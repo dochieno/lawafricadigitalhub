@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import api from "../api/client";
-import "../styles/UserProfileMenu.css";
+import "../styles/userProfileMenu.css";
 
 export default function UserProfileMenu({ user, onLogout }) {
   const { refreshUser } = useAuth();
