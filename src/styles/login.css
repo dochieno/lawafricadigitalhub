@@ -1,0 +1,237 @@
+/* PAGE CENTERING */
+.login-page {
+  width: 100vw;
+  height: 100vh;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  background: #f4f6f8;
+}
+
+/* CARD */
+.login-card {
+  background: #ffffff;
+  width: 450px;
+  padding: 32px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+  text-align: center;
+}
+
+.login-card input {
+  width: 100%;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+
+  background-color: #2f2f2f;   /* dark field */
+  color: #ffffff;              /* white text */
+
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+
+  font-size: 15px;
+  outline: none;
+
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.login-card input::placeholder {
+  color: #b0b0b0;
+}
+
+.login-card input:focus {
+  border-color: #8b1c1c; /* LawAfrica red */
+  box-shadow: 0 0 0 2px rgba(139, 28, 28, 0.25);
+}
+
+/* BRAND */
+.brand-header {
+  margin-bottom: 20px;
+}
+
+.brand-logo {
+  max-width: 220px;
+  height: auto;
+  margin-bottom: 6px;
+}
+
+.brand-tagline {
+  font-size: 14px;
+  color: #7a1c1c; /* matches LawAfrica red tone */
+  font-weight: 600;
+}
+
+/* TEXT */
+h2 {
+  font-size: 25px;
+  margin-bottom: 6px;
+  color: #111827;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: #6b7280;
+  margin-bottom: 20px;
+}
+
+/* INPUTS */
+input {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  font-size: 14px;
+}
+
+input:focus {
+  outline: none;
+  border-color: #7a1c1c;
+}
+
+/* BUTTON */
+button {
+  width: 100%;
+  padding: 12px;
+  background: #7a1c1c;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.login-card button {
+  width: 100%;
+  padding: 14px;
+
+  background-color: #8b1c1c;
+  color: #ffffff;
+
+  border: none;
+  border-radius: 8px;
+
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.login-card button:hover {
+  background-color: #a32121;
+}
+
+.login-card button:active {
+  transform: scale(0.98);
+}
+
+
+button:hover {
+  background: #641616;
+}
+
+.error-box {
+  background: #ffe9e9;
+  border: 1px solid #ffb3b3;
+  color: #8b1c1c;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  font-size: 14px;
+}
+
+/* FOOTER */
+.footer-text {
+  margin-top: 16px;
+  font-size: 12px;
+  color: #6b7280;
+}
+.login-layout {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+}
+
+/* LEFT PANEL */
+.login-info-panel {
+  background: linear-gradient(135deg, var(--la-dark), var(--la-red));
+  color: #fff;
+  padding: 60px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.login-brand-logo {
+  width: 140px;
+  margin-bottom: 24px;
+}
+
+.login-info-panel h1 {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.tagline {
+  font-size: 16px;
+  opacity: 0.9;
+  margin-bottom: 24px;
+}
+
+.login-benefits {
+  list-style: none;
+  padding: 0;
+  margin-bottom: 24px;
+}
+
+.login-benefits li {
+  margin-bottom: 10px;
+  font-size: 15px;
+}
+
+.trust-note {
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+/* RIGHT PANEL */
+.login-form-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f7f8fa;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 560px;
+  max-height: 520px;
+  background: #fff;
+  padding: 120px;
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.08);
+}
+
+/* MOBILE */
+@media (max-width: 900px) {
+  .login-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .login-info-panel {
+    display: none;
+  }
+}
+.success-box {
+  background: #e9fff3;
+  border: 1px solid #86efac;
+  color: #166534;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  font-size: 14px;
+}

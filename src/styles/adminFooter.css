@@ -1,0 +1,64 @@
+/* src/styles/adminFooter.css */
+
+/* One-piece footer surface */
+.admin-footer {
+  margin-top: 18px;
+  background: #efe6e6;              /* ✅ single tone */
+  border: 1px solid #e2d6d8;        /* subtle boundary */
+  border-radius: 14px;
+  padding: 14px 18px;              /* ✅ padding moved here */
+}
+
+/* Keep your subtle option, but make it actually subtle */
+.admin-footer.subtle {
+  opacity: 0.98;
+}
+
+/* Inner becomes layout-only, no background/border to avoid 2-tone feel */
+.admin-footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+/* Layout */
+.admin-footer-left,
+.admin-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-footer-brand {
+  font-weight: 900;
+  color: #111827;
+  letter-spacing: -0.01em;
+}
+
+.admin-footer-brand span {
+  color: #7c2d12; /* admin accent */
+}
+
+.admin-footer-muted {
+  color: rgba(17, 24, 39, 0.65);
+  font-size: 13px;
+}
+
+.admin-footer-dot {
+  color: rgba(17, 24, 39, 0.35);
+  font-weight: 800;
+}
+
+/* Responsive: stack nicely on small widths */
+@media (max-width: 640px) {
+  .admin-footer-inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .admin-footer-right {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

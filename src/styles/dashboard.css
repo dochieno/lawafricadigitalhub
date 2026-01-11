@@ -1,0 +1,254 @@
+.dashboard-container {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Header */
+.dashboard-header h1 {
+  font-size: 28px;
+  color: var(--la-dark);
+  margin-bottom: 6px;
+}
+
+.dashboard-header p {
+  color: var(--la-gray);
+  font-size: 15px;
+}
+
+/* Quick Actions (Toolbar Style) */
+.quick-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.quick-actions button {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  color: var(--la-dark);
+  padding: 8px 14px;
+  font-size: 13px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.quick-actions button:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+/* Subtle emphasis for Resume */
+.quick-actions button.primary {
+  border-color: var(--la-red);
+  color: var(--la-red);
+  font-weight: 500;
+}
+
+.quick-actions button.primary:hover {
+  background: rgba(161, 24, 30, 0.06);
+}
+
+/* Sections */
+.dashboard-section {
+  margin-top: 28px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.section-header h2 {
+  font-size: 20px;
+  color: var(--la-dark);
+}
+
+/* Library Grid */
+.library-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.library-preview-card {
+  background: #ffffff;
+  padding: 14px;
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.library-preview-card:hover {
+  transform: translateY(-2px);
+}
+
+.library-cover {
+  height: 120px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--la-red), var(--la-dark));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.library-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.library-preview-card span {
+  font-size: 14px;
+  color: var(--la-dark);
+  line-height: 1.4;
+}
+
+/* Progress */
+.progress-bar.compact {
+  height: 6px;
+  margin-top: 8px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--la-red);
+}
+
+/* Explore CTA */
+.explore-cta {
+  background: linear-gradient(
+    135deg,
+    rgba(161, 24, 30, 0.08),
+    rgba(0, 0, 0, 0.02)
+  );
+  padding: 28px;
+  border-radius: 14px;
+  text-align: center;
+}
+
+.explore-cta p {
+  color: var(--la-gray);
+  margin-bottom: 16px;
+}
+
+/* Buttons */
+.primary-btn {
+  background: var(--la-red);
+  color: #fff;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.outline-btn {
+  background: transparent;
+  border: 1px solid var(--la-red);
+  color: var(--la-red);
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* Smaller View all */
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--la-red);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 0;
+}
+
+.link-btn:hover {
+  text-decoration: underline;
+}
+/* Quick Actions */
+.quick-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+.dashboard-explore-cta {
+  margin-top: 60px;
+  padding: 32px;
+  border-radius: 14px;
+  background: linear-gradient(
+    135deg,
+    rgba(161, 24, 30, 0.06),
+    rgba(0, 0, 0, 0.015)
+  );
+  text-align: center;
+}
+
+.dashboard-explore-cta h2 {
+  font-size: 20px;
+  margin-bottom: 8px;
+  color: var(--la-dark);
+}
+
+.dashboard-explore-cta p {
+  color: var(--la-gray);
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.link-inline {
+  background: none;
+  border: none;
+  color: var(--la-red);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.link-inline:hover {
+  text-decoration: underline;
+}
+.recent-section {
+  margin-top: 32px;
+}
+
+.recent-list {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.recent-item {
+  background: #fafafa;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 12px;
+  cursor: pointer;
+  min-width: 120px;
+}
+
+.recent-item:hover {
+  background: #f0f0f0;
+}
+
+.recent-meta {
+  font-size: 14px;
+}
+.reading-streak {
+  margin-top: 6px;
+  font-weight: 500;
+  color: #e67e22;
+}
+

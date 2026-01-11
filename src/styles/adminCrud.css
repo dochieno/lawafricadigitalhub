@@ -1,0 +1,942 @@
+/* src/styles/adminCrud.css */
+
+/* Page */
+.admin-page {
+  padding: 26px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.admin-page-wide {
+  max-width: 1400px;
+}
+
+.admin-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.admin-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 900;
+  color: #111827;
+}
+
+.admin-subtitle {
+  margin: 6px 0 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+/* Header actions */
+.admin-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-btn {
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  padding: 10px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 900;
+  color: #111827;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.04);
+}
+
+.admin-btn:hover {
+  background: #f9fafb;
+}
+
+.admin-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.admin-btn.primary {
+  background: #7a1f1f;
+  border-color: #7a1f1f;
+  color: #ffffff;
+}
+
+.admin-btn.primary:hover {
+  filter: brightness(1.05);
+}
+
+/* Small top button */
+.admin-btn.primary.compact {
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  box-shadow: 0 6px 14px rgba(122, 31, 31, 0.18);
+}
+
+/* Alerts */
+.admin-alert {
+  border-radius: 14px;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  margin-bottom: 14px;
+  font-weight: 800;
+}
+
+.admin-alert.ok {
+  background: #ecfdf5;
+  border-color: #86efac;
+  color: #065f46;
+}
+
+.admin-alert.error {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #7f1d1d;
+}
+
+/* Card container */
+.admin-card {
+  background: #ffffff;
+  border: 1px solid #eef2f7;
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: 0 14px 26px rgba(15, 23, 42, 0.06);
+}
+
+.admin-card-fill {
+  min-height: 62vh;
+}
+
+/* Toolbar */
+.admin-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.admin-search {
+  width: min(520px, 100%);
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  outline: none;
+  background: #ffffff;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.admin-search-wide {
+  width: min(760px, 100%);
+}
+
+.admin-search:focus {
+  border-color: #c7d2fe;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12);
+}
+
+.admin-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  font-weight: 900;
+  font-size: 12px;
+  background: #ffffff;
+  color: #111827;
+  white-space: nowrap;
+}
+
+.admin-pill.muted {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+  color: #6b7280;
+}
+
+.admin-pill.ok {
+  background: #ecfdf5;
+  border-color: #86efac;
+  color: #065f46;
+}
+
+.admin-pill.warn {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #7c2d12;
+}
+
+/* Table */
+.admin-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.admin-table thead th {
+  text-align: left;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b7280;
+  padding: 12px 12px;
+  border-bottom: 1px solid #eef2f7;
+  background: #fafafa;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.admin-table tbody td {
+  padding: 14px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #111827;
+  vertical-align: middle;
+}
+
+.admin-table tbody tr:hover td {
+  background: #fbfbff;
+}
+
+.admin-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Actions */
+.admin-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.admin-action-btn {
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #111827;
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 900;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.05);
+}
+
+.admin-action-btn:hover {
+  background: #f9fafb;
+}
+
+.admin-action-btn.small {
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.admin-action-btn.neutral {
+  border-color: #d1d5db;
+}
+
+.admin-action-btn.ok {
+  background: #ecfdf5;
+  border-color: #86efac;
+  color: #065f46;
+}
+
+.admin-action-btn.warn {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #7f1d1d;
+}
+
+/* Modal */
+.admin-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  z-index: 999;
+}
+
+.admin-modal {
+  width: min(980px, 100%);
+  max-height: 90vh;          /* ✅ prevents overflow */
+  background: #ffffff;
+  border-radius: 18px;
+  border: 1px solid #eef2f7;
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.28);
+  overflow: hidden;
+  display: flex;             /* ✅ enables body scrolling */
+  flex-direction: column;
+}
+
+.admin-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #eef2f7;
+  background: #fafafa;
+}
+
+.admin-modal-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 900;
+  color: #111827;
+}
+
+.admin-modal-subtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 700;
+}
+
+.admin-modal-body {
+  padding: 16px;
+  overflow: auto;            /* ✅ scroll inside modal */
+}
+
+.admin-inline-loading {
+  background: #f3f4f6;
+  border: 1px dashed #e5e7eb;
+  color: #374151;
+  font-weight: 900;
+  font-size: 12px;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.admin-modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 16px;
+  border-top: 1px solid #eef2f7;
+  background: #fafafa;
+}
+
+/* Form grid inside modal */
+.admin-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .admin-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .admin-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  .admin-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .admin-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.admin-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 900;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.admin-field input,
+.admin-field select {
+  width: 100%;
+  padding: 12px 12px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  outline: none;
+  background: #ffffff;
+}
+
+.admin-field input:focus,
+.admin-field select:focus {
+  border-color: #c7d2fe;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12);
+}
+/* =========================
+   Product ↔ Document mapping
+   (scoped to this page)
+========================= */
+.admin-docmap .admin-card {
+  margin-bottom: 12px;
+}
+
+.admin-docmap .admin-header {
+  margin-bottom: 12px;
+}
+
+.admin-docmap-toolbar {
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.admin-docmap-add {
+  padding-bottom: 10px;
+}
+
+/* Compact add row layout */
+.admin-docmap-addrow {
+  display: grid;
+  grid-template-columns: 1fr 140px 120px;
+  gap: 10px;
+  padding: 0 12px 12px;
+  align-items: end;
+}
+
+.admin-docmap-field label {
+  display: block;
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 6px;
+  font-weight: 800;
+}
+
+.admin-docmap-field select,
+.admin-docmap-field input {
+  width: 100%;
+}
+
+.admin-docmap-addbtn {
+  height: 38px;
+}
+
+/* Make the mapping list tighter */
+.admin-docmap-title {
+  font-weight: 900;
+  color: #111827;
+}
+
+/* compact table row spacing */
+.admin-table-compact th {
+  padding: 10px 12px;
+}
+
+.admin-table-compact td {
+  padding: 10px 12px;
+}
+
+/* compact numeric input */
+.admin-input-compact {
+  width: 90px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  font-weight: 800;
+}
+
+/* Remove button: compact outline style */
+.danger-outline {
+  border: 1px solid #fca5a5 !important;
+  background: #fff !important;
+  color: #b91c1c !important;
+}
+
+.danger-outline:hover {
+  background: #fff5f5 !important;
+}
+
+/* Mobile: stack add-row neatly */
+@media (max-width: 820px) {
+  .admin-docmap-addrow {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-docmap-addbtn {
+    width: 100%;
+  }
+
+  .admin-input-compact {
+    width: 100%;
+    max-width: 140px;
+  }
+}
+/* =========================
+   EXTRA COMPACT rows for Product Documents table ONLY
+========================= */
+
+.admin-docmap .admin-table-compact td,
+.admin-docmap .admin-table-compact th {
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+  line-height: 1.2;
+  vertical-align: middle;
+}
+
+/* Tighten document title row */
+.admin-docmap-title {
+  line-height: 1.25;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+/* Compact pills inside table */
+.admin-docmap .admin-pill {
+  padding: 3px 10px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+/* Compact number input (SortOrder) */
+.admin-docmap .admin-input-compact {
+  height: 30px;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+/* Compact remove button */
+.admin-docmap .admin-action-btn.small {
+  padding: 4px 10px;
+  font-size: 12px;
+  height: 30px;
+}
+/* =========================
+   Admin · Product Documents (UX polish)
+   Scoped so other admin pages are untouched
+========================= */
+
+.admin-docmap .admin-docmap-addhead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 14px 6px;
+}
+
+.admin-docmap .admin-docmap-addtitle {
+  font-weight: 900;
+  color: #111827;
+  font-size: 14px;
+}
+
+.admin-docmap .admin-docmap-addsub {
+  margin-top: 4px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.admin-docmap .admin-docmap-addrow {
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  gap: 12px;
+  padding: 8px 14px 14px;
+}
+
+@media (max-width: 900px) {
+  .admin-docmap .admin-docmap-addrow {
+    grid-template-columns: 1fr;
+  }
+}
+
+.admin-docmap .admin-docmap-left {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .admin-docmap .admin-docmap-left {
+    grid-template-columns: 1fr;
+  }
+}
+
+.admin-docmap .admin-docmap-right {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  align-content: end;
+}
+
+.admin-docmap .admin-docmap-filter {
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.admin-docmap .admin-docmap-filter:focus {
+  outline: none;
+  border-color: #c7d2fe;
+  box-shadow: 0 0 0 4px rgba(199, 210, 254, 0.35);
+}
+
+/* Fancy select wrapper */
+.admin-docmap .admin-docmap-selectwrap {
+  position: relative;
+}
+
+.admin-docmap .admin-docmap-selectwrap select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: 100%;
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  padding: 10px 38px 10px 12px;
+  background: #fff;
+}
+
+.admin-docmap .admin-docmap-selectwrap select:focus {
+  outline: none;
+  border-color: #c7d2fe;
+  box-shadow: 0 0 0 4px rgba(199, 210, 254, 0.35);
+}
+
+.admin-docmap .admin-docmap-chevron {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6b7280;
+  pointer-events: none;
+  font-size: 14px;
+}
+
+/* Make add button feel like a primary CTA but compact */
+.admin-docmap .admin-docmap-addbtn {
+  height: 42px;
+  border-radius: 12px;
+  font-weight: 900;
+}
+
+/* =========================
+   EXTRA COMPACT table rows (your spacing issue)
+========================= */
+
+.admin-docmap .admin-table-compact td,
+.admin-docmap .admin-table-compact th {
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+  line-height: 1.2;
+  vertical-align: middle;
+}
+
+.admin-docmap .admin-docmap-title {
+  line-height: 1.25;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.admin-docmap .admin-pill {
+  padding: 3px 10px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.admin-docmap .admin-input-compact {
+  height: 30px;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.admin-docmap .admin-action-btn.small {
+  padding: 4px 10px;
+  font-size: 12px;
+  height: 30px;
+}
+/* =========================================================
+   FIX: "Add document" section was too tall
+   Reason: admin-card-fill applies min-height: 62vh
+   Solution: make add panel auto-height only (scoped)
+========================================================= */
+.admin-docmap .admin-docmap-add-compact {
+  min-height: 0 !important;      /* override admin-card-fill behavior */
+  height: auto !important;
+  padding: 12px 14px 12px;
+}
+
+.admin-docmap .admin-docmap-add-compact .admin-docmap-addhead {
+  padding: 6px 0 8px;
+}
+
+.admin-docmap .admin-docmap-add-compact .admin-docmap-addrow {
+  padding: 0;
+  margin: 0;
+}
+
+/* Keep add section visually compact */
+.admin-docmap .admin-docmap-addsub {
+  margin-top: 2px;
+}
+
+/* Make the right column tighter */
+.admin-docmap .admin-docmap-right {
+  align-content: end;
+}
+
+/* Optional: slightly reduce spacing between page cards */
+.admin-docmap .admin-card {
+  margin-bottom: 10px;
+}
+.admin-docmap .admin-docmap-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-docmap .admin-docmap-tablewrap {
+  flex: 1;
+  overflow: auto;
+  border-radius: 14px;
+}
+
+.admin-docmap .admin-docmap-tablewrap .admin-table {
+  width: 100%;
+}
+
+.admin-docmap .admin-docmap-tablewrap .admin-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.admin-footer{
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+}
+.admin-footer-inner{
+  display:flex;
+  justify-content:space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items:center;
+  font-weight: 800;
+  color:#111827;
+}
+.admin-footer-muted{
+  font-weight:600;
+  color:#6b7280;
+}
+/* =========================
+   INLINE ACTION BUTTONS
+   ========================= */
+
+.admin-row-actions.actions-inline {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  white-space: nowrap;        /* prevents vertical stretching */
+}
+
+/* Ensure buttons stay compact */
+.admin-row-actions.actions-inline .admin-action-btn {
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+/* Optional: prevent column from becoming huge */
+.admin-table td:last-child {
+  width: 1%;
+  white-space: nowrap;
+}
+/* Toggle switch */
+.toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.toggle.on {
+  background: #16a34a; /* green */
+}
+
+.toggle.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toggle::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+}
+
+.toggle.on::after {
+  transform: translateX(20px);
+}
+.admin-section {
+  margin-bottom: 18px;
+  padding: 14px;
+  border-radius: 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+}
+
+.admin-section-title {
+  font-weight: 900;
+  margin-bottom: 6px;
+}
+
+.admin-section-sub {
+  font-size: 13px;
+  opacity: 0.8;
+}
+/* ✅ Add to src/styles/adminCrud.css (or keep if already added) */
+
+/* Modal close (X) button */
+.admin-modal-close {
+  appearance: none;
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 8px;
+  color: #374151;
+}
+
+.admin-modal-close:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+
+.admin-modal-close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Toggle styles */
+.admin-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.admin-toggle-text {
+  min-width: 0;
+}
+
+.admin-toggle-label {
+  font-weight: 900;
+  color: #111827;
+  font-size: 14px;
+}
+
+.admin-toggle-hint {
+  margin-top: 4px;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.admin-toggle {
+  position: relative;
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #f3f4f6;
+  padding: 0;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.admin-toggle.on {
+  background: #111827;
+  border-color: #111827;
+}
+
+.admin-toggle.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.admin-toggle-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #ffffff;
+  transition: left 0.15s ease;
+}
+
+.admin-toggle.on .admin-toggle-knob {
+  left: 22px;
+}
+
+/* Optional section title styling (safe) */
+.admin-section-title {
+  font-weight: 900;
+  color: #111827;
+  margin: 2px 0 10px;
+}
+/* Ensure modal head can host an absolute-positioned close button */
+.admin-modal-head-x {
+  position: relative;
+  padding-right: 54px; /* space so title doesn't overlap X */
+}
+
+/* Always-visible X close button */
+.admin-modal-xbtn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #e5e7eb;
+  background: #d32e2e;
+  border-radius: 10px;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.admin-modal-xbtn:hover {
+  background: #f9fafb;
+}
+
+.admin-modal-xbtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

@@ -1,0 +1,21 @@
+/* src/styles/theme.css */
+
+:root {
+  /* Brand Colors */
+  --la-red: #A4161A;
+  --la-red-hover: #8E1216;
+
+  --la-dark: #4B4B4B;
+  --la-gray: #6B7280;
+  --la-border: #D1D5DB;
+
+  --la-bg: #F5F5F5;
+  --la-white: #FFFFFF;
+
+  /* Layout */
+  --sidebar-bg: #1F2933;
+  --sidebar-text: #E5E7EB;
+
+  /* Typography */
+  --font-main: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}

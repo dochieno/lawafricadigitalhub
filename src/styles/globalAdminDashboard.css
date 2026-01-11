@@ -1,0 +1,734 @@
+/* src/styles/globalAdminDashboard.css */
+
+/* Soft cool background + subtle pattern */
+.ga-wrap {
+  padding: 26px;
+  max-width: 1200px;
+  margin: 0 auto;
+
+  background:
+    radial-gradient(900px 500px at 12% -10%, rgba(56, 189, 248, 0.20), transparent 60%),
+    radial-gradient(900px 500px at 88% 0%, rgba(99, 102, 241, 0.18), transparent 55%),
+    radial-gradient(900px 500px at 60% 110%, rgba(16, 185, 129, 0.14), transparent 55%),
+    #f8fafc;
+
+  border-radius: 18px;
+}
+
+/* Hero header */
+.ga-hero {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 980px) {
+  .ga-hero {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ga-titleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ga-title {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 950;
+  color: #0b1220;
+  letter-spacing: -0.02em;
+}
+
+.ga-badge {
+  font-size: 12px;
+  font-weight: 900;
+  color: #0b1220;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  padding: 6px 10px;
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+}
+
+.ga-subtitle {
+  margin: 8px 0 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ga-controls {
+  margin-top: 12px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Range chips */
+.ga-range {
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(8px);
+}
+
+.ga-chip {
+  border: 0;
+  background: transparent;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-weight: 900;
+  cursor: pointer;
+  color: #334155;
+}
+
+.ga-chip.active {
+  color: #ffffff;
+  background: linear-gradient(135deg, #2563eb, #06b6d4);
+  box-shadow: 0 10px 30px rgba(37, 99, 235, 0.18);
+}
+
+/* Primary refresh */
+.ga-refresh {
+  border: 0;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  padding: 10px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 950;
+  box-shadow: 0 14px 30px rgba(99, 102, 241, 0.18);
+}
+
+.ga-refresh:hover {
+  filter: brightness(1.02);
+}
+
+.ga-refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.ga-error {
+  margin-top: 12px;
+  border: 1px solid rgba(244, 63, 94, 0.25);
+  background: rgba(255, 241, 242, 0.9);
+  color: #9f1239;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-weight: 800;
+}
+
+/* Right mini panel */
+.ga-heroRight {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(10px);
+}
+
+.ga-miniLabel {
+  font-size: 12px;
+  font-weight: 950;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ga-miniValue {
+  margin-top: 8px;
+  font-size: 28px;
+  font-weight: 950;
+  color: #0b1220;
+}
+
+.ga-miniHint {
+  margin-top: 6px;
+  color: #334155;
+  font-weight: 800;
+  font-size: 13px;
+}
+
+/* Sections */
+.ga-section {
+  margin-top: 18px;
+}
+
+.ga-sectionHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.ga-h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 950;
+  color: #0b1220;
+}
+
+/* KPI grid */
+.ga-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 1000px) {
+  .ga-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .ga-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Cards with cool glow */
+.ga-card {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.78);
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(10px);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.ga-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.09);
+}
+
+.ga-cardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ga-cardIcon {
+  font-size: 18px;
+  opacity: 0.9;
+}
+
+.ga-cardTitle {
+  color: #64748b;
+  font-weight: 950;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ga-cardValue {
+  margin-top: 10px;
+  font-size: 22px;
+  font-weight: 950;
+  color: #0b1220;
+}
+
+.ga-cardSub {
+  margin-top: 6px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+/* Skeleton */
+.ga-skel {
+  overflow: hidden;
+}
+
+.ga-skelLine {
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #eef2ff 0%, #e0f2fe 50%, #eef2ff 100%);
+  background-size: 200% 100%;
+  animation: gaShimmer 1.2s infinite;
+}
+
+.ga-skelLine.sm { width: 45%; }
+.ga-skelLine.md { width: 70%; margin-top: 10px; }
+.ga-skelLine.lg { width: 60%; margin-top: 14px; height: 22px; }
+
+@keyframes gaShimmer {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 200% 0%; }
+}
+
+/* Two-column rows */
+.ga-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .ga-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Panels */
+.ga-panel {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.78);
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(10px);
+}
+
+.ga-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.ga-panel-title {
+  font-weight: 950;
+  color: #0b1220;
+  font-size: 15px;
+}
+
+.ga-panel-sub {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+/* Chart */
+.ga-chart {
+  width: 100%;
+  height: 170px;
+  display: block;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.ga-chart line {
+  stroke: rgba(148, 163, 184, 0.35);
+  stroke-width: 2;
+}
+
+.ga-chart path {
+  stroke: #2563eb;
+}
+
+.ga-chart circle {
+  fill: #06b6d4;
+}
+
+.ga-xlabels {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 8px;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.ga-xlabel {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 58px;
+}
+
+/* Empty chart */
+.ga-emptyChart {
+  border: 1px dashed rgba(148, 163, 184, 0.55);
+  border-radius: 14px;
+  padding: 18px;
+  text-align: center;
+  background: rgba(248, 250, 252, 0.85);
+}
+
+.ga-emptyChartIcon {
+  font-size: 22px;
+}
+
+.ga-emptyChartText {
+  margin-top: 8px;
+  font-weight: 950;
+  color: #0b1220;
+}
+
+.ga-emptyChartHint {
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+/* Bar list */
+.ga-barlist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ga-barrow {
+  display: grid;
+  grid-template-columns: 160px 1fr 110px;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (max-width: 520px) {
+  .ga-barrow {
+    grid-template-columns: 120px 1fr 90px;
+  }
+}
+
+.ga-barrow-label {
+  font-weight: 950;
+  color: #0b1220;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ga-barrow-barwrap {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.20);
+  overflow: hidden;
+}
+
+.ga-barrow-bar {
+  height: 10px;
+  background: linear-gradient(90deg, #6366f1, #06b6d4);
+  border-radius: 999px;
+}
+
+.ga-barrow-value {
+  text-align: right;
+  font-weight: 950;
+  color: #0b1220;
+  font-size: 12px;
+}
+
+.ga-emptyBlock {
+  color: #64748b;
+  font-weight: 800;
+  font-size: 13px;
+  padding: 10px 0;
+}
+
+/* Footer */
+.ga-footer {
+  margin-top: 22px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.ga-footerInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 6px;
+}
+
+.ga-footerBrand {
+  font-weight: 950;
+  color: #0b1220;
+}
+
+.ga-footerMeta {
+  margin-top: 4px;
+  color: #64748b;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.ga-footerRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ga-footerLink {
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(255, 255, 255, 0.7);
+  padding: 8px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 950;
+  color: #0b1220;
+}
+
+.ga-footerLink:hover {
+  filter: brightness(1.02);
+}
+
+.ga-footerDot {
+  opacity: 0.7;
+}
+
+.ga-footerHint {
+  opacity: 0.95;
+}
+/* ========================= */
+/*  Status tones (scoped)    */
+/* ========================= */
+.ga-card--success {
+  border-color: rgba(34, 197, 94, 0.35);
+  background:
+    radial-gradient(700px 260px at 0% 0%, rgba(34, 197, 94, 0.16), transparent 60%),
+    rgba(255, 255, 255, 0.84);
+}
+
+.ga-card--danger {
+  border-color: rgba(244, 63, 94, 0.35);
+  background:
+    radial-gradient(700px 260px at 0% 0%, rgba(244, 63, 94, 0.16), transparent 60%),
+    rgba(255, 255, 255, 0.84);
+}
+
+/* Pills */
+.ga-pill {
+  font-size: 11px;
+  font-weight: 950;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(255, 255, 255, 0.75);
+  color: #0b1220;
+  backdrop-filter: blur(8px);
+}
+
+.ga-pill--success {
+  border-color: rgba(34, 197, 94, 0.45);
+  background: rgba(240, 253, 244, 0.92);
+  color: #166534;
+}
+
+.ga-pill--danger {
+  border-color: rgba(244, 63, 94, 0.45);
+  background: rgba(255, 241, 242, 0.92);
+  color: #9f1239;
+}
+
+/* Emphasis */
+.ga-text-danger {
+  color: #9f1239;
+  font-weight: 950;
+}
+
+/* ========================= */
+/*  Distinct footer (scoped) */
+/* ========================= */
+.ga-footer--distinct {
+  margin-top: 22px;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  background:
+    radial-gradient(900px 320px at 10% 0%, rgba(59, 130, 246, 0.10), transparent 55%),
+    radial-gradient(900px 320px at 90% 0%, rgba(34, 197, 94, 0.08), transparent 55%),
+    rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  border-radius: 18px;
+  padding: 14px;
+}
+
+.ga-footer--distinct .ga-footerBrand {
+  font-weight: 950;
+  letter-spacing: 0.02em;
+}
+
+.ga-footer--distinct .ga-footerLink {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.85);
+  padding: 8px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.ga-footer--distinct .ga-footerLink:hover {
+  transform: translateY(-1px);
+}
+/* ---------------------------
+   Chart tooltip + hover UX
+---------------------------- */
+
+.ga-chartWrap {
+  position: relative;
+}
+
+.ga-tooltip {
+  position: absolute;
+  transform: translateX(-50%);
+  min-width: 120px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(17, 24, 39, 0.95);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.14);
+  box-shadow: 0 10px 26px rgba(0,0,0,0.22);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.ga-tooltipTitle {
+  font-size: 11px;
+  opacity: 0.85;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.ga-tooltipValue {
+  font-size: 15px;
+  font-weight: 900;
+  margin-top: 2px;
+}
+
+/* faint grid lines inside chart */
+.ga-gridline {
+  stroke: rgba(229, 231, 235, 0.7);
+  stroke-width: 1;
+  stroke-dasharray: 4 6;
+}
+
+.ga-hoverLine {
+  stroke: rgba(17, 24, 39, 0.25);
+  stroke-width: 2;
+}
+
+.ga-hoverDot {
+  fill: #111827;
+  stroke: #ffffff;
+  stroke-width: 2.5;
+}
+
+/* ---------------------------
+   Quick insights
+---------------------------- */
+
+.ga-insightsRow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 1100px) {
+  .ga-insightsRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .ga-insightsRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ga-insight {
+  border: 1px solid rgba(229, 231, 235, 0.9);
+  background: linear-gradient(180deg, #ffffff 0%, #fbfbff 100%);
+  border-radius: 16px;
+  padding: 14px 14px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.ga-insight:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.08);
+}
+
+.ga-insightTop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ga-insightIcon {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: #f3f4f6;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+}
+
+.ga-insightLabel {
+  font-size: 12px;
+  font-weight: 900;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ga-insightValue {
+  margin-top: 10px;
+  font-size: 18px;
+  font-weight: 950;
+  color: #111827;
+}
+
+.ga-insightHint {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #374151;
+}
+
+/* ---------------------------
+   KPI tone accents (green/red)
+---------------------------- */
+
+.ga-card-green {
+  border-color: rgba(34, 197, 94, 0.25);
+  background: linear-gradient(180deg, #ffffff 0%, rgba(34, 197, 94, 0.06) 100%);
+}
+
+.ga-card-red {
+  border-color: rgba(239, 68, 68, 0.25);
+  background: linear-gradient(180deg, #ffffff 0%, rgba(239, 68, 68, 0.06) 100%);
+}
+
+.ga-miniValue-red {
+  color: #b91c1c;
+}
+.toast {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 9999;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-weight: 800;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+}
+
+.toast-success {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+

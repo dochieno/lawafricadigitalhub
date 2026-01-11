@@ -1,0 +1,13 @@
+.note-item {
+  background: #fff;
+  padding: 10px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+  border-left: 4px solid gold;
+}
+
+.note-item em {
+  display: block;
+  margin-top: 5px;
+  color: #555;
+}

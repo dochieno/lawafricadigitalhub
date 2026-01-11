@@ -1,0 +1,114 @@
+.profile-menu {
+  position: relative;
+}
+
+/* Avatar trigger */
+.profile-trigger {
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.profile-trigger img {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.profile-initials {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--la-red);
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Dropdown */
+.profile-dropdown {
+  position: absolute;
+  top: 48px;
+  right: 0;
+  width: 280px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+  padding: 16px;
+  z-index: 999;
+}
+
+/* User info */
+.profile-info {
+  margin-bottom: 16px;
+}
+
+.profile-name {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--la-dark);
+}
+
+.profile-email {
+  font-size: 13px;
+  color: var(--la-gray);
+  margin-top: 2px;
+}
+
+/* ========================= */
+/* BUTTON SYSTEM (UNIFORM)   */
+/* ========================= */
+
+.profile-action {
+  width: 100%;
+  height: 42px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  margin-top: 10px;
+  transition: all 0.2s ease;
+}
+
+/* Primary (Change image) */
+.profile-action.primary {
+  background: var(--la-red);
+  color: #fff;
+}
+
+.profile-action.primary:hover {
+  background: var(--la-red-hover);
+}
+
+/* Outline / Danger (Remove + Logout) */
+.profile-action.outline {
+  background: #fff;
+  color: var(--la-red);
+  border: 1.5px solid var(--la-red);
+}
+
+.profile-action.outline:hover {
+  background: rgba(161, 24, 30, 0.08);
+}
+
+/* Upload progress */
+.upload-progress {
+  width: 100%;
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.upload-progress-bar {
+  height: 100%;
+  background: var(--la-red);
+  transition: width 0.2s ease;
+}

@@ -1,0 +1,509 @@
+.doc-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.doc-title {
+  font-size: 28px;
+  color: var(--la-dark);
+  margin-bottom: 8px;
+}
+
+.doc-meta {
+  color: var(--la-gray);
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+
+.doc-meta span {
+  margin-right: 6px;
+}
+
+.doc-main {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 32px;
+}
+
+.doc-cover {
+  height: 360px;
+  background: linear-gradient(135deg, var(--la-red), var(--la-dark));
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+.doc-description {
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+
+.doc-info div {
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.doc-badges {
+  margin: 16px 0;
+}
+
+.badge {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.badge.free {
+  background: #e6f7ee;
+  color: #1e7f4f;
+}
+
+.badge.premium {
+  background: #fdecea;
+  color: #a11212;
+}
+
+.doc-actions button {
+  padding: 12px 20px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--la-red);
+  color: white;
+}
+
+button.secondary {
+  background: transparent;
+  border: 1px solid var(--la-red);
+  color: var(--la-red);
+}
+.doc-detail-container {
+  max-width: 1260px;
+  margin: 40px auto;
+  padding: 0 24px;
+}
+
+.doc-detail-grid {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 48px;
+  align-items: start;
+}
+
+/* COVER */
+.doc-detail-cover {
+  width: 100%;
+}
+
+.doc-detail-cover img {
+  width: 100%;
+  height: auto;
+  max-height: 520px;
+  object-fit: contain;           /* 🔑 FULL IMAGE, NO CROPPING */
+  border-radius: 16px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.18);
+  background: #7a1e1e;
+}
+
+.doc-cover-placeholder {
+  width: 100%;
+  height: 520px;
+  background: linear-gradient(135deg, #9b1c1c, #4a1f1f);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 24px;
+  letter-spacing: 2px;
+}
+
+/* INFO */
+.doc-title {
+  font-size: 30px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.doc-meta {
+  color: #666;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.doc-description {
+  font-size: 16px;
+  line-height: 1.65;
+  margin-bottom: 24px;
+}
+
+.doc-specs {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.doc-badge {
+  margin-bottom: 24px;
+}
+
+
+
+.doc-action-btn.premium {
+  background: #b11212;
+}
+
+.doc-action-btn:hover {
+  opacity: 0.95;
+}
+
+/* RESPONSIVE */
+@media (max-width: 900px) {
+  .doc-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .doc-detail-cover {
+    max-width: 320px;
+    margin: 0 auto;
+    
+  }
+}
+/* --- META --- */
+.doc-meta {
+  margin-top: 8px;
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
+.doc-badge {
+  margin-top: 10px;
+}
+
+/* --- ACTIONS --- */
+.doc-actions {
+  margin-top: 28px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+
+.doc-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+/* Primary */
+.doc-btn.primary {
+  background: #a11217;
+  color: #fff;
+  border: none;
+}
+
+.doc-btn.primary:hover {
+  background: #8f0f14;
+}
+
+/* Secondary */
+.doc-btn.danger-outline {
+  background: transparent;
+  border: 1px solid #a11217;
+  color: #a11217;
+}
+
+.doc-btn.danger-outline:hover {
+  background: rgba(161, 18, 23, 0.05);
+}
+/* ------------------------------
+   ACTION BUTTONS (LIBRARY)
+-------------------------------- */
+
+.ebook-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* Continue Reading (primary) */
+.ebook-btn {
+  background: #a31616; /* LawAfrica red */
+  color: #fff;
+  border: none;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  line-height: 1;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ebook-btn:hover {
+  background: #8f1313;
+}
+
+/* Remove (secondary / outline) */
+.ebook-remove-btn {
+  background: transparent;
+  color: #a31616;
+  border: 1.5px solid #a31616;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  line-height: 1;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ebook-remove-btn:hover {
+  background: rgba(163, 22, 22, 0.08);
+}
+
+.ebook-remove-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+/* ==============================
+   SHARED BUTTON SYSTEM
+============================== */
+
+.btn {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+/* Primary */
+.btn-primary {
+  background: #a31616;
+  color: #fff;
+  border: none;
+}
+
+.btn-primary:hover {
+  background: #8f1313;
+}
+
+/* Outline / Danger */
+.btn-outline-danger {
+  background: transparent;
+  border: 1.5px solid #a31616;
+  color: #a31616;
+}
+
+.btn-outline-danger:hover {
+  background: rgba(163, 22, 22, 0.08);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+/* ======================================================
+   EXPLORE-STYLE FOOTER CTA (DOCUMENT DETAILS)
+====================================================== */
+
+.doc-footer-explore {
+  margin-top: 96px;
+  padding: 72px 24px;
+  background: linear-gradient(
+    180deg,
+    rgba(248, 241, 241, 0.9),
+    rgba(255, 255, 255, 1)
+  );
+  border-top: 1px solid #eee;
+}
+
+.doc-footer-explore-inner {
+  max-width: 960px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.doc-footer-explore-inner h2 {
+  font-size: 1.9rem;
+  margin-bottom: 12px;
+  color: #111;
+}
+
+.doc-footer-explore-inner p {
+  color: #666;
+  max-width: 680px;
+  margin: 0 auto 28px;
+  line-height: 1.6;
+}
+
+/* Actions */
+.doc-footer-explore-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* Primary (Explore red button) */
+.doc-footer-primary {
+  background: #a11217;
+  color: #fff;
+  border: none;
+  padding: 14px 28px;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 10px;
+  cursor: pointer;
+  min-width: 240px;
+}
+
+.doc-footer-primary:hover {
+  background: #8f0f14;
+}
+
+/* Secondary (link-style) */
+.doc-footer-secondary {
+  background: transparent;
+  border: none;
+  color: #a11217;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.doc-footer-secondary:hover {
+  text-decoration: underline;
+}
+
+/* Responsive spacing */
+@media (max-width: 768px) {
+  .doc-footer-explore {
+    margin-top: 64px;
+    padding: 56px 16px;
+  }
+
+  .doc-footer-primary {
+    width: 100%;
+  }
+}
+/* ================= MODAL ================= */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: #fff;
+  padding: 32px;
+  border-radius: 14px;
+  max-width: 420px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+.modal h3 {
+  margin-bottom: 12px;
+  font-size: 1.25rem;
+}
+
+.modal p {
+  color: #555;
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.badge.coming-soon {
+  background: #fff3cd;
+  color: #821010;
+  margin-left: 8px;
+}
+.doc-offer-card {
+  margin-top: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #ffffff;
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.06);
+}
+
+.doc-offer-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.doc-offer-title {
+  font-weight: 900;
+  color: #111827;
+  font-size: 14px;
+}
+
+.doc-offer-sub {
+  margin-top: 3px;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.doc-offer-price {
+  font-weight: 900;
+  font-size: 14px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  color: #111827;
+  white-space: nowrap;
+}
+
+.doc-offer-note {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 700;
+}
+
+.doc-offer-owned {
+  background: #ecfdf5;
+  border-color: #86efac;
+}
+
+

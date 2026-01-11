@@ -1,0 +1,138 @@
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider } from "./auth/AuthContext";
+import ProtectedRoute from "./routes/ProtectedRoute";
+import AdminOrInstitutionAdminRoute from "./routes/AdminOrInstitutionAdminRoute";
+import AdminRoute from "./routes/AdminRoute";
+
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import TwoFactor from "./pages/TwoFactor";
+import TwoFactorSetup from "./pages/TwoFactorSetup";
+
+// ✅ NEW: Paystack return handler (public route)
+import PaystackReturn from "./pages/payments/PaystackReturn";
+import ResetPassword from "./pages/ResetPassword";
+
+import SecurityDashboard from "./pages/dashboard/SecurityDashboard";
+import InstitutionApprovalDashboard from "./pages/dashboard/InstitutionApprovalDashboard";
+
+import AdminInstitutions from "./pages/dashboard/admin/AdminInstitutions";
+import AdminContentProducts from "./pages/dashboard/admin/AdminContentProducts";
+import AdminInstitutionAdmins from "./pages/dashboard/admin/AdminInstitutionAdmins";
+import AdminInstitutionSubscriptions from "./pages/dashboard/admin/AdminInstitutionSubscriptions";
+import AdminInstitutionBundleSubscriptions from "./pages/dashboard/admin/AdminInstitutionBundleSubscriptions";
+import AdminProductDocuments from "./pages/dashboard/admin/AdminProductDocuments";
+import AdminDocuments from "./pages/dashboard/admin/AdminDocuments";
+import AdminInstitutionUsers from "./pages/dashboard/admin/AdminInstitutionUsers";
+
+import InstitutionMembersAdmin from "./pages/dashboard/institution/InstitutionMembersAdmin";
+
+import AdminSubscriptionRequests from "./pages/dashboard/approvals/AdminSubscriptionRequests";
+
+import AppShell from "./layout/AppShell";
+
+import Explore from "./pages/dashboard/Explore";
+import Library from "./pages/dashboard/Library";
+import QATools from "./pages/dashboard/QATools.jsx";
+
+// ✅ NEW: Switch Home -> Global Admin dashboard (charts) only for Global Admin
+import GlobalAdminHomeSwitch from "./pages/dashboard/GlobalAdminHomeSwitch";
+
+import DocumentDetails from "./pages/documents/DocumentDetails";
+import DocumentReader from "./pages/documents/DocumentReader";
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* ===================== */}
+          {/* PUBLIC ROUTES */}
+          {/* ===================== */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/twofactor" element={<TwoFactor />} />
+          <Route path="/twofactor-setup" element={<TwoFactorSetup />} />
+
+          {/* ✅ NEW: Paystack redirects here after payment */}
+          <Route path="/payments/paystack/return" element={<PaystackReturn />} />
+
+          {/* ===================== */}
+          {/* PROTECTED APP */}
+          {/* ===================== */}
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <AppShell />
+              </ProtectedRoute>
+            }
+          >
+            {/* Base */}
+            {/* ✅ CHANGED: Global Admin sees analytics dashboard on Home */}
+            <Route index element={<GlobalAdminHomeSwitch />} />
+
+            <Route path="explore" element={<Explore />} />
+            <Route path="library" element={<Library />} />
+            <Route path="qa-tools" element={<QATools />} />
+            <Route path="security" element={<SecurityDashboard />} />
+
+            {/* ===================== */}
+            {/* APPROVALS (Institution Admin OR Admin OR Global Admin) */}
+            {/* ===================== */}
+            <Route element={<AdminOrInstitutionAdminRoute />}>
+              <Route path="approvals" element={<InstitutionApprovalDashboard />} />
+              <Route
+                path="approvals/subscription-requests"
+                element={<AdminSubscriptionRequests />}
+              />
+
+              {/* ✅ NEW: Institution Admin members management page (Option A) */}
+              <Route path="approvals/members" element={<InstitutionMembersAdmin />} />
+            </Route>
+
+            {/* ===================== */}
+            {/* ADMIN (Admin OR Global Admin) */}
+            {/* ===================== */}
+            <Route element={<AdminRoute />}>
+              <Route path="admin/institutions" element={<AdminInstitutions />} />
+              <Route path="admin/content-products" element={<AdminContentProducts />} />
+              <Route path="admin/documents" element={<AdminDocuments />} />
+
+              <Route
+                path="admin/institution-subscriptions"
+                element={<AdminInstitutionSubscriptions />}
+              />
+              <Route
+                path="admin/institution-bundle-subscriptions"
+                element={<AdminInstitutionBundleSubscriptions />}
+              />
+              <Route path="admin/institution-admins" element={<AdminInstitutionAdmins />} />
+              <Route
+                path="admin/content-products/:productId/documents"
+                element={<AdminProductDocuments />}
+              />
+
+              {/* ✅ FIXED: make it relative (no leading /dashboard) */}
+              <Route
+                path="admin/institutions/:id/users"
+                element={<AdminInstitutionUsers />}
+              />
+            </Route>
+
+            {/* Documents */}
+            <Route path="documents/:id" element={<DocumentDetails />} />
+            <Route path="documents/:id/read" element={<DocumentReader />} />
+          </Route>
+
+          {/* ===================== */}
+          {/* REDIRECTS */}
+          {/* ===================== */}
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
+  );
+}

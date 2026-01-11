@@ -1,0 +1,375 @@
+
+/* Container */
+.library-container {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: clamp(12px, 2vw, 24px);
+}
+
+/* GRID:
+   - Header and cards share the same grid.
+   - Header spans all columns via grid areas.
+*/
+.library-grid {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-areas:
+    "header header header header"
+    "cards  cards  cards  cards";
+}
+
+/* Breakpoints keep your 4–3–2–1 layout and maintain the header spanning behavior */
+@media (max-width: 1560px) {
+  .library-grid {
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-areas:
+      "header header header"
+      "cards  cards  cards";
+  }
+}
+
+@media (max-width: 1560px) {
+  .library-grid {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-areas:
+      "header header"
+      "cards  cards";
+  }
+}
+
+@media (max-width: 1560px) {
+  .library-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "header"
+      "cards";
+  }
+}
+
+/* Header: now a grid item that spans all columns */
+.library-header {
+  grid-area: header;
+  margin-bottom: 0; /* spacing handled by grid gap */
+  max-width: none;  /* remove the old 800px cap so it spans the grid */
+}
+
+.library-title {
+  margin-bottom: 8px;
+  color: var(--la-dark);
+  font-size: 28px;
+}
+
+.library-intro {
+  color: var(--la-gray);
+  font-size: 15px;
+  line-height: 1.8;
+  text-align: justify; /* optional; remove if you prefer ragged-right */
+}
+
+/* Cards wrapper sits in the cards area; renders card items */
+.library-cards {
+  grid-area: cards;
+  display: contents; /* allows children (.ebook-card) to place directly on grid tracks */
+  /* If you prefer a nested grid wrapper instead of `display: contents`,
+     remove this line and add another grid here. */
+}
+
+/* Loading / empty states */
+.library-loading {
+  font-size: 16px;
+  color: var(--la-gray);
+}
+
+.library-empty {
+  text-align: center;
+  margin-top: 60px;
+  color: var(--la-gray);
+}
+
+/* Card styles */
+.ebook-card {
+  background: var(--la-white);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+}
+
+.ebook-cover {
+  height: 160px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--la-red), var(--la-dark));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.ebook-placeholder {
+  color: white;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+.ebook-info h3 {
+  font-size: 16px;
+  margin: 0;
+  color: var(--la-dark);
+}
+
+.ebook-author {
+  font-size: 13px;
+  color: var(--la-gray);
+  margin-bottom: 10px;
+}
+
+.progress-bar {
+  background: #e5e7eb;
+  border-radius: 999px;
+  height: 6px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.progress {
+  height: 100%;
+  background: var(--la-red);
+}
+
+.ebook-btn {
+  margin-top: auto;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  background: var(--la-red);
+  color: var(--la-white);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.ebook-btn:hover {
+   background: var(--la-red-hover);
+}
+.library-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.library-header {
+  margin-bottom: 32px;
+}
+
+.library-title {
+  font-size: 26px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.library-intro {
+  color: #555;
+  max-width: 800px;
+}
+
+/* GRID */
+.library-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 24px;
+}
+
+/* CARD */
+.ebook-card {
+  background: #fff;
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+}
+
+.ebook-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.15);
+}
+
+/* COVER */
+.ebook-cover {
+  width: 100%;
+  height: 220px;              /* ⬅️ matches Explore */
+  background: #7a1e1e;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ebook-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;          /* bookstore style */
+  display: block;
+}
+
+.ebook-placeholder {
+  color: white;
+  font-weight: 700;
+  letter-spacing: 2px;
+  font-size: 20px;
+}
+
+/* INFO */
+.ebook-info {
+  padding: 16px;
+}
+
+.ebook-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.ebook-author {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 14px;
+}
+
+/* CTA */
+.ebook-btn {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: none;
+  background: #9b1c1c;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ebook-btn:hover {
+  opacity: 0.95;
+}
+
+/* Progress (future-proof) */
+.progress-bar {
+  height: 6px;
+  background: #eee;
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+
+.progress {
+  height: 100%;
+  background: #9b1c1c;
+  border-radius: 4px;
+}
+/* Button container */
+.ebook-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+/* Primary: Continue Reading */
+.ebook-btn {
+  padding: 6px 12px;          /* ⬅ reduced height */
+  font-size: 13px;            /* ⬅ slightly smaller */
+  line-height: 1.2;           /* ⬅ tighter text */
+  border-radius: 6px;
+  background: var(--la-red);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;        /* ⬅ prevents awkward wrapping */
+}
+
+/* Secondary: Remove */
+.ebook-remove-btn {
+  padding: 6px 12px;          /* ⬅ match height */
+  font-size: 13px;
+  line-height: 1.2;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid #dc2626;
+  color: #dc2626;
+  cursor: pointer;
+}
+
+/* Hover states */
+.ebook-btn:hover {
+  background: var(--la-red-hover);
+}
+
+.ebook-remove-btn:hover {
+  background: rgba(220, 38, 38, 0.08);
+}
+.ebook-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ebook-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.08);
+}
+/* -------------------------------- */
+/* LIBRARY CTA */
+/* -------------------------------- */
+.library-cta {
+  margin-top: 60px;
+  padding: 32px;
+  border-radius: 14px;
+  background: linear-gradient(
+    135deg,
+    rgba(161, 24, 30, 0.06),
+    rgba(0, 0, 0, 0.015)
+  );
+  text-align: center;
+}
+
+.library-cta h2 {
+  font-size: 20px;
+  margin-bottom: 8px;
+  color: var(--la-dark);
+}
+
+.library-cta p {
+  color: var(--la-gray);
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+.progress-wrapper {
+  margin-top: 8px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 6px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #2f80ed;
+}
+
+.progress-text {
+  font-size: 12px;
+  margin-top: 4px;
+  color: #555;
+}
+.badge.completed {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  background: #e6f7ed;
+  color: #0f9d58;
+  border-radius: 12px;
+}

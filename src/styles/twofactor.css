@@ -1,0 +1,188 @@
+.twofactor-page {
+  min-height: 100vh;
+  background: var(--la-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.twofactor-card {
+  width: 100%;
+  max-width: 520px;
+  background: var(--la-white);
+  border-radius: 16px;
+  padding: 92px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  text-align: center;
+}
+
+.brand-header {
+  margin-bottom: 16px;
+}
+
+.brand-logo {
+  max-width: 180px;
+}
+
+.brand-tagline {
+  margin-top: 4px;
+  color: var(--la-red);
+  font-weight: 600;
+}
+
+.subtitle {
+  color: var(--la-gray);
+  margin-bottom: 20px;
+}
+
+input {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 14px;
+  border-radius: 8px;
+  border: 1px solid var(--la-border);
+  font-size: 16px;
+  text-align: center;
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--la-red);
+}
+
+button {
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  border: none;
+  background: var(--la-red);
+  color: var(--la-white);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--la-red-hover);
+}
+
+button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.error-box {
+  background: #fde8e8;
+  color: var(--la-red);
+  border: 1px solid #fca5a5;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 14px;
+}
+
+.footer-text {
+  margin-top: 20px;
+  font-size: 13px;
+  color: var(--la-gray);
+}
+/* ================= AUTH FOOTER ================= */
+
+.auth-footer {
+  margin-top: 80px;
+  padding: 40px 16px;
+  background: linear-gradient(
+    180deg,
+    rgba(245, 245, 245, 0.7),
+    rgba(255, 255, 255, 1)
+  );
+  border-top: 1px solid #eee;
+}
+
+.auth-footer-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.auth-footer-inner h4 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: #111;
+}
+
+.auth-footer-inner p {
+  font-size: 0.95rem;
+  color: #666;
+  line-height: 1.6;
+}
+/* ================= PAGE LAYOUT ================= */
+
+.auth-page {
+  min-height: 100vh;            /* 🔑 full viewport height */
+  display: flex;
+  flex-direction: column;
+  background: #f6f6f6;
+}
+
+.auth-content {
+  flex: 1;                      /* 🔑 pushes footer down */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+}
+
+/* ================= FOOTER ================= */
+
+/* ================= AUTH FOOTER (EXPLORE STYLE) ================= */
+
+.auth-footer {
+  padding: 48px 16px;
+  background: linear-gradient(
+    180deg,
+    rgba(248, 242, 242, 0.9),
+    rgba(255, 255, 255, 1)
+  );
+  border-top: 1px solid #eee;
+}
+
+
+.auth-footer-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.auth-footer-inner h4 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+  color: #111;
+}
+
+.auth-footer-inner p {
+  font-size: 0.95rem;
+  color: #6b7280; /* same neutral gray as Explore */
+  line-height: 1.6;
+}
+
+.auth-footer-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.lock-icon {
+  color: #a11217; /* LawAfrica red */
+  display: inline-flex;
+}
+.success-box {
+  background: #e9fff3;
+  border: 1px solid #86efac;
+  color: #166534;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  font-size: 14px;
+}
