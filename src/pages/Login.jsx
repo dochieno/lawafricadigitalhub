@@ -7,8 +7,7 @@ import { useAuth } from "../auth/AuthContext";
 // ✅ Use env if provided, otherwise fallback:
 // - local dev: VITE_API_BASE_URL=http://localhost:7033
 // - production: VITE_API_BASE_URL=https://lawafricaapi.onrender.com
-const API_BASE =
-  (import.meta?.env?.VITE_API_BASE_URL || "http://localhost:7033").replace(/\/$/, "");
+const API_BASE = (import.meta?.env?.VITE_API_BASE_URL || "http://localhost:7033").replace(/\/$/, "");
 const API = `${API_BASE}/api`;
 
 export default function Login() {
@@ -340,8 +339,7 @@ export default function Login() {
               type="text"
               placeholder="Username or email"
               value={username}
-              onChange={(e) => setUsername(e.target.valuevalue)
-              }
+              onChange={(e) => setUsername(e.target.value)}
             />
 
             <input
