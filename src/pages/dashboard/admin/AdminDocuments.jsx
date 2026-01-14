@@ -12,26 +12,8 @@ function getServerOrigin() {
 }
 function buildCoverUrl(coverImagePath) {
   if (!coverImagePath) return null;
-  const clean = String(coverImagePath)
-    .replace(/^Storage\//i, "")
-    .replace(/^\/+/, "");
+  const clean = String(coverImagePath).replace(/^Storage\//i, "").replace(/^\/+/, "");
   return `${getServerOrigin()}/storage/${clean}`;
-}
-
-function toText(v) {
-  if (v == null) return "";
-  if (typeof v === "string") return v;
-  if (typeof v === "number" || typeof v === "boolean") return String(v);
-  if (typeof v === "object") {
-    if (v.message) return String(v.message);
-    if (v.error) return String(v.error);
-    try {
-      return JSON.stringify(v, null, 2);
-    } catch {
-      return "An unexpected error occurred.";
-    }
-  }
-  return String(v);
 }
 
 function getApiErrorMessage(err, fallback = "Request failed.") {
@@ -58,7 +40,7 @@ function safeBool(v, fallback = false) {
   return fallback;
 }
 
-// Try multiple endpoints (because some environments use /documents instead of /legal-documents)
+// Try multiple endpoints (in case environments differ)
 async function postMultipartWithFallback(paths, formData) {
   let lastErr = null;
   for (const p of paths) {
@@ -67,12 +49,8 @@ async function postMultipartWithFallback(paths, formData) {
     } catch (e) {
       lastErr = e;
       const status = e?.response?.status;
-
-      // If route mismatch, try next path
-      if (status === 404 || status === 405) continue;
-
-      // Otherwise it's a real error (500/401/etc)
-      throw e;
+      if (status === 404 || status === 405) continue; // try next route
+      throw e; // real error (500/401/etc)
     }
   }
   throw lastErr || new Error("Upload failed.");
@@ -132,7 +110,11 @@ export default function AdminDocuments() {
     setInfo("");
     setLoading(true);
     try {
-      const [docsRes, countriesRes] = await Promise.all([api.get("/legal-documents/admin"), api.get("/Country")]);
+      const [docsRes, countriesRes] = await Promise.all([
+        api.get("/legal-documents/admin"),
+        api.get("/Country"),
+      ]);
+
       setRows(Array.isArray(docsRes.data) ? docsRes.data : []);
       setCountries(Array.isArray(countriesRes.data) ? countriesRes.data : []);
     } catch (e) {
@@ -167,15 +149,19 @@ export default function AdminDocuments() {
     });
   }, [rows, q]);
 
+  function resetUploadInputs() {
+    setEbookFile(null);
+    setCoverFile(null);
+    if (ebookInputRef.current) ebookInputRef.current.value = "";
+    if (coverInputRef.current) coverInputRef.current.value = "";
+  }
+
   function openCreate() {
     setError("");
     setInfo("");
     setEditing(null);
     setForm({ ...emptyForm });
-    setEbookFile(null);
-    setCoverFile(null);
-    if (ebookInputRef.current) ebookInputRef.current.value = "";
-    if (coverInputRef.current) coverInputRef.current.value = "";
+    resetUploadInputs();
     setOpen(true);
   }
 
@@ -183,10 +169,7 @@ export default function AdminDocuments() {
     setError("");
     setInfo("");
     setEditing(row);
-    setEbookFile(null);
-    setCoverFile(null);
-    if (ebookInputRef.current) ebookInputRef.current.value = "";
-    if (coverInputRef.current) coverInputRef.current.value = "";
+    resetUploadInputs();
     setOpen(true);
 
     try {
@@ -212,7 +195,7 @@ export default function AdminDocuments() {
         publicPrice: d.publicPrice ?? d.PublicPrice ?? "",
         publicCurrency: d.publicCurrency ?? d.PublicCurrency ?? "KES",
       });
-    } catch (e) {
+    } catch {
       setInfo("Loaded partial row (details endpoint failed).");
     }
   }
@@ -233,7 +216,6 @@ export default function AdminDocuments() {
       category: form.category,
       countryId: Number(form.countryId),
 
-      // create then upload
       filePath: "",
       fileType: "pdf",
       fileSizeBytes: 0,
@@ -280,14 +262,12 @@ export default function AdminDocuments() {
     if (!form.title.trim()) return setError("Title is required.");
     if (!form.countryId) return setError("Country is required.");
 
-    // If not premium => force disable selling fields
     if (!form.isPremium) {
       setField("allowPublicPurchase", false);
       setField("publicPrice", "");
       setField("publicCurrency", "KES");
     }
 
-    // If selling ON => currency + price required
     if (form.isPremium && form.allowPublicPurchase) {
       const priceNum = Number(form.publicPrice);
       if (!form.publicCurrency?.trim()) return setError("Currency is required when public purchase is ON.");
@@ -304,14 +284,11 @@ export default function AdminDocuments() {
         return;
       }
 
-      // Create
       const res = await api.post("/legal-documents", buildCreatePayload());
       const newId = res.data?.id ?? res.data?.data?.id;
 
       if (newId) {
-        // Keep modal open, switch into edit mode so you can upload immediately (better UX)
-        const newRow = { id: newId, title: form.title, coverImagePath: null };
-        setEditing(newRow);
+        setEditing({ id: newId, title: form.title, coverImagePath: null });
         setInfo(`Document created (#${newId}). Now upload the ebook and cover below.`);
         await loadAll();
       } else {
@@ -337,15 +314,11 @@ export default function AdminDocuments() {
     try {
       const fd = new FormData();
 
-      // ✅ Send BOTH keys (covers backend binder differences)
+      // ✅ Send BOTH keys (backend may expect File or file)
       fd.append("file", ebookFile, ebookFile.name);
       fd.append("File", ebookFile, ebookFile.name);
 
-      // ✅ Try both endpoint variants (covers route mismatch)
-      await postMultipartWithFallback(
-        [`/legal-documents/${editing.id}/upload`, `/documents/${editing.id}/upload`],
-        fd
-      );
+      await postMultipartWithFallback([`/legal-documents/${editing.id}/upload`], fd);
 
       setInfo("Ebook uploaded successfully.");
       setEbookFile(null);
@@ -373,11 +346,7 @@ export default function AdminDocuments() {
       fd.append("file", coverFile, coverFile.name);
       fd.append("File", coverFile, coverFile.name);
 
-      // ✅ Try both endpoint variants
-      await postMultipartWithFallback(
-        [`/legal-documents/${editing.id}/cover`, `/documents/${editing.id}/cover`],
-        fd
-      );
+      await postMultipartWithFallback([`/legal-documents/${editing.id}/cover`], fd);
 
       setInfo("Cover uploaded successfully.");
       setCoverFile(null);
@@ -403,7 +372,7 @@ export default function AdminDocuments() {
 
   return (
     <div className="admin-page admin-page-wide">
-      {/* Minimal scoped styles (keeps your CSS file untouched) */}
+      {/* Scoped polish (no CSS file changes needed) */}
       <style>{`
         .admin-table-wrap { max-height: 68vh; overflow: auto; border-radius: 14px; }
         .admin-table thead th { position: sticky; top: 0; z-index: 2; background: #fafafa; }
@@ -411,8 +380,9 @@ export default function AdminDocuments() {
         .row-hover:hover td { background: #fbfbff; }
         .num-cell { text-align: right; font-variant-numeric: tabular-nums; }
         .price-on { font-weight: 900; }
+
         .admin-form-section {
-          margin: 12px 0 6px;
+          margin: 12px 0 10px;
           padding: 12px 12px;
           border-radius: 12px;
           background: #f9fafb;
@@ -428,6 +398,7 @@ export default function AdminDocuments() {
           font-size: 12px;
           line-height: 1.35;
         }
+
         .admin-upload-box {
           border: 1px dashed #d1d5db;
           background: #fff;
@@ -442,15 +413,13 @@ export default function AdminDocuments() {
           flex-wrap: wrap;
         }
         .filehint { color: #6b7280; font-weight: 700; font-size: 12px; }
-        .minihelp { color:#6b7280; font-size:12px; margin-top:6px; }
+        .minihelp { color:#6b7280; font-size:12px; margin-top:6px; line-height:1.35; }
       `}</style>
 
       <div className="admin-header">
         <div>
           <h1 className="admin-title">Admin · Books (Legal Documents)</h1>
-          <p className="admin-subtitle">
-            Create documents, set pricing, then upload the ebook (PDF/EPUB) and a cover image.
-          </p>
+          <p className="admin-subtitle">Create documents, set pricing, then upload the ebook and cover image.</p>
         </div>
 
         <div className="admin-actions">
@@ -463,7 +432,7 @@ export default function AdminDocuments() {
         </div>
       </div>
 
-      {(error || info) && <div className={`admin-alert ${error ? "error" : "ok"}`}>{error ? error : info}</div>}
+      {(error || info) && <div className={`admin-alert ${error ? "error" : "ok"}`}>{error || info}</div>}
 
       <div className="admin-card admin-card-fill">
         <div className="admin-toolbar">
@@ -572,7 +541,7 @@ export default function AdminDocuments() {
               <div>
                 <h3 className="admin-modal-title">{editing ? `Edit Document #${editing.id}` : "Create Document"}</h3>
                 <div className="admin-modal-subtitle">
-                  {editing ? "Update metadata, pricing and upload files." : "Create first, then upload ebook & cover."}
+                  {editing ? "Update details, pricing and upload files." : "Create first, then upload ebook & cover."}
                 </div>
               </div>
 
@@ -582,10 +551,11 @@ export default function AdminDocuments() {
             </div>
 
             <div className="admin-modal-body admin-modal-scroll">
-              {/* SECTION: Metadata */}
               <div className="admin-form-section">
                 <div className="admin-form-section-title">Document details</div>
-                <div className="admin-form-section-sub">Title, jurisdiction, status, and descriptive metadata.</div>
+                <div className="admin-form-section-sub">
+                  Title, jurisdiction, category, and descriptive metadata.
+                </div>
               </div>
 
               <div className="admin-grid">
@@ -665,11 +635,10 @@ export default function AdminDocuments() {
                 </div>
               </div>
 
-              {/* SECTION: Pricing */}
               <div className="admin-form-section">
                 <div className="admin-form-section-title">Pricing rules</div>
                 <div className="admin-form-section-sub">
-                  Only premium documents can be sold to the public. If public purchase is ON, set currency and price.
+                  Only premium documents can be sold publicly. Turn on public purchase to set currency and price.
                 </div>
               </div>
 
@@ -685,7 +654,7 @@ export default function AdminDocuments() {
                     <option value="true">Yes</option>
                     <option value="false">No</option>
                   </select>
-                  {!form.isPremium && <div className="minihelp">This is disabled because the document is not premium.</div>}
+                  {!form.isPremium && <div className="minihelp">Disabled because the document is not premium.</div>}
                 </div>
 
                 <div className="admin-field">
@@ -710,11 +679,10 @@ export default function AdminDocuments() {
                 </div>
               </div>
 
-              {/* SECTION: Upload */}
               <div className="admin-form-section">
                 <div className="admin-form-section-title">Files</div>
                 <div className="admin-form-section-sub">
-                  Upload the ebook (PDF/EPUB) and cover image. You must save first to get an ID.
+                  You must save first (to get an ID), then upload ebook and cover.
                 </div>
               </div>
 
@@ -736,10 +704,6 @@ export default function AdminDocuments() {
                         {uploadingEbook ? "Uploading…" : "Upload ebook"}
                       </button>
                       <span className="filehint">{ebookFile ? ebookFile.name : "No file selected."}</span>
-                    </div>
-
-                    <div className="minihelp">
-                      If upload fails, it’s usually a backend multipart binding issue. This page sends both <b>file</b> and <b>File</b> keys and retries both routes automatically.
                     </div>
                   </div>
                 </div>
@@ -768,11 +732,17 @@ export default function AdminDocuments() {
                         <img
                           src={buildCoverUrl(editing.coverImagePath)}
                           alt="cover"
-                          style={{ width: 110, height: 140, objectFit: "cover", borderRadius: 12, border: "1px solid #e5e7eb" }}
+                          style={{
+                            width: 110,
+                            height: 140,
+                            objectFit: "cover",
+                            borderRadius: 12,
+                            border: "1px solid #e5e7eb",
+                          }}
                           onError={(e) => (e.currentTarget.style.display = "none")}
                         />
                         <div className="filehint" style={{ maxWidth: 520 }}>
-                          Current cover is shown above (if available). If you don’t see it, the file may not be in /storage or the path differs.
+                          Current cover is shown if available.
                         </div>
                       </div>
                     )}
