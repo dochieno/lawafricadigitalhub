@@ -100,11 +100,11 @@ export default function TwoFactorSetup() {
     try {
       // ✅ FIX 1: remove "/api" prefix (client.js already includes it in baseURL)
       // ✅ FIX 2: keep under Auth controller
-      const res = await api.post("/Auth/resend-2fa-setup", {
+      const res = await api.post("/Security/resend-2fa-setup", {
         username: username.trim(),
         password,
       });
-
+      
       const data = res.data?.data ?? res.data;
 
       // In dev you might get setupToken back
