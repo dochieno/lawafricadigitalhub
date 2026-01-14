@@ -194,11 +194,7 @@ export default function AdminContentProducts() {
 
   // ✅ When rows change, fetch counts for visible products in background
   useEffect(() => {
-    const ids = rows
-      .map((r) => r.id ?? r.Id)
-      .filter((id) => id != null);
-
-    // only fetch those still marked null/undefined
+    const ids = rows.map((r) => r.id ?? r.Id).filter((id) => id != null);
     const needs = ids.filter((id) => docCounts[id] == null);
     if (needs.length) loadDocCountsForProducts(needs);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -214,7 +210,9 @@ export default function AdminContentProducts() {
       const desc = (r.description ?? r.Description ?? "").toLowerCase();
 
       const instModel = accessModelLabel(r.institutionAccessModel ?? r.InstitutionAccessModel);
-      const pubModel = accessModelLabel(r.publicAccessModel ?? r.PublicAccessModel ?? r.accessModel ?? r.AccessModel);
+      const pubModel = accessModelLabel(
+        r.publicAccessModel ?? r.PublicAccessModel ?? r.accessModel ?? r.AccessModel
+      );
 
       const instBundle = bundleLabel(
         safeBool(r.includedInInstitutionBundle ?? r.IncludedInInstitutionBundle, true),
@@ -227,8 +225,7 @@ export default function AdminContentProducts() {
       );
 
       const docsCount = docCounts[id];
-      const docsText =
-        typeof docsCount === "number" ? String(docsCount) : docsCount === "err" ? "" : "";
+      const docsText = typeof docsCount === "number" ? String(docsCount) : docsCount === "err" ? "" : "";
 
       const meta = `${instModel} ${pubModel} ${instBundle} ${pubBundle} ${docsText}`.toLowerCase();
 
@@ -365,16 +362,11 @@ export default function AdminContentProducts() {
             <tr>
               <th style={{ width: "22%" }}>Name</th>
               <th style={{ width: "26%" }}>Description</th>
-
-              {/* ✅ NEW column */}
               <th style={{ width: "7%" }}>Docs</th>
-
               <th style={{ width: "12%" }}>Institution</th>
               <th style={{ width: "12%" }}>Inst. Subscription</th>
-
               <th style={{ width: "12%" }}>Public</th>
               <th style={{ width: "12%" }}>Public Subscription</th>
-
               <th style={{ textAlign: "right", width: "15%" }}>Actions</th>
             </tr>
           </thead>
@@ -412,7 +404,6 @@ export default function AdminContentProducts() {
 
                   <td style={{ color: "#374151" }}>{desc || <span style={{ color: "#9ca3af" }}>—</span>}</td>
 
-                  {/* ✅ Docs count */}
                   <td>
                     <span className={`admin-pill ${typeof c === "number" ? "" : "muted"}`}>{countText}</span>
                   </td>
@@ -440,13 +431,8 @@ export default function AdminContentProducts() {
                   </td>
 
                   <td>
-                    <div className="admin-row-actions" style={{ justifyContent: "flex-end", gap: 10 }}>
-                      <button
-                        className="admin-action-btn neutral small"
-                        onClick={() => openEdit(r)}
-                        disabled={busy}
-                        title="Edit product"
-                      >
+                    <div className="admin-row-actions actions-inline" style={{ justifyContent: "flex-end", gap: 10 }}>
+                      <button className="admin-action-btn neutral small" onClick={() => openEdit(r)} disabled={busy}>
                         Edit
                       </button>
 
@@ -454,7 +440,6 @@ export default function AdminContentProducts() {
                         className="admin-action-btn neutral small"
                         onClick={() => navigate(`/dashboard/admin/content-products/${id}/documents`)}
                         disabled={busy}
-                        title="Manage documents in this product"
                       >
                         Documents
                       </button>
@@ -479,7 +464,7 @@ export default function AdminContentProducts() {
       {open && (
         <div className="admin-modal-overlay" onClick={closeModal}>
           <div className="admin-modal admin-modal-tight" onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-head">
+            <div className="admin-modal-head admin-modal-head-x">
               <div>
                 <h3 className="admin-modal-title">{editing ? "Edit Content Product" : "Create Content Product"}</h3>
                 <div className="admin-modal-subtitle">
@@ -487,8 +472,9 @@ export default function AdminContentProducts() {
                 </div>
               </div>
 
-              <button className="admin-btn" onClick={closeModal} disabled={busy}>
-                Close
+              {/* X close button */}
+              <button className="admin-modal-xbtn" onClick={closeModal} disabled={busy} aria-label="Close">
+                ×
               </button>
             </div>
 
@@ -523,7 +509,14 @@ export default function AdminContentProducts() {
                   </select>
                 </div>
 
-                {/* ===================== INSTITUTION RULE ===================== */}
+                {/* ✅ Section header: Institution rules */}
+                <div className="admin-form-section">
+                  <div className="admin-form-section-title">Institution rules</div>
+                  <div className="admin-form-section-sub">
+                    Applies when the product is used under an institution account.
+                  </div>
+                </div>
+
                 <div className="admin-field">
                   <label>Institution access model</label>
                   <select
@@ -554,7 +547,14 @@ export default function AdminContentProducts() {
                   </select>
                 </div>
 
-                {/* ===================== PUBLIC RULE ===================== */}
+                {/* ✅ Section header: Public rules */}
+                <div className="admin-form-section">
+                  <div className="admin-form-section-title">Public rules</div>
+                  <div className="admin-form-section-sub">
+                    Applies when the product is used by individual/public users (non-institution).
+                  </div>
+                </div>
+
                 <div className="admin-field">
                   <label>Public access model</label>
                   <select
@@ -590,11 +590,6 @@ export default function AdminContentProducts() {
                   <label>Description</label>
                   <textarea rows={4} value={form.description} onChange={(e) => setField("description", e.target.value)} />
                 </div>
-              </div>
-
-              <div className="admin-note" style={{ marginTop: 10 }}>
-                <b>Backend:</b> GET <code>/api/content-products</code>, GET <code>/api/content-products/{`{id}`}</code>,
-                POST <code>/api/content-products</code>, PUT <code>/api/content-products/{`{id}`}</code>
               </div>
             </div>
 

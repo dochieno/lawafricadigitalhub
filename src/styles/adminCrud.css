@@ -940,3 +940,155 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+/* =========================================================
+   Admin Modal + Form UX polish (safe, global for modals)
+   Paste at END of adminCrud.css
+========================================================= */
+
+/* Modal sizing + nicer spacing */
+.admin-modal {
+  width: min(940px, 100%);
+  max-height: 88vh;
+  border-radius: 20px;
+}
+
+/* Head looks less heavy */
+.admin-modal-head {
+  background: #ffffff;
+  padding: 16px 18px;
+}
+
+/* Title/subtitle spacing */
+.admin-modal-title {
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+
+.admin-modal-subtitle {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+/* Body gets softer background + less visual noise */
+.admin-modal-body {
+  background: #fbfbfc;
+  padding: 16px 18px;
+}
+
+/* Footer feels sticky + clear action area */
+.admin-modal-foot {
+  background: #ffffff;
+  padding: 14px 18px;
+  border-top: 1px solid #eef2f7;
+}
+
+/* Make grid feel less cramped */
+.admin-grid {
+  gap: 14px;
+}
+
+/* Field blocks */
+.admin-field {
+  min-width: 0;
+}
+
+/* Inputs */
+.admin-field input,
+.admin-field select,
+.admin-field textarea {
+  width: 100%;
+  padding: 12px 12px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  outline: none;
+  background: #ffffff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease;
+}
+
+/* Textarea: better UX */
+.admin-field textarea {
+  resize: vertical;
+  min-height: 110px;
+  line-height: 1.45;
+}
+
+/* Focus: match LawAfrica brand direction (subtle) */
+.admin-field input:focus,
+.admin-field select:focus,
+.admin-field textarea:focus {
+  border-color: rgba(122, 31, 31, 0.45);
+  box-shadow: 0 0 0 4px rgba(122, 31, 31, 0.12);
+}
+
+/* Disabled inputs: clearer */
+.admin-field input:disabled,
+.admin-field select:disabled,
+.admin-field textarea:disabled {
+  background: #f3f4f6;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+/* Helper sections (used in updated JSX) */
+.admin-form-section {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+  padding: 12px 12px;
+  border-radius: 14px;
+  border: 1px solid #eef2f7;
+  background: #ffffff;
+}
+
+.admin-form-section-title {
+  font-weight: 900;
+  color: #111827;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.admin-form-section-sub {
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* Small info note box */
+.admin-note-soft {
+  grid-column: 1 / -1;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  color: #374151;
+}
+
+/* Close button: consistent (remove red X feel) */
+.admin-modal-xbtn {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  color: #111827;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
+}
+
+.admin-modal-xbtn:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.admin-modal-xbtn:disabled {
+  opacity: 0.6;
+}
+
+/* Modal overlay: slightly softer */
+.admin-modal-overlay {
+  background: rgba(15, 23, 42, 0.38);
+}
+
+/* Make primary button look more premium */
+.admin-btn.primary {
+  box-shadow: 0 10px 18px rgba(122, 31, 31, 0.18);
+}
+
+.admin-btn.primary:active {
+  transform: translateY(1px);
+}
