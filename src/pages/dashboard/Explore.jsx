@@ -9,13 +9,15 @@ function getServerOrigin() {
   return String(API_BASE_URL || "").replace(/\/api\/?$/i, "");
 }
 
+// ✅ FIXED: do NOT lowercase (Render/Linux is case-sensitive)
+// ✅ Normalize "\" to "/" and strip "Storage/" prefix safely
 function buildCoverUrl(coverImagePath) {
   if (!coverImagePath) return null;
 
   const clean = String(coverImagePath)
-    .replace(/^Storage\//i, "")
+    .replace(/\\/g, "/")
     .replace(/^\/+/, "")
-    .toLowerCase();
+    .replace(/^Storage\//, "");
 
   return `${getServerOrigin()}/storage/${clean}`;
 }
@@ -155,7 +157,7 @@ export default function Explore() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered, isInst, isPublic]);
 
-  // ✅ NEW: Fetch availability for visible docs (so we can disable Add-to-library for "Coming soon")
+  // ✅ Fetch availability for visible docs (so we can disable Add-to-library for "Coming soon")
   useEffect(() => {
     let cancelled = false;
 
@@ -300,8 +302,7 @@ export default function Explore() {
             const hasFullAccess = !!access?.hasFullAccess;
             const accessLoading = accessLoadingIds.has(d.id);
 
-            const hasContent =
-              availabilityMap[d.id] == null ? true : !!availabilityMap[d.id];
+            const hasContent = availabilityMap[d.id] == null ? true : !!availabilityMap[d.id];
             const availabilityLoading = availabilityLoadingIds.has(d.id);
 
             // ✅ Institution premium: show Add/Remove if entitled
@@ -311,8 +312,7 @@ export default function Explore() {
             const showPublicReadNow = d.isPremium && isPublic && hasFullAccess;
 
             // ✅ Universal rule: coming soon => no add-to-library
-            const canAddLibraryHere =
-              hasContent && (!d.isPremium || showPremiumAsLibraryAction);
+            const canAddLibraryHere = hasContent && (!d.isPremium || showPremiumAsLibraryAction);
 
             const disabledReason = !hasContent ? "Coming soon" : "";
 
@@ -377,9 +377,7 @@ export default function Explore() {
                   {!d.isPremium && (
                     <button
                       className="explore-btn"
-                      disabled={
-                        actionLoading === d.id || !canAddLibraryHere || availabilityLoading
-                      }
+                      disabled={actionLoading === d.id || !canAddLibraryHere || availabilityLoading}
                       title={disabledReason}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -474,10 +472,7 @@ export default function Explore() {
           resources organized in one place for quick access anytime.
         </p>
 
-        <button
-          className="explore-cta-btn"
-          onClick={() => navigate("/dashboard/library")}
-        >
+        <button className="explore-cta-btn" onClick={() => navigate("/dashboard/library")}>
           📚 Go to My Library
         </button>
       </section>

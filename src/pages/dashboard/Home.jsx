@@ -1,8 +1,24 @@
+// src/pages/dashboard/Home.jsx
 import { useAuth } from "../../auth/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import api from "../../api/client";
+import api, { API_BASE_URL } from "../../api/client";
 import "../../styles/dashboard.css";
+
+function getServerOrigin() {
+  return String(API_BASE_URL || "").replace(/\/api\/?$/i, "");
+}
+
+function buildCoverUrl(coverImagePath) {
+  if (!coverImagePath) return null;
+
+  const clean = String(coverImagePath)
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "")
+    .replace(/^Storage\//, "");
+
+  return `${getServerOrigin()}/storage/${clean}`;
+}
 
 export default function Home() {
   const { user } = useAuth();
@@ -12,7 +28,7 @@ export default function Home() {
   const [continueReadingDocId, setContinueReadingDocId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [readingStreak, setReadingStreak] = useState(0);
- /* const [recentItems, setRecentItems] = useState([]);*/
+  /* const [recentItems, setRecentItems] = useState([]);*/
 
   useEffect(() => {
     async function loadDashboardData() {
@@ -52,29 +68,24 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-  api.get("/reading-progress/recent?take=30").then((res) => {
-    const days = new Set(
-      res.data.map((x) =>
-        new Date(x.lastReadAt).toDateString()
-      )
-    );
+    api.get("/reading-progress/recent?take=30").then((res) => {
+      const days = new Set(res.data.map((x) => new Date(x.lastReadAt).toDateString()));
 
-    let streak = 0;
-    let day = new Date();
+      let streak = 0;
+      let day = new Date();
 
-    while (days.has(day.toDateString())) {
-      streak++;
-      day.setDate(day.getDate() - 1);
-    }
+      while (days.has(day.toDateString())) {
+        streak++;
+        day.setDate(day.getDate() - 1);
+      }
 
-    setReadingStreak(streak);
-  });
-}, []);
-
+      setReadingStreak(streak);
+    });
+  }, []);
 
   // --------------------------------------------
-// LOAD RECENTLY READ
-// --------------------------------------------
+  // LOAD RECENTLY READ
+  // --------------------------------------------
   /*useEffect(() => {
     api
       .get("/reading-progress/recent?take=5")
@@ -87,33 +98,25 @@ export default function Home() {
   }, []);*/
 
   const continueReading =
-    ebooks.find((b) => b.id === continueReadingDocId) ||
-    (ebooks.length > 0 ? ebooks[0] : null);
+    ebooks.find((b) => b.id === continueReadingDocId) || (ebooks.length > 0 ? ebooks[0] : null);
 
   const libraryPreview = ebooks.slice(0, 3);
 
   const ebookTitleMap = {};
-      ebooks.forEach((b) => {
-        ebookTitleMap[b.id] = b.title;
-      });
+  ebooks.forEach((b) => {
+    ebookTitleMap[b.id] = b.title;
+  });
 
   return (
     <div className="dashboard-container">
       {/* HEADER */}
       <header className="dashboard-header">
-        <h1>
-          Welcome back{user?.firstName ? `, ${user.firstName}` : ""} 👋
-        </h1>
+        <h1>Welcome back{user?.firstName ? `, ${user.firstName}` : ""} 👋</h1>
         <p>
-          Ready to dive deeper into your legal research? Pick up where you left off
-          or discover authoritative insights from LawAfrica’s trusted publications.
+          Ready to dive deeper into your legal research? Pick up where you left off or discover authoritative insights
+          from LawAfrica’s trusted publications.
         </p>
-        {readingStreak > 0 && (
-          <p className="reading-streak">
-            🔥 {readingStreak}-day reading streak
-          </p>
-        )}
-
+        {readingStreak > 0 && <p className="reading-streak">🔥 {readingStreak}-day reading streak</p>}
       </header>
 
       {/* CONTINUE READING */}
@@ -128,20 +131,17 @@ export default function Home() {
           <div className="library-preview">
             <div
               className="library-preview-card"
-              onClick={() =>
-                navigate(`/dashboard/documents/${continueReading.id}/read`)
-              }
+              onClick={() => navigate(`/dashboard/documents/${continueReading.id}/read`)}
             >
               <div className="library-cover">
                 {continueReading.coverImagePath ? (
                   <img
-                    src={
-                      import.meta.env.VITE_API_URL +
-                      "/storage/" +
-                      continueReading.coverImagePath.replace("Storage/", "")
-                    }
+                    src={buildCoverUrl(continueReading.coverImagePath)}
                     alt={continueReading.title}
                     loading="lazy"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
                   />
                 ) : (
                   "LAW"
@@ -152,10 +152,7 @@ export default function Home() {
 
               {continueReading.progress > 0 && (
                 <div className="progress-bar compact">
-                  <div
-                    className="progress-fill"
-                    style={{ width: continueReading.progress + "%" }}
-                  />
+                  <div className="progress-fill" style={{ width: continueReading.progress + "%" }} />
                 </div>
               )}
             </div>
@@ -164,9 +161,9 @@ export default function Home() {
           <p className="empty-state">You haven’t started reading yet.</p>
         )}
       </section>
-      
-     {/* ================= RECENTLY READ ================= */}
-{/*
+
+      {/* ================= RECENTLY READ ================= */}
+      {/*
 <section className="dashboard-section">
   <div className="section-header">
     <h2>Recently Read</h2>
@@ -201,15 +198,11 @@ export default function Home() {
 </section>
 */}
 
-
       {/* LIBRARY PREVIEW */}
       <section className="dashboard-section">
         <div className="section-header">
           <h2>Your Library</h2>
-          <button
-            className="link-btn"
-            onClick={() => navigate("/dashboard/library")}
-          >
+          <button className="link-btn" onClick={() => navigate("/dashboard/library")}>
             View all →
           </button>
         </div>
@@ -222,20 +215,17 @@ export default function Home() {
               <div
                 key={book.id}
                 className="library-preview-card"
-                onClick={() =>
-                  navigate(`/dashboard/documents/${book.id}`)
-                }
+                onClick={() => navigate(`/dashboard/documents/${book.id}`)}
               >
                 <div className="library-cover">
                   {book.coverImagePath ? (
                     <img
-                      src={
-                        import.meta.env.VITE_API_URL +
-                        "/storage/" +
-                        book.coverImagePath.replace("Storage/", "")
-                      }
+                      src={buildCoverUrl(book.coverImagePath)}
                       alt={book.title}
                       loading="lazy"
+                      onError={(e) => {
+                        e.currentTarget.style.display = "none";
+                      }}
                     />
                   ) : (
                     "LAW"
@@ -254,14 +244,11 @@ export default function Home() {
       <section className="dashboard-explore-cta">
         <h2>Explore the Full LawAfrica Catalog</h2>
         <p>
-          Discover free and premium legal publications across jurisdictions,
-          categories, and practice areas curated for professionals and students.
+          Discover free and premium legal publications across jurisdictions, categories, and practice areas curated for
+          professionals and students.
         </p>
 
-        <button
-          className="outline-btn"
-          onClick={() => navigate("/dashboard/explore")}
-        >
+        <button className="outline-btn" onClick={() => navigate("/dashboard/explore")}>
           Browse All Publications
         </button>
       </section>
