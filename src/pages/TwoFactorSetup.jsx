@@ -98,7 +98,9 @@ export default function TwoFactorSetup() {
 
     setResendLoading(true);
     try {
-      const res = await api.post("/security/resend-2fa-setup", {
+      // ✅ FIX 1: remove "/api" prefix (client.js already includes it in baseURL)
+      // ✅ FIX 2: keep under Auth controller
+      const res = await api.post("/Auth/resend-2fa-setup", {
         username: username.trim(),
         password,
       });
@@ -136,7 +138,8 @@ export default function TwoFactorSetup() {
 
     setLoading(true);
     try {
-      await api.post("/security/verify-2fa-setup", {
+      // ✅ FIX 3: this should also be under Auth (not /security)
+      await api.post("/Auth/verify-2fa-setup", {
         setupToken: setupToken.trim(),
         code,
       });
