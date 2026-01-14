@@ -22,12 +22,12 @@ export default function DocumentReader() {
     "Access blocked. Please contact your administrator."
   );
 
-  // ✅ NEW: purchase gating returned by /access
+  // ✅ purchase gating returned by /access
   const [canPurchaseIndividually, setCanPurchaseIndividually] = useState(true);
   const [purchaseDisabledReason, setPurchaseDisabledReason] = useState(null);
   const [blockReason, setBlockReason] = useState(null);
 
-  // ✅ NEW: success toast when landing from payment
+  // ✅ success toast when landing from payment
   const [toast, setToast] = useState(null);
 
   function showToast(message, type = "success") {
@@ -35,7 +35,7 @@ export default function DocumentReader() {
     setTimeout(() => setToast(null), 2500);
   }
 
-  // ✅ NEW: show success toast when redirected from Paystack/MPesa return
+  // ✅ show success toast when redirected from Paystack/MPesa return
   useEffect(() => {
     const qs = new URLSearchParams(location.search);
     const paid = (qs.get("paid") || "").trim();
@@ -78,16 +78,17 @@ export default function DocumentReader() {
         setCanPurchaseIndividually(true);
         setPurchaseDisabledReason(null);
 
+        setContentAvailable(true);
         setBlockMessage("Access blocked. Please contact your administrator.");
 
-        // 1️⃣ Load access rules
+        // 1️⃣ Load access rules (this is the main authoritative backend enforcement)
         const accessRes = await api.get(`/legal-documents/${id}/access`);
         if (cancelled) return;
 
         const accessData = accessRes.data;
         setAccess(accessData);
 
-        // ✅ NEW: capture purchase policy from server
+        // capture purchase policy from server
         setCanPurchaseIndividually(accessData?.canPurchaseIndividually !== false);
         setPurchaseDisabledReason(accessData?.purchaseDisabledReason || null);
 
@@ -110,15 +111,22 @@ export default function DocumentReader() {
         }
 
         // 3️⃣ Verify PDF content exists (only if not blocked)
+        // NOTE: This call should NOT be the one that logs you out.
+        // If it returns 404 => "Coming soon". Other errors => keep reader resilient.
         try {
           await api.get(`/documents/${id}/content`, { responseType: "blob" });
           if (!cancelled) setContentAvailable(true);
         } catch (err) {
           if (cancelled) return;
-          if (err.response?.status === 404) {
+
+          const status = err?.response?.status;
+
+          if (status === 404) {
             setContentAvailable(false);
           } else {
-            throw err;
+            // Do NOT force logout here — just show a safe message.
+            console.error("Content check failed:", err);
+            setContentAvailable(false);
           }
         }
       } catch (err) {
@@ -168,7 +176,6 @@ export default function DocumentReader() {
           <div className="preview-lock-card">
             <h2>Access blocked</h2>
 
-            {/* ✅ optional reason badge */}
             {blockReason && (
               <div
                 style={{
@@ -189,7 +196,6 @@ export default function DocumentReader() {
 
             <p style={{ whiteSpace: "pre-wrap" }}>{blockMessage}</p>
 
-            {/* ✅ If purchases disabled by institution policy */}
             {!canPurchaseIndividually && (
               <div
                 style={{
@@ -216,7 +222,6 @@ export default function DocumentReader() {
                 Back to Details
               </button>
 
-              {/* ✅ Still allow personal purchase ONLY if server allows */}
               <button
                 className="primary-btn"
                 disabled={!canPurchaseIndividually || offer?.alreadyOwned === true}
@@ -297,7 +302,6 @@ export default function DocumentReader() {
         onPreviewLimitReached={() => setLocked(true)}
       />
 
-      {/* Preview lock overlay */}
       {locked && !access.hasFullAccess && (
         <div className="preview-lock-backdrop">
           <div className="preview-lock-card">
