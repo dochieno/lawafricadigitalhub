@@ -1,14 +1,30 @@
 // src/utils/pdfSource.js
-import { API_BASE_URL } from "../api/client";
+
+function getApiBase() {
+  const envBase =
+    import.meta?.env?.VITE_API_BASE_URL ||
+    import.meta?.env?.VITE_API_URL ||
+    "";
+  return (envBase || "").replace(/\/+$/, "");
+}
+
+function getToken() {
+  return (
+    localStorage.getItem("token") ||
+    localStorage.getItem("accessToken") ||
+    localStorage.getItem("jwt") ||
+    ""
+  );
+}
 
 export function getPdfSource(documentId) {
-  const token = localStorage.getItem("token");
+  const base = getApiBase();
+  const url = `${base}/legal-documents/${documentId}/download`;
+  const token = getToken();
 
-  // API_BASE_URL is expected to be like: https://lawafricaapi.onrender.com/api
-  const url = `${String(API_BASE_URL).replace(/\/+$/, "")}/documents/${documentId}/content`;
-
-  // react-pdf supports { url, httpHeaders }
-  return token
-    ? { url, httpHeaders: { Authorization: `Bearer ${token}` } }
-    : { url };
+  return {
+    url,
+    httpHeaders: token ? { Authorization: `Bearer ${token}` } : {},
+    withCredentials: true,
+  };
 }

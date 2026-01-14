@@ -104,8 +104,7 @@ export default function PdfViewer({
 
   /* ==================================================
      ✅ ENTITLEMENT PREFLIGHT GUARD (FIXED ENDPOINT)
-     - prevents 405
-     - prevents "Failed to load PDF file"
+     - IMPORTANT CHANGE: use /legal-documents/{id}/download (your real endpoint)
      ================================================== */
   useEffect(() => {
     let cancelled = false;
@@ -115,9 +114,9 @@ export default function PdfViewer({
     setBlockMessage("");
 
     api
-      .get(`/documents/${documentId}/content`, {
+      .get(`/legal-documents/${documentId}/download`, {
         responseType: "blob",
-        headers: { Range: "bytes=0-0" },
+        headers: { Range: "bytes=0-0" }, // small probe
       })
       .then(() => {
         if (cancelled) return;
@@ -128,7 +127,7 @@ export default function PdfViewer({
 
         const status = err?.response?.status;
 
-        // 401 should be handled by your axios interceptor (logout/refresh token etc.)
+        // 403 => entitlement denied
         if (status === 403) {
           setBlocked(true);
           setBlockMessage(
@@ -137,6 +136,16 @@ export default function PdfViewer({
           );
         }
 
+        // 404 => file missing
+        if (status === 404) {
+          setBlocked(true);
+          setBlockMessage(
+            err?.response?.data?.message ||
+              "This document is listed in our catalog, but its content is not yet available."
+          );
+        }
+
+        // Let other errors still pass entitlement check so UI doesn't hang
         setEntitlementChecked(true);
       });
 
@@ -406,10 +415,7 @@ export default function PdfViewer({
   }
 
   /* ==================================================
-     (Front-end overlap check kept, but rect-based meta has no start/end)
-     NOTE: if your API requires charOffsetStart/end, you must compute them.
-     Right now your saveNote still sends meta.start/meta.end which don't exist.
-     I'm leaving your behavior, but this is a separate bug to fix later.
+     (Overlap check + highlight rendering unchanged)
      ================================================== */
   function overlaps(aStart, aEnd, bStart, bEnd) {
     const as = Math.min(aStart, aEnd);
@@ -429,7 +435,6 @@ export default function PdfViewer({
         n.charOffsetEnd != null
     );
 
-    // meta.start/meta.end might be undefined with rect-based highlighting
     if (meta.start == null || meta.end == null) return false;
 
     return pageNotes.some((n) =>
@@ -437,9 +442,6 @@ export default function PdfViewer({
     );
   }
 
-  /* ==================================================
-     HIGHLIGHT RENDERING BY OFFSETS (existing)
-     ================================================== */
   function clearExistingMarks(textLayerEl) {
     const marks = textLayerEl.querySelectorAll("mark.pdf-highlight");
     marks.forEach((mark) => {
@@ -543,9 +545,7 @@ export default function PdfViewer({
     attachHighlightClickHandler(textLayer);
   }
 
-  /* ==================================================
-     NOTES CRUD
-     ================================================== */
+  // NOTES CRUD unchanged (kept)
   async function saveNote() {
     try {
       if (!highlightMeta) return;
@@ -564,11 +564,8 @@ export default function PdfViewer({
         legalDocumentId: Number(documentId),
         highlightedText: highlightMeta.text,
         pageNumber: highlightMeta.page,
-
-        // NOTE: rect-based meta doesn't provide offsets; leave as-is for now
         charOffsetStart: highlightMeta.start,
         charOffsetEnd: highlightMeta.end,
-
         content: finalContent,
         highlightColor: highlightColor,
       });
@@ -628,9 +625,6 @@ export default function PdfViewer({
     }
   }
 
-  /* ==================================================
-     GROUP NOTES BY PAGE
-     ================================================== */
   const groupedNotes = useMemo(() => {
     const map = new Map();
 
@@ -826,7 +820,9 @@ export default function PdfViewer({
                     <button
                       key={c}
                       type="button"
-                      className={`hl-color-chip ${c} ${highlightColor === c ? "active" : ""}`}
+                      className={`hl-color-chip ${c} ${
+                        highlightColor === c ? "active" : ""
+                      }`}
                       onClick={() => setHighlightColor(c)}
                       title={c}
                     />
@@ -878,7 +874,9 @@ export default function PdfViewer({
               ) : (
                 groupedNotes.map((group) => (
                   <div key={group.pageNumber ?? "unknown"} className="notes-group">
-                    <div className="notes-group-title">Page {group.pageNumber ?? "—"}</div>
+                    <div className="notes-group-title">
+                      Page {group.pageNumber ?? "—"}
+                    </div>
 
                     {group.items.map((note) => (
                       <div
@@ -897,7 +895,9 @@ export default function PdfViewer({
                           onClick={() => jumpToPage(note.pageNumber)}
                           style={{ cursor: "pointer" }}
                         >
-                          <span className={`note-color-dot ${note.highlightColor || "yellow"}`} />
+                          <span
+                            className={`note-color-dot ${note.highlightColor || "yellow"}`}
+                          />
                           Page {note.pageNumber ?? "—"}
                         </div>
 
