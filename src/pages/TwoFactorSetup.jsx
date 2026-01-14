@@ -12,6 +12,24 @@ const LS_REG_PASSWORD = "la_reg_password";
 const LS_LOGIN_USERNAME = "la_login_username";
 const LS_LOGIN_PASSWORD = "la_login_password";
 
+// ✅ Small helper: avoid [object Object]
+function getApiErrorMessage(err, fallback = "Request failed.") {
+  const data = err?.response?.data;
+
+  // If API returns { message: "..." }
+  if (data && typeof data === "object" && typeof data.message === "string") {
+    return data.message;
+  }
+
+  // If API returns plain string
+  if (typeof data === "string") return data;
+
+  // Axios generic
+  if (typeof err?.message === "string") return err.message;
+
+  return fallback;
+}
+
 export default function TwoFactorSetup() {
   const nav = useNavigate();
   const location = useLocation();
@@ -98,24 +116,25 @@ export default function TwoFactorSetup() {
 
     setResendLoading(true);
     try {
-      // ✅ FIX 1: remove "/api" prefix (client.js already includes it in baseURL)
-      // ✅ FIX 2: keep under Auth controller
+      // ✅ Correct endpoint (controller = Security)
       const res = await api.post("/Security/resend-2fa-setup", {
         username: username.trim(),
         password,
       });
-      
+
       const data = res.data?.data ?? res.data;
 
       // In dev you might get setupToken back
       if (data?.setupToken) {
         setSetupToken(data.setupToken);
-        setInfo("Setup email resent. (Dev) Setup token has been filled automatically.");
+        setInfo("Setup email resent. Setup token has been filled automatically.");
       } else {
-        setInfo("If the account exists and credentials are correct, a new 2FA setup email has been sent.");
+        setInfo(
+          "If the account exists and credentials are correct, a new 2FA setup email has been sent."
+        );
       }
     } catch (err) {
-      setError(err?.response?.data || err?.message || "Failed to resend setup email.");
+      setError(getApiErrorMessage(err, "Failed to resend setup email."));
     } finally {
       setResendLoading(false);
     }
@@ -138,10 +157,13 @@ export default function TwoFactorSetup() {
 
     setLoading(true);
     try {
-      // ✅ FIX 3: this should also be under Auth (not /security)
-      await api.post("/Auth/verify-2fa-setup", {
+      // ✅ IMPORTANT FIX:
+      // Your backend endpoint is:
+      // [HttpPost("verify-2fa-setup")] on SecurityController
+      // => POST /api/Security/verify-2fa-setup
+      await api.post("/Security/verify-2fa-setup", {
         setupToken: setupToken.trim(),
-        code,
+        code: code.trim(),
       });
 
       // ✅ Cleanup temporary creds once user completes 2FA setup
@@ -150,7 +172,7 @@ export default function TwoFactorSetup() {
       setInfo("2FA enabled successfully. You can now sign in.");
       setTimeout(() => nav("/login", { replace: true }), 900);
     } catch (err) {
-      setError(err?.response?.data || err?.message || "Invalid/expired setup token or invalid code.");
+      setError(getApiErrorMessage(err, "Invalid/expired setup token or invalid code."));
     } finally {
       setLoading(false);
     }
