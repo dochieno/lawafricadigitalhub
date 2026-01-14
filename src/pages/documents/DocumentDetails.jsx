@@ -3,23 +3,50 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api, { API_BASE_URL } from "../../api/client";
 import { getAuthClaims } from "../../auth/auth";
-import { useAuth } from "../../auth/AuthContext"; // ✅ NEW
+import { useAuth } from "../../auth/AuthContext";
 import "../../styles/document-details.css";
 
 function getServerOrigin() {
+  // API_BASE_URL: e.g. https://lawafricaapi.onrender.com/api
+  // origin needed for static: https://lawafricaapi.onrender.com
   return String(API_BASE_URL || "").replace(/\/api\/?$/i, "");
 }
 
-// ✅ FIXED: do NOT lowercase paths (Render/Linux is case-sensitive)
-// ✅ Also normalize windows "\" to "/"
+/**
+ * ✅ FIXED:
+ * - do NOT lowercase paths (Linux case-sensitive)
+ * - normalize "\" -> "/"
+ * - accept:
+ *   - "Storage/covers/x.jpg"
+ *   - "/Storage/covers/x.jpg"
+ *   - "storage/covers/x.jpg"
+ *   - "/storage/covers/x.jpg"
+ *   - already full URL: "https://..."
+ */
 function buildCoverUrl(coverImagePath) {
   if (!coverImagePath) return null;
 
-  const clean = String(coverImagePath)
-    .replace(/\\/g, "/")        // windows path -> url path
-    .replace(/^\/+/, "")        // trim leading /
-    .replace(/^Storage\//, ""); // strip exact Storage/
+  const raw = String(coverImagePath).trim();
+  if (!raw) return null;
 
+  // Already a full URL
+  if (/^https?:\/\//i.test(raw)) return raw;
+
+  let clean = raw.replace(/\\/g, "/").replace(/^\/+/, "");
+
+  // If backend stored "storage/..." or "/storage/..."
+  if (clean.toLowerCase().startsWith("storage/")) {
+    clean = clean.slice("storage/".length);
+    return `${getServerOrigin()}/storage/${clean}`;
+  }
+
+  // If backend stored "Storage/..."
+  if (clean.startsWith("Storage/")) {
+    clean = clean.slice("Storage/".length);
+    return `${getServerOrigin()}/storage/${clean}`;
+  }
+
+  // Otherwise treat it as already relative within storage
   return `${getServerOrigin()}/storage/${clean}`;
 }
 
@@ -69,7 +96,6 @@ function isInstitutionUser() {
   return !!(c?.institutionId && c.institutionId > 0);
 }
 
-// ✅ NEW: robust email extraction (JWT claim keys vary)
 function extractEmailFromClaims(claims) {
   if (!claims || typeof claims !== "object") return null;
 
@@ -78,11 +104,7 @@ function extractEmailFromClaims(claims) {
     claims.Email,
     claims.emailAddress,
     claims.EmailAddress,
-
-    // common .NET claim URI
     claims["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"],
-
-    // sometimes mapped differently
     claims["emails"],
     claims["preferred_username"],
   ];
@@ -99,7 +121,7 @@ export default function DocumentDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const { user } = useAuth(); // ✅ NEW: your UI clearly has this user email
+  const { user } = useAuth();
 
   const [doc, setDoc] = useState(null);
   const [inLibrary, setInLibrary] = useState(false);
@@ -116,17 +138,18 @@ export default function DocumentDetails() {
   const [offerError, setOfferError] = useState("");
   const [purchaseLoading, setPurchaseLoading] = useState(false);
 
-  // ✅ Access (institution bundle / subscription etc.)
   const [access, setAccess] = useState(null);
   const [accessLoading, setAccessLoading] = useState(false);
 
-  // Payment modal
   const [showPayModal, setShowPayModal] = useState(false);
-  const [payMethod, setPayMethod] = useState("MPESA"); // "MPESA" | "PAYSTACK"
+  const [payMethod, setPayMethod] = useState("MPESA");
   const [mpesaPhone, setMpesaPhone] = useState("");
   const [pendingPaymentId, setPendingPaymentId] = useState(null);
 
   const isInst = isInstitutionUser();
+
+  // ✅ NEW: cover image state so we can show placeholder if it fails
+  const [coverFailed, setCoverFailed] = useState(false);
 
   function showToast(message, type = "success") {
     setToast({ message, type });
@@ -180,6 +203,8 @@ export default function DocumentDetails() {
     async function load() {
       setLoading(true);
       setOfferError("");
+      setCoverFailed(false);
+
       try {
         const [docRes, availabilityRes] = await Promise.all([
           api.get(`/legal-documents/${id}`),
@@ -239,9 +264,8 @@ export default function DocumentDetails() {
     }
   }
 
-  // More resilient polling (handles temporary network errors)
   async function pollPayment(paymentIntentId) {
-    const deadline = Date.now() + 120000; // 2 mins
+    const deadline = Date.now() + 120000;
 
     while (Date.now() < deadline) {
       try {
@@ -290,7 +314,6 @@ export default function DocumentDetails() {
 
     setPurchaseLoading(true);
     try {
-      // PaymentPurpose.PublicLegalDocumentPurchase = 4
       const initRes = await api.post(`/payments/mpesa/stk/initiate`, {
         purpose: 4,
         amount,
@@ -331,11 +354,8 @@ export default function DocumentDetails() {
   async function startPaystackPayment() {
     if (!doc) return;
 
-    // ✅ Prefer AuthContext user.email (what your UI shows), then claims
     const claims = getAuthClaims() || {};
-    const email =
-      String(user?.email || "").trim() ||
-      extractEmailFromClaims(claims);
+    const email = String(user?.email || "").trim() || extractEmailFromClaims(claims);
 
     if (!email) {
       showToast(
@@ -362,7 +382,7 @@ export default function DocumentDetails() {
         purpose: 4,
         amount,
         currency,
-        email, // ✅ always send (backend may ignore if it can read user email; harmless)
+        email,
         legalDocumentId: doc.id,
       });
 
@@ -378,7 +398,6 @@ export default function DocumentDetails() {
       }
 
       showToast("Redirecting to Paystack checkout...");
-
       window.location.href = authorizationUrl;
     } catch (e) {
       const msg =
@@ -413,13 +432,15 @@ export default function DocumentDetails() {
   const hasFullAccess = !!access?.hasFullAccess;
 
   const isBlocked = !!access?.isBlocked;
-  const blockMessage = access?.blockMessage || "Institution subscription expired. Please contact your administrator.";
+  const blockMessage =
+    access?.blockMessage || "Institution subscription expired. Please contact your administrator.";
 
   const canPurchaseIndividually =
     access?.canPurchaseIndividually === undefined ? true : !!access?.canPurchaseIndividually;
 
   const purchaseDisabledReason =
-    access?.purchaseDisabledReason || "Purchases are disabled for this account. Please contact your administrator.";
+    access?.purchaseDisabledReason ||
+    "Purchases are disabled for this account. Please contact your administrator.";
 
   const showPublicPurchaseDisabledMessage =
     !!doc.isPremium &&
@@ -437,7 +458,11 @@ export default function DocumentDetails() {
     purchaseLoading || !hasContent || (isInst && isBlocked && !canPurchaseIndividually);
 
   const purchaseButtonTitle =
-    !hasContent ? "Coming soon" : isInst && isBlocked && !canPurchaseIndividually ? purchaseDisabledReason : "";
+    !hasContent
+      ? "Coming soon"
+      : isInst && isBlocked && !canPurchaseIndividually
+      ? purchaseDisabledReason
+      : "";
 
   const showIncludedActiveBadge = doc.isPremium && isInst && !accessLoading && hasFullAccess;
   const showIncludedInactiveBadge = doc.isPremium && isInst && !accessLoading && isBlocked && !hasFullAccess;
@@ -451,7 +476,6 @@ export default function DocumentDetails() {
     : "View / Preview";
 
   const canInstitutionAddPremium = isInst && doc.isPremium && hasFullAccess;
-
   const canAddToLibrary = hasContent && (!doc.isPremium || canInstitutionAddPremium);
 
   return (
@@ -460,14 +484,12 @@ export default function DocumentDetails() {
 
       <div className="doc-detail-grid">
         <div className="doc-detail-cover">
-          {coverUrl ? (
+          {!coverFailed && coverUrl ? (
             <img
               src={coverUrl}
               alt={doc.title}
               className="doc-cover-img"
-              onError={(e) => {
-                e.currentTarget.style.display = "none";
-              }}
+              onError={() => setCoverFailed(true)}
             />
           ) : (
             <div className="doc-cover-placeholder">LAW</div>
@@ -482,7 +504,11 @@ export default function DocumentDetails() {
           </p>
 
           <div className="doc-badge">
-            {doc.isPremium ? <span className="badge premium">Premium</span> : <span className="badge free">Free</span>}
+            {doc.isPremium ? (
+              <span className="badge premium">Premium</span>
+            ) : (
+              <span className="badge free">Free</span>
+            )}
 
             {!hasContent && <span className="badge coming-soon">Coming soon</span>}
 
@@ -551,7 +577,7 @@ export default function DocumentDetails() {
                     {purchaseLoading ? "Processing…" : "Pay with Paystack"}
                   </button>
 
-                  {(isInst && isBlocked && !canPurchaseIndividually) && (
+                  {isInst && isBlocked && !canPurchaseIndividually && (
                     <div className="doc-offer-note">{purchaseDisabledReason}</div>
                   )}
 
@@ -671,7 +697,6 @@ export default function DocumentDetails() {
         </div>
       )}
 
-      {/* ✅ PAYMENT MODAL (MPESA OR PAYSTACK) */}
       {showPayModal && (
         <div className="modal-overlay">
           <div className="modal">
@@ -733,7 +758,11 @@ export default function DocumentDetails() {
             )}
 
             <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-              <button className="btn btn-outline-danger" onClick={() => setShowPayModal(false)} disabled={purchaseLoading}>
+              <button
+                className="btn btn-outline-danger"
+                onClick={() => setShowPayModal(false)}
+                disabled={purchaseLoading}
+              >
                 Cancel
               </button>
 
@@ -776,7 +805,7 @@ export default function DocumentDetails() {
               )}
             </div>
 
-            {(isInst && isBlocked && !canPurchaseIndividually) && (
+            {isInst && isBlocked && !canPurchaseIndividually && (
               <div className="doc-offer-note" style={{ marginTop: 10 }}>
                 {purchaseDisabledReason}
               </div>
