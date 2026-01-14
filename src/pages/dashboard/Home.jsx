@@ -13,9 +13,9 @@ function buildCoverUrl(coverImagePath) {
   if (!coverImagePath) return null;
 
   const clean = String(coverImagePath)
-    .replace(/\\/g, "/")
+    .replace(/^Storage[\\/]/i, "")
     .replace(/^\/+/, "")
-    .replace(/^Storage\//, "");
+    .replace(/\\/g, "/");
 
   return `${getServerOrigin()}/storage/${clean}`;
 }
@@ -28,7 +28,6 @@ export default function Home() {
   const [continueReadingDocId, setContinueReadingDocId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [readingStreak, setReadingStreak] = useState(0);
-  /* const [recentItems, setRecentItems] = useState([]);*/
 
   useEffect(() => {
     async function loadDashboardData() {
@@ -83,43 +82,23 @@ export default function Home() {
     });
   }, []);
 
-  // --------------------------------------------
-  // LOAD RECENTLY READ
-  // --------------------------------------------
-  /*useEffect(() => {
-    api
-      .get("/reading-progress/recent?take=5")
-      .then((res) => {
-        setRecentItems(res.data || []);
-      })
-      .catch(() => {
-        setRecentItems([]);
-      });
-  }, []);*/
-
   const continueReading =
     ebooks.find((b) => b.id === continueReadingDocId) || (ebooks.length > 0 ? ebooks[0] : null);
 
   const libraryPreview = ebooks.slice(0, 3);
 
-  const ebookTitleMap = {};
-  ebooks.forEach((b) => {
-    ebookTitleMap[b.id] = b.title;
-  });
-
   return (
     <div className="dashboard-container">
-      {/* HEADER */}
       <header className="dashboard-header">
         <h1>Welcome back{user?.firstName ? `, ${user.firstName}` : ""} 👋</h1>
         <p>
-          Ready to dive deeper into your legal research? Pick up where you left off or discover authoritative insights
-          from LawAfrica’s trusted publications.
+          Ready to dive deeper into your legal research? Pick up where you left off
+          or discover authoritative insights from LawAfrica’s trusted publications.
         </p>
+
         {readingStreak > 0 && <p className="reading-streak">🔥 {readingStreak}-day reading streak</p>}
       </header>
 
-      {/* CONTINUE READING */}
       <section className="dashboard-section">
         <div className="section-header">
           <h2>Continue Reading</h2>
@@ -162,43 +141,6 @@ export default function Home() {
         )}
       </section>
 
-      {/* ================= RECENTLY READ ================= */}
-      {/*
-<section className="dashboard-section">
-  <div className="section-header">
-    <h2>Recently Read</h2>
-  </div>
-
-  <div className="recent-list">
-    {recentItems.length > 0 ? (
-      recentItems.map((item) => (
-        <div
-          key={item.documentId}
-          className="recent-item"
-          onClick={() =>
-            navigate(`/dashboard/documents/${item.documentId}/read`)
-          }
-        >
-          <div className="recent-meta">
-            <div className="recent-title">
-              {ebookTitleMap[item.documentId] || "Untitled document"}
-            </div>
-
-            <div className="recent-progress">
-              <strong>{item.percentage}%</strong>
-              <span>Page {item.pageNumber ?? "—"}</span>
-            </div>
-          </div>
-        </div>
-      ))
-    ) : (
-      <p className="empty-state">No recent activity yet.</p>
-    )}
-  </div>
-</section>
-*/}
-
-      {/* LIBRARY PREVIEW */}
       <section className="dashboard-section">
         <div className="section-header">
           <h2>Your Library</h2>
@@ -240,12 +182,11 @@ export default function Home() {
         )}
       </section>
 
-      {/* EXPLORE CTA */}
       <section className="dashboard-explore-cta">
         <h2>Explore the Full LawAfrica Catalog</h2>
         <p>
-          Discover free and premium legal publications across jurisdictions, categories, and practice areas curated for
-          professionals and students.
+          Discover free and premium legal publications across jurisdictions,
+          categories, and practice areas curated for professionals and students.
         </p>
 
         <button className="outline-btn" onClick={() => navigate("/dashboard/explore")}>

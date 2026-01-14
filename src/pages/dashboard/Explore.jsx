@@ -6,18 +6,18 @@ import { getAuthClaims } from "../../auth/auth";
 import "../../styles/explore.css";
 
 function getServerOrigin() {
+  // If API_BASE_URL is https://host/api -> return https://host
   return String(API_BASE_URL || "").replace(/\/api\/?$/i, "");
 }
 
-// ✅ FIXED: do NOT lowercase (Render/Linux is case-sensitive)
-// ✅ Normalize "\" to "/" and strip "Storage/" prefix safely
 function buildCoverUrl(coverImagePath) {
   if (!coverImagePath) return null;
 
+  // Keep original case (Linux is case-sensitive)
   const clean = String(coverImagePath)
-    .replace(/\\/g, "/")
-    .replace(/^\/+/, "")
-    .replace(/^Storage\//, "");
+    .replace(/^Storage[\\/]/i, "") // remove "Storage/" or "Storage\"
+    .replace(/^\/+/, "")           // trim leading slashes
+    .replace(/\\/g, "/");          // normalize backslashes to /
 
   return `${getServerOrigin()}/storage/${clean}`;
 }
@@ -51,7 +51,6 @@ export default function Explore() {
   const [accessMap, setAccessMap] = useState({});
   const [accessLoadingIds, setAccessLoadingIds] = useState(new Set());
 
-  // ✅ NEW: availability (hasContent) map
   const [availabilityMap, setAvailabilityMap] = useState({});
   const [availabilityLoadingIds, setAvailabilityLoadingIds] = useState(new Set());
 
@@ -104,7 +103,6 @@ export default function Explore() {
     });
   }, [docs, q, showPremium]);
 
-  // ✅ Fetch access for visible premium docs
   useEffect(() => {
     let cancelled = false;
 
@@ -157,7 +155,6 @@ export default function Explore() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered, isInst, isPublic]);
 
-  // ✅ Fetch availability for visible docs (so we can disable Add-to-library for "Coming soon")
   useEffect(() => {
     let cancelled = false;
 
@@ -190,7 +187,6 @@ export default function Explore() {
             if (r.status === "fulfilled") {
               next[docId] = !!r.value?.data?.hasContent;
             } else {
-              // If availability fails, assume content exists to avoid blocking unnecessarily
               next[docId] = true;
             }
           });
@@ -305,15 +301,10 @@ export default function Explore() {
             const hasContent = availabilityMap[d.id] == null ? true : !!availabilityMap[d.id];
             const availabilityLoading = availabilityLoadingIds.has(d.id);
 
-            // ✅ Institution premium: show Add/Remove if entitled
             const showPremiumAsLibraryAction = d.isPremium && isInst && hasFullAccess;
-
-            // ✅ Public premium: if owned/subscribed => Read now
             const showPublicReadNow = d.isPremium && isPublic && hasFullAccess;
 
-            // ✅ Universal rule: coming soon => no add-to-library
             const canAddLibraryHere = hasContent && (!d.isPremium || showPremiumAsLibraryAction);
-
             const disabledReason = !hasContent ? "Coming soon" : "";
 
             return (
@@ -373,7 +364,6 @@ export default function Explore() {
                     {d.countryName} • {d.category}
                   </p>
 
-                  {/* FREE docs: Add/Remove (disabled if coming soon) */}
                   {!d.isPremium && (
                     <button
                       className="explore-btn"
@@ -389,15 +379,10 @@ export default function Explore() {
                         cursor: canAddLibraryHere ? "pointer" : "not-allowed",
                       }}
                     >
-                      {availabilityLoading
-                        ? "Checking…"
-                        : inLibrary
-                        ? "🗑️ Remove from Library"
-                        : "➕ Add to Library"}
+                      {availabilityLoading ? "Checking…" : inLibrary ? "🗑️ Remove from Library" : "➕ Add to Library"}
                     </button>
                   )}
 
-                  {/* Premium + Institution + Entitled => Add/Remove (disabled if coming soon) */}
                   {d.isPremium && showPremiumAsLibraryAction && (
                     <button
                       className="explore-btn"
@@ -418,15 +403,10 @@ export default function Explore() {
                         cursor: canAddLibraryHere ? "pointer" : "not-allowed",
                       }}
                     >
-                      {accessLoading || availabilityLoading
-                        ? "Checking…"
-                        : inLibrary
-                        ? "🗑️ Remove from Library"
-                        : "➕ Add to Library"}
+                      {accessLoading || availabilityLoading ? "Checking…" : inLibrary ? "🗑️ Remove from Library" : "➕ Add to Library"}
                     </button>
                   )}
 
-                  {/* Premium + Public + Owned => Read now */}
                   {d.isPremium && showPublicReadNow && (
                     <button
                       className="explore-btn explore-btn-premium"
@@ -446,7 +426,6 @@ export default function Explore() {
                     </button>
                   )}
 
-                  {/* Default premium fallback => View / Preview */}
                   {d.isPremium && !showPremiumAsLibraryAction && !showPublicReadNow && (
                     <button
                       className="explore-btn explore-btn-premium"

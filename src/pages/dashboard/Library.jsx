@@ -8,14 +8,13 @@ function getServerOrigin() {
   return String(API_BASE_URL || "").replace(/\/api\/?$/i, "");
 }
 
-// ✅ FIXED: consistent cover URL builder (case-sensitive safe)
 function buildCoverUrl(coverImagePath) {
   if (!coverImagePath) return null;
 
   const clean = String(coverImagePath)
-    .replace(/\\/g, "/")
+    .replace(/^Storage[\\/]/i, "")
     .replace(/^\/+/, "")
-    .replace(/^Storage\//, "");
+    .replace(/\\/g, "/");
 
   return `${getServerOrigin()}/storage/${clean}`;
 }
@@ -28,7 +27,6 @@ export default function Library() {
 
   const navigate = useNavigate();
 
-  // 🔔 Toast
   const [toast, setToast] = useState(null);
 
   function showToast(message, type = "success") {
@@ -36,19 +34,14 @@ export default function Library() {
     setTimeout(() => setToast(null), 2500);
   }
 
-  // --------------------------------------------
-  // LOAD LIBRARY + READING PROGRESS
-  // --------------------------------------------
   useEffect(() => {
     async function loadLibrary() {
       try {
-        // Load both in parallel
         const [libraryRes, progressRes] = await Promise.all([
           api.get("/my-library"),
           api.get("/reading-progress/recent?take=100"),
         ]);
 
-        // Map progress by documentId
         const progressMap = {};
         (progressRes.data || []).forEach((p) => {
           progressMap[p.documentId] = p;
@@ -68,14 +61,12 @@ export default function Library() {
           };
         });
 
-        // ✅ SORT HERE (correct place)
         mapped.sort((a, b) => {
           if (a.isCompleted && !b.isCompleted) return 1;
           if (!a.isCompleted && b.isCompleted) return -1;
           return (b.progress || 0) - (a.progress || 0);
         });
 
-        // ✅ THEN set state
         setEbooks(mapped);
       } catch (err) {
         console.error(err);
@@ -88,16 +79,12 @@ export default function Library() {
     loadLibrary();
   }, []);
 
-  // --------------------------------------------
-  // REMOVE ACTION
-  // --------------------------------------------
   async function removeFromLibrary(documentId) {
     try {
       setActionLoading(documentId);
       await api.delete(`/my-library/${documentId}`);
 
       setEbooks((prev) => prev.filter((book) => book.id !== documentId));
-
       showToast("Removed from your library");
     } catch {
       showToast("Failed to remove from library", "error");
@@ -106,12 +93,7 @@ export default function Library() {
     }
   }
 
-  // --------------------------------------------
-  // STATES
-  // --------------------------------------------
-  if (loading) {
-    return <p className="library-loading">Loading your library…</p>;
-  }
+  if (loading) return <p className="library-loading">Loading your library…</p>;
 
   if (error) {
     return (
@@ -131,20 +113,18 @@ export default function Library() {
     );
   }
 
-  // --------------------------------------------
-  // UI
-  // --------------------------------------------
   return (
     <div className="library-container">
-      {/* 🔔 TOAST */}
       {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
 
       <header className="library-header">
         <h1 className="library-title">My Library: LawAfrica Legal Knowledge Hub</h1>
         <p className="library-intro">
-          Access free legal resources and all your premium subscriptions in one seamless experience. Your LawAfrica
-          Library keeps everything organized, bringing together complimentary materials and authoritative publications
-          you’ve invested in, so you can research smarter and stay ahead with trusted content.
+          Access free legal resources and all your premium subscriptions
+          in one seamless experience. Your LawAfrica Library keeps everything
+          organized, bringing together complimentary materials and authoritative
+          publications you’ve invested in, so you can research smarter and stay
+          ahead with trusted content.
         </p>
       </header>
 
@@ -159,14 +139,7 @@ export default function Library() {
               role="button"
               tabIndex={0}
               onClick={() => navigate(`/dashboard/documents/${book.id}`)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  navigate(`/dashboard/documents/${book.id}`);
-                }
-              }}
             >
-              {/* COVER */}
               <div className="ebook-cover">
                 {coverUrl ? (
                   <img
@@ -182,14 +155,12 @@ export default function Library() {
                 )}
               </div>
 
-              {/* INFO */}
               <div className="ebook-info">
                 <h3 className="ebook-title">{book.title}</h3>
                 <p className="ebook-author">{book.author}</p>
 
                 {book.isCompleted && <span className="badge completed">✓ Completed</span>}
 
-                {/* Progress */}
                 {book.progress > 0 && book.progress < 100 && (
                   <div className="progress-bar">
                     <div className="progress" style={{ width: `${book.progress}%` }} />
@@ -207,7 +178,6 @@ export default function Library() {
                     Continue Reading
                   </button>
 
-                  {/* REMOVE (free only, defensive) */}
                   {!book.isPremium && (
                     <button
                       className="ebook-remove-btn"
@@ -227,12 +197,11 @@ export default function Library() {
         })}
       </div>
 
-      {/* LIBRARY CTA */}
       <section className="library-cta">
         <h2>Expand Your Legal Library</h2>
         <p>
-          Discover more free and premium legal publications across jurisdictions and practice areas to grow your
-          personal LawAfrica library.
+          Discover more free and premium legal publications across jurisdictions
+          and practice areas to grow your personal LawAfrica library.
         </p>
 
         <button className="outline-btn" onClick={() => navigate("/dashboard/explore")}>
