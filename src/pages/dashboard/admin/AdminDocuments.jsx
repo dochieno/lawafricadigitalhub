@@ -1,5 +1,5 @@
 // src/pages/dashboard/admin/AdminDocuments.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api, { API_BASE_URL } from "../../../api/client";
 import "../../../styles/adminCrud.css";
 
@@ -14,8 +14,7 @@ function buildCoverUrl(coverImagePath) {
   if (!coverImagePath) return null;
   const clean = String(coverImagePath)
     .replace(/^Storage\//i, "")
-    .replace(/^\/+/, "")
-    .toLowerCase();
+    .replace(/^\/+/, "");
   return `${getServerOrigin()}/storage/${clean}`;
 }
 
@@ -25,6 +24,7 @@ function toText(v) {
   if (typeof v === "number" || typeof v === "boolean") return String(v);
   if (typeof v === "object") {
     if (v.message) return String(v.message);
+    if (v.error) return String(v.error);
     try {
       return JSON.stringify(v, null, 2);
     } catch {
@@ -34,11 +34,48 @@ function toText(v) {
   return String(v);
 }
 
+function getApiErrorMessage(err, fallback = "Request failed.") {
+  const data = err?.response?.data;
+  if (data && typeof data === "object") {
+    if (typeof data.message === "string") return data.message;
+    if (typeof data.error === "string") return data.error;
+  }
+  if (typeof data === "string") return data;
+  if (typeof err?.message === "string") return err.message;
+  return fallback;
+}
+
 function formatMoney(val) {
-  // Accepts number|string; returns "1,500.00"
   const n = typeof val === "number" ? val : Number(val);
   if (!Number.isFinite(n)) return "—";
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function safeBool(v, fallback = false) {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "string") return v.toLowerCase() === "true";
+  if (typeof v === "number") return v !== 0;
+  return fallback;
+}
+
+// Try multiple endpoints (because some environments use /documents instead of /legal-documents)
+async function postMultipartWithFallback(paths, formData) {
+  let lastErr = null;
+  for (const p of paths) {
+    try {
+      return await api.post(p, formData, { headers: { "Content-Type": "multipart/form-data" } });
+    } catch (e) {
+      lastErr = e;
+      const status = e?.response?.status;
+
+      // If route mismatch, try next path
+      if (status === 404 || status === 405) continue;
+
+      // Otherwise it's a real error (500/401/etc)
+      throw e;
+    }
+  }
+  throw lastErr || new Error("Upload failed.");
 }
 
 const emptyForm = {
@@ -49,7 +86,6 @@ const emptyForm = {
   edition: "",
   version: "1",
 
-  // these must match your backend enums/DTO expectations
   category: "Commentaries",
   countryId: "",
 
@@ -57,7 +93,6 @@ const emptyForm = {
   status: "Published",
   publishedAt: "",
 
-  // Pricing
   allowPublicPurchase: false,
   publicPrice: "",
   publicCurrency: "KES",
@@ -85,21 +120,24 @@ export default function AdminDocuments() {
   const [uploadingEbook, setUploadingEbook] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
 
+  const ebookInputRef = useRef(null);
+  const coverInputRef = useRef(null);
+
+  function setField(k, v) {
+    setForm((p) => ({ ...p, [k]: v }));
+  }
+
   async function loadAll() {
     setError("");
     setInfo("");
     setLoading(true);
     try {
-      const [docsRes, countriesRes] = await Promise.all([
-        api.get("/legal-documents/admin"),
-        api.get("/Country"),
-      ]);
-
+      const [docsRes, countriesRes] = await Promise.all([api.get("/legal-documents/admin"), api.get("/Country")]);
       setRows(Array.isArray(docsRes.data) ? docsRes.data : []);
       setCountries(Array.isArray(countriesRes.data) ? countriesRes.data : []);
     } catch (e) {
       setRows([]);
-      setError(toText(e?.response?.data || e?.message || "Failed to load admin documents."));
+      setError(getApiErrorMessage(e, "Failed to load admin documents."));
     } finally {
       setLoading(false);
     }
@@ -118,7 +156,7 @@ export default function AdminDocuments() {
       const status = String(r.status ?? "").toLowerCase();
       const premium = r.isPremium ? "premium" : "free";
 
-      const allow = !!(r.allowPublicPurchase ?? r.AllowPublicPurchase ?? false);
+      const allow = safeBool(r.allowPublicPurchase ?? r.AllowPublicPurchase, false);
       const currency = String((r.publicCurrency ?? r.PublicCurrency ?? "") || "").toLowerCase();
       const price = String((r.publicPrice ?? r.PublicPrice ?? "") || "").toLowerCase();
 
@@ -129,10 +167,6 @@ export default function AdminDocuments() {
     });
   }, [rows, q]);
 
-  function setField(k, v) {
-    setForm((p) => ({ ...p, [k]: v }));
-  }
-
   function openCreate() {
     setError("");
     setInfo("");
@@ -140,6 +174,8 @@ export default function AdminDocuments() {
     setForm({ ...emptyForm });
     setEbookFile(null);
     setCoverFile(null);
+    if (ebookInputRef.current) ebookInputRef.current.value = "";
+    if (coverInputRef.current) coverInputRef.current.value = "";
     setOpen(true);
   }
 
@@ -149,9 +185,10 @@ export default function AdminDocuments() {
     setEditing(row);
     setEbookFile(null);
     setCoverFile(null);
+    if (ebookInputRef.current) ebookInputRef.current.value = "";
+    if (coverInputRef.current) coverInputRef.current.value = "";
     setOpen(true);
 
-    // Load full details for edit
     try {
       const res = await api.get(`/legal-documents/${row.id}`);
       const d = res.data;
@@ -171,12 +208,11 @@ export default function AdminDocuments() {
         status: d.status ?? "Published",
         publishedAt: d.publishedAt ? String(d.publishedAt).slice(0, 10) : "",
 
-        // pricing fields (works even if server returns PascalCase)
         allowPublicPurchase: !!(d.allowPublicPurchase ?? d.AllowPublicPurchase ?? false),
         publicPrice: d.publicPrice ?? d.PublicPrice ?? "",
         publicCurrency: d.publicCurrency ?? d.PublicCurrency ?? "KES",
       });
-    } catch {
+    } catch (e) {
       setInfo("Loaded partial row (details endpoint failed).");
     }
   }
@@ -241,91 +277,114 @@ export default function AdminDocuments() {
     setError("");
     setInfo("");
 
-    // ✅ Pricing safety rules
     if (!form.title.trim()) return setError("Title is required.");
     if (!form.countryId) return setError("Country is required.");
 
     // If not premium => force disable selling fields
-    if (!form.isPremium && (form.allowPublicPurchase || form.publicPrice || form.publicCurrency)) {
-      setForm((p) => ({
-        ...p,
-        allowPublicPurchase: false,
-        publicPrice: "",
-        publicCurrency: "KES",
-      }));
+    if (!form.isPremium) {
+      setField("allowPublicPurchase", false);
+      setField("publicPrice", "");
+      setField("publicCurrency", "KES");
     }
 
-    // If selling is ON => currency + price required
+    // If selling ON => currency + price required
     if (form.isPremium && form.allowPublicPurchase) {
       const priceNum = Number(form.publicPrice);
       if (!form.publicCurrency?.trim()) return setError("Currency is required when public purchase is ON.");
-      if (!Number.isFinite(priceNum) || priceNum <= 0)
-        return setError("Price must be greater than 0 when public purchase is ON.");
+      if (!Number.isFinite(priceNum) || priceNum <= 0) return setError("Price must be greater than 0.");
     }
 
     setBusy(true);
     try {
-      if (editing) {
+      if (editing?.id) {
         await api.put(`/legal-documents/${editing.id}`, buildUpdatePayload());
         setInfo("Document updated.");
-      } else {
-        const res = await api.post("/legal-documents", buildCreatePayload());
-        const newId = res.data?.id ?? res.data?.data?.id;
-        setInfo(`Document created (ID: ${newId}). You can upload files now.`);
+        await loadAll();
+        closeModal();
+        return;
       }
 
-      await loadAll();
-      closeModal();
+      // Create
+      const res = await api.post("/legal-documents", buildCreatePayload());
+      const newId = res.data?.id ?? res.data?.data?.id;
+
+      if (newId) {
+        // Keep modal open, switch into edit mode so you can upload immediately (better UX)
+        const newRow = { id: newId, title: form.title, coverImagePath: null };
+        setEditing(newRow);
+        setInfo(`Document created (#${newId}). Now upload the ebook and cover below.`);
+        await loadAll();
+      } else {
+        setInfo("Document created. Refresh the list, then edit to upload files.");
+        await loadAll();
+        closeModal();
+      }
     } catch (e) {
-      setError(toText(e?.response?.data || e?.message || "Save failed."));
+      setError(getApiErrorMessage(e, "Save failed."));
     } finally {
       setBusy(false);
     }
   }
 
   async function uploadEbook() {
-    if (!editing?.id) return setError("Save the document first (edit mode) before uploading an ebook.");
+    if (!editing?.id) return setError("Save the document first, then upload an ebook.");
     if (!ebookFile) return setError("Select a PDF or EPUB first.");
 
     setError("");
     setInfo("");
     setUploadingEbook(true);
+
     try {
       const fd = new FormData();
-      fd.append("File", ebookFile);
 
-      await api.post(`/legal-documents/${editing.id}/upload`, fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      // ✅ Send BOTH keys (covers backend binder differences)
+      fd.append("file", ebookFile, ebookFile.name);
+      fd.append("File", ebookFile, ebookFile.name);
+
+      // ✅ Try both endpoint variants (covers route mismatch)
+      await postMultipartWithFallback(
+        [`/legal-documents/${editing.id}/upload`, `/documents/${editing.id}/upload`],
+        fd
+      );
 
       setInfo("Ebook uploaded successfully.");
+      setEbookFile(null);
+      if (ebookInputRef.current) ebookInputRef.current.value = "";
       await loadAll();
     } catch (e) {
-      setError(toText(e?.response?.data || e?.message || "Ebook upload failed."));
+      setError(getApiErrorMessage(e, "Ebook upload failed."));
     } finally {
       setUploadingEbook(false);
     }
   }
 
   async function uploadCover() {
-    if (!editing?.id) return setError("Save the document first (edit mode) before uploading a cover.");
+    if (!editing?.id) return setError("Save the document first, then upload a cover.");
     if (!coverFile) return setError("Select an image file first.");
 
     setError("");
     setInfo("");
     setUploadingCover(true);
+
     try {
       const fd = new FormData();
-      fd.append("file", coverFile);
 
-      await api.post(`/legal-documents/${editing.id}/cover`, fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      // ✅ Send BOTH keys
+      fd.append("file", coverFile, coverFile.name);
+      fd.append("File", coverFile, coverFile.name);
+
+      // ✅ Try both endpoint variants
+      await postMultipartWithFallback(
+        [`/legal-documents/${editing.id}/cover`, `/documents/${editing.id}/cover`],
+        fd
+      );
 
       setInfo("Cover uploaded successfully.");
+      setCoverFile(null);
+      if (coverInputRef.current) coverInputRef.current.value = "";
       await loadAll();
     } catch (e) {
-      setError(toText(e?.response?.data || e?.message || "Cover upload failed."));
+      setError(getApiErrorMessage(e, "Cover upload failed."));
     } finally {
       setUploadingCover(false);
     }
@@ -344,30 +403,53 @@ export default function AdminDocuments() {
 
   return (
     <div className="admin-page admin-page-wide">
-      {/* Minimal scoped styles (no CSS file changes needed) */}
+      {/* Minimal scoped styles (keeps your CSS file untouched) */}
       <style>{`
-        .admin-table-wrap {
-          max-height: 68vh;
-          overflow: auto;
-          border-radius: 14px;
-        }
-        .admin-table thead th {
-          position: sticky;
-          top: 0;
-          z-index: 2;
-          background: #fff;
-        }
+        .admin-table-wrap { max-height: 68vh; overflow: auto; border-radius: 14px; }
+        .admin-table thead th { position: sticky; top: 0; z-index: 2; background: #fafafa; }
         .row-zebra { background: #fafafa; }
-        .row-hover:hover { background: #f3f4f6; }
+        .row-hover:hover td { background: #fbfbff; }
         .num-cell { text-align: right; font-variant-numeric: tabular-nums; }
         .price-on { font-weight: 900; }
+        .admin-form-section {
+          margin: 12px 0 6px;
+          padding: 12px 12px;
+          border-radius: 12px;
+          background: #f9fafb;
+          border: 1px solid #e5e7eb;
+        }
+        .admin-form-section-title {
+          font-weight: 900;
+          color: #111827;
+          margin-bottom: 4px;
+        }
+        .admin-form-section-sub {
+          color: #6b7280;
+          font-size: 12px;
+          line-height: 1.35;
+        }
+        .admin-upload-box {
+          border: 1px dashed #d1d5db;
+          background: #fff;
+          border-radius: 14px;
+          padding: 12px;
+        }
+        .admin-upload-actions {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-top: 8px;
+          flex-wrap: wrap;
+        }
+        .filehint { color: #6b7280; font-weight: 700; font-size: 12px; }
+        .minihelp { color:#6b7280; font-size:12px; margin-top:6px; }
       `}</style>
 
       <div className="admin-header">
         <div>
           <h1 className="admin-title">Admin · Books (Legal Documents)</h1>
           <p className="admin-subtitle">
-            Create, edit, upload ebook files & cover images, and manage public pricing (Admin only).
+            Create documents, set pricing, then upload the ebook (PDF/EPUB) and a cover image.
           </p>
         </div>
 
@@ -381,9 +463,7 @@ export default function AdminDocuments() {
         </div>
       </div>
 
-      {(error || info) && (
-        <div className={`admin-alert ${error ? "error" : "ok"}`}>{error ? error : info}</div>
-      )}
+      {(error || info) && <div className={`admin-alert ${error ? "error" : "ok"}`}>{error ? error : info}</div>}
 
       <div className="admin-card admin-card-fill">
         <div className="admin-toolbar">
@@ -393,7 +473,6 @@ export default function AdminDocuments() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
-
           <div className="admin-pill muted">{loading ? "Loading…" : `${filtered.length} document(s)`}</div>
         </div>
 
@@ -407,13 +486,10 @@ export default function AdminDocuments() {
                 <th style={{ width: "8%" }} className="num-cell">
                   Pages
                 </th>
-
-                {/* ✅ Currency then Price */}
                 <th style={{ width: "10%" }}>Currency</th>
                 <th style={{ width: "10%" }} className="num-cell">
                   Public Price
                 </th>
-
                 <th style={{ textAlign: "right", width: "16%" }}>Actions</th>
               </tr>
             </thead>
@@ -438,24 +514,17 @@ export default function AdminDocuments() {
                     <td style={{ fontWeight: 900 }}>{r.title}</td>
 
                     <td>
-                      <span
-                        className={`admin-pill ${
-                          String(r.status).toLowerCase() === "published" ? "ok" : "muted"
-                        }`}
-                      >
+                      <span className={`admin-pill ${String(r.status).toLowerCase() === "published" ? "ok" : "muted"}`}>
                         {r.status}
                       </span>
                     </td>
 
                     <td>
-                      <span className={`admin-pill ${isPremium ? "warn" : "muted"}`}>
-                        {isPremium ? "Yes" : "No"}
-                      </span>
+                      <span className={`admin-pill ${isPremium ? "warn" : "muted"}`}>{isPremium ? "Yes" : "No"}</span>
                     </td>
 
                     <td className="num-cell">{r.pageCount ?? "—"}</td>
 
-                    {/* Currency */}
                     <td>
                       {!isPremium ? (
                         <span className="admin-pill muted">N/A</span>
@@ -469,7 +538,6 @@ export default function AdminDocuments() {
                       )}
                     </td>
 
-                    {/* Price with comma + 2 decimals */}
                     <td className="num-cell">
                       {!isPremium ? (
                         <span className="admin-pill muted">N/A</span>
@@ -484,20 +552,7 @@ export default function AdminDocuments() {
 
                     <td>
                       <div className="admin-row-actions" style={{ justifyContent: "flex-end", gap: 10 }}>
-                        <button
-                          className="admin-action-btn neutral small"
-                          onClick={() => window.open(`/dashboard/documents/${r.id}`, "_blank")}
-                          disabled={busy}
-                          title="Open public document details in a new tab"
-                        >
-                          View
-                        </button>
-
-                        <button
-                          className="admin-action-btn neutral small"
-                          onClick={() => openEdit(r)}
-                          disabled={busy}
-                        >
+                        <button className="admin-action-btn neutral small" onClick={() => openEdit(r)} disabled={busy}>
                           Edit
                         </button>
                       </div>
@@ -515,26 +570,24 @@ export default function AdminDocuments() {
           <div className="admin-modal admin-modal-tight" onClick={(e) => e.stopPropagation()}>
             <div className="admin-modal-head">
               <div>
-                <h3 className="admin-modal-title">
-                  {editing ? `Edit Document #${editing.id}` : "Create Document"}
-                </h3>
+                <h3 className="admin-modal-title">{editing ? `Edit Document #${editing.id}` : "Create Document"}</h3>
                 <div className="admin-modal-subtitle">
-                  {editing
-                    ? "Edit metadata, pricing, then upload ebook/cover."
-                    : "Create metadata first. Upload ebook/cover after you save."}
+                  {editing ? "Update metadata, pricing and upload files." : "Create first, then upload ebook & cover."}
                 </div>
               </div>
 
-              <button
-                className="admin-btn"
-                onClick={closeModal}
-                disabled={busy || uploadingCover || uploadingEbook}
-              >
+              <button className="admin-btn" onClick={closeModal} disabled={busy || uploadingCover || uploadingEbook}>
                 Close
               </button>
             </div>
 
             <div className="admin-modal-body admin-modal-scroll">
+              {/* SECTION: Metadata */}
+              <div className="admin-form-section">
+                <div className="admin-form-section-title">Document details</div>
+                <div className="admin-form-section-sub">Title, jurisdiction, status, and descriptive metadata.</div>
+              </div>
+
               <div className="admin-grid">
                 <div className="admin-field admin-span2">
                   <label>Title *</label>
@@ -575,10 +628,7 @@ export default function AdminDocuments() {
 
                 <div className="admin-field">
                   <label>Premium?</label>
-                  <select
-                    value={String(!!form.isPremium)}
-                    onChange={(e) => setField("isPremium", e.target.value === "true")}
-                  >
+                  <select value={String(!!form.isPremium)} onChange={(e) => setField("isPremium", e.target.value === "true")}>
                     <option value="true">Yes</option>
                     <option value="false">No</option>
                   </select>
@@ -613,8 +663,17 @@ export default function AdminDocuments() {
                   <label>Edition</label>
                   <input value={form.edition} onChange={(e) => setField("edition", e.target.value)} />
                 </div>
+              </div>
 
-                {/* ================= PRICING ================= */}
+              {/* SECTION: Pricing */}
+              <div className="admin-form-section">
+                <div className="admin-form-section-title">Pricing rules</div>
+                <div className="admin-form-section-sub">
+                  Only premium documents can be sold to the public. If public purchase is ON, set currency and price.
+                </div>
+              </div>
+
+              <div className="admin-grid">
                 <div className="admin-field">
                   <label>Allow public purchase?</label>
                   <select
@@ -626,6 +685,7 @@ export default function AdminDocuments() {
                     <option value="true">Yes</option>
                     <option value="false">No</option>
                   </select>
+                  {!form.isPremium && <div className="minihelp">This is disabled because the document is not premium.</div>}
                 </div>
 
                 <div className="admin-field">
@@ -648,61 +708,76 @@ export default function AdminDocuments() {
                     disabled={!form.isPremium || !form.allowPublicPurchase}
                   />
                 </div>
+              </div>
 
-                {/* ================= UPLOADS ================= */}
+              {/* SECTION: Upload */}
+              <div className="admin-form-section">
+                <div className="admin-form-section-title">Files</div>
+                <div className="admin-form-section-sub">
+                  Upload the ebook (PDF/EPUB) and cover image. You must save first to get an ID.
+                </div>
+              </div>
+
+              <div className="admin-grid">
                 <div className="admin-field admin-span2">
                   <label>Ebook file (PDF/EPUB)</label>
-                  <input type="file" accept=".pdf,.epub" onChange={(e) => setEbookFile(e.target.files?.[0] || null)} />
-                  <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-                    <button
-                      className="admin-btn"
-                      onClick={uploadEbook}
-                      disabled={!editing || uploadingEbook || busy}
+                  <div className="admin-upload-box">
+                    <input
+                      ref={ebookInputRef}
+                      type="file"
+                      accept=".pdf,.epub"
+                      onChange={(e) => setEbookFile(e.target.files?.[0] || null)}
+                      disabled={!editing || uploadingEbook || uploadingCover || busy}
                       title={!editing ? "Save first, then upload." : ""}
-                    >
-                      {uploadingEbook ? "Uploading…" : "Upload ebook"}
-                    </button>
-                    <span className="admin-footer-muted">{ebookFile ? ebookFile.name : "No file selected."}</span>
+                    />
+
+                    <div className="admin-upload-actions">
+                      <button className="admin-btn" onClick={uploadEbook} disabled={!editing || uploadingEbook || uploadingCover || busy}>
+                        {uploadingEbook ? "Uploading…" : "Upload ebook"}
+                      </button>
+                      <span className="filehint">{ebookFile ? ebookFile.name : "No file selected."}</span>
+                    </div>
+
+                    <div className="minihelp">
+                      If upload fails, it’s usually a backend multipart binding issue. This page sends both <b>file</b> and <b>File</b> keys and retries both routes automatically.
+                    </div>
                   </div>
                 </div>
 
                 <div className="admin-field admin-span2">
                   <label>Cover image</label>
-                  <input type="file" accept="image/*" onChange={(e) => setCoverFile(e.target.files?.[0] || null)} />
-                  <div style={{ display: "flex", gap: 10, marginTop: 8, alignItems: "center" }}>
-                    <button
-                      className="admin-btn"
-                      onClick={uploadCover}
-                      disabled={!editing || uploadingCover || busy}
+                  <div className="admin-upload-box">
+                    <input
+                      ref={coverInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setCoverFile(e.target.files?.[0] || null)}
+                      disabled={!editing || uploadingCover || uploadingEbook || busy}
                       title={!editing ? "Save first, then upload." : ""}
-                    >
-                      {uploadingCover ? "Uploading…" : "Upload cover"}
-                    </button>
+                    />
 
-                    <span className="admin-footer-muted">{coverFile ? coverFile.name : "No file selected."}</span>
-                  </div>
-
-                  {editing?.coverImagePath && (
-                    <div style={{ marginTop: 10 }}>
-                      <div className="admin-footer-muted" style={{ marginBottom: 6 }}>
-                        Current cover:
-                      </div>
-                      <img
-                        src={buildCoverUrl(editing.coverImagePath)}
-                        alt="cover"
-                        style={{ width: 140, height: 180, objectFit: "cover", borderRadius: 12 }}
-                        onError={(e) => (e.currentTarget.style.display = "none")}
-                      />
+                    <div className="admin-upload-actions">
+                      <button className="admin-btn" onClick={uploadCover} disabled={!editing || uploadingCover || uploadingEbook || busy}>
+                        {uploadingCover ? "Uploading…" : "Upload cover"}
+                      </button>
+                      <span className="filehint">{coverFile ? coverFile.name : "No file selected."}</span>
                     </div>
-                  )}
-                </div>
-              </div>
 
-              <div className="admin-note" style={{ marginTop: 10 }}>
-                <b>Backend:</b>{" "}
-                <code>GET /api/legal-documents/admin</code>, <code>POST /api/legal-documents</code>,{" "}
-                <code>PUT /api/legal-documents/{"{id}"}</code>, <code>POST /api/legal-documents/{"{id}"}/upload</code>,{" "}
-                <code>POST /api/legal-documents/{"{id}"}/cover</code>
+                    {editing?.coverImagePath && (
+                      <div style={{ marginTop: 10, display: "flex", gap: 12, alignItems: "center" }}>
+                        <img
+                          src={buildCoverUrl(editing.coverImagePath)}
+                          alt="cover"
+                          style={{ width: 110, height: 140, objectFit: "cover", borderRadius: 12, border: "1px solid #e5e7eb" }}
+                          onError={(e) => (e.currentTarget.style.display = "none")}
+                        />
+                        <div className="filehint" style={{ maxWidth: 520 }}>
+                          Current cover is shown above (if available). If you don’t see it, the file may not be in /storage or the path differs.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -712,7 +787,7 @@ export default function AdminDocuments() {
               </button>
 
               <button className="admin-btn primary" onClick={save} disabled={busy || uploadingCover || uploadingEbook}>
-                {busy ? "Saving…" : "Save"}
+                {busy ? "Saving…" : editing ? "Save changes" : "Create"}
               </button>
             </div>
           </div>
@@ -723,7 +798,7 @@ export default function AdminDocuments() {
         <div className="admin-footer-inner">
           <span>LawAfrica Admin • Books</span>
           <span className="admin-footer-muted">
-            Tip: set <b>Allow public purchase</b> + <b>Currency</b> + <b>Price</b> for premium documents to enable public buying.
+            Tip: enable <b>public purchase</b> only for premium items, then set <b>currency</b> + <b>price</b>.
           </span>
         </div>
       </footer>
