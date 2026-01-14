@@ -2,11 +2,15 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import api from "../api/client.js";
-import "../styles/twofactor.css"; // reuse existing auth styles
+import "../styles/twofactor.css";
 
 // ✅ Must match Register.jsx
 const LS_REG_USERNAME = "la_reg_username";
 const LS_REG_PASSWORD = "la_reg_password";
+
+// ✅ From Login.jsx
+const LS_LOGIN_USERNAME = "la_login_username";
+const LS_LOGIN_PASSWORD = "la_login_password";
 
 export default function TwoFactorSetup() {
   const nav = useNavigate();
@@ -15,10 +19,14 @@ export default function TwoFactorSetup() {
   const initialUsername = location.state?.username || "";
   const initialPassword = location.state?.password || "";
 
-  // ✅ Fallback after Paystack redirect (React state lost)
+  // ✅ Fallback after Paystack redirect OR login refresh
   const storedUsername = (() => {
     try {
-      return localStorage.getItem(LS_REG_USERNAME) || "";
+      return (
+        localStorage.getItem(LS_REG_USERNAME) ||
+        localStorage.getItem(LS_LOGIN_USERNAME) ||
+        ""
+      );
     } catch {
       return "";
     }
@@ -26,7 +34,11 @@ export default function TwoFactorSetup() {
 
   const storedPassword = (() => {
     try {
-      return localStorage.getItem(LS_REG_PASSWORD) || "";
+      return (
+        localStorage.getItem(LS_REG_PASSWORD) ||
+        localStorage.getItem(LS_LOGIN_PASSWORD) ||
+        ""
+      );
     } catch {
       return "";
     }
@@ -49,8 +61,16 @@ export default function TwoFactorSetup() {
   // ✅ Keep localStorage in sync if user edits (best-effort)
   useEffect(() => {
     try {
-      if (username?.trim()) localStorage.setItem(LS_REG_USERNAME, username.trim());
-      if (password) localStorage.setItem(LS_REG_PASSWORD, password);
+      const u = username?.trim();
+      if (u) {
+        // store in both to be safe; does not harm
+        localStorage.setItem(LS_REG_USERNAME, u);
+        localStorage.setItem(LS_LOGIN_USERNAME, u);
+      }
+      if (password) {
+        localStorage.setItem(LS_REG_PASSWORD, password);
+        localStorage.setItem(LS_LOGIN_PASSWORD, password);
+      }
     } catch {
       // ignore
     }
@@ -60,6 +80,8 @@ export default function TwoFactorSetup() {
     try {
       localStorage.removeItem(LS_REG_USERNAME);
       localStorage.removeItem(LS_REG_PASSWORD);
+      localStorage.removeItem(LS_LOGIN_USERNAME);
+      localStorage.removeItem(LS_LOGIN_PASSWORD);
     } catch {
       // ignore
     }
@@ -119,7 +141,7 @@ export default function TwoFactorSetup() {
         code,
       });
 
-      // ✅ Cleanup temporary Paystack/signup creds once user completes 2FA
+      // ✅ Cleanup temporary creds once user completes 2FA setup
       clearStoredCreds();
 
       setInfo("2FA enabled successfully. You can now sign in.");

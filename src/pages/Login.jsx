@@ -4,6 +4,13 @@ import { useNavigate } from "react-router-dom";
 import "../styles/login.css";
 import { useAuth } from "../auth/AuthContext";
 
+// ✅ Use env if provided, otherwise fallback:
+// - local dev: VITE_API_BASE_URL=http://localhost:7033
+// - production: VITE_API_BASE_URL=https://lawafricaapi.onrender.com
+const API_BASE =
+  (import.meta?.env?.VITE_API_BASE_URL || "http://localhost:7033").replace(/\/$/, "");
+const API = `${API_BASE}/api`;
+
 export default function Login() {
   const navigate = useNavigate();
 
@@ -19,9 +26,8 @@ export default function Login() {
   const [resetEmail, setResetEmail] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
 
-  // ✅ resend verification
-  const [showResendVerify, setShowResendVerify] = useState(false);
-  const [resendLoading, setResendLoading] = useState(false);
+  // ✅ inline "resend verification email" link loading
+  const [resendInlineLoading, setResendInlineLoading] = useState(false);
 
   const { refreshUser } = useAuth();
 
@@ -43,22 +49,22 @@ export default function Login() {
 
   function looksLikeEmailNotVerified(msg) {
     const m = String(msg || "").toLowerCase();
-    return m.includes("verify your email");
+    return m.includes("verify your email") || m.includes("email not verified");
   }
 
-  async function handleResendVerification() {
+  async function handleInlineResendVerification() {
     setError("");
     setInfo("");
-    setResendLoading(true);
+    setResendInlineLoading(true);
 
     try {
       const key = (username || "").trim();
       if (!key) {
-        setError("Enter your username or email, then click resend verification.");
+        setError("Enter your username or email first, then click resend verification email.");
         return;
       }
 
-      const res = await fetch("https://localhost:7033/api/Auth/resend-verification", {
+      const res = await fetch(`${API}/Auth/resend-verification`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ emailOrUsername: key }),
@@ -80,22 +86,20 @@ export default function Login() {
 
       // ✅ generic success (no user enumeration)
       setInfo("If the account exists, a verification email has been sent.");
-      setShowResendVerify(false);
     } catch {
       setError("Network error. Please try again.");
     } finally {
-      setResendLoading(false);
+      setResendInlineLoading(false);
     }
   }
 
   async function handleLogin() {
     setError("");
     setInfo("");
-    setShowResendVerify(false);
     setLoading(true);
 
     try {
-      const response = await fetch("https://localhost:7033/api/Auth/login", {
+      const response = await fetch(`${API}/Auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
@@ -118,10 +122,9 @@ export default function Login() {
           return;
         }
 
-        // ✅ Email not verified UX
+        // ✅ Email not verified UX (compact + link)
         if (looksLikeEmailNotVerified(msg)) {
-          setError(msg || "Please verify your email before logging in.");
-          setShowResendVerify(true);
+          setError(msg || "Email not verified. Please verify your email before logging in.");
           return;
         }
 
@@ -170,7 +173,7 @@ export default function Login() {
         return;
       }
 
-      const res = await fetch("https://localhost:7033/api/Auth/request-password-reset", {
+      const res = await fetch(`${API}/Auth/request-password-reset`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -267,9 +270,7 @@ export default function Login() {
           <li>✔ Designed for professionals & institutions</li>
         </ul>
 
-        <div className="trust-note">
-          Used by courts, law firms, universities, and public institutions.
-        </div>
+        <div className="trust-note">Used by courts, law firms, universities, and public institutions.</div>
       </div>
 
       {/* RIGHT PANEL */}
@@ -278,7 +279,40 @@ export default function Login() {
           <h2>Sign in to your account</h2>
           <p className="subtitle">Access trusted legal publications and resources.</p>
 
-          {error && <div className="error-box">{error}</div>}
+          {/* ✅ Error + inline resend link */}
+          {error && (
+            <div className="error-box">
+              {error}
+
+              {looksLikeEmailNotVerified(error) && (
+                <div style={{ marginTop: 6, fontSize: 13 }}>
+                  <button
+                    type="button"
+                    onClick={handleInlineResendVerification}
+                    disabled={resendInlineLoading}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      margin: 0,
+                      color: "#8b1c1c",
+                      fontWeight: 800,
+                      cursor: resendInlineLoading ? "not-allowed" : "pointer",
+                      textDecoration: "underline",
+                    }}
+                    title={!username.trim() ? "Enter your username or email first" : "Resend verification email"}
+                  >
+                    {resendInlineLoading ? "Resending…" : "Resend verification email"}
+                  </button>
+
+                  <div style={{ marginTop: 4, fontSize: 12, color: "#7f1d1d", opacity: 0.9 }}>
+                    Tip: check your Spam/Junk folder too.
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {info && (
             <div
               style={{
@@ -296,43 +330,6 @@ export default function Login() {
             </div>
           )}
 
-          {/* ✅ Verification helper panel */}
-          {showResendVerify && (
-            <div
-              style={{
-                background: "#FFFAEB",
-                border: "1px solid #FEDF89",
-                color: "#B54708",
-                padding: "10px 12px",
-                borderRadius: 12,
-                marginBottom: 12,
-                fontSize: 13,
-              }}
-            >
-              <div style={{ fontWeight: 800, marginBottom: 6 }}>Email not verified</div>
-              <div style={{ marginBottom: 10 }}>
-                Please verify your email to sign in. You can resend the verification email below.
-              </div>
-              <button
-                type="button"
-                onClick={handleResendVerification}
-                disabled={resendLoading}
-                style={{
-                  width: "100%",
-                  background: "#801010",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 10,
-                  padding: "10px 12px",
-                  fontWeight: 800,
-                  cursor: "pointer",
-                }}
-              >
-                {resendLoading ? "Sending..." : "Resend verification email"}
-              </button>
-            </div>
-          )}
-
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -343,7 +340,8 @@ export default function Login() {
               type="text"
               placeholder="Username or email"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={(e) => setUsername(e.target.valuevalue)
+              }
             />
 
             <input

@@ -2,12 +2,18 @@
 import axios from "axios";
 import { getToken, clearToken, isTokenExpired } from "../auth/auth";
 
-export const API_BASE_URL = "https://localhost:7033/api";
+// Base = https://localhost:7033 (dev) OR https://lawafricaapi.onrender.com (prod)
+const BASE = (import.meta.env.VITE_API_BASE_URL || "https://lawafricaapi.onrender.com")
+  .trim()
+  .replace(/\/$/, "");
+
+// Final API base = .../api
+export const API_BASE_URL = `${BASE}/api`;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
-    // Keep existing default, but we will intelligently remove it for FormData.
+    // Keep JSON default; we'll remove for FormData automatically.
     "Content-Type": "application/json",
   },
 });
@@ -21,11 +27,8 @@ api.interceptors.request.use(
     const token = getToken();
 
     // ✅ If token exists but is expired, clear it and STOP the request.
-    // This prevents spamming the API with 401s (your current code still sends the request).
     if (token && isTokenExpired()) {
       clearToken();
-
-      // Cancel the request cleanly (caller won't see 401 spam)
       return Promise.reject(
         new axios.Cancel("Token expired. Request cancelled; user must login again.")
       );
@@ -37,13 +40,11 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    // ✅ If sending FormData, remove JSON Content-Type so browser sets multipart boundary
-    // (important for /upload and /cover endpoints)
+    // ✅ If sending FormData, remove JSON Content-Type so browser sets boundary
     const isFormData =
       typeof FormData !== "undefined" && config.data instanceof FormData;
 
     if (isFormData && config.headers) {
-      // Axios may store headers in different casing/structures; handle both.
       delete config.headers["Content-Type"];
       delete config.headers["content-type"];
     }
@@ -53,23 +54,19 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// ✅ Auto-clear token + redirect to login on 401 (once)
+// ✅ Auto-clear token + redirect to login on 401/403 (once)
 api.interceptors.response.use(
   (res) => res,
   (error) => {
-    // Ignore axios cancel (we used it for expired token)
     if (axios.isCancel(error)) return Promise.reject(error);
 
     const status = error?.response?.status;
 
-    if (status === 401) {
+    if (status === 401 || status === 403) {
       clearToken();
 
-      // Prevent endless redirects / loops
       if (!hasRedirectedOn401) {
         hasRedirectedOn401 = true;
-
-        // If you're using react-router navigation in components, this still works globally:
         window.location.href = "/login";
       }
     }

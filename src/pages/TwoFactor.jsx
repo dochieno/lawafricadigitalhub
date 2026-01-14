@@ -1,3 +1,4 @@
+// src/pages/TwoFactor.jsx
 import { useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import api from "../api/client.js";
@@ -5,13 +6,24 @@ import { saveToken } from "../auth/auth.js";
 import { useAuth } from "../auth/AuthContext";
 import "../styles/twofactor.css";
 
+const LS_LOGIN_USERNAME = "la_login_username";
+const LS_LOGIN_PASSWORD = "la_login_password";
+
 export default function TwoFactor() {
   const navigate = useNavigate();
   const location = useLocation();
   const { refreshUser } = useAuth();
 
-  // Username passed from Login page
-  const username = location.state?.username;
+  // ✅ Username from route state OR fallback to localStorage (refresh-safe)
+  const username =
+    location.state?.username ||
+    (() => {
+      try {
+        return localStorage.getItem(LS_LOGIN_USERNAME) || "";
+      } catch {
+        return "";
+      }
+    })();
 
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -43,6 +55,13 @@ export default function TwoFactor() {
       if (!token) throw new Error("Verification failed.");
 
       saveToken(token);
+
+      // ✅ cleanup pending keys
+      try {
+        localStorage.removeItem(LS_LOGIN_USERNAME);
+        localStorage.removeItem(LS_LOGIN_PASSWORD);
+      } catch {}
+
       await refreshUser();
       navigate("/dashboard", { replace: true });
     } catch (err) {
@@ -58,26 +77,21 @@ export default function TwoFactor() {
 
   return (
     <div className="auth-page">
-      {/* ================= MAIN CONTENT ================= */}
       <div className="auth-content">
         <div className="twofactor-card">
-          {/* LOGO */}
           <div className="brand-header">
             <img src="/logo.png" alt="LawAfrica Logo" className="brand-logo" />
             <p className="brand-tagline">Know. Do. Be More.</p>
           </div>
 
-          {/* TEXT */}
           <h2>Two-Step Verification</h2>
           <p className="subtitle">
             For your security, please enter the 6-digit verification
             code from your Google Authenticator or Microsoft Authenticator app.
           </p>
 
-          {/* ERROR */}
           {error && <div className="error-box">{error}</div>}
 
-          {/* FORM */}
           <form onSubmit={onVerify}>
             <input
               type="text"
@@ -94,14 +108,10 @@ export default function TwoFactor() {
             </button>
           </form>
 
-          {/* SMALL INLINE TRUST TEXT */}
-          <div className="footer-text">
-            Secure • Trusted • Authoritative
-          </div>
+          <div className="footer-text">Secure • Trusted • Authoritative</div>
         </div>
       </div>
 
-      {/* ================= PAGE FOOTER ================= */}
       <footer className="auth-footer">
         <div className="auth-footer-inner">
           <h4 className="auth-footer-title">
