@@ -10,13 +10,15 @@ function getServerOrigin() {
   return String(API_BASE_URL || "").replace(/\/api\/?$/i, "");
 }
 
+// ✅ FIXED: do NOT lowercase paths (Render/Linux is case-sensitive)
+// ✅ Also normalize windows "\" to "/"
 function buildCoverUrl(coverImagePath) {
   if (!coverImagePath) return null;
 
   const clean = String(coverImagePath)
-    .replace(/^Storage\//i, "")
-    .replace(/^\/+/, "")
-    .toLowerCase();
+    .replace(/\\/g, "/")        // windows path -> url path
+    .replace(/^\/+/, "")        // trim leading /
+    .replace(/^Storage\//, ""); // strip exact Storage/
 
   return `${getServerOrigin()}/storage/${clean}`;
 }
