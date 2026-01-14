@@ -62,8 +62,12 @@ export default function TwoFactorSetup() {
     }
   })();
 
-  const [username, setUsername] = useState(initialUsername || storedUsername || "");
-  const [password, setPassword] = useState(initialPassword || storedPassword || "");
+  const [username, setUsername] = useState(
+    initialUsername || storedUsername || ""
+  );
+  const [password, setPassword] = useState(
+    initialPassword || storedPassword || ""
+  );
 
   const [setupToken, setSetupToken] = useState("");
   const [code, setCode] = useState("");
@@ -74,7 +78,10 @@ export default function TwoFactorSetup() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
-  const canResend = useMemo(() => username.trim() && password, [username, password]);
+  const canResend = useMemo(
+    () => username.trim() && password,
+    [username, password]
+  );
 
   // ✅ Keep localStorage in sync if user edits (best-effort)
   useEffect(() => {
@@ -113,6 +120,8 @@ export default function TwoFactorSetup() {
       setError("Enter username and password to resend your setup email.");
       return;
     }
+
+    if (resendLoading || loading) return;
 
     setResendLoading(true);
     try {
@@ -157,10 +166,7 @@ export default function TwoFactorSetup() {
 
     setLoading(true);
     try {
-      // ✅ IMPORTANT FIX:
-      // Your backend endpoint is:
-      // [HttpPost("verify-2fa-setup")] on SecurityController
-      // => POST /api/Security/verify-2fa-setup
+      // ✅ POST /api/Security/verify-2fa-setup
       await api.post("/Security/verify-2fa-setup", {
         setupToken: setupToken.trim(),
         code: code.trim(),
@@ -172,11 +178,27 @@ export default function TwoFactorSetup() {
       setInfo("2FA enabled successfully. You can now sign in.");
       setTimeout(() => nav("/login", { replace: true }), 900);
     } catch (err) {
-      setError(getApiErrorMessage(err, "Invalid/expired setup token or invalid code."));
+      setError(
+        getApiErrorMessage(err, "Invalid/expired setup token or invalid code.")
+      );
     } finally {
       setLoading(false);
     }
   }
+
+  const actionDisabled = resendLoading || loading;
+
+  const linkStyleBase = {
+    display: "inline-block",
+    fontWeight: 800,
+    fontSize: 14,
+    letterSpacing: "0.1px",
+    color: actionDisabled ? "#9ca3af" : "#8b1c1c",
+    cursor: actionDisabled ? "not-allowed" : "pointer",
+    userSelect: "none",
+    marginTop: 10,
+    padding: "6px 2px",
+  };
 
   return (
     <div className="auth-page">
@@ -189,8 +211,9 @@ export default function TwoFactorSetup() {
 
           <h2>Set up Two-Factor Authentication</h2>
           <p className="subtitle">
-            Check your email for the QR / setup instructions, add LawAfrica to your Authenticator app,
-            then verify using the setup token and 6-digit code.
+            Check your email for the QR / setup instructions, add LawAfrica to
+            your Authenticator app, then verify using the setup token and
+            6-digit code.
           </p>
 
           {error && <div className="error-box">{String(error)}</div>}
@@ -220,24 +243,44 @@ export default function TwoFactorSetup() {
               placeholder="Username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              disabled={resendLoading || loading}
+              disabled={actionDisabled}
             />
             <input
               type="password"
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              disabled={resendLoading || loading}
+              disabled={actionDisabled}
             />
 
-            <button
-              type="button"
-              onClick={resendSetupEmail}
-              disabled={resendLoading || loading}
-              style={{ marginTop: 10 }}
+            {/* ✅ Secondary action as text link */}
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={() => !actionDisabled && resendSetupEmail()}
+              onKeyDown={(e) => {
+                if (actionDisabled) return;
+                if (e.key === "Enter" || e.key === " ") resendSetupEmail();
+              }}
+              style={linkStyleBase}
+              onMouseEnter={(e) => {
+                if (actionDisabled) return;
+                e.currentTarget.style.textDecoration = "underline";
+                e.currentTarget.style.opacity = "0.92";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.textDecoration = "none";
+                e.currentTarget.style.opacity = "1";
+              }}
+              aria-disabled={actionDisabled}
+              title={
+                canResend
+                  ? "Resend your setup email"
+                  : "Enter username and password first"
+              }
             >
-              {resendLoading ? "Resending..." : "Resend setup email"}
-            </button>
+              {resendLoading ? "Resending setup email…" : "Resend setup email"}
+            </span>
           </div>
 
           <form onSubmit={verifySetup}>
@@ -246,7 +289,7 @@ export default function TwoFactorSetup() {
               placeholder="Setup token (from email)"
               value={setupToken}
               onChange={(e) => setSetupToken(e.target.value)}
-              disabled={loading || resendLoading}
+              disabled={actionDisabled}
             />
 
             <input
@@ -256,18 +299,39 @@ export default function TwoFactorSetup() {
               value={code}
               onChange={(e) => setCode(e.target.value)}
               maxLength={6}
-              disabled={loading || resendLoading}
+              disabled={actionDisabled}
             />
 
-            <button type="submit" disabled={loading || resendLoading}>
+            {/* ✅ Primary action stays a button */}
+            <button type="submit" disabled={actionDisabled}>
               {loading ? "Verifying..." : "Enable 2FA"}
             </button>
           </form>
 
+          {/* ✅ Secondary nav as text link */}
           <div className="footer-text" style={{ marginTop: 14 }}>
             <span
-              style={{ cursor: "pointer", color: "#8b1c1c", fontWeight: 700 }}
-              onClick={() => nav("/login")}
+              role="button"
+              tabIndex={0}
+              style={{
+                cursor: actionDisabled ? "not-allowed" : "pointer",
+                color: actionDisabled ? "#9ca3af" : "#8b1c1c",
+                fontWeight: 800,
+                textDecoration: "none",
+              }}
+              onClick={() => !actionDisabled && nav("/login")}
+              onKeyDown={(e) => {
+                if (actionDisabled) return;
+                if (e.key === "Enter" || e.key === " ") nav("/login");
+              }}
+              onMouseEnter={(e) => {
+                if (actionDisabled) return;
+                e.currentTarget.style.textDecoration = "underline";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.textDecoration = "none";
+              }}
+              aria-disabled={actionDisabled}
             >
               Back to sign in
             </span>
@@ -298,7 +362,8 @@ export default function TwoFactorSetup() {
 
           <p>
             LawAfrica protects your legal research with industry-grade security
-            while giving you access to Africa’s most authoritative legal knowledge.
+            while giving you access to Africa’s most authoritative legal
+            knowledge.
           </p>
         </div>
       </footer>
