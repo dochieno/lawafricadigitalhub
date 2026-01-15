@@ -107,7 +107,8 @@ export default function DocumentReader() {
           return;
         }
 
-        // 3) Verify content exists (LIGHTWEIGHT RANGE PREFLIGHT)
+        // 3) Verify content exists using LIGHTWEIGHT RANGE PREFLIGHT:
+        // GET /api/legal-documents/{id}/download with Range bytes=0-0
         // This avoids downloading huge PDFs just to check.
         try {
           await api.get(`/legal-documents/${id}/download`, {
@@ -120,15 +121,20 @@ export default function DocumentReader() {
 
           const status = err?.response?.status;
 
+          // 404 = file missing
           if (status === 404) {
             setContentAvailable(false);
             return;
           }
 
+          // 403 = not allowed (entitlement/access). Not "missing content".
+          // Do NOT mark as unavailable; /access + PdfViewer will handle messaging.
           if (status === 403) {
-            // Access denied, but /access should have handled block states.
-            // Still, do not crash: show unavailable.
-            setContentAvailable(false);
+            return;
+          }
+
+          // 401 = auth issue; axios interceptor should redirect/login.
+          if (status === 401) {
             return;
           }
 

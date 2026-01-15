@@ -13,7 +13,6 @@ export const API_BASE_URL = `${BASE}/api`;
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
-    // Keep JSON default; we'll remove for FormData automatically.
     "Content-Type": "application/json",
   },
 });
@@ -54,7 +53,7 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// ✅ Auto-clear token + redirect to login on 401/403 (once)
+// ✅ Auto-clear token + redirect to login on 401 ONLY
 api.interceptors.response.use(
   (res) => res,
   (error) => {
@@ -62,7 +61,10 @@ api.interceptors.response.use(
 
     const status = error?.response?.status;
 
-    if (status === 401 || status === 403) {
+    // ✅ IMPORTANT:
+    // 401 = invalid/expired token => logout
+    // 403 = authenticated but not allowed => DO NOT logout
+    if (status === 401) {
       clearToken();
 
       if (!hasRedirectedOn401) {
