@@ -1,6 +1,6 @@
 // src/pages/Login.jsx
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import "../styles/login.css";
 import { useAuth } from "../auth/AuthContext";
 
@@ -12,6 +12,7 @@ const API = `${API_BASE}/api`;
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -50,6 +51,30 @@ export default function Login() {
     const m = String(msg || "").toLowerCase();
     return m.includes("verify your email") || m.includes("email not verified");
   }
+
+  const emailNotVerified = useMemo(() => looksLikeEmailNotVerified(error), [error]);
+
+  // ----------------------------------------------------
+  // ✅ Banner after email verification redirect
+  // API redirects to: /login?verified=1 OR /login?verified=0&reason=expired
+  // ----------------------------------------------------
+  useEffect(() => {
+    const qs = new URLSearchParams(location.search);
+    const verified = (qs.get("verified") || "").trim();
+    const reason = (qs.get("reason") || "").trim();
+
+    if (verified === "1") {
+      setError("");
+      setInfo("Email verified successfully. You can now sign in.");
+    } else if (verified === "0") {
+      setInfo("");
+      if (reason === "expired") {
+        setError("Verification link expired. Please resend the verification email.");
+      } else {
+        setError("Email verification failed. Please request a new verification email.");
+      }
+    }
+  }, [location.search]);
 
   async function handleInlineResendVerification() {
     setError("");
@@ -121,7 +146,7 @@ export default function Login() {
           return;
         }
 
-        // ✅ Email not verified UX (compact + link)
+        // ✅ Email not verified UX
         if (looksLikeEmailNotVerified(msg)) {
           setError(msg || "Email not verified. Please verify your email before logging in.");
           return;
@@ -232,7 +257,7 @@ export default function Login() {
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-            <div style={{ fontWeight: 800, color: "#101828" }}>{title}</div>
+            <div style={{ fontWeight: 850, color: "#101828" }}>{title}</div>
             <button
               type="button"
               onClick={onClose}
@@ -253,12 +278,54 @@ export default function Login() {
     );
   }
 
+  function Banner({ kind, children, right }) {
+    const isErr = kind === "error";
+    const bg = isErr ? "#FEF2F2" : "#ECFDF3";
+    const border = isErr ? "#FECACA" : "#ABEFC6";
+    const color = isErr ? "#7F1D1D" : "#067647";
+    const icon = isErr ? "⚠️" : "✅";
+
+    return (
+      <div
+        style={{
+          background: bg,
+          border: `1px solid ${border}`,
+          color,
+          padding: "10px 12px",
+          borderRadius: 12,
+          marginBottom: 12,
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 10,
+        }}
+      >
+        <div style={{ display: "flex", gap: 10 }}>
+          <div style={{ lineHeight: 1.1 }}>{icon}</div>
+          <div style={{ fontSize: 13, fontWeight: 650, lineHeight: 1.35, whiteSpace: "pre-wrap" }}>
+            {children}
+          </div>
+        </div>
+        {right ? <div style={{ flex: "0 0 auto" }}>{right}</div> : null}
+      </div>
+    );
+  }
+
+  const inputStyle = {
+    width: "100%",
+    borderRadius: 12,
+    border: "1px solid #D0D5DD",
+    padding: "12px 12px",
+    outline: "none",
+    fontSize: 14,
+    background: "#fff",
+  };
+
   return (
     <div className="login-layout">
       {/* LEFT PANEL */}
       <div className="login-info-panel">
         <img src="/logo.png" alt="LawAfrica" className="login-brand-logo" />
-
         <h1>LawAfrica Digital Platform</h1>
         <p className="tagline">Trusted legal knowledge. Anywhere. Anytime.</p>
 
@@ -274,72 +341,64 @@ export default function Login() {
 
       {/* RIGHT PANEL */}
       <div className="login-form-panel">
-        <div className="login-card">
-          <h2>Sign in to your account</h2>
-          <p className="subtitle">Access trusted legal publications and resources.</p>
+        <div className="login-card" style={{ paddingTop: 26 }}>
+          <h2 style={{ marginBottom: 6 }}>Sign in</h2>
+          <p className="subtitle" style={{ marginTop: 0 }}>
+            Access trusted legal publications and resources.
+          </p>
 
-          {/* ✅ Error + inline resend link */}
+          {/* ✅ Polished banners */}
           {error && (
-            <div className="error-box">
-              {error}
-
-              {looksLikeEmailNotVerified(error) && (
-                <div style={{ marginTop: 6, fontSize: 13 }}>
+            <Banner
+              kind="error"
+              right={
+                emailNotVerified ? (
                   <button
                     type="button"
                     onClick={handleInlineResendVerification}
                     disabled={resendInlineLoading}
                     style={{
-                      background: "none",
-                      border: "none",
-                      padding: 0,
-                      margin: 0,
-                      color: "#8b1c1c",
+                      background: "transparent",
+                      border: "1px solid #FCA5A5",
+                      color: "#7F1D1D",
+                      borderRadius: 10,
+                      padding: "8px 10px",
+                      fontSize: 12,
                       fontWeight: 800,
                       cursor: resendInlineLoading ? "not-allowed" : "pointer",
-                      textDecoration: "underline",
+                      whiteSpace: "nowrap",
                     }}
                     title={!username.trim() ? "Enter your username or email first" : "Resend verification email"}
                   >
-                    {resendInlineLoading ? "Resending…" : "Resend verification email"}
+                    {resendInlineLoading ? "Resending…" : "Resend email"}
                   </button>
-
-                  <div style={{ marginTop: 4, fontSize: 12, color: "#7f1d1d", opacity: 0.9 }}>
-                    Tip: check your Spam/Junk folder too.
-                  </div>
+                ) : null
+              }
+            >
+              {error}
+              {emailNotVerified && (
+                <div style={{ marginTop: 6, fontSize: 12, fontWeight: 650, opacity: 0.9 }}>
+                  Tip: check your Spam/Junk folder too.
                 </div>
               )}
-            </div>
+            </Banner>
           )}
 
-          {info && (
-            <div
-              style={{
-                background: "#ECFDF3",
-                border: "1px solid #ABEFC6",
-                color: "#067647",
-                padding: "10px 12px",
-                borderRadius: 10,
-                marginBottom: 12,
-                fontSize: 13,
-                fontWeight: 600,
-              }}
-            >
-              {info}
-            </div>
-          )}
+          {info && <Banner kind="ok">{info}</Banner>}
 
           <form
             onSubmit={(e) => {
               e.preventDefault();
               handleLogin();
             }}
+            style={{ display: "grid", gap: 10, marginTop: 4 }}
           >
             <input
               type="text"
               placeholder="Username or email"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              style={inputStyle}
             />
 
             <input
@@ -347,28 +406,52 @@ export default function Login() {
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              style={inputStyle}
             />
 
-            <button type="submit" disabled={loading} style={{ marginTop: 12 }}>
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                marginTop: 6,
+                borderRadius: 12,
+                padding: "12px 14px",
+                fontWeight: 900,
+                letterSpacing: 0.2,
+                background: "#801010",
+                color: "#fff",
+                border: "none",
+                cursor: loading ? "not-allowed" : "pointer",
+              }}
+            >
               {loading ? "Signing in..." : "Sign In"}
             </button>
           </form>
 
-          {/* ✅ Forgot password below Sign In */}
+          {/* Forgot password */}
           <div style={{ marginTop: 10, display: "flex", justifyContent: "center" }}>
-            <span
-              style={{ fontSize: 13, color: "#8b1c1c", fontWeight: 800, cursor: "pointer" }}
+            <button
+              type="button"
               onClick={() => {
                 setError("");
                 setInfo("");
                 setShowForgot(true);
               }}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "#801010",
+                fontWeight: 900,
+                cursor: "pointer",
+                fontSize: 13,
+                textDecoration: "underline",
+              }}
             >
               Forgot password?
-            </span>
+            </button>
           </div>
 
-          {/* ✅ Forgot password modal */}
+          {/* Forgot password modal */}
           {showForgot && (
             <Modal
               title="Reset your password"
@@ -386,7 +469,10 @@ export default function Login() {
                 placeholder="Email address"
                 value={resetEmail}
                 onChange={(e) => setResetEmail(e.target.value)}
-                style={{ width: "100%", marginBottom: 10 }}
+                style={{
+                  ...inputStyle,
+                  marginBottom: 10,
+                }}
               />
 
               <div style={{ display: "flex", gap: 10 }}>
@@ -394,7 +480,16 @@ export default function Login() {
                   type="button"
                   onClick={handleRequestPasswordReset}
                   disabled={resetLoading}
-                  style={{ flex: 1, background: "#801010", color: "#fff", border: "none", borderRadius: 10 }}
+                  style={{
+                    flex: 1,
+                    background: "#801010",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 12,
+                    padding: "10px 12px",
+                    fontWeight: 900,
+                    cursor: resetLoading ? "not-allowed" : "pointer",
+                  }}
                 >
                   {resetLoading ? "Sending..." : "Send reset link"}
                 </button>
@@ -410,7 +505,10 @@ export default function Login() {
                     background: "#fff",
                     color: "#344054",
                     border: "1px solid #D0D5DD",
-                    borderRadius: 10,
+                    borderRadius: 12,
+                    padding: "10px 12px",
+                    fontWeight: 900,
+                    cursor: "pointer",
                   }}
                 >
                   Cancel
@@ -419,17 +517,19 @@ export default function Login() {
             </Modal>
           )}
 
-          <div style={{ marginTop: 14, fontSize: 13, color: "#6b7280" }}>
+          <div style={{ marginTop: 14, fontSize: 13, color: "#6b7280", textAlign: "center" }}>
             Don&apos;t have an account?{" "}
             <span
-              style={{ color: "#8b1c1c", fontWeight: 800, cursor: "pointer" }}
+              style={{ color: "#801010", fontWeight: 900, cursor: "pointer", textDecoration: "underline" }}
               onClick={() => navigate("/register")}
             >
               Create account
             </span>
           </div>
 
-          <div className="footer-text">Secure • Trusted • Authoritative</div>
+          <div className="footer-text" style={{ marginTop: 14 }}>
+            Secure • Trusted • Authoritative
+          </div>
         </div>
       </div>
     </div>
