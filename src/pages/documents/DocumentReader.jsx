@@ -16,18 +16,18 @@ export default function DocumentReader() {
   const [locked, setLocked] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // ✅ hard-block overlay
+  // hard-block overlay
   const [blocked, setBlocked] = useState(false);
   const [blockMessage, setBlockMessage] = useState(
     "Access blocked. Please contact your administrator."
   );
 
-  // ✅ purchase gating returned by /access
+  // purchase gating returned by /access
   const [canPurchaseIndividually, setCanPurchaseIndividually] = useState(true);
   const [purchaseDisabledReason, setPurchaseDisabledReason] = useState(null);
   const [blockReason, setBlockReason] = useState(null);
 
-  // ✅ success toast when landing from payment
+  // success toast when landing from payment
   const [toast, setToast] = useState(null);
 
   function showToast(message, type = "success") {
@@ -35,7 +35,7 @@ export default function DocumentReader() {
     setTimeout(() => setToast(null), 2500);
   }
 
-  // ✅ show success toast when redirected from Paystack/MPesa return
+  // show success toast when redirected from Paystack/MPesa return
   useEffect(() => {
     const qs = new URLSearchParams(location.search);
     const paid = (qs.get("paid") || "").trim();
@@ -47,7 +47,6 @@ export default function DocumentReader() {
         "success"
       );
 
-      // Remove paid/provider params so toast doesn't reappear on refresh
       qs.delete("paid");
       qs.delete("provider");
 
@@ -67,7 +66,6 @@ export default function DocumentReader() {
 
     async function loadAll() {
       try {
-        // reset per-load
         setLoading(true);
         setLocked(false);
 
@@ -81,40 +79,41 @@ export default function DocumentReader() {
         setContentAvailable(true);
         setBlockMessage("Access blocked. Please contact your administrator.");
 
-        // 1️⃣ Load access rules (this is the main authoritative backend enforcement)
+        // 1) Load access rules
         const accessRes = await api.get(`/legal-documents/${id}/access`);
         if (cancelled) return;
 
         const accessData = accessRes.data;
         setAccess(accessData);
 
-        // capture purchase policy from server
         setCanPurchaseIndividually(accessData?.canPurchaseIndividually !== false);
         setPurchaseDisabledReason(accessData?.purchaseDisabledReason || null);
 
-        // 2️⃣ Load public offer (safe: improves CTA wording only)
+        // 2) Load public offer (safe)
         try {
           const offerRes = await api.get(`/legal-documents/${id}/public-offer`);
           if (!cancelled) setOffer(offerRes.data);
         } catch {
-          // ignore offer errors; reader should still work
+          // ignore
         }
 
-        // ✅ HARD BLOCK from backend decision
+        // HARD BLOCK from backend decision
         if (accessData?.isBlocked) {
           setBlocked(true);
           setBlockReason(accessData?.blockReason || null);
           setBlockMessage(
             accessData?.blockMessage || accessData?.message || "Access blocked."
           );
-          return; // ⛔ do not load content
+          return;
         }
 
-        // 3️⃣ Verify PDF content exists (only if not blocked)
-        // NOTE: This call should NOT be the one that logs you out.
-        // If it returns 404 => "Coming soon". Other errors => keep reader resilient.
+        // 3) Verify content exists (LIGHTWEIGHT RANGE PREFLIGHT)
+        // This avoids downloading huge PDFs just to check.
         try {
-          await api.get(`/documents/${id}/content`, { responseType: "blob" });
+          await api.get(`/legal-documents/${id}/download`, {
+            responseType: "blob",
+            headers: { Range: "bytes=0-0" },
+          });
           if (!cancelled) setContentAvailable(true);
         } catch (err) {
           if (cancelled) return;
@@ -123,11 +122,18 @@ export default function DocumentReader() {
 
           if (status === 404) {
             setContentAvailable(false);
-          } else {
-            // Do NOT force logout here — just show a safe message.
-            console.error("Content check failed:", err);
-            setContentAvailable(false);
+            return;
           }
+
+          if (status === 403) {
+            // Access denied, but /access should have handled block states.
+            // Still, do not crash: show unavailable.
+            setContentAvailable(false);
+            return;
+          }
+
+          console.error("Content check failed:", err);
+          setContentAvailable(false);
         }
       } catch (err) {
         console.error("Failed to initialize reader", err);
@@ -144,15 +150,10 @@ export default function DocumentReader() {
     };
   }, [id]);
 
-  if (loading) {
-    return <p style={{ padding: 20 }}>Loading reader…</p>;
-  }
+  if (loading) return <p style={{ padding: 20 }}>Loading reader…</p>;
+  if (!access) return <p style={{ padding: 20 }}>Unable to open document.</p>;
 
-  if (!access) {
-    return <p style={{ padding: 20 }}>Unable to open document.</p>;
-  }
-
-  // ✅ HARD BLOCK overlay
+  // HARD BLOCK overlay
   if (blocked) {
     const canPay =
       canPurchaseIndividually === true &&
@@ -168,9 +169,7 @@ export default function DocumentReader() {
 
     return (
       <div className="reader-shell">
-        {toast && (
-          <div className={`toast toast-${toast.type}`}>{toast.message}</div>
-        )}
+        {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
 
         <div className="preview-lock-backdrop">
           <div className="preview-lock-card">
@@ -215,10 +214,7 @@ export default function DocumentReader() {
             )}
 
             <div className="preview-lock-actions">
-              <button
-                className="outline-btn"
-                onClick={() => navigate(`/dashboard/documents/${id}`)}
-              >
+              <button className="outline-btn" onClick={() => navigate(`/dashboard/documents/${id}`)}>
                 Back to Details
               </button>
 
@@ -258,28 +254,17 @@ export default function DocumentReader() {
   if (!contentAvailable) {
     return (
       <div className="reader-error-state">
-        {toast && (
-          <div className={`toast toast-${toast.type}`}>{toast.message}</div>
-        )}
+        {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
 
         <h2>Document unavailable</h2>
-        <p>
-          This publication is listed in the catalog, but its content is not
-          available yet.
-        </p>
+        <p>This publication is listed in the catalog, but its content is not available yet.</p>
 
         <div className="reader-error-actions">
-          <button
-            className="outline-btn"
-            onClick={() => navigate(`/dashboard/documents/${id}`)}
-          >
+          <button className="outline-btn" onClick={() => navigate(`/dashboard/documents/${id}`)}>
             Back to Details
           </button>
 
-          <button
-            className="primary-btn"
-            onClick={() => navigate("/dashboard/explore")}
-          >
+          <button className="primary-btn" onClick={() => navigate("/dashboard/explore")}>
             Explore Other Publications
           </button>
         </div>
@@ -287,14 +272,11 @@ export default function DocumentReader() {
     );
   }
 
-  // Preview logic
   const maxPages = access.hasFullAccess ? null : access.previewMaxPages;
 
   return (
     <div className="reader-shell">
-      {toast && (
-        <div className={`toast toast-${toast.type}`}>{toast.message}</div>
-      )}
+      {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
 
       <PdfViewer
         documentId={Number(id)}
@@ -307,36 +289,26 @@ export default function DocumentReader() {
           <div className="preview-lock-card">
             <h2>Preview limit reached</h2>
             <p>
-              You’re reading a preview of this publication. To continue beyond
-              page {access.previewMaxPages}, you’ll need full access.
+              You’re reading a preview of this publication. To continue beyond page{" "}
+              {access.previewMaxPages}, you’ll need full access.
             </p>
 
             <div className="preview-lock-actions">
-              <button
-                className="outline-btn"
-                onClick={() => navigate(`/dashboard/documents/${id}`)}
-              >
+              <button className="outline-btn" onClick={() => navigate(`/dashboard/documents/${id}`)}>
                 Back to Details
               </button>
 
-              <button
-                className="primary-btn"
-                onClick={() => navigate(`/dashboard/documents/${id}`)}
-              >
+              <button className="primary-btn" onClick={() => navigate(`/dashboard/documents/${id}`)}>
                 Purchase Access
               </button>
 
-              <button
-                className="outline-btn"
-                onClick={() => navigate("/dashboard/explore")}
-              >
+              <button className="outline-btn" onClick={() => navigate("/dashboard/explore")}>
                 Explore More
               </button>
             </div>
 
             <p className="preview-lock-footnote">
-              You can purchase this publication from the details page to unlock
-              full reading access.
+              You can purchase this publication from the details page to unlock full reading access.
             </p>
           </div>
         </div>

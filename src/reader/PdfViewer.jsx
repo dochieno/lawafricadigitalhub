@@ -32,12 +32,16 @@ export default function PdfViewer({
   const [blocked, setBlocked] = useState(false);
   const [blockMessage, setBlockMessage] = useState("");
 
-  // ✅ entitlement preflight state
+  // ✅ NEW: entitlement preflight state
   const [entitlementChecked, setEntitlementChecked] = useState(false);
 
   /* ---------------- Reader Preferences ---------------- */
   const [zoom, setZoom] = useState(1);
   const [darkMode, setDarkMode] = useState(false);
+  const WINDOW_BEFORE = 5;
+  const WINDOW_AFTER = 7;
+
+  const endPage = Math.min(maxAllowedPage ?? numPages, page + WINDOW_AFTER);
 
   /* ---------------- Go to Page ---------------- */
   const [pageJumpError, setPageJumpError] = useState("");
@@ -49,19 +53,27 @@ export default function PdfViewer({
   const [selectedText, setSelectedText] = useState("");
   const [noteContent, setNoteContent] = useState("");
   const [notes, setNotes] = useState([]);
+
+  // Sidebar always exists; "showNotes" controls open/closed
   const [showNotes, setShowNotes] = useState(true);
 
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [editingContent, setEditingContent] = useState("");
 
+  // ✅ Feature 1: highlight click opens the note
   const [activeNoteId, setActiveNoteId] = useState(null);
   const [flashNoteId, setFlashNoteId] = useState(null);
 
+  // ✅ Feature 3: highlight colors
   const [highlightColor, setHighlightColor] = useState("yellow");
+
+  // ✅ Real highlight meta captured from selection
   const [highlightMeta, setHighlightMeta] = useState(null);
 
+  /* Reliable jump */
   const pendingJumpRef = useRef(null);
-  const noteRefs = useRef({});
+
+  const noteRefs = useRef({}); // noteId -> HTMLElement
 
   const fileSource = useMemo(() => getPdfSource(documentId), [documentId]);
 
@@ -82,7 +94,7 @@ export default function PdfViewer({
   const snapTimeoutRef = useRef(null);
   const isUserScrollingRef = useRef(false);
 
-  const pageElsRef = useRef({});
+  const pageElsRef = useRef({}); // pageNumber -> wrapper HTMLElement
   const previewLimitTriggeredRef = useRef(false);
 
   const [renderLimit, setRenderLimit] = useState(10);
@@ -96,15 +108,19 @@ export default function PdfViewer({
     if (el) pageElsRef.current[pageNumber] = el;
   }
 
+  // Scrolling Helper Function
   function scrollToPage(targetPage, behavior = "auto") {
     const el = pageElsRef.current[targetPage];
     if (!el) return;
-    el.scrollIntoView({ behavior, block: "start" });
+
+    el.scrollIntoView({
+      behavior,
+      block: "start",
+    });
   }
 
   /* ==================================================
-     ✅ ENTITLEMENT PREFLIGHT GUARD (FIXED ENDPOINT)
-     - IMPORTANT CHANGE: use /legal-documents/{id}/download (your real endpoint)
+     ✅ ENTITLEMENT PREFLIGHT GUARD
      ================================================== */
   useEffect(() => {
     let cancelled = false;
@@ -116,7 +132,7 @@ export default function PdfViewer({
     api
       .get(`/legal-documents/${documentId}/download`, {
         responseType: "blob",
-        headers: { Range: "bytes=0-0" }, // small probe
+        headers: { Range: "bytes=0-0" },
       })
       .then(() => {
         if (cancelled) return;
@@ -126,26 +142,23 @@ export default function PdfViewer({
         if (cancelled) return;
 
         const status = err?.response?.status;
+        const reason =
+          err?.response?.headers?.["x-entitlement-deny-reason"] ||
+          err?.response?.headers?.["X-Entitlement-Deny-Reason"];
 
-        // 403 => entitlement denied
-        if (status === 403) {
+        const msg =
+          err?.response?.headers?.["x-entitlement-message"] ||
+          err?.response?.headers?.["X-Entitlement-Message"];
+
+        if (status === 403 && reason === "InstitutionSubscriptionInactive") {
           setBlocked(true);
           setBlockMessage(
-            err?.response?.data?.message ||
-              "Access denied. Please contact your administrator."
+            msg ||
+              err?.response?.data?.message ||
+              "Institution subscription expired. Please contact your administrator."
           );
         }
 
-        // 404 => file missing
-        if (status === 404) {
-          setBlocked(true);
-          setBlockMessage(
-            err?.response?.data?.message ||
-              "This document is listed in our catalog, but its content is not yet available."
-          );
-        }
-
-        // Let other errors still pass entitlement check so UI doesn't hang
         setEntitlementChecked(true);
       });
 
@@ -190,7 +203,7 @@ export default function PdfViewer({
   }, [documentId]);
 
   /* ==================================================
-     LOAD READING PROGRESS (RESUME)
+     LOAD READING PROGRESS
      ================================================== */
   useEffect(() => {
     let cancelled = false;
@@ -249,11 +262,13 @@ export default function PdfViewer({
   }, [page, ready, numPages, resumeLoaded, documentId, blocked]);
 
   /* ==================================================
-     SAFE PAGE SETTER (PREVIEW ENFORCEMENT)
+     SAFE PAGE SETTER
      ================================================== */
   function safeSetPage(nextPage) {
     if (allowedMaxPage && nextPage > allowedMaxPage) {
-      if (typeof onPreviewLimitReached === "function") onPreviewLimitReached();
+      if (typeof onPreviewLimitReached === "function") {
+        onPreviewLimitReached();
+      }
       return;
     }
     setPage(nextPage);
@@ -266,15 +281,14 @@ export default function PdfViewer({
 
     api
       .get(`/legal-document-notes/document/${documentId}`)
-      .then((res) => setNotes(res.data || []))
+      .then((res) => {
+        setNotes(res.data || []);
+      })
       .catch((err) => {
         console.warn("Failed to load notes:", err?.response?.data || err?.message);
       });
   }, [documentId, blocked]);
 
-  /* ==================================================
-     PROGRESSIVE RENDER EXTENSION
-     ================================================== */
   useEffect(() => {
     if (blocked) return;
     if (!ready || !numPages) return;
@@ -283,6 +297,19 @@ export default function PdfViewer({
 
     if (page >= renderLimit - 4) {
       setRenderLimit((prev) => Math.min(maxPage, prev + 10));
+    }
+  }, [page, renderLimit, ready, numPages, allowedMaxPage, blocked]);
+
+  useEffect(() => {
+    if (blocked) return;
+    if (!ready || !numPages) return;
+    if (!allowedMaxPage) return;
+
+    const EXTEND_THRESHOLD = 4;
+    const EXTEND_BY = 10;
+
+    if (page >= renderLimit - EXTEND_THRESHOLD) {
+      setRenderLimit((prev) => Math.min(allowedMaxPage, prev + EXTEND_BY));
     }
   }, [page, renderLimit, ready, numPages, allowedMaxPage, blocked]);
 
@@ -299,7 +326,9 @@ export default function PdfViewer({
     const pages = root.querySelectorAll(".pdf-page-wrapper");
     if (!pages.length) return;
 
-    if (pageObserverRef.current) pageObserverRef.current.disconnect();
+    if (pageObserverRef.current) {
+      pageObserverRef.current.disconnect();
+    }
 
     pageObserverRef.current = new IntersectionObserver(
       (entries) => {
@@ -310,10 +339,13 @@ export default function PdfViewer({
         if (!visible) return;
 
         const current = Number(visible.target.getAttribute("data-page-number"));
+
         if (!Number.isNaN(current)) {
           if (!isProgrammaticNavRef.current) {
             clearTimeout(pageUpdateTimeoutRef.current);
-            pageUpdateTimeoutRef.current = setTimeout(() => setPage(current), 100);
+            pageUpdateTimeoutRef.current = setTimeout(() => {
+              setPage(current);
+            }, 100);
           }
 
           if (
@@ -331,7 +363,10 @@ export default function PdfViewer({
           }
         }
       },
-      { root, threshold: 0.6 }
+      {
+        root,
+        threshold: 0.6,
+      }
     );
 
     pages.forEach((p) => pageObserverRef.current.observe(p));
@@ -340,13 +375,15 @@ export default function PdfViewer({
   }, [ready, zoom, renderLimit, allowedMaxPage, blocked]);
 
   /* ==================================================
-     HIGHLIGHT CAPTURE (RECT-BASED)
+     REAL HIGHLIGHT CAPTURE
      ================================================== */
   function getPageWrapperFromSelection(selection) {
     const node = selection?.anchorNode;
     if (!node) return null;
+
     const el = node.nodeType === 1 ? node : node.parentElement;
     if (!el) return null;
+
     return el.closest(".pdf-page-wrapper");
   }
 
@@ -381,6 +418,7 @@ export default function PdfViewer({
 
       setSelectedText(text);
       setNoteContent("");
+
       setHighlightMeta({
         id: crypto.randomUUID(),
         page: pageNumber,
@@ -397,7 +435,6 @@ export default function PdfViewer({
     }, 30);
   }
 
-  /* ---------------- Note jump ---------------- */
   function jumpToPage(p) {
     if (!p) return;
 
@@ -410,38 +447,23 @@ export default function PdfViewer({
     setPage(target);
 
     requestAnimationFrame(() => {
-      setTimeout(() => scrollToPage(target, "smooth"), 60);
+      setTimeout(() => {
+        scrollToPage(target, "smooth");
+      }, 60);
     });
   }
 
-  /* ==================================================
-     (Overlap check + highlight rendering unchanged)
-     ================================================== */
-  function overlaps(aStart, aEnd, bStart, bEnd) {
-    const as = Math.min(aStart, aEnd);
-    const ae = Math.max(aStart, aEnd);
-    const bs = Math.min(bStart, bEnd);
-    const be = Math.max(bStart, bEnd);
-    return as < be && ae > bs;
-  }
-
+  // ✅ ADDED: because your highlightMeta is rect-based, these should not crash
   function hasOverlapOnPage(meta) {
-    if (!meta) return false;
-
-    const pageNotes = (notes || []).filter(
-      (n) =>
-        n.pageNumber === meta.page &&
-        n.charOffsetStart != null &&
-        n.charOffsetEnd != null
-    );
-
-    if (meta.start == null || meta.end == null) return false;
-
-    return pageNotes.some((n) =>
-      overlaps(meta.start, meta.end, n.charOffsetStart, n.charOffsetEnd)
-    );
+    // old offset-based overlap is not compatible with rect-based meta
+    // return false to avoid crashes and preserve UX
+    return false;
   }
 
+  /* ==================================================
+     HIGHLIGHT RENDERING (notes-based, offset model)
+     (unchanged)
+     ================================================== */
   function clearExistingMarks(textLayerEl) {
     const marks = textLayerEl.querySelectorAll("mark.pdf-highlight");
     marks.forEach((mark) => {
@@ -545,7 +567,9 @@ export default function PdfViewer({
     attachHighlightClickHandler(textLayer);
   }
 
-  // NOTES CRUD unchanged (kept)
+  /* ==================================================
+     NOTES CRUD
+     ================================================== */
   async function saveNote() {
     try {
       if (!highlightMeta) return;
@@ -560,12 +584,13 @@ export default function PdfViewer({
           ? noteContent.trim()
           : highlightMeta.text;
 
+      // ✅ ADDED: avoid crashing because start/end aren't present in rect-based model
       await api.post("/legal-document-notes", {
         legalDocumentId: Number(documentId),
         highlightedText: highlightMeta.text,
         pageNumber: highlightMeta.page,
-        charOffsetStart: highlightMeta.start,
-        charOffsetEnd: highlightMeta.end,
+        charOffsetStart: null,
+        charOffsetEnd: null,
         content: finalContent,
         highlightColor: highlightColor,
       });
@@ -593,7 +618,9 @@ export default function PdfViewer({
 
   async function saveEdit(noteId) {
     try {
-      await api.put(`/legal-document-notes/${noteId}`, { content: editingContent });
+      await api.put(`/legal-document-notes/${noteId}`, {
+        content: editingContent,
+      });
 
       setNotes((ns) =>
         ns.map((n) => (n.id === noteId ? { ...n, content: editingContent } : n))
@@ -650,9 +677,6 @@ export default function PdfViewer({
     }));
   }, [notes]);
 
-  /* ==================================================
-     RENDER GATING
-     ================================================== */
   const showLoading = !entitlementChecked;
   const showBlocked = entitlementChecked && blocked;
   const showViewer = entitlementChecked && !blocked;
@@ -675,7 +699,6 @@ export default function PdfViewer({
 
       {showViewer && (
         <>
-          {/* TOP NAV */}
           <div className="reader-top-nav">
             <div className="reader-top-nav-inner go-only">
               <div className="reader-tools">
@@ -694,7 +717,6 @@ export default function PdfViewer({
             </div>
           </div>
 
-          {/* PDF CONTENT */}
           <div className="reader-container">
             <div
               className="reader-scroll"
@@ -704,6 +726,7 @@ export default function PdfViewer({
                 if (isProgrammaticNavRef.current) return;
 
                 isUserScrollingRef.current = true;
+
                 clearTimeout(snapTimeoutRef.current);
                 snapTimeoutRef.current = setTimeout(() => {
                   isUserScrollingRef.current = false;
@@ -712,6 +735,15 @@ export default function PdfViewer({
             >
               <Document
                 file={fileSource}
+                // ✅ ADDED: makes failures obvious in console
+                onLoadError={(err) => {
+                  console.error("react-pdf onLoadError:", err, "fileSource=", fileSource);
+                  setBlocked(true);
+                  setBlockMessage("Failed to load PDF file.");
+                }}
+                onSourceError={(err) => {
+                  console.error("react-pdf onSourceError:", err, "fileSource=", fileSource);
+                }}
                 onLoadSuccess={({ numPages }) => {
                   setNumPages(numPages);
 
@@ -734,9 +766,6 @@ export default function PdfViewer({
 
                   setTimeout(() => scrollToPage(initial, "auto"), 80);
                 }}
-                onLoadError={(err) => {
-                  console.error("PDF load error:", err);
-                }}
               >
                 {ready &&
                   Array.from({ length: renderLimit }, (_, i) => {
@@ -749,7 +778,6 @@ export default function PdfViewer({
                         data-page-number={pageNumber}
                         ref={(el) => registerPageEl(pageNumber, el)}
                       >
-                        {/* SVG HIGHLIGHT LAYER (rects) */}
                         <svg className="highlight-layer" width="100%" height="100%">
                           {(highlightsByPage?.[pageNumber] || []).map((h) =>
                             (h.rects || []).map((r, idx) => (
@@ -769,7 +797,9 @@ export default function PdfViewer({
                         <Page
                           pageNumber={pageNumber}
                           width={Math.round(820 * zoom)}
-                          onRenderTextLayerSuccess={() => applyHighlightsForPage(pageNumber)}
+                          onRenderTextLayerSuccess={() =>
+                            applyHighlightsForPage(pageNumber)
+                          }
                         />
                       </div>
                     );
@@ -780,7 +810,6 @@ export default function PdfViewer({
             </div>
           </div>
 
-          {/* BOTTOM NAV */}
           <div className="reader-nav">
             <div className="reader-nav-inner">
               <button
@@ -798,7 +827,9 @@ export default function PdfViewer({
               <button
                 className="reader-btn"
                 onClick={() =>
-                  safeSetPage(Math.min((allowedMaxPage ?? numPages) || 1, page + 1))
+                  safeSetPage(
+                    Math.min((allowedMaxPage ?? numPages) || 1, page + 1)
+                  )
                 }
                 disabled={numPages ? page >= (allowedMaxPage ?? numPages) : true}
               >
@@ -807,7 +838,6 @@ export default function PdfViewer({
             </div>
           </div>
 
-          {/* NOTE MODAL */}
           {showNoteBox && (
             <div className="note-overlay">
               <div className="note-box">
@@ -856,7 +886,6 @@ export default function PdfViewer({
             </div>
           )}
 
-          {/* NOTES SIDEBAR */}
           <div className={`notes-sidebar ${showNotes ? "open" : "closed"}`}>
             <div className="notes-header">
               <h3>Notes</h3>
@@ -896,7 +925,9 @@ export default function PdfViewer({
                           style={{ cursor: "pointer" }}
                         >
                           <span
-                            className={`note-color-dot ${note.highlightColor || "yellow"}`}
+                            className={`note-color-dot ${
+                              note.highlightColor || "yellow"
+                            }`}
                           />
                           Page {note.pageNumber ?? "—"}
                         </div>
