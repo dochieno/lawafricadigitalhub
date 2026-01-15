@@ -1,155 +1,27 @@
-/* PAGE CENTERING */
-.login-page {
-  width: 100vw;
-  height: 100vh;
+/* =========================
+   LOGIN PAGE (CLEAN + VISIBLE)
+   ========================= */
 
-  display: flex;
-  justify-content: center;
-  align-items: center;
+/* Optional brand vars (safe if you already have them) */
+:root {
+  --la-red: #801010;
+  --la-red-2: #8b1c1c;
+  --la-dark: #111827;
 
-  background: #f4f6f8;
+  --bg: #f7f8fa;
+  --card: #ffffff;
+  --text: #101828;
+  --muted: #667085;
+
+  --border: #d0d5dd;
+  --border-2: #eaecf0;
+
+  --shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
 }
 
-/* CARD */
-.login-card {
-  background: #ffffff;
-  width: 450px;
-  padding: 32px;
-  border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
-  text-align: center;
-}
-
-.login-card input {
-  width: 100%;
-  padding: 14px 16px;
-  margin-bottom: 16px;
-
-  background-color: #2f2f2f;   /* dark field */
-  color: #ffffff;              /* white text */
-
-  border: 1px solid #3a3a3a;
-  border-radius: 8px;
-
-  font-size: 15px;
-  outline: none;
-
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.login-card input::placeholder {
-  color: #b0b0b0;
-}
-
-.login-card input:focus {
-  border-color: #8b1c1c; /* LawAfrica red */
-  box-shadow: 0 0 0 2px rgba(139, 28, 28, 0.25);
-}
-
-/* BRAND */
-.brand-header {
-  margin-bottom: 20px;
-}
-
-.brand-logo {
-  max-width: 220px;
-  height: auto;
-  margin-bottom: 6px;
-}
-
-.brand-tagline {
-  font-size: 14px;
-  color: #7a1c1c; /* matches LawAfrica red tone */
-  font-weight: 600;
-}
-
-/* TEXT */
-h2 {
-  font-size: 25px;
-  margin-bottom: 6px;
-  color: #111827;
-}
-
-.subtitle {
-  font-size: 14px;
-  color: #6b7280;
-  margin-bottom: 20px;
-}
-
-/* INPUTS */
-input {
-  width: 100%;
-  padding: 12px;
-  margin-bottom: 12px;
-  border-radius: 8px;
-  border: 1px solid #d1d5db;
-  font-size: 14px;
-}
-
-input:focus {
-  outline: none;
-  border-color: #7a1c1c;
-}
-
-/* BUTTON */
-button {
-  width: 100%;
-  padding: 12px;
-  background: #7a1c1c;
-  color: #ffffff;
-  border: none;
-  border-radius: 8px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.login-card button {
-  width: 100%;
-  padding: 14px;
-
-  background-color: #8b1c1c;
-  color: #ffffff;
-
-  border: none;
-  border-radius: 8px;
-
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-
-  transition: background-color 0.2s ease, transform 0.1s ease;
-}
-
-.login-card button:hover {
-  background-color: #a32121;
-}
-
-.login-card button:active {
-  transform: scale(0.98);
-}
-
-
-button:hover {
-  background: #641616;
-}
-
-.error-box {
-  background: #ffe9e9;
-  border: 1px solid #ffb3b3;
-  color: #8b1c1c;
-  padding: 10px 12px;
-  border-radius: 10px;
-  margin-bottom: 14px;
-  font-size: 14px;
-}
-
-/* FOOTER */
-.footer-text {
-  margin-top: 16px;
-  font-size: 12px;
-  color: #6b7280;
-}
+/* -------------------------
+   Layout
+-------------------------- */
 .login-layout {
   min-height: 100vh;
   display: grid;
@@ -173,19 +45,19 @@ button:hover {
 
 .login-info-panel h1 {
   font-size: 32px;
-  margin-bottom: 8px;
+  margin: 0 0 8px 0;
 }
 
 .tagline {
   font-size: 16px;
-  opacity: 0.9;
-  margin-bottom: 24px;
+  opacity: 0.92;
+  margin: 0 0 24px 0;
 }
 
 .login-benefits {
   list-style: none;
   padding: 0;
-  margin-bottom: 24px;
+  margin: 0 0 24px 0;
 }
 
 .login-benefits li {
@@ -203,17 +75,132 @@ button:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f7f8fa;
+  background: var(--bg);
+  padding: 24px;
 }
 
+/* Card */
 .login-card {
   width: 100%;
   max-width: 560px;
-  max-height: 520px;
-  background: #fff;
-  padding: 120px;
-  border-radius: 16px;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.08);
+  background: var(--card);
+  padding: 44px 44px;
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border-2);
+  text-align: center;
+}
+
+/* Typography */
+.login-card h2 {
+  font-size: 28px;
+  margin: 0 0 6px 0;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+
+.login-card .subtitle {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 0 0 18px 0;
+}
+
+/* -------------------------
+   Inputs (FIXED VISIBILITY)
+-------------------------- */
+.login-card input {
+  width: 100%;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+
+  background: #ffffff;
+  color: var(--text);
+
+  border: 1px solid var(--border);
+  border-radius: 12px;
+
+  font-size: 14px;
+  outline: none;
+
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* placeholder visible */
+.login-card input::placeholder {
+  color: #98a2b3;
+}
+
+/* focus ring */
+.login-card input:focus {
+  border-color: var(--la-red);
+  box-shadow: 0 0 0 4px rgba(128, 16, 16, 0.14);
+}
+
+/* -------------------------
+   Buttons
+-------------------------- */
+.login-card button {
+  width: 100%;
+  padding: 12px 14px;
+
+  background: var(--la-red);
+  color: #ffffff;
+
+  border: none;
+  border-radius: 12px;
+
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+
+  transition: transform 0.08s ease, background-color 0.2s ease;
+}
+
+.login-card button:hover {
+  background: var(--la-red-2);
+}
+
+.login-card button:active {
+  transform: scale(0.99);
+}
+
+.login-card button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* -------------------------
+   Alerts
+-------------------------- */
+.error-box {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #7f1d1d;
+  padding: 10px 12px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.success-box {
+  background: #ecfdf3;
+  border: 1px solid #abeFC6;
+  color: #067647;
+  padding: 10px 12px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+/* Footer */
+.footer-text {
+  margin-top: 14px;
+  font-size: 12px;
+  color: #6b7280;
 }
 
 /* MOBILE */
@@ -221,17 +208,11 @@ button:hover {
   .login-layout {
     grid-template-columns: 1fr;
   }
-
   .login-info-panel {
     display: none;
   }
-}
-.success-box {
-  background: #e9fff3;
-  border: 1px solid #86efac;
-  color: #166534;
-  padding: 10px 12px;
-  border-radius: 10px;
-  margin-bottom: 14px;
-  font-size: 14px;
+  .login-card {
+    padding: 36px 20px;
+    border-radius: 16px;
+  }
 }
