@@ -103,6 +103,22 @@ function statusPillClass(v) {
   return "muted";
 }
 
+function isValidNow(row) {
+  const status = row.status ?? row.Status;
+  const start = row.startDate ?? row.StartDate;
+  const end = row.endDate ?? row.EndDate;
+
+  const n = parseStatus(status);
+  if (n !== 2) return false;
+
+  const s = new Date(start);
+  const e = new Date(end);
+  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return false;
+
+  const now = Date.now();
+  return s.getTime() <= now && e.getTime() > now;
+}
+
 function parseAuditAction(v) {
   if (v == null || v === "") return "—";
   if (typeof v === "string") return v;
@@ -128,7 +144,7 @@ function getPendingRequestType(row) {
     return t;
   }
 
-  // If your enum maps: 1 = Suspend, 2 = Unsuspend (common)
+  // If your enum maps: 1 = Suspend, 2 = Unsuspend
   if (typeof t === "number") {
     if (t === 1) return "Suspend";
     if (t === 2) return "Unsuspend";
@@ -191,13 +207,13 @@ export default function AdminInstitutionSubscriptions() {
   const [auditRows, setAuditRows] = useState([]);
   const [auditLoading, setAuditLoading] = useState(false);
 
-  // ✅ Requests history modal (approval logs)
+  // Requests history modal
   const [openReqLog, setOpenReqLog] = useState(false);
   const [reqLogTarget, setReqLogTarget] = useState(null);
   const [reqLogRows, setReqLogRows] = useState([]);
   const [reqLogLoading, setReqLogLoading] = useState(false);
 
-  // ✅ Request action modal (notes)
+  // Request action modal (notes)
   const [openReqAction, setOpenReqAction] = useState(false);
   const [reqActionRow, setReqActionRow] = useState(null);
   const [reqActionMode, setReqActionMode] = useState(null); // "suspend" | "unsuspend"
@@ -249,6 +265,7 @@ export default function AdminInstitutionSubscriptions() {
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
+
     return rows
       .filter((r) => {
         if (statusFilter === "all") return true;
@@ -264,6 +281,24 @@ export default function AdminInstitutionSubscriptions() {
         return inst.includes(s) || prod.includes(s) || st.includes(s) || p.includes(s);
       });
   }, [rows, q, statusFilter]);
+
+  // Summary pills (like Bundle page)
+  const summary = useMemo(() => {
+    const total = filtered.length;
+    let active = 0;
+    let validNow = 0;
+    let pending = 0;
+    let suspended = 0;
+
+    for (const r of filtered) {
+      const st = parseStatus(r.status ?? r.Status);
+      if (st === 2) active += 1;
+      if (st === 1) pending += 1;
+      if (st === 4) suspended += 1;
+      if (isValidNow(r)) validNow += 1;
+    }
+    return { total, active, validNow, pending, suspended };
+  }, [filtered]);
 
   // --------------------
   // Modal open/close
@@ -292,7 +327,7 @@ export default function AdminInstitutionSubscriptions() {
 
     const statusNum = parseStatus(row.status ?? row.Status);
     if (statusNum === 4) {
-      setError("This subscription is Suspended. Unsuspend it before renewing.");
+      setError("This subscription is suspended. Unsuspend it before renewing.");
       return;
     }
 
@@ -329,9 +364,6 @@ export default function AdminInstitutionSubscriptions() {
     setAuditRows([]);
   }
 
-  // --------------------
-  // ✅ Requests history modal (approval logs)
-  // --------------------
   async function openReqLogModalFor(row) {
     setError("");
     setInfo("");
@@ -342,8 +374,6 @@ export default function AdminInstitutionSubscriptions() {
     const id = row.id ?? row.Id;
     setReqLogLoading(true);
     try {
-      // ✅ This endpoint MUST exist in backend.
-      // Recommended: GET /api/institutions/subscriptions/{id}/requests
       const res = await api.get(`/institutions/subscriptions/${id}/requests`);
       const data = res.data?.data ?? res.data;
       setReqLogRows(Array.isArray(data) ? data : []);
@@ -362,15 +392,12 @@ export default function AdminInstitutionSubscriptions() {
     setReqLogRows([]);
   }
 
-  // --------------------
-  // ✅ Request action modal (notes)
-  // --------------------
   function openRequestActionModal(row, mode) {
     if (busy) return;
 
     const pendingId = getPendingRequestId(row);
     if (pendingId) {
-      setError("There is already a pending request for this subscription. Review it before submitting another.");
+      setError("There’s already a pending request for this subscription. Please wait for review.");
       return;
     }
 
@@ -400,7 +427,7 @@ export default function AdminInstitutionSubscriptions() {
     const inst = (row.institutionName ?? row.InstitutionName) || "—";
     const prod = (row.contentProductName ?? row.ContentProductName) || "—";
 
-    const mode = reqActionMode; // suspend | unsuspend
+    const mode = reqActionMode;
     const isSuspend = mode === "suspend";
 
     const actionLabel = meIsGlobal
@@ -408,16 +435,14 @@ export default function AdminInstitutionSubscriptions() {
         ? "Suspend"
         : "Unsuspend"
       : isSuspend
-      ? "Request Suspend"
-      : "Request Unsuspend";
+      ? "Request suspension"
+      : "Request unsuspension";
 
-    if (
-      !window.confirm(
-        `Confirm ${actionLabel}?\n\nInstitution: ${inst}\nProduct: ${prod}${reqActionNotes ? `\nNotes: ${reqActionNotes}` : ""}`
-      )
-    ) {
-      return;
-    }
+    const confirmMsg = `Confirm ${actionLabel}?\n\nInstitution: ${inst}\nProduct: ${prod}${
+      reqActionNotes ? `\nNotes: ${reqActionNotes}` : ""
+    }`;
+
+    if (!window.confirm(confirmMsg)) return;
 
     setBusy(true);
     setError("");
@@ -425,14 +450,12 @@ export default function AdminInstitutionSubscriptions() {
 
     try {
       if (meIsGlobal) {
-        // Global admin direct action
         await api.post(
           `/institutions/subscriptions/${id}/${isSuspend ? "suspend" : "unsuspend"}`,
           { notes: reqActionNotes || null }
         );
         setInfo(isSuspend ? "Subscription suspended." : "Subscription updated.");
       } else {
-        // Admin request flow
         const res = await api.post(
           `/institutions/subscriptions/${id}/${isSuspend ? "request-suspend" : "request-unsuspend"}`,
           { notes: reqActionNotes || null }
@@ -449,19 +472,17 @@ export default function AdminInstitutionSubscriptions() {
     }
   }
 
-  // --------------------
   // Create / Extend
-  // --------------------
   async function createOrExtend(e) {
     e?.preventDefault?.();
     setError("");
     setInfo("");
 
-    if (!createForm.institutionId) return setError("Institution is required.");
-    if (!createForm.contentProductId) return setError("Product is required.");
+    if (!createForm.institutionId) return setError("Please select an institution.");
+    if (!createForm.contentProductId) return setError("Please select a product.");
 
     const months = Number(createForm.durationInMonths);
-    if (!months || months <= 0) return setError("Duration must be > 0.");
+    if (!months || months <= 0) return setError("Duration must be greater than 0.");
 
     const startDateIso = createForm.startDate ? `${createForm.startDate}T00:00:00Z` : null;
 
@@ -488,9 +509,7 @@ export default function AdminInstitutionSubscriptions() {
     }
   }
 
-  // --------------------
   // Renew
-  // --------------------
   async function renew(e) {
     e?.preventDefault?.();
     setError("");
@@ -499,17 +518,17 @@ export default function AdminInstitutionSubscriptions() {
     if (!renewTarget) return setError("No subscription selected.");
 
     const statusNum = parseStatus(renewTarget.status ?? renewTarget.Status);
-    if (statusNum === 4) return setError("This subscription is Suspended. Unsuspend it before renewing.");
+    if (statusNum === 4) return setError("This subscription is suspended. Unsuspend it before renewing.");
 
     const months = Number(renewForm.durationInMonths);
-    if (!months || months <= 0) return setError("Duration must be > 0.");
+    if (!months || months <= 0) return setError("Duration must be greater than 0.");
 
     const startDateIso = renewForm.startDate ? `${renewForm.startDate}T00:00:00Z` : null;
 
     const inst = (renewTarget.institutionName ?? renewTarget.InstitutionName) || "—";
     const prod = (renewTarget.contentProductName ?? renewTarget.ContentProductName) || "—";
     const msg = `Confirm renewal?\n\nInstitution: ${inst}\nProduct: ${prod}\nMonths: ${months}${
-      renewForm.startDate ? `\nStart: ${renewForm.startDate}` : "\nStart: (Rule A / automatic)"
+      renewForm.startDate ? `\nStart: ${renewForm.startDate}` : "\nStart: automatic (Rule A)"
     }`;
 
     if (!window.confirm(msg)) return;
@@ -535,7 +554,6 @@ export default function AdminInstitutionSubscriptions() {
     }
   }
 
-  // Buttons -> open modal (notes)
   function suspend(row) {
     openRequestActionModal(row, "suspend");
   }
@@ -548,12 +566,12 @@ export default function AdminInstitutionSubscriptions() {
     <div className="admin-page admin-page-wide">
       <div className="admin-header">
         <div>
-          <h1 className="admin-title">Admin · Institution Subscriptions</h1>
+          <h1 className="admin-title">Institution Subscriptions</h1>
           <p className="admin-subtitle">
-            Create/extend, renew and manage institution subscriptions.
+            Manage institution subscriptions — create, extend, renew, and review history.
             {!meIsGlobal && (
               <span style={{ marginLeft: 8, color: "#6b7280" }}>
-                (Suspend/Unsuspend requires Global Admin approval.)
+                Some actions require Global Admin approval.
               </span>
             )}
           </p>
@@ -572,45 +590,53 @@ export default function AdminInstitutionSubscriptions() {
       {(error || info) && <div className={`admin-alert ${error ? "error" : "ok"}`}>{error ? error : info}</div>}
 
       <div className="admin-card admin-card-fill">
-        <div className="admin-toolbar">
+        <div className="admin-toolbar" style={{ alignItems: "center" }}>
           <input
             className="admin-search admin-search-wide"
-            placeholder="Search by institution, product, status, or pending…"
+            placeholder="Search by institution, product, status…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
+            style={{ maxWidth: 560 }}
           />
 
-          <select
-            className="admin-select"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            style={{ minWidth: 200 }}
-          >
-            <option value="all">All statuses</option>
-            <option value="1">Pending</option>
-            <option value="2">Active</option>
-            <option value="3">Expired</option>
-            <option value="4">Suspended</option>
-          </select>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end", flex: 1 }}>
+            <span className="admin-pill muted">{summary.total} subscription{summary.total === 1 ? "" : "s"}</span>
+            <span className="admin-pill ok">{summary.active} Active</span>
+            <span className="admin-pill ok">{summary.validNow} Valid now</span>
+            <span className="admin-pill warn">{summary.pending} Pending</span>
+            <span className="admin-pill warn">{summary.suspended} Suspended</span>
 
-          <div className="admin-pill muted">{loading ? "Loading…" : `${filtered.length} subscription(s)`}</div>
+            <select
+              className="admin-select"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              style={{ minWidth: 180 }}
+            >
+              <option value="all">All statuses</option>
+              <option value="1">Pending</option>
+              <option value="2">Active</option>
+              <option value="3">Expired</option>
+              <option value="4">Suspended</option>
+            </select>
+          </div>
         </div>
 
         <table className="admin-table">
           <thead>
             <tr>
-              <th style={{ width: "22%" }}>Institution</th>
-              <th style={{ width: "26%" }}>Product</th>
-              <th style={{ width: "16%" }}>Status</th>
-              <th style={{ width: "14%" }}>End</th>
-              <th style={{ textAlign: "right", width: "22%" }}>Actions</th>
+              <th style={{ width: "26%" }}>Institution</th>
+              <th style={{ width: "28%" }}>Product</th>
+              <th style={{ width: "14%" }}>Status</th>
+              <th style={{ width: "16%" }}>End</th>
+              <th style={{ width: "10%" }}>Valid now?</th>
+              <th style={{ textAlign: "right", width: "16%" }}>Actions</th>
             </tr>
           </thead>
 
           <tbody>
             {!loading && filtered.length === 0 && (
               <tr>
-                <td colSpan={5} style={{ color: "#6b7280", padding: "14px" }}>
+                <td colSpan={6} style={{ color: "#6b7280", padding: "14px" }}>
                   No subscriptions found.
                 </td>
               </tr>
@@ -625,6 +651,7 @@ export default function AdminInstitutionSubscriptions() {
 
               const statusText = statusLabel(statusVal);
               const pillClass = statusPillClass(statusVal);
+              const validNow = isValidNow(r);
 
               const statusNum = parseStatus(statusVal);
               const isSuspended = statusNum === 4;
@@ -660,7 +687,11 @@ export default function AdminInstitutionSubscriptions() {
                   <td>{formatPrettyDate(end)}</td>
 
                   <td>
-                    <div className="admin-row-actions actions-inline" style={{ justifyContent: "flex-end", gap: 10 }}>
+                    <span className={`admin-pill ${validNow ? "ok" : "muted"}`}>{validNow ? "Yes" : "No"}</span>
+                  </td>
+
+                  <td>
+                    <div className="admin-row-actions" style={{ justifyContent: "flex-end", gap: 10 }}>
                       <button
                         className="admin-action-btn neutral small"
                         onClick={() => openAuditModalFor(r)}
@@ -674,7 +705,7 @@ export default function AdminInstitutionSubscriptions() {
                         className="admin-action-btn neutral small"
                         onClick={() => openReqLogModalFor(r)}
                         disabled={busy}
-                        title="View requests / approval logs"
+                        title="View request / approval logs"
                       >
                         Requests
                       </button>
@@ -683,7 +714,7 @@ export default function AdminInstitutionSubscriptions() {
                         className="admin-action-btn neutral small"
                         onClick={() => openRenewModalFor(r)}
                         disabled={busy || isSuspended}
-                        title={isSuspended ? "Unsuspend first" : "Renew (Rule A: extends from EndDate if still active)"}
+                        title={isSuspended ? "Unsuspend first" : "Renew subscription"}
                       >
                         Renew
                       </button>
@@ -713,7 +744,7 @@ export default function AdminInstitutionSubscriptions() {
                               ? `Disabled: ${pendingTitle}`
                               : meIsGlobal
                               ? "Unsuspend subscription"
-                              : "Request unsuspend (needs approval)"
+                              : "Request unsuspension (needs approval)"
                           }
                         >
                           {meIsGlobal ? "Unsuspend" : "Request Unsuspend"}
@@ -728,9 +759,7 @@ export default function AdminInstitutionSubscriptions() {
         </table>
       </div>
 
-      <AdminPageFooter
-        right={<span className="admin-footer-muted">Tip: Suspended subscriptions must be unsuspended before renewing.</span>}
-      />
+      <AdminPageFooter right={<span className="admin-footer-muted">Tip: suspended subscriptions must be unsuspended before renewing.</span>} />
 
       {/* ========================= */}
       {/* CREATE MODAL */}
@@ -741,7 +770,7 @@ export default function AdminInstitutionSubscriptions() {
             <div className="admin-modal-head">
               <div>
                 <h3 className="admin-modal-title">Create / Extend Subscription</h3>
-                <div className="admin-modal-subtitle">Creates a new subscription or extends the existing one.</div>
+                <div className="admin-modal-subtitle">Choose an institution, product, and duration.</div>
               </div>
 
               <button className="admin-btn" onClick={closeCreateModal} disabled={busy}>
@@ -789,7 +818,7 @@ export default function AdminInstitutionSubscriptions() {
                     onChange={(e) => setCreateForm((p) => ({ ...p, startDate: e.target.value }))}
                   />
                   <div className="admin-help" style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>
-                    Defaults to today. Choose a future date to schedule (Pending until start).
+                    Leave as today, or choose a future date to schedule activation.
                   </div>
                 </div>
 
@@ -806,10 +835,6 @@ export default function AdminInstitutionSubscriptions() {
                     <option value="24">24</option>
                   </select>
                 </div>
-              </div>
-
-              <div className="admin-note" style={{ marginTop: 10 }}>
-                <b>Backend:</b> POST <code>/api/institutions/subscriptions</code>
               </div>
 
               <div className="admin-modal-foot">
@@ -835,7 +860,7 @@ export default function AdminInstitutionSubscriptions() {
               <div>
                 <h3 className="admin-modal-title">Renew Subscription</h3>
                 <div className="admin-modal-subtitle">
-                  Rule A: if still active, renewal extends from current EndDate. Otherwise from now (unless you pick a start date).
+                  If still active, renewal extends from the current end date.
                 </div>
               </div>
 
@@ -862,7 +887,7 @@ export default function AdminInstitutionSubscriptions() {
                     onChange={(e) => setRenewForm((p) => ({ ...p, startDate: e.target.value }))}
                   />
                   <div className="admin-help" style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>
-                    Leave empty to use Rule A automatically.
+                    Leave empty to renew automatically.
                   </div>
                 </div>
 
@@ -879,10 +904,6 @@ export default function AdminInstitutionSubscriptions() {
                     <option value="24">24</option>
                   </select>
                 </div>
-              </div>
-
-              <div className="admin-note" style={{ marginTop: 10 }}>
-                <b>Backend:</b> POST <code>/api/institutions/subscriptions/{`{id}`}/renew</code>
               </div>
 
               <div className="admin-modal-foot">
@@ -906,7 +927,7 @@ export default function AdminInstitutionSubscriptions() {
           <div className="admin-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 1100 }}>
             <div className="admin-modal-head">
               <div>
-                <h3 className="admin-modal-title">Subscription Audit History</h3>
+                <h3 className="admin-modal-title">Audit History</h3>
                 <div className="admin-modal-subtitle">
                   {(auditTarget.institutionName ?? auditTarget.InstitutionName) || "—"} —{" "}
                   {(auditTarget.contentProductName ?? auditTarget.ContentProductName) || "—"}
@@ -1134,7 +1155,7 @@ export default function AdminInstitutionSubscriptions() {
       )}
 
       {/* ========================= */}
-      {/* REQUEST ACTION MODAL (notes) */}
+      {/* REQUEST ACTION MODAL */}
       {/* ========================= */}
       {openReqAction && reqActionRow && reqActionMode && (
         <div className="admin-modal-overlay" onClick={closeRequestActionModal}>
@@ -1147,8 +1168,8 @@ export default function AdminInstitutionSubscriptions() {
                       ? "Suspend Subscription"
                       : "Unsuspend Subscription"
                     : reqActionMode === "suspend"
-                    ? "Request Suspend"
-                    : "Request Unsuspend"}
+                    ? "Request Suspension"
+                    : "Request Unsuspension"}
                 </h3>
                 <div className="admin-modal-subtitle">
                   {(reqActionRow.institutionName ?? reqActionRow.InstitutionName) || "—"} —{" "}
@@ -1167,18 +1188,9 @@ export default function AdminInstitutionSubscriptions() {
                 <textarea
                   value={reqActionNotes}
                   onChange={(e) => setReqActionNotes(e.target.value)}
-                  placeholder="Add a note (reason, context, etc.)"
+                  placeholder="Add a short reason or context…"
                   rows={4}
                 />
-              </div>
-
-              <div className="admin-note" style={{ marginTop: 10 }}>
-                <b>Backend:</b>{" "}
-                <code>
-                  {meIsGlobal
-                    ? `/api/institutions/subscriptions/{id}/${reqActionMode}`
-                    : `/api/institutions/subscriptions/{id}/request-${reqActionMode}`}
-                </code>
               </div>
 
               <div className="admin-modal-foot">
