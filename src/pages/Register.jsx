@@ -78,7 +78,7 @@ function extractAxiosError(e) {
 const LS_REG_INTENT = "la_reg_intent_id";
 const LS_REG_EMAIL = "la_reg_email";
 
-// ✅ NEW: store creds across Paystack redirect so TwoFactorSetup works
+// ✅ store creds across Paystack redirect so TwoFactorSetup works
 const LS_REG_USERNAME = "la_reg_username";
 const LS_REG_PASSWORD = "la_reg_password";
 
@@ -277,9 +277,8 @@ export default function Register() {
       }
     }
     if (name === "phoneNumber") {
-      // MPesa needs phone. Paystack doesn't.
-      if (isPublic && publicPayMethod === "MPESA" && !v.trim())
-        return "Phone number is required for Mpesa payment.";
+      // Mpesa requires phone. Paystack doesn't.
+      if (isPublic && publicPayMethod === "MPESA" && !v.trim()) return "Phone number is required for Mpesa payment.";
     }
     if (name === "referenceNumber") {
       if (!v.trim()) return "Reference number is required.";
@@ -321,6 +320,7 @@ export default function Register() {
       ["lastName", lastName],
       ["username", username],
       ["email", email],
+      // only validate phone as “required” if Mpesa is chosen
       ["phoneNumber", phoneNumber],
       ["referenceNumber", referenceNumber],
       ["password", password],
@@ -448,9 +448,7 @@ export default function Register() {
 
         // ✅ show success + move user forward
         setRegistrationComplete(true);
-        setSuccessMessage(
-          "Payment confirmed and your account has been created. Proceed to set up 2FA."
-        );
+        setSuccessMessage("Payment confirmed and your account has been created. Proceed to set up 2FA.");
 
         // ✅ Cleanup stored state now that we are done
         localStorage.removeItem(LS_REG_INTENT);
@@ -505,7 +503,7 @@ export default function Register() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waitingPayment, intentId]);
 
-  // ✅ NEW: Handle Paystack return to registration
+  // ✅ Handle Paystack return to registration
   useEffect(() => {
     const qs = new URLSearchParams(location.search);
     const paid = (qs.get("paid") || "").trim();
@@ -574,10 +572,7 @@ export default function Register() {
 
       if (action === "PAYMENT_REQUIRED") {
         if (publicPayMethod === "MPESA") {
-          setInfo(
-            `Signup fee applies: KES ${SIGNUP_FEE_KES}. An Mpesa prompt is being sent — please check your phone and approve.`
-          );
-
+          setInfo(`Signup fee: KES ${SIGNUP_FEE_KES}. An Mpesa prompt is being sent — approve on your phone.`);
           await initiateSignupPaymentMpesa(createdIntentId);
 
           setWaitingPayment(true);
@@ -586,7 +581,7 @@ export default function Register() {
         }
 
         // PAYSTACK
-        setInfo(`Signup fee applies: KES ${SIGNUP_FEE_KES}. Redirecting to Paystack checkout...`);
+        setInfo(`Signup fee: KES ${SIGNUP_FEE_KES}. Redirecting to Paystack checkout...`);
         await initiateSignupPaymentPaystack(createdIntentId);
         return;
       }
@@ -631,7 +626,7 @@ export default function Register() {
     localStorage.removeItem(LS_REG_INTENT);
     localStorage.removeItem(LS_REG_EMAIL);
 
-    // ✅ clear stored creds too
+    // clear stored creds too
     localStorage.removeItem(LS_REG_USERNAME);
     localStorage.removeItem(LS_REG_PASSWORD);
   }
@@ -649,7 +644,10 @@ export default function Register() {
     return fieldErrors?.[name] ? { borderColor: "#ef4444", outlineColor: "#ef4444" } : undefined;
   }
 
-  function PillChoice({ items, value, onChange, disabled }) {
+  function PillChoice({ items, value, onChange, disabled, tone = "default" }) {
+    const accent = tone === "payment" ? "#0f766e" : "#8b1c1c"; // teal for payment, red for type
+    const activeBg = tone === "payment" ? "#ecfeff" : "#fff1f2";
+
     return (
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         {items.map((t) => {
@@ -661,21 +659,29 @@ export default function Register() {
               disabled={disabled}
               onClick={() => onChange(t.value)}
               style={{
-                padding: "10px 12px",
-                borderRadius: 12,
-                border: active ? "2px solid #8b1c1c" : "1px solid #e5e7eb",
-                background: active ? "#fff1f2" : "white",
+                padding: "12px 14px",
+                borderRadius: 14,
+                border: active ? `2px solid ${accent}` : "1px solid #e5e7eb",
+                background: active ? activeBg : "white",
                 color: "#111827",
-                fontWeight: 800,
+                fontWeight: 900,
                 cursor: disabled ? "not-allowed" : "pointer",
-                flex: "1 1 220px",
+                flex: "1 1 240px",
                 textAlign: "left",
-                boxShadow: active ? "0 8px 20px rgba(0,0,0,0.06)" : "none",
+                boxShadow: active ? "0 10px 22px rgba(0,0,0,0.06)" : "none",
+                transition: "transform 120ms ease, box-shadow 120ms ease",
+              }}
+              onMouseDown={(e) => {
+                // tiny tactile feel without changing behavior
+                if (!disabled) e.currentTarget.style.transform = "scale(0.99)";
+              }}
+              onMouseUp={(e) => {
+                e.currentTarget.style.transform = "scale(1)";
               }}
             >
               <div style={{ fontSize: 14 }}>{t.label}</div>
               {t.sub && (
-                <div style={{ marginTop: 4, fontSize: 12, color: "#6b7280", fontWeight: 600 }}>
+                <div style={{ marginTop: 4, fontSize: 12, color: "#6b7280", fontWeight: 650, lineHeight: 1.3 }}>
                   {t.sub}
                 </div>
               )}
@@ -683,6 +689,56 @@ export default function Register() {
           );
         })}
       </div>
+    );
+  }
+
+  function Alert({ kind, children }) {
+    if (!children) return null;
+
+    const isErr = kind === "error";
+    const bg = isErr ? "#fef2f2" : "#ecfdf5";
+    const border = isErr ? "#fecaca" : "#a7f3d0";
+    const color = isErr ? "#991b1b" : "#065f46";
+    const icon = isErr ? "⚠️" : "✅";
+
+    return (
+      <div
+        className={isErr ? "error-box" : "success-box"}
+        style={{
+          background: bg,
+          border: `1px solid ${border}`,
+          color,
+          padding: "12px 12px",
+          borderRadius: 12,
+          whiteSpace: "pre-wrap",
+          display: "flex",
+          gap: 10,
+          alignItems: "flex-start",
+          marginBottom: 12,
+        }}
+      >
+        <div style={{ fontSize: 16, lineHeight: 1 }}>{icon}</div>
+        <div style={{ flex: 1 }}>{children}</div>
+      </div>
+    );
+  }
+
+  function StepPill({ text }) {
+    return (
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          padding: "6px 10px",
+          borderRadius: 999,
+          fontSize: 12,
+          fontWeight: 800,
+          background: "#f3f4f6",
+          color: "#374151",
+        }}
+      >
+        {text}
+      </span>
     );
   }
 
@@ -710,16 +766,8 @@ export default function Register() {
             <h2>Proceed to 2FA setup</h2>
             <p className="subtitle">{successMessage || "Your account is ready. Continue to set up 2FA."}</p>
 
-            {error && (
-              <div className="error-box" style={{ whiteSpace: "pre-wrap" }}>
-                {toText(error)}
-              </div>
-            )}
-            {info && (
-              <div className="success-box" style={{ whiteSpace: "pre-wrap" }}>
-                {toText(info)}
-              </div>
-            )}
+            <Alert kind="error">{error ? toText(error) : ""}</Alert>
+            <Alert kind="ok">{info ? toText(info) : ""}</Alert>
 
             <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
               <button
@@ -817,38 +865,40 @@ export default function Register() {
               : "Institution users can sign up here. Choose Student or Staff to allocate the correct seat type."}
           </p>
 
-          {error && (
-            <div className="error-box" style={{ whiteSpace: "pre-wrap" }}>
-              {toText(error)}
-            </div>
-          )}
-          {info && (
-            <div className="success-box" style={{ whiteSpace: "pre-wrap" }}>
-              {toText(info)}
-            </div>
-          )}
+          <Alert kind="error">{error ? toText(error) : ""}</Alert>
+          <Alert kind="ok">{info ? toText(info) : ""}</Alert>
 
+          {/* Fee + method explanation */}
           {isPublic && (
             <div
-              className="success-box"
               style={{
                 marginBottom: 14,
-                background: "#ecfdf5",
-                border: "1px solid #a7f3d0",
-                color: "#065f46",
+                background: "#f0f9ff",
+                border: "1px solid #bae6fd",
+                color: "#0c4a6e",
+                padding: "12px 12px",
+                borderRadius: 14,
               }}
             >
-              <strong>Signup fee: KES {SIGNUP_FEE_KES}</strong>
-              <div style={{ marginTop: 6 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ fontWeight: 950 }}>
+                  Signup fee: <span style={{ color: "#0f766e" }}>KES {SIGNUP_FEE_KES}</span>
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <StepPill text="1) Create intent" />
+                  <StepPill text="2) Pay" />
+                  <StepPill text="3) Auto-confirm" />
+                </div>
+              </div>
+
+              <div style={{ marginTop: 6, fontSize: 13, color: "#075985" }}>
                 {publicPayMethod === "MPESA" ? (
                   <>
-                    When you click <strong>Create Account</strong>, we’ll initiate an <strong>Mpesa STK push</strong>.
-                    Please <strong>check your phone</strong> and approve the prompt.
+                    We’ll send an <b>Mpesa STK push</b>. Approve it on your phone, then we’ll confirm automatically.
                   </>
                 ) : (
                   <>
-                    When you click <strong>Create Account</strong>, you’ll be redirected to <strong>Paystack</strong> to
-                    complete payment.
+                    You’ll be redirected to <b>Paystack checkout</b>, then returned here to finalize your account.
                   </>
                 )}
               </div>
@@ -861,12 +911,13 @@ export default function Register() {
               <PillChoice items={USER_TYPES} value={userType} onChange={setUserType} disabled={waitingPayment} />
             </div>
 
-            {/* ✅ Public payment method choice */}
+            {/* Public payment method choice */}
             {isPublic && (
               <>
                 <label className="field-label">Payment Method</label>
                 <div style={{ marginBottom: 14 }}>
                   <PillChoice
+                    tone="payment"
                     items={[
                       { value: "MPESA", label: "Mpesa", sub: "Kenya-only (STK prompt)" },
                       { value: "PAYSTACK", label: "Paystack", sub: "Card/bank/international" },
@@ -945,11 +996,7 @@ export default function Register() {
 
             <label className="field-label">
               Phone{" "}
-              {isPublic
-                ? publicPayMethod === "MPESA"
-                  ? "(required for Mpesa)"
-                  : "(optional)"
-                : "(optional)"}
+              {isPublic ? (publicPayMethod === "MPESA" ? "(required for Mpesa)" : "(optional)") : "(optional)"}
             </label>
             <input
               value={phoneNumber}
@@ -960,6 +1007,7 @@ export default function Register() {
               }}
               disabled={lockForm}
               style={inputStyle("phoneNumber")}
+              placeholder={publicPayMethod === "MPESA" ? "e.g. 2547XXXXXXXX" : "Optional"}
             />
             <FieldError name="phoneNumber" />
 
@@ -1167,6 +1215,10 @@ export default function Register() {
                   : "Creating account..."
                 : waitingPayment
                 ? "Finalizing payment..."
+                : isPublic
+                ? publicPayMethod === "MPESA"
+                  ? `Pay (KES ${SIGNUP_FEE_KES}) & Create Account`
+                  : `Go to Paystack (KES ${SIGNUP_FEE_KES})`
                 : "Create Account"}
             </button>
 
@@ -1196,12 +1248,16 @@ export default function Register() {
                   color: "#0e7490",
                 }}
               >
-                <div style={{ fontWeight: 900, marginBottom: 6 }}>
-                  {statusText || "Finalizing payment..."}
-                </div>
+                <div style={{ fontWeight: 950, marginBottom: 6 }}>{statusText || "Finalizing payment..."}</div>
 
-                <div style={{ fontSize: 13, color: "#155e75" }}>
-                  We auto-refresh every 5 seconds.
+                <div style={{ fontSize: 13, color: "#155e75", display: "grid", gap: 6 }}>
+                  <div>We auto-refresh every 5 seconds.</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <StepPill text="Approve payment" />
+                    <StepPill text="We confirm" />
+                    <StepPill text="Account created" />
+                    <StepPill text="Setup 2FA" />
+                  </div>
                 </div>
 
                 <div style={{ marginTop: 8, fontSize: 12, color: "#155e75" }}>
