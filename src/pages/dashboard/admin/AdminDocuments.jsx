@@ -18,10 +18,20 @@ function buildCoverUrl(coverImagePath) {
 
 function getApiErrorMessage(err, fallback = "Request failed.") {
   const data = err?.response?.data;
+
+  // ASP.NET validation often looks like { errors: { Field: [msg] } }
   if (data && typeof data === "object") {
     if (typeof data.message === "string") return data.message;
     if (typeof data.error === "string") return data.error;
+
+    if (data.errors && typeof data.errors === "object") {
+      const k = Object.keys(data.errors)[0];
+      const arr = data.errors[k];
+      if (Array.isArray(arr) && arr[0]) return `${k}: ${arr[0]}`;
+      return "Validation failed.";
+    }
   }
+
   if (typeof data === "string") return data;
   if (typeof err?.message === "string") return err.message;
   return fallback;
@@ -40,6 +50,23 @@ function safeBool(v, fallback = false) {
   return fallback;
 }
 
+function toIntOrNull(v) {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  if (!s) return null;
+  const n = Number(s);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(0, Math.floor(n));
+}
+
+function toDecimalOrNull(v) {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
 // Try multiple endpoints (in case environments differ)
 async function postMultipartWithFallback(paths, formData) {
   let lastErr = null;
@@ -56,6 +83,16 @@ async function postMultipartWithFallback(paths, formData) {
   throw lastErr || new Error("Upload failed.");
 }
 
+/** ✅ Must match backend enum values EXACTLY */
+const CATEGORY_OPTIONS = [
+  "Commentaries",
+  "InternationalTitles",
+  "Journals",
+  "LawReports",
+  "Statutes",
+  "LLRServices",
+];
+
 const emptyForm = {
   title: "",
   description: "",
@@ -66,6 +103,9 @@ const emptyForm = {
 
   category: "Commentaries",
   countryId: "",
+
+  // ✅ NEW
+  pageCount: "",
 
   isPremium: true,
   status: "Published",
@@ -142,7 +182,8 @@ export default function AdminDocuments() {
       const currency = String((r.publicCurrency ?? r.PublicCurrency ?? "") || "").toLowerCase();
       const price = String((r.publicPrice ?? r.PublicPrice ?? "") || "").toLowerCase();
 
-      const pricing = `${allow ? "on" : "off"} ${currency} ${price} ${r.pageCount ?? ""}`.toLowerCase();
+      const pages = String(r.pageCount ?? "").toLowerCase();
+      const pricing = `${allow ? "on" : "off"} ${currency} ${price} ${pages}`;
       const meta = `${status} ${premium} ${pricing}`.toLowerCase();
 
       return title.includes(s) || meta.includes(s);
@@ -187,6 +228,9 @@ export default function AdminDocuments() {
         category: d.category ?? "Commentaries",
         countryId: d.countryId ?? "",
 
+        // ✅ NEW
+        pageCount: d.pageCount ?? "",
+
         isPremium: !!d.isPremium,
         status: d.status ?? "Published",
         publishedAt: d.publishedAt ? String(d.publishedAt).slice(0, 10) : "",
@@ -206,6 +250,9 @@ export default function AdminDocuments() {
   }
 
   function buildCreatePayload() {
+    const isPremium = !!form.isPremium;
+    const allowPublicPurchase = isPremium ? !!form.allowPublicPurchase : false;
+
     return {
       title: form.title.trim(),
       description: form.description?.trim() || null,
@@ -219,21 +266,27 @@ export default function AdminDocuments() {
       filePath: "",
       fileType: "pdf",
       fileSizeBytes: 0,
-      pageCount: 0,
-      chapterCount: 0,
 
-      isPremium: !!form.isPremium,
+      // ✅ send user entered pages
+      pageCount: toIntOrNull(form.pageCount),
+      chapterCount: null,
+
+      isPremium,
       version: form.version?.trim() || "1",
       status: form.status,
       publishedAt: form.publishedAt ? new Date(form.publishedAt).toISOString() : null,
 
-      allowPublicPurchase: !!form.allowPublicPurchase,
-      publicPrice: form.publicPrice === "" ? null : Number(form.publicPrice),
-      publicCurrency: form.publicCurrency?.trim() || "KES",
+      // ✅ For free docs: always off/null
+      allowPublicPurchase,
+      publicPrice: allowPublicPurchase ? toDecimalOrNull(form.publicPrice) : null,
+      publicCurrency: allowPublicPurchase ? (form.publicCurrency?.trim() || "KES") : "KES",
     };
   }
 
   function buildUpdatePayload() {
+    const isPremium = !!form.isPremium;
+    const allowPublicPurchase = isPremium ? !!form.allowPublicPurchase : false;
+
     return {
       title: form.title.trim(),
       description: form.description?.trim() || null,
@@ -244,14 +297,17 @@ export default function AdminDocuments() {
       category: form.category,
       countryId: Number(form.countryId),
 
-      isPremium: !!form.isPremium,
+      // ✅ NEW: update pages
+      pageCount: toIntOrNull(form.pageCount),
+
+      isPremium,
       version: form.version?.trim() || "1",
       status: form.status,
       publishedAt: form.publishedAt ? new Date(form.publishedAt).toISOString() : null,
 
-      allowPublicPurchase: !!form.allowPublicPurchase,
-      publicPrice: form.publicPrice === "" ? null : Number(form.publicPrice),
-      publicCurrency: form.publicCurrency?.trim() || "KES",
+      allowPublicPurchase,
+      publicPrice: allowPublicPurchase ? toDecimalOrNull(form.publicPrice) : null,
+      publicCurrency: allowPublicPurchase ? (form.publicCurrency?.trim() || "KES") : "KES",
     };
   }
 
@@ -262,6 +318,12 @@ export default function AdminDocuments() {
     if (!form.title.trim()) return setError("Title is required.");
     if (!form.countryId) return setError("Country is required.");
 
+    // ✅ Hard guard: category must match enum
+    if (!CATEGORY_OPTIONS.includes(form.category)) {
+      return setError("Invalid category selected. Please choose a valid category.");
+    }
+
+    // ✅ If not premium, pricing must be off
     if (!form.isPremium) {
       setField("allowPublicPurchase", false);
       setField("publicPrice", "");
@@ -313,8 +375,6 @@ export default function AdminDocuments() {
 
     try {
       const fd = new FormData();
-
-      // ✅ Send BOTH keys (backend may expect File or file)
       fd.append("file", ebookFile, ebookFile.name);
       fd.append("File", ebookFile, ebookFile.name);
 
@@ -341,8 +401,6 @@ export default function AdminDocuments() {
 
     try {
       const fd = new FormData();
-
-      // ✅ Send BOTH keys
       fd.append("file", coverFile, coverFile.name);
       fd.append("File", coverFile, coverFile.name);
 
@@ -370,9 +428,10 @@ export default function AdminDocuments() {
     return !!(r.allowPublicPurchase ?? r.AllowPublicPurchase ?? false);
   }
 
+  const showPricing = !!form.isPremium;
+
   return (
     <div className="admin-page admin-page-wide">
-      {/* Scoped polish (no CSS file changes needed) */}
       <style>{`
         .admin-table-wrap { max-height: 68vh; overflow: auto; border-radius: 14px; }
         .admin-table thead th { position: sticky; top: 0; z-index: 2; background: #fafafa; }
@@ -388,16 +447,8 @@ export default function AdminDocuments() {
           background: #f9fafb;
           border: 1px solid #e5e7eb;
         }
-        .admin-form-section-title {
-          font-weight: 900;
-          color: #111827;
-          margin-bottom: 4px;
-        }
-        .admin-form-section-sub {
-          color: #6b7280;
-          font-size: 12px;
-          line-height: 1.35;
-        }
+        .admin-form-section-title { font-weight: 900; color: #111827; margin-bottom: 4px; }
+        .admin-form-section-sub { color: #6b7280; font-size: 12px; line-height: 1.35; }
 
         .admin-upload-box {
           border: 1px dashed #d1d5db;
@@ -414,12 +465,17 @@ export default function AdminDocuments() {
         }
         .filehint { color: #6b7280; font-weight: 700; font-size: 12px; }
         .minihelp { color:#6b7280; font-size:12px; margin-top:6px; line-height:1.35; }
+        .minihelp.warn {
+          background:#fffbeb; border:1px solid #fcd34d; color:#92400e;
+          padding:8px 10px; border-radius:12px; margin-top:8px;
+          font-size:12px; font-weight:800;
+        }
       `}</style>
 
       <div className="admin-header">
         <div>
           <h1 className="admin-title">Admin · Books (Legal Documents)</h1>
-          <p className="admin-subtitle">Create documents, set pricing, then upload the ebook and cover image.</p>
+          <p className="admin-subtitle">Create documents, then upload the ebook and cover image.</p>
         </div>
 
         <div className="admin-actions">
@@ -438,7 +494,7 @@ export default function AdminDocuments() {
         <div className="admin-toolbar">
           <input
             className="admin-search admin-search-wide"
-            placeholder="Search by title, status, premium, currency, price…"
+            placeholder="Search by title, status, premium, pages, currency, price…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -452,13 +508,9 @@ export default function AdminDocuments() {
                 <th style={{ width: "50%" }}>Title</th>
                 <th style={{ width: "14%" }}>Status</th>
                 <th style={{ width: "10%" }}>Premium</th>
-                <th style={{ width: "8%" }} className="num-cell">
-                  Pages
-                </th>
+                <th style={{ width: "8%" }} className="num-cell">Pages</th>
                 <th style={{ width: "10%" }}>Currency</th>
-                <th style={{ width: "10%" }} className="num-cell">
-                  Public Price
-                </th>
+                <th style={{ width: "10%" }} className="num-cell">Public Price</th>
                 <th style={{ textAlign: "right", width: "16%" }}>Actions</th>
               </tr>
             </thead>
@@ -554,7 +606,7 @@ export default function AdminDocuments() {
               <div className="admin-form-section">
                 <div className="admin-form-section-title">Document details</div>
                 <div className="admin-form-section-sub">
-                  Title, jurisdiction, category, and descriptive metadata.
+                  Title, jurisdiction, category, pages and descriptive metadata.
                 </div>
               </div>
 
@@ -588,17 +640,37 @@ export default function AdminDocuments() {
                 <div className="admin-field">
                   <label>Category</label>
                   <select value={form.category} onChange={(e) => setField("category", e.target.value)}>
-                    <option value="Commentaries">Commentaries</option>
-                    <option value="Journals">Journals</option>
-                    <option value="LawReports">LawReports</option>
-                    <option value="Books">Books</option>
-                    <option value="Constitution">Constitution</option>
+                    {CATEGORY_OPTIONS.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
                   </select>
+                  <div className="minihelp">
+                    These options match the backend enum (prevents 400 errors).
+                  </div>
+                </div>
+
+                {/* ✅ NEW FIELD */}
+                <div className="admin-field">
+                  <label>No of Pages</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={form.pageCount}
+                    onChange={(e) => setField("pageCount", e.target.value)}
+                    placeholder="e.g. 120"
+                  />
+                  <div className="minihelp">Optional. Used for display and search.</div>
                 </div>
 
                 <div className="admin-field">
                   <label>Premium?</label>
-                  <select value={String(!!form.isPremium)} onChange={(e) => setField("isPremium", e.target.value === "true")}>
+                  <select
+                    value={String(!!form.isPremium)}
+                    onChange={(e) => setField("isPremium", e.target.value === "true")}
+                  >
                     <option value="true">Yes</option>
                     <option value="false">No</option>
                   </select>
@@ -638,8 +710,14 @@ export default function AdminDocuments() {
               <div className="admin-form-section">
                 <div className="admin-form-section-title">Pricing rules</div>
                 <div className="admin-form-section-sub">
-                  Only premium documents can be sold publicly. Turn on public purchase to set currency and price.
+                  Only premium documents can be sold publicly.
                 </div>
+
+                {!showPricing && (
+                  <div className="minihelp warn">
+                    This document is FREE (Premium = No). Pricing is disabled and will not be saved.
+                  </div>
+                )}
               </div>
 
               <div className="admin-grid">
@@ -649,12 +727,10 @@ export default function AdminDocuments() {
                     value={String(!!form.allowPublicPurchase)}
                     onChange={(e) => setField("allowPublicPurchase", e.target.value === "true")}
                     disabled={!form.isPremium}
-                    title={!form.isPremium ? "Only premium documents should be sold." : ""}
                   >
                     <option value="true">Yes</option>
                     <option value="false">No</option>
                   </select>
-                  {!form.isPremium && <div className="minihelp">Disabled because the document is not premium.</div>}
                 </div>
 
                 <div className="admin-field">
@@ -682,7 +758,7 @@ export default function AdminDocuments() {
               <div className="admin-form-section">
                 <div className="admin-form-section-title">Files</div>
                 <div className="admin-form-section-sub">
-                  You must save first (to get an ID), then upload ebook and cover.
+                  Save first (to get an ID), then upload ebook and cover.
                 </div>
               </div>
 
@@ -700,7 +776,11 @@ export default function AdminDocuments() {
                     />
 
                     <div className="admin-upload-actions">
-                      <button className="admin-btn" onClick={uploadEbook} disabled={!editing || uploadingEbook || uploadingCover || busy}>
+                      <button
+                        className="admin-btn"
+                        onClick={uploadEbook}
+                        disabled={!editing || uploadingEbook || uploadingCover || busy}
+                      >
                         {uploadingEbook ? "Uploading…" : "Upload ebook"}
                       </button>
                       <span className="filehint">{ebookFile ? ebookFile.name : "No file selected."}</span>
@@ -721,7 +801,11 @@ export default function AdminDocuments() {
                     />
 
                     <div className="admin-upload-actions">
-                      <button className="admin-btn" onClick={uploadCover} disabled={!editing || uploadingCover || uploadingEbook || busy}>
+                      <button
+                        className="admin-btn"
+                        onClick={uploadCover}
+                        disabled={!editing || uploadingCover || uploadingEbook || busy}
+                      >
                         {uploadingCover ? "Uploading…" : "Upload cover"}
                       </button>
                       <span className="filehint">{coverFile ? coverFile.name : "No file selected."}</span>
@@ -763,15 +847,6 @@ export default function AdminDocuments() {
           </div>
         </div>
       )}
-
-      <footer className="admin-footer">
-        <div className="admin-footer-inner">
-          <span>LawAfrica Admin • Books</span>
-          <span className="admin-footer-muted">
-            Tip: enable <b>public purchase</b> only for premium items, then set <b>currency</b> + <b>price</b>.
-          </span>
-        </div>
-      </footer>
     </div>
   );
 }
