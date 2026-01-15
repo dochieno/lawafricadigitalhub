@@ -28,6 +28,10 @@ export default function PdfViewer({
   const readingStartRef = useRef(Date.now());
   const pageUpdateTimeoutRef = useRef(null);
 
+  /* ✅ NEW: resume target tracking */
+  const resumeTargetRef = useRef(null);
+  const resumeAppliedRef = useRef(false);
+
   /* ---------------- Reader Preferences ---------------- */
   const [zoom, setZoom] = useState(1);
   const [darkMode, setDarkMode] = useState(false);
@@ -97,30 +101,37 @@ export default function PdfViewer({
 
   function scrollToPage(targetPage, behavior = "auto") {
     const el = pageElsRef.current[targetPage];
-    if (!el) return;
+    if (!el) return false;
 
     el.scrollIntoView({
       behavior,
       block: "start",
     });
+    return true;
   }
 
   /* ==================================================
      LOAD READING PROGRESS
-     (If you already have /reading-progress endpoints, keep them)
      ================================================== */
   useEffect(() => {
     let cancelled = false;
 
     setResumeLoaded(false);
     pendingJumpRef.current = null;
+    resumeTargetRef.current = null;
+    resumeAppliedRef.current = false;
 
     api
       .get(`/reading-progress/${documentId}`)
       .then((res) => {
         if (cancelled) return;
+
         const saved = res.data?.pageNumber;
-        if (saved && saved > 0) pendingJumpRef.current = saved;
+        if (saved && saved > 0) {
+          pendingJumpRef.current = saved;
+          resumeTargetRef.current = saved;
+        }
+
         setResumeLoaded(true);
       })
       .catch(() => {
@@ -158,18 +169,60 @@ export default function PdfViewer({
   }, [page, ready, numPages, resumeLoaded, documentId]);
 
   /* ==================================================
-     ✅ FIX: EXTEND RENDER LIMIT (THIS SOLVES “stops at 10 pages”)
+     ✅ FIX: EXTEND RENDER LIMIT (keeps scrolling working)
      ================================================== */
   useEffect(() => {
     if (!ready || !numPages) return;
 
     const maxPage = allowedMaxPage ?? numPages;
 
-    // When user is near end of rendered pages, extend by 10
     if (page >= renderLimit - 4) {
       setRenderLimit((prev) => Math.min(maxPage, prev + 10));
     }
   }, [page, renderLimit, ready, numPages, allowedMaxPage]);
+
+  /* ==================================================
+     ✅ NEW: APPLY RESUME (render enough pages, then scroll)
+     This is what makes "Read Now" open where you left off.
+     ================================================== */
+  useEffect(() => {
+    if (!ready || !numPages || !resumeLoaded) return;
+    if (resumeAppliedRef.current) return;
+
+    const targetRaw = resumeTargetRef.current;
+    if (!targetRaw) return;
+
+    const maxPage = allowedMaxPage ?? numPages;
+    const target = Math.min(Math.max(1, Number(targetRaw)), maxPage);
+
+    // Ensure the target page is actually rendered in DOM
+    setRenderLimit((prev) => Math.max(prev, Math.min(target + 6, maxPage)));
+
+    // Set page state too (nav indicator + progress)
+    setPage(target);
+
+    // After render, do a reliable scroll
+    const attemptScroll = () => {
+      isProgrammaticNavRef.current = true;
+
+      const ok = scrollToPage(target, "auto");
+      if (ok) {
+        resumeAppliedRef.current = true;
+
+        // release programmatic lock shortly after scroll settles
+        setTimeout(() => {
+          isProgrammaticNavRef.current = false;
+        }, 300);
+        return;
+      }
+
+      // If not yet in DOM, try again shortly
+      setTimeout(attemptScroll, 80);
+    };
+
+    // Small delay to allow wrappers to mount
+    setTimeout(attemptScroll, 80);
+  }, [ready, numPages, resumeLoaded, allowedMaxPage, renderLimit]);
 
   /* ==================================================
      SAFE PAGE SETTER (enforces preview limit)
@@ -452,7 +505,6 @@ export default function PdfViewer({
           ? noteContent.trim()
           : highlightMeta.text;
 
-      // Keep existing API intact: offsets can be null for now (rect-model)
       await api.post("/legal-document-notes", {
         legalDocumentId: Number(documentId),
         highlightedText: highlightMeta.text,
@@ -463,12 +515,10 @@ export default function PdfViewer({
         highlightColor: highlightColor,
       });
 
-      // reload notes
       const res = await api.get(`/legal-document-notes/document/${documentId}`);
       setNotes(res.data || []);
       setShowNotes(true);
 
-      // Optional: show rect overlay highlight (session)
       setHighlights((prev) => [
         ...prev,
         {
@@ -631,6 +681,7 @@ export default function PdfViewer({
               setRenderLimit(Math.min(allowed, Math.max(initial + 6, 10)));
               setReady(true);
 
+              // Note: resume effect will do the reliable scroll when needed
               setTimeout(() => scrollToPage(initial, "auto"), 80);
             }}
           >
@@ -645,7 +696,6 @@ export default function PdfViewer({
                     data-page-number={pageNumber}
                     ref={(el) => registerPageEl(pageNumber, el)}
                   >
-                    {/* rect-based overlay highlights (session-level) */}
                     <svg className="highlight-layer" width="100%" height="100%">
                       {(highlightsByPage?.[pageNumber] || []).map((h) =>
                         (h.rects || []).map((r, idx) => (
@@ -704,9 +754,7 @@ export default function PdfViewer({
         </div>
       </div>
 
-      {/* =========================
-          NOTE OVERLAY (RESTORED)
-         ========================= */}
+      {/* NOTE OVERLAY */}
       {showNoteBox && (
         <div className="note-overlay">
           <div className="note-box">
@@ -755,9 +803,7 @@ export default function PdfViewer({
         </div>
       )}
 
-      {/* =========================
-          NOTES SIDEBAR (RESTORED)
-         ========================= */}
+      {/* NOTES SIDEBAR */}
       <div className={`notes-sidebar ${showNotes ? "open" : "closed"}`}>
         <div className="notes-header">
           <h3>Notes</h3>
