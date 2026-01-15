@@ -1,6 +1,7 @@
 // src/reader/PdfViewer.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
+import api from "../api/client";
 import { getPdfSource } from "../utils/pdfSource";
 import "../styles/reader.css";
 
@@ -19,7 +20,7 @@ export default function PdfViewer({
   const [numPages, setNumPages] = useState(null);
   const [page, setPage] = useState(startPage || 1);
   const [ready, setReady] = useState(false);
-  const [highlights, setHighlights] = useState([]);
+  const [highlights, setHighlights] = useState([]); // rect-based overlay highlights (optional)
 
   /* ---------------- Reading Progress ---------------- */
   const [resumeLoaded, setResumeLoaded] = useState(false);
@@ -48,21 +49,21 @@ export default function PdfViewer({
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [editingContent, setEditingContent] = useState("");
 
-  // ✅ Feature 1: highlight click opens the note
+  // ✅ Feature: highlight click opens the note
   const [activeNoteId, setActiveNoteId] = useState(null);
   const [flashNoteId, setFlashNoteId] = useState(null);
 
-  // ✅ Feature 3: highlight colors
+  // ✅ highlight colors
   const [highlightColor, setHighlightColor] = useState("yellow");
 
-  // ✅ Real highlight meta captured from selection
+  // ✅ Real highlight meta captured from selection (rect-based)
   const [highlightMeta, setHighlightMeta] = useState(null);
 
   /* Reliable jump */
   const pendingJumpRef = useRef(null);
-
   const noteRefs = useRef({}); // noteId -> HTMLElement
 
+  /* Scroll + observer */
   const scrollRootRef = useRef(null);
   const pageObserverRef = useRef(null);
   const snapTimeoutRef = useRef(null);
@@ -71,6 +72,7 @@ export default function PdfViewer({
   const pageElsRef = useRef({}); // pageNumber -> wrapper HTMLElement
   const previewLimitTriggeredRef = useRef(false);
 
+  // ✅ progressive render: start with 10 and extend as user scrolls
   const [renderLimit, setRenderLimit] = useState(10);
 
   const fileSource = useMemo(() => getPdfSource(documentId), [documentId]);
@@ -104,21 +106,70 @@ export default function PdfViewer({
   }
 
   /* ==================================================
-     LOAD READING PROGRESS (reads must remain via api)
-     NOTE: leaving your existing API shape untouched
+     LOAD READING PROGRESS
+     (If you already have /reading-progress endpoints, keep them)
      ================================================== */
   useEffect(() => {
     let cancelled = false;
 
-    // IMPORTANT: if you already had this endpoint working, keep it.
-    // If you want, we can re-add api calls here, but you didn’t paste the progress endpoints in this file.
-    // For now: mark resumeLoaded true so the rest of viewer works.
-    setResumeLoaded(true);
+    setResumeLoaded(false);
+    pendingJumpRef.current = null;
+
+    api
+      .get(`/reading-progress/${documentId}`)
+      .then((res) => {
+        if (cancelled) return;
+        const saved = res.data?.pageNumber;
+        if (saved && saved > 0) pendingJumpRef.current = saved;
+        setResumeLoaded(true);
+      })
+      .catch(() => {
+        if (!cancelled) setResumeLoaded(true);
+      });
 
     return () => {
       cancelled = true;
     };
   }, [documentId]);
+
+  /* ==================================================
+     SAVE READING PROGRESS
+     ================================================== */
+  useEffect(() => {
+    if (!ready || !numPages || !resumeLoaded) return;
+    if (lastSavedPageRef.current === page) return;
+
+    lastSavedPageRef.current = page;
+
+    const now = Date.now();
+    const secondsReadDelta = Math.round((now - readingStartRef.current) / 1000);
+    readingStartRef.current = now;
+
+    const percentage = Math.round((page / numPages) * 100);
+
+    api
+      .put(`/reading-progress/${documentId}`, {
+        pageNumber: page,
+        percentage,
+        secondsReadDelta,
+        isCompleted: percentage >= 100,
+      })
+      .catch(() => {});
+  }, [page, ready, numPages, resumeLoaded, documentId]);
+
+  /* ==================================================
+     ✅ FIX: EXTEND RENDER LIMIT (THIS SOLVES “stops at 10 pages”)
+     ================================================== */
+  useEffect(() => {
+    if (!ready || !numPages) return;
+
+    const maxPage = allowedMaxPage ?? numPages;
+
+    // When user is near end of rendered pages, extend by 10
+    if (page >= renderLimit - 4) {
+      setRenderLimit((prev) => Math.min(maxPage, prev + 10));
+    }
+  }, [page, renderLimit, ready, numPages, allowedMaxPage]);
 
   /* ==================================================
      SAFE PAGE SETTER (enforces preview limit)
@@ -186,6 +237,16 @@ export default function PdfViewer({
 
     return () => pageObserverRef.current?.disconnect();
   }, [ready, zoom, renderLimit, allowedMaxPage]);
+
+  /* ==================================================
+     NOTES: LOAD
+     ================================================== */
+  useEffect(() => {
+    api
+      .get(`/legal-document-notes/document/${documentId}`)
+      .then((res) => setNotes(res.data || []))
+      .catch(() => {});
+  }, [documentId]);
 
   /* ==================================================
      REAL HIGHLIGHT CAPTURE (unchanged)
@@ -269,7 +330,7 @@ export default function PdfViewer({
   }
 
   /* =========================
-     Highlights rendering (unchanged)
+     Highlights rendering (offset-based notes)
      ========================= */
   function clearExistingMarks(textLayerEl) {
     const marks = textLayerEl.querySelectorAll("mark.pdf-highlight");
@@ -375,6 +436,135 @@ export default function PdfViewer({
   }
 
   /* ==================================================
+     NOTES CRUD
+     ================================================== */
+  async function saveNote() {
+    try {
+      if (!highlightMeta) return;
+
+      if (hasOverlapOnPage(highlightMeta)) {
+        alert("A highlight already exists in that selected range.");
+        return;
+      }
+
+      const finalContent =
+        noteContent && noteContent.trim().length > 0
+          ? noteContent.trim()
+          : highlightMeta.text;
+
+      // Keep existing API intact: offsets can be null for now (rect-model)
+      await api.post("/legal-document-notes", {
+        legalDocumentId: Number(documentId),
+        highlightedText: highlightMeta.text,
+        pageNumber: highlightMeta.page,
+        charOffsetStart: null,
+        charOffsetEnd: null,
+        content: finalContent,
+        highlightColor: highlightColor,
+      });
+
+      // reload notes
+      const res = await api.get(`/legal-document-notes/document/${documentId}`);
+      setNotes(res.data || []);
+      setShowNotes(true);
+
+      // Optional: show rect overlay highlight (session)
+      setHighlights((prev) => [
+        ...prev,
+        {
+          id: highlightMeta.id,
+          page: highlightMeta.page,
+          rects: highlightMeta.rects,
+          color:
+            highlightColor === "blue"
+              ? "rgba(59,130,246,0.30)"
+              : highlightColor === "pink"
+              ? "rgba(236,72,153,0.30)"
+              : highlightColor === "green"
+              ? "rgba(34,197,94,0.28)"
+              : "rgba(255, 235, 59, 0.45)",
+        },
+      ]);
+
+      setTimeout(() => applyHighlightsForPage(highlightMeta.page), 80);
+    } catch (err) {
+      console.error("Failed to save note:", err);
+      alert(
+        err?.response?.data?.message ||
+          JSON.stringify(err?.response?.data) ||
+          "Failed to save note. Please try again."
+      );
+      return;
+    } finally {
+      setShowNoteBox(false);
+      setSelectedText("");
+      setNoteContent("");
+      setHighlightMeta(null);
+    }
+  }
+
+  async function saveEdit(noteId) {
+    try {
+      await api.put(`/legal-document-notes/${noteId}`, {
+        content: editingContent,
+      });
+
+      setNotes((ns) =>
+        ns.map((n) => (n.id === noteId ? { ...n, content: editingContent } : n))
+      );
+    } catch (err) {
+      alert(
+        err?.response?.data?.message ||
+          JSON.stringify(err?.response?.data) ||
+          "Failed to update note."
+      );
+    } finally {
+      setEditingNoteId(null);
+      setEditingContent("");
+    }
+  }
+
+  async function deleteNote(noteId) {
+    if (!confirm("Delete this note?")) return;
+
+    try {
+      await api.delete(`/legal-document-notes/${noteId}`);
+      setNotes((ns) => ns.filter((n) => n.id !== noteId));
+    } catch (err) {
+      alert(
+        err?.response?.data?.message ||
+          JSON.stringify(err?.response?.data) ||
+          "Failed to delete note."
+      );
+    }
+  }
+
+  const groupedNotes = useMemo(() => {
+    const map = new Map();
+
+    for (const n of notes || []) {
+      const key = n.pageNumber ?? -1;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(n);
+    }
+
+    for (const [k, arr] of map.entries()) {
+      arr.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
+
+    const keys = Array.from(map.keys()).sort((a, b) => {
+      if (a === -1) return 1;
+      if (b === -1) return -1;
+      return a - b;
+    });
+
+    return keys.map((k) => ({
+      pageNumber: k === -1 ? null : k,
+      items: map.get(k),
+    }));
+  }, [notes]);
+
+  /* ==================================================
      Render
      ================================================== */
   return (
@@ -382,9 +572,13 @@ export default function PdfViewer({
       <div className="reader-top-nav">
         <div className="reader-top-nav-inner go-only">
           <div className="reader-tools">
-            <button onClick={() => setZoom((z) => Math.max(0.7, z - 0.1))}>−</button>
+            <button onClick={() => setZoom((z) => Math.max(0.7, z - 0.1))}>
+              −
+            </button>
             <span>{Math.round(zoom * 100)}%</span>
-            <button onClick={() => setZoom((z) => Math.min(1.6, z + 0.1))}>+</button>
+            <button onClick={() => setZoom((z) => Math.min(1.6, z + 0.1))}>
+              +
+            </button>
             <button onClick={() => setDarkMode((d) => !d)}>
               {darkMode ? "☀️" : "🌙"}
             </button>
@@ -451,6 +645,7 @@ export default function PdfViewer({
                     data-page-number={pageNumber}
                     ref={(el) => registerPageEl(pageNumber, el)}
                   >
+                    {/* rect-based overlay highlights (session-level) */}
                     <svg className="highlight-layer" width="100%" height="100%">
                       {(highlightsByPage?.[pageNumber] || []).map((h) =>
                         (h.rects || []).map((r, idx) => (
@@ -470,7 +665,9 @@ export default function PdfViewer({
                     <Page
                       pageNumber={pageNumber}
                       width={Math.round(820 * zoom)}
-                      onRenderTextLayerSuccess={() => applyHighlightsForPage(pageNumber)}
+                      onRenderTextLayerSuccess={() =>
+                        applyHighlightsForPage(pageNumber)
+                      }
                     />
                   </div>
                 );
@@ -507,9 +704,148 @@ export default function PdfViewer({
         </div>
       </div>
 
-      {/* Notes sidebar + note overlay blocks kept as-is (unchanged) */}
-      {/* If you want, I can paste the unchanged parts back in, but your file is very long.
-          The critical fix is removing duplicate guards and blocked state from PdfViewer. */}
+      {/* =========================
+          NOTE OVERLAY (RESTORED)
+         ========================= */}
+      {showNoteBox && (
+        <div className="note-overlay">
+          <div className="note-box">
+            <h4>Add note</h4>
+            <p className="note-preview">“{selectedText.slice(0, 120)}…”</p>
+
+            <div className="hl-color-row">
+              <span className="hl-color-label">Highlight:</span>
+              {["yellow", "blue", "pink", "green"].map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className={`hl-color-chip ${c} ${
+                    highlightColor === c ? "active" : ""
+                  }`}
+                  onClick={() => setHighlightColor(c)}
+                  title={c}
+                />
+              ))}
+            </div>
+
+            <textarea
+              value={noteContent}
+              onChange={(e) => setNoteContent(e.target.value)}
+              placeholder="Write your note (optional)…"
+            />
+
+            <div className="note-actions">
+              <button
+                className="reader-btn secondary"
+                onClick={() => {
+                  setShowNoteBox(false);
+                  setSelectedText("");
+                  setNoteContent("");
+                  setHighlightMeta(null);
+                }}
+              >
+                Cancel
+              </button>
+
+              <button className="reader-btn" onClick={saveNote}>
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================
+          NOTES SIDEBAR (RESTORED)
+         ========================= */}
+      <div className={`notes-sidebar ${showNotes ? "open" : "closed"}`}>
+        <div className="notes-header">
+          <h3>Notes</h3>
+          <button onClick={() => setShowNotes(false)}>✕</button>
+        </div>
+
+        <div className="notes-list">
+          {groupedNotes.length === 0 ? (
+            <div className="notes-empty">
+              <p>No notes yet</p>
+              <p className="notes-empty-hint">
+                Select text in the document to add your first note.
+              </p>
+            </div>
+          ) : (
+            groupedNotes.map((group) => (
+              <div key={group.pageNumber ?? "unknown"} className="notes-group">
+                <div className="notes-group-title">
+                  Page {group.pageNumber ?? "—"}
+                </div>
+
+                {group.items.map((note) => (
+                  <div
+                    key={note.id}
+                    className={[
+                      "note-item",
+                      note.id === activeNoteId ? "active" : "",
+                      note.id === flashNoteId ? "flash" : "",
+                    ].join(" ")}
+                    ref={(el) => {
+                      if (el) noteRefs.current[note.id] = el;
+                    }}
+                  >
+                    <div
+                      className="note-meta"
+                      onClick={() => jumpToPage(note.pageNumber)}
+                      style={{ cursor: "pointer" }}
+                    >
+                      <span
+                        className={`note-color-dot ${
+                          note.highlightColor || "yellow"
+                        }`}
+                      />
+                      Page {note.pageNumber ?? "—"}
+                    </div>
+
+                    {editingNoteId === note.id ? (
+                      <>
+                        <textarea
+                          className="note-edit"
+                          value={editingContent}
+                          onChange={(e) => setEditingContent(e.target.value)}
+                        />
+                        <div className="note-actions-inline">
+                          <button onClick={() => saveEdit(note.id)}>💾</button>
+                          <button
+                            onClick={() => {
+                              setEditingNoteId(null);
+                              setEditingContent("");
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="note-text">{note.content}</div>
+                        <div className="note-actions-inline">
+                          <button
+                            onClick={() => {
+                              setEditingNoteId(note.id);
+                              setEditingContent(note.content);
+                            }}
+                          >
+                            ✏️
+                          </button>
+                          <button onClick={() => deleteNote(note.id)}>🗑️</button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }
