@@ -31,15 +31,24 @@ function extractAxiosError(e) {
   return e?.message || "Request failed.";
 }
 
+// LocalStorage keys used by your Register flow
 const LS_REG_INTENT = "la_reg_intent_id";
 const LS_REG_EMAIL = "la_reg_email";
+
+// Your production frontend base (used only as a fallback)
+// If you run locally, this still works because nav() stays within SPA routing.
+const FRONTEND_BASE = "https://lawafricadigitalhub.vercel.app";
 
 export default function PaystackReturn() {
   const nav = useNavigate();
   const query = useQuery();
-  const { state } = useLocation();
+  const location = useLocation();
+  const { state } = location;
 
+  // Paystack returns reference + trxref
   const reference = (query.get("reference") || query.get("trxref") || "").trim();
+
+  // Optional fallback (if you passed docId via route state)
   const fallbackDocId = state?.docId ? Number(state.docId) : null;
 
   const [phase, setPhase] = useState("LOADING"); // LOADING | WAITING | SUCCESS | FAILED
@@ -53,10 +62,20 @@ export default function PaystackReturn() {
     try {
       if (!ref) return;
       localStorage.removeItem(`paystack_intent_${ref}`);
-    } catch {}
+    } catch {
+      // ignore
+    }
   }
 
-  // IMPORTANT: only call this when authenticated (to avoid 401 -> login redirect)
+  function redirectToRegisterPaid() {
+    const qs = new URLSearchParams();
+    qs.set("paid", "1");
+    qs.set("provider", "paystack");
+    if (reference) qs.set("reference", reference); // optional debugging
+    nav(`/register?${qs.toString()}`, { replace: true });
+  }
+
+  // IMPORTANT: only call this when authenticated (avoid 401 -> login redirect)
   async function logReturnVisit(ref) {
     try {
       if (!ref) return;
@@ -76,6 +95,7 @@ export default function PaystackReturn() {
   }
 
   async function pollIntent(intentId) {
+    // 2 minutes
     const deadline = Date.now() + 120000;
 
     while (Date.now() < deadline) {
@@ -84,13 +104,15 @@ export default function PaystackReturn() {
         const intent = res.data?.data ?? res.data;
 
         const status = intent?.status;
-        const isSuccess = status === 3 || status === "Success";
-        const isFailed = status === 4 || status === "Failed";
+
+        // Support both numeric and string enums
+        const isSuccess = status === 3 || status === "Success" || status === "SUCCESS";
+        const isFailed = status === 4 || status === "Failed" || status === "FAILED";
 
         if (isFailed) throw new Error(intent?.providerResultDesc || "Payment failed.");
         if (isSuccess) return intent;
       } catch {
-        // ignore transient errors
+        // ignore transient errors while waiting for webhook finalize
       }
 
       setPhase("WAITING");
@@ -99,14 +121,6 @@ export default function PaystackReturn() {
     }
 
     throw new Error("Payment is taking longer to confirm. Please refresh in a moment.");
-  }
-
-  function redirectToRegisterPaid() {
-    const qs = new URLSearchParams();
-    qs.set("paid", "1");
-    qs.set("provider", "paystack");
-    if (reference) qs.set("reference", reference); // optional for debugging
-    nav(`/register?${qs.toString()}`, { replace: true });
   }
 
   async function run() {
@@ -119,11 +133,12 @@ export default function PaystackReturn() {
       return;
     }
 
-    // ✅ DO THIS FIRST — BEFORE ANY api.* CALLS
-    // If registration intent exists, we are in signup flow (anonymous).
+    // ✅ FIRST: decide if we are in signup flow (anonymous) BEFORE any api.* calls
     const storedRegIntent = localStorage.getItem(LS_REG_INTENT);
     const token = getToken?.() || null;
 
+    // If registration intent exists but no JWT, we’re returning from Paystack signup flow.
+    // We should NOT call protected endpoints — just bounce back to /register?paid=1
     if (storedRegIntent && !token) {
       setPhase("SUCCESS");
       setMessage("Payment received ✅ Returning to registration to finalize your account…");
@@ -133,16 +148,17 @@ export default function PaystackReturn() {
       return;
     }
 
-    // From here, we assume it’s a logged-in purchase flow (document/library/etc.)
+    // From here: likely a logged-in purchase flow (user has JWT)
     try {
       setPhase("LOADING");
       setMessage("Finalizing payment… please wait.");
 
-      // Now it's safe to log (we expect to be authenticated)
+      // If authenticated, this should succeed; if not, it's best-effort only.
       await logReturnVisit(reference);
 
       clearLocalStorageMapping(reference);
 
+      // Resolve intent using the reference (endpoint is AllowAnonymous)
       const resolved = await fetchIntentByReference(reference);
       const intentId = resolved?.paymentIntentId || null;
       const meta = resolved?.meta || null;
@@ -151,6 +167,7 @@ export default function PaystackReturn() {
 
       setPaymentIntentId(intentId);
 
+      // Wait for webhook to finalize and set status
       const intent = await pollIntent(intentId);
 
       const docId =
@@ -170,10 +187,10 @@ export default function PaystackReturn() {
 
       nav("/dashboard/library", { replace: true });
     } catch (e) {
-      // ✅ if anything auth-related happens, and we have reg intent, go finalize registration
       const status = e?.response?.status;
       const stored = localStorage.getItem(LS_REG_INTENT);
 
+      // ✅ If auth fails but we still have a reg intent, we are likely in signup flow.
       if ((status === 401 || status === 403) && stored) {
         setPhase("SUCCESS");
         setMessage("Payment received ✅ Returning to registration to finalize your account…");
@@ -197,7 +214,7 @@ export default function PaystackReturn() {
 
   return (
     <div style={{ padding: 24, maxWidth: 720, margin: "0 auto" }}>
-      <h2 style={{ fontWeight: 900, marginBottom: 12 }}>Paystack Return</h2>
+      <h2 style={{ fontWeight: 900, marginBottom: 12 }}>Finalizing Paystack payment</h2>
 
       {phase !== "FAILED" ? (
         <div
@@ -225,6 +242,7 @@ export default function PaystackReturn() {
               <div style={{ marginTop: 4, fontSize: 13, color: "#6b7280" }}>
                 Don’t close this page. We’re confirming your payment.
               </div>
+
               {paymentIntentId && (
                 <div style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>
                   PaymentIntentId: <b>#{paymentIntentId}</b> • Reference: <b>{reference}</b>
@@ -290,6 +308,39 @@ export default function PaystackReturn() {
             >
               Back to Register
             </button>
+
+            <button
+              onClick={() => nav("/login")}
+              style={{
+                background: "#111827",
+                color: "white",
+                border: "none",
+                borderRadius: 10,
+                padding: "10px 14px",
+                fontWeight: 800,
+                cursor: "pointer",
+              }}
+            >
+              Go to Login
+            </button>
+
+            <a
+              href={FRONTEND_BASE}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                background: "transparent",
+                color: "#111827",
+                border: "1px solid #d1d5db",
+                borderRadius: 10,
+                padding: "10px 14px",
+                fontWeight: 800,
+                textDecoration: "none",
+              }}
+            >
+              Home
+            </a>
           </div>
         </div>
       )}
