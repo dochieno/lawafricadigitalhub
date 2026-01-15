@@ -109,14 +109,96 @@ function isValidNow(row) {
   return s.getTime() <= now && e.getTime() > now;
 }
 
-// ✅ (Nice UI) Map audit action if backend returns enums/numbers
 function auditActionLabel(v) {
   if (v == null || v === "") return "—";
   if (typeof v === "string") return v;
-
-  // If it comes as a number (enum), just show the numeric value.
-  // You can replace with exact mapping if you want.
   return String(v);
+}
+
+function plural(n, one, many = `${one}s`) {
+  return n === 1 ? one : many;
+}
+
+function DismissibleAlert({ kind = "ok", title, message, onClose }) {
+  if (!message && !title) return null;
+  const cls = kind === "error" ? "admin-alert error" : "admin-alert ok";
+
+  return (
+    <div className={cls} style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+      <div style={{ flex: 1 }}>
+        {title && <div style={{ fontWeight: 900, marginBottom: 4 }}>{title}</div>}
+        {message && <div style={{ whiteSpace: "pre-wrap" }}>{message}</div>}
+      </div>
+
+      {onClose && (
+        <button
+          className="admin-btn"
+          type="button"
+          onClick={onClose}
+          style={{ padding: "6px 10px", lineHeight: 1, height: 32 }}
+          aria-label="Dismiss"
+          title="Dismiss"
+        >
+          ✕
+        </button>
+      )}
+    </div>
+  );
+}
+
+function PrimaryEmptyState({ title, subtitle, actionLabel, onAction, disabled }) {
+  return (
+    <div
+      className="admin-card"
+      style={{
+        padding: 18,
+        background: "#fff",
+        borderRadius: 14,
+        border: "1px solid rgba(0,0,0,0.06)",
+      }}
+    >
+      <div style={{ fontWeight: 900, fontSize: 16 }}>{title}</div>
+      {subtitle && <div style={{ marginTop: 6, color: "#6b7280" }}>{subtitle}</div>}
+
+      {actionLabel && (
+        <div style={{ marginTop: 12 }}>
+          <button className="admin-btn primary" onClick={onAction} disabled={disabled}>
+            {actionLabel}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ConfirmModal({ open, title, body, confirmText = "Confirm", cancelText = "Cancel", busy, onCancel, onConfirm }) {
+  if (!open) return null;
+
+  return (
+    <div className="admin-modal-overlay" onClick={busy ? undefined : onCancel}>
+      <div className="admin-modal admin-modal-tight" onClick={(e) => e.stopPropagation()}>
+        <div className="admin-modal-head">
+          <div>
+            <h3 className="admin-modal-title">{title}</h3>
+            {body ? <div className="admin-modal-subtitle">{body}</div> : null}
+          </div>
+
+          <button className="admin-btn" onClick={onCancel} disabled={busy}>
+            Close
+          </button>
+        </div>
+
+        <div className="admin-modal-foot">
+          <button className="admin-btn" type="button" onClick={onCancel} disabled={busy}>
+            {cancelText}
+          </button>
+          <button className="admin-btn primary" type="button" onClick={onConfirm} disabled={busy}>
+            {busy ? "Working…" : confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function AdminInstitutionBundleSubscriptions() {
@@ -138,7 +220,10 @@ export default function AdminInstitutionBundleSubscriptions() {
   const [renewForm, setRenewForm] = useState({ ...emptyRenewForm });
   const [renewTarget, setRenewTarget] = useState(null);
 
-  // ✅ Phase 5: audit modal
+  // Confirm renew modal (replaces window.confirm)
+  const [openConfirmRenew, setOpenConfirmRenew] = useState(false);
+
+  // Audit modal
   const [openAudit, setOpenAudit] = useState(false);
   const [auditTarget, setAuditTarget] = useState(null);
   const [auditLoading, setAuditLoading] = useState(false);
@@ -183,7 +268,21 @@ export default function AdminInstitutionBundleSubscriptions() {
       setRows(onlyBundle);
     } catch (e) {
       setRows([]);
-      setError(toText(e?.response?.data || e?.message || "Failed to load bundle subscriptions."));
+      setError(toText(e?.response?.data || e?.message || "Failed to load subscriptions."));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function refreshEverything() {
+    setError("");
+    setInfo("");
+    setLoading(true);
+    try {
+      await Promise.all([loadBundleProduct(), loadInstitutions(), loadAll()]);
+      setInfo("Refreshed.");
+    } catch {
+      // loadAll handles its own error, but keep UI calm
     } finally {
       setLoading(false);
     }
@@ -194,6 +293,14 @@ export default function AdminInstitutionBundleSubscriptions() {
     loadInstitutions();
     loadAll();
   }, []);
+
+  const stats = useMemo(() => {
+    const active = rows.filter((r) => parseStatus(r.status ?? r.Status) === 2).length;
+    const validNow = rows.filter((r) => isValidNow(r)).length;
+    const pending = rows.filter((r) => parseStatus(r.status ?? r.Status) === 1).length;
+    const suspended = rows.filter((r) => parseStatus(r.status ?? r.Status) === 4).length;
+    return { active, validNow, pending, suspended, total: rows.length };
+  }, [rows]);
 
   const filteredRows = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -215,6 +322,7 @@ export default function AdminInstitutionBundleSubscriptions() {
     if (busy) return;
     setOpenRenew(false);
     setRenewTarget(null);
+    setOpenConfirmRenew(false);
   }
 
   function openCreateModal() {
@@ -230,7 +338,7 @@ export default function AdminInstitutionBundleSubscriptions() {
 
     const statusNum = parseStatus(row.status ?? row.Status);
     if (statusNum === 4) {
-      setError("This subscription is Suspended. Unsuspend it before renewing.");
+      setError("This subscription is suspended. Unsuspend it before renewing.");
       return;
     }
 
@@ -244,11 +352,11 @@ export default function AdminInstitutionBundleSubscriptions() {
     setError("");
     setInfo("");
 
-    if (!bundleProduct) return setError("Bundle product not found.");
-    if (!createForm.institutionId) return setError("Institution is required.");
+    if (!bundleProduct) return setError("Bundle product is not available yet. Please refresh and try again.");
+    if (!createForm.institutionId) return setError("Please select an institution.");
 
     const months = Number(createForm.durationInMonths);
-    if (!months || months <= 0) return setError("Duration must be > 0.");
+    if (!months || months <= 0) return setError("Duration must be greater than 0.");
 
     const startDateIso = createForm.startDate ? `${createForm.startDate}T00:00:00Z` : null;
 
@@ -265,36 +373,40 @@ export default function AdminInstitutionBundleSubscriptions() {
       const endDate = res.data?.endDate ?? res.data?.EndDate;
       const status = res.data?.status ?? res.data?.Status;
 
-      setInfo(`Saved. Status: ${statusLabel(status)}. Ends: ${endDate ? formatPrettyDate(endDate) : "—"}`);
+      setInfo(`Saved. ${statusLabel(status)} · Ends ${endDate ? formatPrettyDate(endDate) : "—"}`);
       closeCreateModal();
       await loadAll();
     } catch (e2) {
-      setError(toText(e2?.response?.data || e2?.message || "Create/extend failed."));
+      setError(toText(e2?.response?.data || e2?.message || "Could not save subscription."));
     } finally {
       setBusy(false);
     }
   }
 
-  async function renew(e) {
+  function beginRenewConfirm(e) {
     e?.preventDefault?.();
     setError("");
     setInfo("");
     if (!renewTarget) return setError("No subscription selected.");
 
     const statusNum = parseStatus(renewTarget.status ?? renewTarget.Status);
-    if (statusNum === 4) return setError("This subscription is Suspended. Unsuspend it before renewing.");
+    if (statusNum === 4) return setError("This subscription is suspended. Unsuspend it before renewing.");
 
     const months = Number(renewForm.durationInMonths);
-    if (!months || months <= 0) return setError("Duration must be > 0.");
+    if (!months || months <= 0) return setError("Duration must be greater than 0.");
+
+    setOpenConfirmRenew(true);
+  }
+
+  async function confirmRenew() {
+    setError("");
+    setInfo("");
+    if (!renewTarget) return setError("No subscription selected.");
+
+    const months = Number(renewForm.durationInMonths);
+    if (!months || months <= 0) return setError("Duration must be greater than 0.");
 
     const startDateIso = renewForm.startDate ? `${renewForm.startDate}T00:00:00Z` : null;
-
-    const inst = (renewTarget.institutionName ?? renewTarget.InstitutionName) || "—";
-    const msg = `Confirm renewal?\n\nInstitution: ${inst}\nMonths: ${months}${
-      renewForm.startDate ? `\nStart: ${renewForm.startDate}` : "\nStart: (Rule A / automatic)"
-    }`;
-
-    if (!window.confirm(msg)) return;
 
     setBusy(true);
     try {
@@ -307,17 +419,16 @@ export default function AdminInstitutionBundleSubscriptions() {
       const endDate = res.data?.endDate ?? res.data?.EndDate;
       const status = res.data?.status ?? res.data?.Status;
 
-      setInfo(`Renewed. Status: ${statusLabel(status)}. Ends: ${endDate ? formatPrettyDate(endDate) : "—"}`);
+      setInfo(`Renewed. ${statusLabel(status)} · Ends ${endDate ? formatPrettyDate(endDate) : "—"}`);
       closeRenewModal();
       await loadAll();
     } catch (e2) {
-      setError(toText(e2?.response?.data || e2?.message || "Renew failed."));
+      setError(toText(e2?.response?.data || e2?.message || "Renewal failed."));
     } finally {
       setBusy(false);
     }
   }
 
-  // ✅ Phase 5: Audit History
   function closeAuditModal() {
     if (busy || auditLoading) return;
     setOpenAudit(false);
@@ -341,43 +452,70 @@ export default function AdminInstitutionBundleSubscriptions() {
       setAuditRows(Array.isArray(data) ? data : []);
     } catch (e) {
       setAuditRows([]);
-      setError(toText(e?.response?.data || e?.message || "Failed to load audit history."));
+      setError(toText(e?.response?.data || e?.message || "Failed to load history."));
     } finally {
       setAuditLoading(false);
     }
   }
 
+  const renewSummary = useMemo(() => {
+    if (!renewTarget) return "";
+    const inst = (renewTarget.institutionName ?? renewTarget.InstitutionName) || "—";
+    const months = Number(renewForm.durationInMonths) || 0;
+    const start = renewForm.startDate ? renewForm.startDate : "Automatic (recommended)";
+    return `Institution: ${inst}\nDuration: ${months} ${plural(months, "month")}\nStart: ${start}`;
+  }, [renewTarget, renewForm.durationInMonths, renewForm.startDate]);
+
   return (
     <div className="admin-page admin-page-wide">
       <div className="admin-header">
         <div>
-          <h1 className="admin-title">Admin · Institution Bundle Subscriptions</h1>
-          <p className="admin-subtitle">Activate/extend the institution “All-Access Bundle” subscription (Admin only).</p>
+          <h1 className="admin-title">Institution Bundle Subscriptions</h1>
+          <p className="admin-subtitle">
+            Manage the institution “All-Access Bundle” — create, extend, renew, and review history.
+          </p>
         </div>
 
         <div className="admin-actions">
-          <button className="admin-btn" onClick={loadAll} disabled={busy || loading}>
-            Refresh
+          <button className="admin-btn" onClick={refreshEverything} disabled={busy || loading}>
+            {loading ? "Refreshing…" : "Refresh"}
           </button>
-          <button className="admin-btn primary compact" onClick={openCreateModal} disabled={busy}>
+
+          <button
+            className="admin-btn primary compact"
+            onClick={openCreateModal}
+            disabled={busy || !bundleProduct}
+            title={!bundleProduct ? "Bundle product isn’t available yet. Refresh first." : "Create a new bundle subscription"}
+          >
             + New
           </button>
         </div>
       </div>
 
-      {(error || info) && <div className={`admin-alert ${error ? "error" : "ok"}`}>{error ? error : info}</div>}
+      <DismissibleAlert
+        kind={error ? "error" : "ok"}
+        title={error ? "Something went wrong" : info ? "Done" : ""}
+        message={error || info}
+        onClose={() => {
+          setError("");
+          setInfo("");
+        }}
+      />
 
       {!bundleProduct && (
-        <div className="admin-alert error" style={{ marginBottom: 12 }}>
-          Bundle product not found. Create it via Swagger:
-          <div style={{ marginTop: 6 }}>
-            <code>POST /api/admin/seed/institution-bundle-product</code>
-          </div>
-        </div>
+        <PrimaryEmptyState
+          title="Bundle product isn’t available yet"
+          subtitle={
+            "This page needs the “Institution All-Access Bundle” product to exist. If it was just created, refresh to load it."
+          }
+          actionLabel={loading ? "Refreshing…" : "Refresh now"}
+          onAction={refreshEverything}
+          disabled={busy || loading}
+        />
       )}
 
-      <div className="admin-card admin-card-fill">
-        <div className="admin-toolbar">
+      <div className="admin-card admin-card-fill" style={{ marginTop: 12 }}>
+        <div className="admin-toolbar" style={{ alignItems: "center" }}>
           <input
             className="admin-search admin-search-wide"
             placeholder="Search by institution or status…"
@@ -385,7 +523,13 @@ export default function AdminInstitutionBundleSubscriptions() {
             onChange={(e) => setQ(e.target.value)}
           />
 
-          <div className="admin-pill muted">{loading ? "Loading…" : `${filteredRows.length} bundle subscription(s)`}</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <div className="admin-pill muted">{loading ? "Loading…" : `${stats.total} ${plural(stats.total, "subscription")}`}</div>
+            <div className="admin-pill ok" title="Active subscriptions">{stats.active} Active</div>
+            <div className="admin-pill ok" title="Active & within dates">{stats.validNow} Valid now</div>
+            <div className="admin-pill warn" title="Pending subscriptions">{stats.pending} Pending</div>
+            <div className="admin-pill warn" title="Suspended subscriptions">{stats.suspended} Suspended</div>
+          </div>
         </div>
 
         <table className="admin-table">
@@ -405,8 +549,11 @@ export default function AdminInstitutionBundleSubscriptions() {
           <tbody>
             {!loading && filteredRows.length === 0 && (
               <tr>
-                <td colSpan={6} style={{ color: "#6b7280", padding: "14px" }}>
-                  No bundle subscriptions found.
+                <td colSpan={6} style={{ padding: "18px" }}>
+                  <div style={{ color: "#6b7280", fontWeight: 700 }}>No bundle subscriptions found.</div>
+                  <div style={{ color: "#6b7280", marginTop: 6 }}>
+                    Click <b>+ New</b> to create one for an institution.
+                  </div>
                 </td>
               </tr>
             )}
@@ -446,7 +593,7 @@ export default function AdminInstitutionBundleSubscriptions() {
                         className="admin-action-btn neutral small"
                         onClick={() => openAuditFor(r)}
                         disabled={busy}
-                        title="View audit history"
+                        title="View changes and renewals"
                       >
                         History
                       </button>
@@ -455,7 +602,7 @@ export default function AdminInstitutionBundleSubscriptions() {
                         className="admin-action-btn neutral small"
                         onClick={() => openRenewModalFor(r)}
                         disabled={busy || isSuspended}
-                        title={isSuspended ? "Unsuspend first" : "Renew (Rule A)"}
+                        title={isSuspended ? "Unsuspend first" : "Renew subscription"}
                       >
                         Renew
                       </button>
@@ -512,27 +659,23 @@ export default function AdminInstitutionBundleSubscriptions() {
                     onChange={(e) => setCreateForm((p) => ({ ...p, startDate: e.target.value }))}
                   />
                   <div className="admin-help" style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>
-                    Defaults to today. Choose a future date to schedule (Pending until start).
+                    Leave as today, or choose a future date to schedule activation.
                   </div>
                 </div>
 
                 <div className="admin-field">
-                  <label>Duration (months) *</label>
+                  <label>Duration *</label>
                   <select
                     value={createForm.durationInMonths}
                     onChange={(e) => setCreateForm((p) => ({ ...p, durationInMonths: e.target.value }))}
                   >
-                    <option value="1">1</option>
-                    <option value="3">3</option>
-                    <option value="6">6</option>
-                    <option value="12">12</option>
-                    <option value="24">24</option>
+                    <option value="1">1 month</option>
+                    <option value="3">3 months</option>
+                    <option value="6">6 months</option>
+                    <option value="12">12 months</option>
+                    <option value="24">24 months</option>
                   </select>
                 </div>
-              </div>
-
-              <div className="admin-note" style={{ marginTop: 10 }}>
-                <b>Backend:</b> POST <code>/api/institutions/subscriptions</code> (bundle product)
               </div>
 
               <div className="admin-modal-foot">
@@ -554,8 +697,10 @@ export default function AdminInstitutionBundleSubscriptions() {
           <div className="admin-modal admin-modal-tight" onClick={(e) => e.stopPropagation()}>
             <div className="admin-modal-head">
               <div>
-                <h3 className="admin-modal-title">Renew Bundle Subscription</h3>
-                <div className="admin-modal-subtitle">Rule A: extends from EndDate if still active.</div>
+                <h3 className="admin-modal-title">Renew Subscription</h3>
+                <div className="admin-modal-subtitle" style={{ maxWidth: 560 }}>
+                  Renews the current bundle. If you leave the start date empty, the system will apply the normal renewal rule.
+                </div>
               </div>
 
               <button className="admin-btn" onClick={closeRenewModal} disabled={busy}>
@@ -563,11 +708,11 @@ export default function AdminInstitutionBundleSubscriptions() {
               </button>
             </div>
 
-            <form className="admin-modal-body admin-modal-scroll" onSubmit={renew}>
+            <form className="admin-modal-body admin-modal-scroll" onSubmit={beginRenewConfirm}>
               <div className="admin-grid">
                 <div className="admin-field admin-span2">
-                  <label>Target</label>
-                  <div style={{ fontWeight: 800, paddingTop: 8 }}>
+                  <label>Institution</label>
+                  <div style={{ fontWeight: 900, paddingTop: 8 }}>
                     {(renewTarget.institutionName ?? renewTarget.InstitutionName) || "—"}
                   </div>
                 </div>
@@ -580,27 +725,23 @@ export default function AdminInstitutionBundleSubscriptions() {
                     onChange={(e) => setRenewForm((p) => ({ ...p, startDate: e.target.value }))}
                   />
                   <div className="admin-help" style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>
-                    Leave empty to use Rule A automatically.
+                    Optional. Leave empty for the recommended default.
                   </div>
                 </div>
 
                 <div className="admin-field">
-                  <label>Duration (months) *</label>
+                  <label>Duration *</label>
                   <select
                     value={renewForm.durationInMonths}
                     onChange={(e) => setRenewForm((p) => ({ ...p, durationInMonths: e.target.value }))}
                   >
-                    <option value="1">1</option>
-                    <option value="3">3</option>
-                    <option value="6">6</option>
-                    <option value="12">12</option>
-                    <option value="24">24</option>
+                    <option value="1">1 month</option>
+                    <option value="3">3 months</option>
+                    <option value="6">6 months</option>
+                    <option value="12">12 months</option>
+                    <option value="24">24 months</option>
                   </select>
                 </div>
-              </div>
-
-              <div className="admin-note" style={{ marginTop: 10 }}>
-                <b>Backend:</b> POST <code>/api/institutions/subscriptions/{`{id}`}/renew</code>
               </div>
 
               <div className="admin-modal-foot">
@@ -608,7 +749,7 @@ export default function AdminInstitutionBundleSubscriptions() {
                   Cancel
                 </button>
                 <button className="admin-btn primary" type="submit" disabled={busy}>
-                  {busy ? "Saving…" : "Renew"}
+                  Continue
                 </button>
               </div>
             </form>
@@ -616,13 +757,32 @@ export default function AdminInstitutionBundleSubscriptions() {
         </div>
       )}
 
+      {/* CONFIRM RENEW MODAL */}
+      <ConfirmModal
+        open={openConfirmRenew}
+        title="Confirm renewal"
+        body={
+          <div style={{ whiteSpace: "pre-wrap", marginTop: 6 }}>
+            {renewSummary}
+            <div style={{ marginTop: 10, color: "#6b7280" }}>
+              You can view the full change log in <b>History</b>.
+            </div>
+          </div>
+        }
+        confirmText="Renew"
+        cancelText="Back"
+        busy={busy}
+        onCancel={() => setOpenConfirmRenew(false)}
+        onConfirm={confirmRenew}
+      />
+
       {/* AUDIT MODAL */}
       {openAudit && auditTarget && (
         <div className="admin-modal-overlay" onClick={closeAuditModal}>
           <div className="admin-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
             <div className="admin-modal-head">
               <div>
-                <h3 className="admin-modal-title">Audit History</h3>
+                <h3 className="admin-modal-title">History</h3>
                 <div className="admin-modal-subtitle">
                   {(auditTarget.institutionName ?? auditTarget.InstitutionName) || "—"} — <b>{BUNDLE_PRODUCT_NAME}</b>
                 </div>
@@ -635,10 +795,10 @@ export default function AdminInstitutionBundleSubscriptions() {
 
             <div className="admin-modal-body admin-modal-scroll">
               {auditLoading ? (
-                <div className="admin-pill muted">Loading audit…</div>
+                <div className="admin-pill muted">Loading…</div>
               ) : auditRows.length === 0 ? (
                 <div className="admin-alert" style={{ background: "#EFE5E6" }}>
-                  No audit entries found.
+                  No history found.
                 </div>
               ) : (
                 <table className="admin-table" style={{ marginTop: 8 }}>
@@ -687,10 +847,6 @@ export default function AdminInstitutionBundleSubscriptions() {
                   </tbody>
                 </table>
               )}
-
-              <div className="admin-note" style={{ marginTop: 10 }}>
-                <b>Backend:</b> GET <code>/api/institutions/subscriptions/{`{id}`}/audit</code>
-              </div>
             </div>
 
             <div className="admin-modal-foot">
