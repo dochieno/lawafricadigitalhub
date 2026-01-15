@@ -29,9 +29,9 @@ api.interceptors.request.use(
     if (token && isTokenExpired()) {
       clearToken();
       return Promise.reject(
-        new axios.Cancel("Token expired. Request cancelled; user must login again.")
-      );
-    }
+        new axios.CanceledError("Token expired. Request cancelled; user must login again.")
+      );}
+
 
     // ✅ Attach Authorization if token exists
     if (token) {
