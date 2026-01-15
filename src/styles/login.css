@@ -1,27 +1,17 @@
-/* =========================
-   LOGIN PAGE (CLEAN + VISIBLE)
-   ========================= */
-
-/* Optional brand vars (safe if you already have them) */
+/* ---------------------------------------
+   Variables
+---------------------------------------- */
 :root {
-  --la-red: #801010;
-  --la-red-2: #8b1c1c;
-  --la-dark: #111827;
-
-  --bg: #f7f8fa;
-  --card: #ffffff;
-  --text: #101828;
-  --muted: #667085;
-
-  --border: #d0d5dd;
-  --border-2: #eaecf0;
-
-  --shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+  --la-red: #8b1c1c;
+  --la-red-dark: #6f1414;
+  --la-dark: #1f2937;
+  --panel-bg: #f7f8fa;
+  --border: #eaecf0;
 }
 
-/* -------------------------
+/* ---------------------------------------
    Layout
--------------------------- */
+---------------------------------------- */
 .login-layout {
   min-height: 100vh;
   display: grid;
@@ -41,6 +31,7 @@
 .login-brand-logo {
   width: 140px;
   margin-bottom: 24px;
+  opacity: 0.95;
 }
 
 .login-info-panel h1 {
@@ -50,7 +41,7 @@
 
 .tagline {
   font-size: 16px;
-  opacity: 0.92;
+  opacity: 0.9;
   margin: 0 0 24px 0;
 }
 
@@ -75,49 +66,49 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg);
+  background: var(--panel-bg);
   padding: 24px;
 }
 
-/* Card */
+/* ---------------------------------------
+   Card (NOT stretched)
+---------------------------------------- */
 .login-card {
   width: 100%;
-  max-width: 560px;
-  background: var(--card);
-  padding: 44px 44px;
+  max-width: 420px;          /* ✅ tighter, not stretched */
+  background: #fff;
+  padding: 40px 36px;        /* ✅ realistic padding */
   border-radius: 18px;
-  box-shadow: var(--shadow);
-  border: 1px solid var(--border-2);
+  border: 1px solid var(--border);
+  box-shadow: 0 20px 45px rgba(16, 24, 40, 0.12);
   text-align: center;
 }
 
-/* Typography */
 .login-card h2 {
-  font-size: 28px;
+  font-size: 30px;
   margin: 0 0 6px 0;
-  color: var(--text);
-  letter-spacing: -0.2px;
+  color: #111827;
 }
 
-.login-card .subtitle {
+.subtitle {
   font-size: 14px;
-  color: var(--muted);
+  color: #6b7280;
   margin: 0 0 18px 0;
 }
 
-/* -------------------------
-   Inputs (FIXED VISIBILITY)
--------------------------- */
+/* ---------------------------------------
+   Inputs (dark)
+---------------------------------------- */
 .login-card input {
   width: 100%;
-  padding: 12px 14px;
-  margin-bottom: 12px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
 
-  background: #ffffff;
-  color: var(--text);
+  background: #0f1115;       /* ✅ deep black */
+  color: #ffffff;
 
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  border: 1px solid #2a2f3a;
+  border-radius: 14px;
 
   font-size: 14px;
   outline: none;
@@ -125,39 +116,33 @@
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* placeholder visible */
 .login-card input::placeholder {
-  color: #98a2b3;
+  color: #9aa4b2;
 }
 
-/* focus ring */
 .login-card input:focus {
   border-color: var(--la-red);
-  box-shadow: 0 0 0 4px rgba(128, 16, 16, 0.14);
+  box-shadow: 0 0 0 3px rgba(139, 28, 28, 0.35);
 }
 
-/* -------------------------
-   Buttons
--------------------------- */
+/* ---------------------------------------
+   Button
+---------------------------------------- */
 .login-card button {
   width: 100%;
-  padding: 12px 14px;
-
+  padding: 14px;
   background: var(--la-red);
   color: #ffffff;
-
   border: none;
-  border-radius: 12px;
-
+  border-radius: 14px;
   font-size: 15px;
   font-weight: 800;
   cursor: pointer;
-
-  transition: transform 0.08s ease, background-color 0.2s ease;
+  transition: background-color 0.2s ease, transform 0.08s ease;
 }
 
 .login-card button:hover {
-  background: var(--la-red-2);
+  background: #a32121;
 }
 
 .login-card button:active {
@@ -165,54 +150,86 @@
 }
 
 .login-card button:disabled {
-  opacity: 0.7;
+  opacity: 0.75;
   cursor: not-allowed;
 }
 
-/* -------------------------
+/* ---------------------------------------
    Alerts
--------------------------- */
+---------------------------------------- */
 .error-box {
-  background: #fef2f2;
+  background: #fff1f2;
   border: 1px solid #fecaca;
-  color: #7f1d1d;
+  color: #8b1c1c;
   padding: 10px 12px;
   border-radius: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   font-size: 13px;
-  font-weight: 650;
-  line-height: 1.35;
+  white-space: pre-wrap;
 }
 
 .success-box {
   background: #ecfdf3;
-  border: 1px solid #abeFC6;
+  border: 1px solid #abeFc6;
   color: #067647;
   padding: 10px 12px;
   border-radius: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   font-size: 13px;
-  font-weight: 650;
-  line-height: 1.35;
+  white-space: pre-wrap;
+}
+
+/* inline link styles */
+.linkish {
+  font-size: 13px;
+  color: var(--la-red);
+  font-weight: 800;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.link-button {
+  background: none !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  color: var(--la-red) !important;
+  font-weight: 900 !important;
+  cursor: pointer !important;
+  text-decoration: underline !important;
+  width: auto !important;
+}
+
+.link-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed !important;
 }
 
 /* Footer */
 .footer-text {
-  margin-top: 14px;
+  margin-top: 18px;
   font-size: 12px;
   color: #6b7280;
 }
 
-/* MOBILE */
+/* ---------------------------------------
+   Mobile
+---------------------------------------- */
 @media (max-width: 900px) {
   .login-layout {
     grid-template-columns: 1fr;
   }
+
   .login-info-panel {
     display: none;
   }
+
+  .login-form-panel {
+    padding: 18px;
+  }
+
   .login-card {
-    padding: 36px 20px;
+    padding: 34px 22px;
     border-radius: 16px;
   }
 }
