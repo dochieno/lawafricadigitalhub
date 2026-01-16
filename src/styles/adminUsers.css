@@ -720,3 +720,68 @@
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+/* ===== Modern compact tweaks (append-only) ===== */
+
+.au-heroTight { padding: 18px 18px 10px; }
+.au-subtitleTight { margin-top: 6px; opacity: 0.9; }
+.au-toolbarTight { gap: 10px; margin-top: 12px; align-items: center; }
+.au-toolbarRight { display: flex; gap: 10px; align-items: center; }
+
+.au-sort { display: flex; gap: 8px; align-items: center; }
+.au-sortLabel { font-size: 12px; font-weight: 800; color: #374151; }
+.au-sort select {
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  padding: 6px 10px;
+  font-size: 13px;
+  outline: none;
+}
+
+.au-refreshSmall { height: 34px; padding: 0 12px; border-radius: 10px; }
+
+.au-kpisInline {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.au-kpiMini {
+  background: #fff;
+  border: 1px solid rgba(229,231,235,0.9);
+  border-radius: 12px;
+  padding: 10px 12px;
+  min-width: 120px;
+}
+.au-kpiMiniLabel { font-size: 11px; font-weight: 900; color: #6b7280; text-transform: uppercase; }
+.au-kpiMiniValue { font-size: 18px; font-weight: 900; color: #111827; margin-top: 2px; }
+
+.au-filtersTight { margin-top: 12px; gap: 12px; }
+.au-panelTight { margin-top: 12px; }
+
+.au-tableModern thead th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.02em; }
+.au-lastSeenTight { line-height: 1.25; }
+
+.au-userSub2 { margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+.au-badgesWrap { gap: 6px; flex-wrap: wrap; }
+
+.au-actionsRow {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: nowrap; /* always single row */
+}
+
+.au-iconBtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.au-panelBottomTight { padding-top: 10px; }
