@@ -24,6 +24,7 @@ import AdminInstitutionBundleSubscriptions from "./pages/dashboard/admin/AdminIn
 import AdminProductDocuments from "./pages/dashboard/admin/AdminProductDocuments";
 import AdminDocuments from "./pages/dashboard/admin/AdminDocuments";
 import AdminInstitutionUsers from "./pages/dashboard/admin/AdminInstitutionUsers";
+import AdminUsers from "./pages/dashboard/admin/AdminUsers";
 
 import InstitutionMembersAdmin from "./pages/dashboard/institution/InstitutionMembersAdmin";
 
@@ -119,6 +120,7 @@ export default function App() {
                 path="admin/institutions/:id/users"
                 element={<AdminInstitutionUsers />}
               />
+              <Route path="admin/users" element={<AdminUsers />} />
             </Route>
 
             {/* Documents */}

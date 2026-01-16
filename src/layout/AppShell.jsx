@@ -172,6 +172,9 @@ export default function AppShell() {
                     <NavLink to="/dashboard/admin/institution-admins" className="nav-link nav-child">
                       Institution Admins
                     </NavLink>
+                    <NavLink to="/dashboard/admin/users" className="nav-link nav-child">
+                      Users
+                    </NavLink>
                   </div>
                 )}
               </div>

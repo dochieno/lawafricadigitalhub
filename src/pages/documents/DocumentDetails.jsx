@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api, { API_BASE_URL } from "../../api/client";
+import { getToken } from "../../auth/auth"; //
 import { getAuthClaims } from "../../auth/auth";
 import { useAuth } from "../../auth/AuthContext";
 import "../../styles/document-details.css";
@@ -57,6 +58,18 @@ function pick(obj, keys) {
   }
   return null;
 }
+
+function paystackCtxKey(ref) {
+  return `la_paystack_ctx_${ref}`;
+}
+
+function savePaystackCtx(ref, ctx) {
+  try {
+    if (!ref) return;
+    localStorage.setItem(paystackCtxKey(ref), JSON.stringify(ctx));
+  } catch {}
+}
+
 
 function toBool(v) {
   if (v === true || v === false) return v;
@@ -351,64 +364,82 @@ export default function DocumentDetails() {
     }
   }
 
+  //here
   async function startPaystackPayment() {
-    if (!doc) return;
+  if (!doc) return;
 
-    const claims = getAuthClaims() || {};
-    const email = String(user?.email || "").trim() || extractEmailFromClaims(claims);
+  const claims = getAuthClaims() || {};
+  const email = String(user?.email || "").trim() || extractEmailFromClaims(claims);
 
-    if (!email) {
-      showToast(
-        "Missing account email for Paystack. Please update your profile email or log out and log in again.",
-        "error"
-      );
-      return;
-    }
-
-    const amount = Number(priceToPay() || 0);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      showToast("This document does not have a valid price set.", "error");
-      return;
-    }
-
-    const currency =
-      pick(publicOffer, ["currency", "Currency"]) ||
-      pick(doc, ["publicCurrency", "PublicCurrency"]) ||
-      "KES";
-
-    setPurchaseLoading(true);
-    try {
-      const initRes = await api.post("/payments/paystack/initialize", {
-        purpose: 4,
-        amount,
-        currency,
-        email,
-        legalDocumentId: doc.id,
-      });
-
-      const data = initRes.data?.data ?? initRes.data;
-
-      const authorizationUrl =
-        data?.authorization_url ||
-        data?.authorizationUrl ||
-        data?.data?.authorization_url;
-
-      if (!authorizationUrl) {
-        throw new Error("Paystack initialize did not return authorization_url.");
-      }
-
-      showToast("Redirecting to Paystack checkout...");
-      window.location.href = authorizationUrl;
-    } catch (e) {
-      const msg =
-        e?.response?.data?.message ||
-        e?.response?.data ||
-        e?.message ||
-        "Paystack payment failed.";
-      showToast(String(msg), "error");
-      setPurchaseLoading(false);
-    }
+  if (!email) {
+    showToast(
+      "Missing account email for Paystack. Please update your profile email or log out and log in again.",
+      "error"
+    );
+    return;
   }
+
+  const amount = Number(priceToPay() || 0);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    showToast("This document does not have a valid price set.", "error");
+    return;
+  }
+
+  const currency =
+    pick(publicOffer, ["currency", "Currency"]) ||
+    pick(doc, ["publicCurrency", "PublicCurrency"]) ||
+    "KES";
+
+  setPurchaseLoading(true);
+  try {
+    const initRes = await api.post("/payments/paystack/initialize", {
+      purpose: 4,
+      amount,
+      currency,
+      email,
+      legalDocumentId: doc.id,
+    });
+
+    const data = initRes.data?.data ?? initRes.data;
+
+    const authorizationUrl =
+      data?.authorization_url ||
+      data?.authorizationUrl ||
+      data?.data?.authorization_url;
+
+    // ✅ Paystack reference often comes back on initialize response
+    const reference =
+      data?.reference ||
+      data?.data?.reference ||
+      data?.trxref ||
+      null;
+
+    if (!authorizationUrl) {
+      throw new Error("Paystack initialize did not return authorization_url.");
+    }
+
+    // ✅ Save return context so PaystackReturn can recover token + docId even if state is lost
+    // This fixes “You're not logged in” after Paystack redirects back.
+    if (reference) {
+      savePaystackCtx(reference, {
+        docId: doc.id,
+        tokenSnapshot: getToken?.() || null,
+        ts: Date.now(),
+      });
+    }
+
+    showToast("Redirecting to Paystack checkout...");
+    window.location.href = authorizationUrl;
+  } catch (e) {
+    const msg =
+      e?.response?.data?.message ||
+      e?.response?.data ||
+      e?.message ||
+      "Paystack payment failed.";
+    showToast(String(msg), "error");
+    setPurchaseLoading(false);
+  }
+}
 
   if (loading) return <p className="doc-loading">Loading…</p>;
   if (!doc) return <p className="doc-error">Document not found.</p>;

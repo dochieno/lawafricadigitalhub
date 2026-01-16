@@ -1,8 +1,7 @@
-// src/pages/payments/PaystackReturn.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../../api/client";
-import { getToken, clearToken } from "../../auth/auth";
+import { getToken, clearToken, saveToken } from "../../auth/auth";
 
 function useQuery() {
   const { search } = useLocation();
@@ -36,6 +35,11 @@ function extractAxiosError(e) {
 const LS_REG_INTENT = "la_reg_intent_id";
 const LS_REG_EMAIL = "la_reg_email";
 
+// ✅ new key for paystack return context
+function ctxKey(ref) {
+  return `la_paystack_ctx_${ref}`;
+}
+
 export default function PaystackReturn() {
   const nav = useNavigate();
   const query = useQuery();
@@ -56,6 +60,42 @@ export default function PaystackReturn() {
       if (!ref) return;
       localStorage.removeItem(`paystack_intent_${ref}`);
     } catch {}
+  }
+
+  function readCtx(ref) {
+    try {
+      if (!ref) return null;
+      const raw = localStorage.getItem(ctxKey(ref));
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  function clearCtx(ref) {
+    try {
+      if (!ref) return;
+      localStorage.removeItem(ctxKey(ref));
+    } catch {}
+  }
+
+  // ✅ Restore token snapshot if it was lost on return
+  function restoreTokenIfMissing(ref) {
+    try {
+      const token = getToken?.() || null;
+      if (token) return token;
+
+      const ctx = readCtx(ref);
+      const snapshot = ctx?.tokenSnapshot;
+      if (snapshot) {
+        saveToken(snapshot);
+        return snapshot;
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   // Only call this for authenticated purchases (NOT signup)
@@ -123,26 +163,25 @@ export default function PaystackReturn() {
 
     // ✅ SIGNUP FLOW MUST WIN — regardless of existing token
     const storedRegIntent = localStorage.getItem(LS_REG_INTENT);
-
     if (storedRegIntent) {
-      // Prevent inheriting an existing session (e.g. global admin token)
       clearToken();
-
       setPhase("SUCCESS");
       setMessage("Payment received ✅ Returning to registration to finalize your account…");
 
       clearLocalStorageMapping(reference);
+      clearCtx(reference);
       await sleep(400);
       redirectToRegisterPaid();
       return;
     }
 
-    // ✅ Otherwise: authenticated purchase flow (docs/subscriptions/etc.)
-    const token = getToken?.() || null;
+    // ✅ Authenticated purchase flow
+    // Restore token snapshot if needed (fixes “You’re not logged in” after Paystack redirect)
+    const token = restoreTokenIfMissing(reference);
     if (!token) {
       setPhase("FAILED");
       setMessage("You’re not logged in.");
-      setError("Please log in first, then retry the payment return.");
+      setError("Please log in first, then click Refresh to retry the payment return.");
       return;
     }
 
@@ -163,15 +202,22 @@ export default function PaystackReturn() {
 
       const intent = await pollIntent(intentId);
 
+      // ✅ Resolve docId from intent/meta, then fall back to stored context, then route state.
+      const ctx = readCtx(reference);
+
       const docId =
         intent?.legalDocumentId ??
         meta?.legalDocumentId ??
+        ctx?.docId ??
         fallbackDocId ??
         null;
 
       setPhase("SUCCESS");
       setMessage("Payment confirmed ✅ Redirecting…");
       await sleep(600);
+
+      // ✅ cleanup context once we’re done
+      clearCtx(reference);
 
       if (docId) {
         nav(`/dashboard/documents/${docId}/read?paid=1&provider=paystack`, { replace: true });
@@ -274,8 +320,9 @@ export default function PaystackReturn() {
               Refresh
             </button>
 
+            {/* ✅ Better than “Back to Register” for logged-in purchase flow */}
             <button
-              onClick={() => nav("/register")}
+              onClick={() => nav("/login", { replace: true })}
               style={{
                 background: "white",
                 color: "#8b1c1c",
@@ -286,8 +333,12 @@ export default function PaystackReturn() {
                 cursor: "pointer",
               }}
             >
-              Back to Register
+              Go to Login
             </button>
+          </div>
+
+          <div style={{ marginTop: 10, fontSize: 12, color: "#6b7280" }}>
+            Tip: after logging in, come back to this same return URL and click Refresh.
           </div>
         </div>
       )}
