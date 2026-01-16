@@ -1,3 +1,4 @@
+// src/pages/dashboard/admin/AdminUsers.jsx
 import { useEffect, useMemo, useState } from "react";
 import api from "../../../api/client";
 import "../../../styles/adminUsers.css";
@@ -34,11 +35,7 @@ function Badge({ tone = "neutral", children }) {
 
 function PillButton({ active, children, ...props }) {
   return (
-    <button
-      type="button"
-      className={`au-chip ${active ? "active" : ""}`}
-      {...props}
-    >
+    <button type="button" className={`au-chip ${active ? "active" : ""}`} {...props}>
       {children}
     </button>
   );
@@ -96,11 +93,9 @@ export default function AdminUsers() {
     }
   }
 
-  // Load on filter changes (debounce search)
+  // When filters change reset to page 1 (debounced) to avoid jumpy reloads
   useEffect(() => {
-    const t = window.setTimeout(() => {
-      setPage(1);
-    }, 250);
+    const t = window.setTimeout(() => setPage(1), 250);
     return () => window.clearTimeout(t);
   }, [q, type, status, online]);
 
@@ -109,11 +104,9 @@ export default function AdminUsers() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pageSize, type, status, online]);
 
-  // When q changes we reset page then load
+  // q changes => debounce load
   useEffect(() => {
-    const t = window.setTimeout(() => {
-      load();
-    }, 280);
+    const t = window.setTimeout(() => load(), 280);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
@@ -180,6 +173,14 @@ export default function AdminUsers() {
     if (t === "institution") return "info";
     if (t === "student") return "warn";
     return "neutral";
+  }
+
+  // ✅ Single-row actions: derive a compact, readable label
+  function actionLabel(action, u) {
+    const isLocked = !!u.lockoutEndAt && new Date(u.lockoutEndAt) > new Date();
+    if (action === "active") return u.isActive ? "Deactivate" : "Activate";
+    if (action === "lock") return isLocked ? "Unblock" : "Block sign-in";
+    return "Reset 2FA";
   }
 
   return (
@@ -296,9 +297,7 @@ export default function AdminUsers() {
 
       <section className="au-panel">
         <div className="au-panelTop">
-          <div className="au-panelTitle">
-            {loading ? "Loading users…" : "User directory"}
-          </div>
+          <div className="au-panelTitle">{loading ? "Loading users…" : "User directory"}</div>
 
           <div className="au-pager">
             <button
@@ -332,7 +331,6 @@ export default function AdminUsers() {
                 <th>User</th>
                 <th>Type</th>
                 <th>Status</th>
-                <th>Institution</th>
                 <th>Last seen</th>
                 <th className="au-thRight">Actions</th>
               </tr>
@@ -341,7 +339,7 @@ export default function AdminUsers() {
             <tbody>
               {!loading && (data.items?.length ?? 0) === 0 ? (
                 <tr>
-                  <td colSpan={6} className="au-empty">
+                  <td colSpan={5} className="au-empty">
                     No users found for the current filters.
                   </td>
                 </tr>
@@ -356,7 +354,10 @@ export default function AdminUsers() {
                   <tr key={u.id}>
                     <td>
                       <div className="au-userCell">
-                        <div className={`au-dot ${u.isOnline ? "on" : ""}`} title={u.isOnline ? "Online" : "Offline"} />
+                        <div
+                          className={`au-dot ${u.isOnline ? "on" : ""}`}
+                          title={u.isOnline ? "Online" : "Offline"}
+                        />
                         <div className="au-userMeta">
                           <div className="au-userName">
                             {name}{" "}
@@ -382,19 +383,12 @@ export default function AdminUsers() {
                           {u.isActive ? "Active" : "Inactive"}
                         </Badge>
                         {isLocked ? <Badge tone="warn">Locked</Badge> : <Badge tone="neutral">Normal</Badge>}
-                        {!u.isEmailVerified ? <Badge tone="danger">Email unverified</Badge> : <Badge tone="neutral">Email ok</Badge>}
+                        {!u.isEmailVerified ? (
+                          <Badge tone="danger">Email unverified</Badge>
+                        ) : (
+                          <Badge tone="neutral">Email ok</Badge>
+                        )}
                       </div>
-                    </td>
-
-                    <td>
-                      {u.institutionName ? (
-                        <div className="au-inst">
-                          <div className="au-instName">{u.institutionName}</div>
-                          <div className="au-instSub">Institution ID: {u.institutionId}</div>
-                        </div>
-                      ) : (
-                        <span className="au-muted">—</span>
-                      )}
                     </td>
 
                     <td>
@@ -409,7 +403,8 @@ export default function AdminUsers() {
                     </td>
 
                     <td className="au-tdRight">
-                      <div className="au-actions">
+                      {/* ✅ Single-row actions */}
+                      <div className="au-actions au-actions-row">
                         <button
                           type="button"
                           className={`au-action ${u.isActive ? "outline" : "primary"}`}
@@ -417,7 +412,7 @@ export default function AdminUsers() {
                           onClick={() => setActive(u.id, !u.isActive)}
                           title={u.isActive ? "Deactivate user" : "Activate user"}
                         >
-                          {u.isActive ? "Deactivate" : "Activate"}
+                          {actionLabel("active", u)}
                         </button>
 
                         <button
@@ -427,7 +422,7 @@ export default function AdminUsers() {
                           onClick={() => setLock(u.id, !isLocked)}
                           title={isLocked ? "Unblock sign-in" : "Block sign-in"}
                         >
-                          {isLocked ? "Unblock" : "Block sign-in"}
+                          {actionLabel("lock", u)}
                         </button>
 
                         <button
@@ -437,7 +432,7 @@ export default function AdminUsers() {
                           onClick={() => reset2fa(u.id)}
                           title="Regenerate 2FA and email QR"
                         >
-                          Reset 2FA
+                          {actionLabel("2fa", u)}
                         </button>
                       </div>
                     </td>
@@ -449,12 +444,8 @@ export default function AdminUsers() {
         </div>
 
         <div className="au-panelBottom">
-          <div className="au-muted">
-            Tip: “Locked” blocks sign-in even if a user is Active.
-          </div>
-          <div className="au-muted">
-            Online is derived from last seen within 5 minutes.
-          </div>
+          <div className="au-muted">Tip: “Locked” blocks sign-in even if a user is Active.</div>
+          <div className="au-muted">Online is derived from last seen within 5 minutes.</div>
         </div>
       </section>
     </div>
