@@ -11,23 +11,19 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
-function num(v) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-}
-
-/** Detect the common pdf.js fetch/caching/range failures we want to fallback for */
-function shouldFallbackNoRange(err) {
+function looksLikeRangeCacheFailure(err) {
   const msg = String(err?.message || err || "").toLowerCase();
-  return (
-    msg.includes("err_cache_operation_not_supported") ||
-    msg.includes("cache operation") ||
-    msg.includes("aborterror") ||
-    msg.includes("signal is aborted") ||
-    msg.includes("worker was terminated") ||
-    msg.includes("networkerror") ||
-    msg.includes("failed to fetch")
-  );
+
+  // Chrome/ServiceWorker/Cache API often throws this for Range requests
+  if (msg.includes("err_cache_operation_not_supported")) return true;
+
+  // pdf.js / fetch failures often surface like this
+  if (msg.includes("failed to fetch") || msg.includes("networkerror")) return true;
+
+  // Some environments report AbortError when SW cancels range chunks
+  if (msg.includes("aborterror")) return true;
+
+  return false;
 }
 
 export default function PdfViewer({
@@ -40,6 +36,12 @@ export default function PdfViewer({
   const [page, setPage] = useState(startPage || 1);
   const [ready, setReady] = useState(false);
   const [highlights, setHighlights] = useState([]);
+
+  /* ---------------- Loading UX ---------------- */
+  const [loadPct, setLoadPct] = useState(0);
+  const [loadError, setLoadError] = useState("");
+  const [safeMode, setSafeMode] = useState(false); // fallback: disableRange/disableStream
+  const [docKey, setDocKey] = useState(0); // force remount of <Document> when switching modes
 
   /* ---------------- Reading Progress ---------------- */
   const [resumeLoaded, setResumeLoaded] = useState(false);
@@ -67,7 +69,9 @@ export default function PdfViewer({
   const [noteContent, setNoteContent] = useState("");
   const [notes, setNotes] = useState([]);
 
+  // ✅ notes NOT persistent (closed by default)
   const [showNotes, setShowNotes] = useState(false);
+
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [editingContent, setEditingContent] = useState("");
 
@@ -86,24 +90,24 @@ export default function PdfViewer({
   const snapTimeoutRef = useRef(null);
   const isUserScrollingRef = useRef(false);
 
+  // ✅ robust scroll-based page detection
   const scrollRafRef = useRef(null);
   const lastScrollComputedPageRef = useRef(null);
 
   const pageElsRef = useRef({});
   const previewLimitTriggeredRef = useRef(false);
 
-  // render controls
   const [renderLimit, setRenderLimit] = useState(10);
-  const WINDOW_BEHIND = 2;
-  const WINDOW_AHEAD = 10;
 
-  // ✅ PDF load fallback mode
-  const [noRangeMode, setNoRangeMode] = useState(false);
-  const [pdfReloadKey, setPdfReloadKey] = useState(0);
-  const fallbackTriedRef = useRef(false);
-
-  // Keep fileSource stable for pdf.js (only changes when doc changes)
   const fileSource = useMemo(() => getPdfSource(documentId), [documentId]);
+
+  const pdfOptions = useMemo(() => {
+    // Normal mode is fastest when the environment supports Range/streaming.
+    // Safe mode avoids cache/service-worker Range issues.
+    return safeMode
+      ? { disableRange: true, disableStream: true }
+      : { disableRange: false, disableStream: false };
+  }, [safeMode]);
 
   const highlightsByPage = useMemo(() => {
     const map = {};
@@ -119,28 +123,6 @@ export default function PdfViewer({
     return maxAllowedPage ? Math.min(maxAllowedPage, numPages) : numPages;
   }, [numPages, maxAllowedPage]);
 
-  // Reset viewer core state when document changes
-  useEffect(() => {
-    setNumPages(null);
-    setReady(false);
-    setPage(startPage || 1);
-    setRenderLimit(10);
-
-    // Reset fallback state
-    setNoRangeMode(false);
-    fallbackTriedRef.current = false;
-    setPdfReloadKey((k) => k + 1);
-
-    // reset programmatic refs
-    pendingJumpRef.current = null;
-    resumeTargetRef.current = null;
-    resumeAppliedRef.current = false;
-    previewLimitTriggeredRef.current = false;
-
-    // clear page els
-    pageElsRef.current = {};
-  }, [documentId, startPage]);
-
   function registerPageEl(pageNumber, el) {
     if (el) pageElsRef.current[pageNumber] = el;
   }
@@ -151,6 +133,33 @@ export default function PdfViewer({
     el.scrollIntoView({ behavior, block: "start" });
     return true;
   }
+
+  /* ==================================================
+     RESET WHEN DOCUMENT CHANGES
+     ================================================== */
+  useEffect(() => {
+    setNumPages(null);
+    setReady(false);
+    setLoadPct(0);
+    setLoadError("");
+    setRenderLimit(10);
+
+    // reset fallback per document
+    setSafeMode(false);
+    setDocKey((k) => k + 1);
+
+    // reset page state per doc
+    setPage(startPage || 1);
+
+    // reset resume flags
+    setResumeLoaded(false);
+    pendingJumpRef.current = null;
+    resumeTargetRef.current = null;
+    resumeAppliedRef.current = false;
+
+    // reset preview trigger
+    previewLimitTriggeredRef.current = false;
+  }, [documentId, startPage]);
 
   /* ==================================================
      LOAD READING PROGRESS
@@ -209,17 +218,20 @@ export default function PdfViewer({
   }, [page, ready, numPages, resumeLoaded, documentId]);
 
   /* ==================================================
-     SPEED: keep enough pages ahead
+     EXTEND RENDER LIMIT
      ================================================== */
   useEffect(() => {
     if (!ready || !numPages) return;
+
     const maxPage = allowedMaxPage ?? numPages;
-    const need = Math.min(maxPage, Math.max(page + WINDOW_AHEAD, 10));
-    if (need > renderLimit) setRenderLimit(need);
-  }, [page, ready, numPages, allowedMaxPage, renderLimit]);
+
+    if (page >= renderLimit - 4) {
+      setRenderLimit((prev) => Math.min(maxPage, prev + 10));
+    }
+  }, [page, renderLimit, ready, numPages, allowedMaxPage]);
 
   /* ==================================================
-     APPLY RESUME
+     APPLY RESUME (render enough pages, then scroll)
      ================================================== */
   useEffect(() => {
     if (!ready || !numPages || !resumeLoaded) return;
@@ -231,15 +243,18 @@ export default function PdfViewer({
     const maxPage = allowedMaxPage ?? numPages;
     const target = Math.min(Math.max(1, Number(targetRaw)), maxPage);
 
-    setRenderLimit((prev) => Math.max(prev, Math.min(target + WINDOW_AHEAD, maxPage)));
+    setRenderLimit((prev) => Math.max(prev, Math.min(target + 6, maxPage)));
     setPage(target);
 
     const attemptScroll = () => {
       isProgrammaticNavRef.current = true;
+
       const ok = scrollToPage(target, "auto");
       if (ok) {
         resumeAppliedRef.current = true;
-        setTimeout(() => (isProgrammaticNavRef.current = false), 350);
+        setTimeout(() => {
+          isProgrammaticNavRef.current = false;
+        }, 350);
         return;
       }
       setTimeout(attemptScroll, 80);
@@ -249,39 +264,22 @@ export default function PdfViewer({
   }, [ready, numPages, resumeLoaded, allowedMaxPage]);
 
   /* ==================================================
-     SAFE PAGE SETTER (single source of truth)
+     SAFE PAGE SETTER (enforces preview limit)
      ================================================== */
   function safeSetPage(nextPage) {
-    const maxPage = allowedMaxPage ?? numPages ?? 1;
-    const n = Math.min(Math.max(1, Number(nextPage)), maxPage);
-
-    if (allowedMaxPage && n > allowedMaxPage) {
+    if (allowedMaxPage && nextPage > allowedMaxPage) {
       if (typeof onPreviewLimitReached === "function") onPreviewLimitReached();
       return;
     }
 
-    setRenderLimit((prev) => Math.max(prev, Math.min(n + WINDOW_AHEAD, maxPage)));
-
     isProgrammaticNavRef.current = true;
-    setPage(n);
+    setPage(nextPage);
 
     requestAnimationFrame(() => {
-      const ok = scrollToPage(n, "smooth");
-      if (!ok) {
-        let tries = 0;
-        const tick = () => {
-          tries++;
-          const ok2 = scrollToPage(n, "auto");
-          if (ok2 || tries >= 10) {
-            setTimeout(() => (isProgrammaticNavRef.current = false), 350);
-            return;
-          }
-          setTimeout(tick, 70);
-        };
-        setTimeout(tick, 70);
-        return;
-      }
-      setTimeout(() => (isProgrammaticNavRef.current = false), 350);
+      scrollToPage(nextPage, "smooth");
+      setTimeout(() => {
+        isProgrammaticNavRef.current = false;
+      }, 350);
     });
   }
 
@@ -326,7 +324,9 @@ export default function PdfViewer({
     if (bestPage !== lastScrollComputedPageRef.current && !isProgrammaticNavRef.current) {
       lastScrollComputedPageRef.current = bestPage;
       clearTimeout(pageUpdateTimeoutRef.current);
-      pageUpdateTimeoutRef.current = setTimeout(() => setPage(bestPage), 60);
+      pageUpdateTimeoutRef.current = setTimeout(() => {
+        setPage(bestPage);
+      }, 60);
 
       if (
         allowedMaxPage &&
@@ -352,7 +352,7 @@ export default function PdfViewer({
   }
 
   /* ==================================================
-     IntersectionObserver (kept)
+     INTERSECTION OBSERVER (kept)
      ================================================== */
   useEffect(() => {
     if (!ready) return;
@@ -379,7 +379,9 @@ export default function PdfViewer({
         if (!isProgrammaticNavRef.current) {
           lastScrollComputedPageRef.current = current;
           clearTimeout(pageUpdateTimeoutRef.current);
-          pageUpdateTimeoutRef.current = setTimeout(() => setPage(current), 40);
+          pageUpdateTimeoutRef.current = setTimeout(() => {
+            setPage(current);
+          }, 40);
         }
       },
       {
@@ -404,13 +406,14 @@ export default function PdfViewer({
   }, [documentId]);
 
   /* ==================================================
-     Keyboard shortcuts
+     KEYBOARD SHORTCUTS
      ================================================== */
   useEffect(() => {
     function onKeyDown(e) {
       const tag = document.activeElement?.tagName?.toLowerCase();
       const typing =
         tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable;
+
       if (typing) return;
 
       if (e.key === "ArrowLeft") {
@@ -442,10 +445,6 @@ export default function PdfViewer({
         if (showNotes) setShowNotes(false);
         if (showPageJump) setShowPageJump(false);
       }
-      if (e.key === "g" || e.key === "G") {
-        e.preventDefault();
-        openPageJump();
-      }
     }
 
     window.addEventListener("keydown", onKeyDown);
@@ -453,13 +452,15 @@ export default function PdfViewer({
   }, [page, numPages, allowedMaxPage, showNoteBox, showNotes, showPageJump]);
 
   /* ==================================================
-     Highlight capture (unchanged)
+     REAL HIGHLIGHT CAPTURE (unchanged)
      ================================================== */
   function getPageWrapperFromSelection(selection) {
     const node = selection?.anchorNode;
     if (!node) return null;
+
     const el = node.nodeType === 1 ? node : node.parentElement;
     if (!el) return null;
+
     return el.closest(".pdf-page-wrapper");
   }
 
@@ -474,6 +475,7 @@ export default function PdfViewer({
       if (!text || text.length < 3) return;
 
       const range = selection.getRangeAt(0);
+
       const wrapper = getPageWrapperFromSelection(selection);
       if (!wrapper) return;
 
@@ -510,8 +512,34 @@ export default function PdfViewer({
     }, 30);
   }
 
+  function jumpToPage(p) {
+    if (!p) return;
+
+    const target = Math.min(Math.max(1, p), allowedMaxPage ?? numPages ?? p);
+
+    setRenderLimit((prev) =>
+      Math.max(prev, Math.min(target + 6, allowedMaxPage ?? numPages))
+    );
+
+    isProgrammaticNavRef.current = true;
+    setPage(target);
+
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        scrollToPage(target, "smooth");
+        setTimeout(() => {
+          isProgrammaticNavRef.current = false;
+        }, 350);
+      }, 60);
+    });
+  }
+
+  function hasOverlapOnPage(meta) {
+    return false;
+  }
+
   /* =========================
-     Highlights rendering (offset-based)
+     Highlights rendering (offset-based notes)
      ========================= */
   function clearExistingMarks(textLayerEl) {
     const marks = textLayerEl.querySelectorAll("mark.pdf-highlight");
@@ -528,6 +556,7 @@ export default function PdfViewer({
     if (spans.length === 0) return;
 
     let pos = 0;
+
     for (const span of spans) {
       const spanText = span.textContent || "";
       const spanStart = pos;
@@ -553,6 +582,7 @@ export default function PdfViewer({
       mark.dataset.noteId = String(noteId);
 
       span.appendChild(mark);
+
       if (after) span.appendChild(document.createTextNode(after));
     }
   }
@@ -564,8 +594,11 @@ export default function PdfViewer({
     textLayerEl.addEventListener("click", (e) => {
       const mark = e.target?.closest?.("mark.pdf-highlight");
       if (!mark) return;
-      const id = Number(mark.dataset.noteId);
+
+      const idStr = mark.dataset.noteId;
+      const id = Number(idStr);
       if (!id || Number.isNaN(id)) return;
+
       focusNote(id);
     });
   }
@@ -594,6 +627,7 @@ export default function PdfViewer({
     clearExistingMarks(textLayer);
 
     const pageNotes = (notes || []).filter((n) => n.pageNumber === pageNumber);
+
     for (const n of pageNotes) {
       if (n.charOffsetStart != null && n.charOffsetEnd != null) {
         applyHighlightByOffsets(
@@ -610,12 +644,8 @@ export default function PdfViewer({
   }
 
   /* ==================================================
-     Notes CRUD (unchanged)
+     NOTES CRUD
      ================================================== */
-  function hasOverlapOnPage() {
-    return false;
-  }
-
   async function saveNote() {
     try {
       if (!highlightMeta) return;
@@ -626,7 +656,9 @@ export default function PdfViewer({
       }
 
       const finalContent =
-        noteContent && noteContent.trim().length > 0 ? noteContent.trim() : highlightMeta.text;
+        noteContent && noteContent.trim().length > 0
+          ? noteContent.trim()
+          : highlightMeta.text;
 
       await api.post("/legal-document-notes", {
         legalDocumentId: Number(documentId),
@@ -679,8 +711,13 @@ export default function PdfViewer({
 
   async function saveEdit(noteId) {
     try {
-      await api.put(`/legal-document-notes/${noteId}`, { content: editingContent });
-      setNotes((ns) => ns.map((n) => (n.id === noteId ? { ...n, content: editingContent } : n)));
+      await api.put(`/legal-document-notes/${noteId}`, {
+        content: editingContent,
+      });
+
+      setNotes((ns) =>
+        ns.map((n) => (n.id === noteId ? { ...n, content: editingContent } : n))
+      );
     } catch (err) {
       alert(
         err?.response?.data?.message ||
@@ -710,35 +747,36 @@ export default function PdfViewer({
 
   const groupedNotes = useMemo(() => {
     const map = new Map();
+
     for (const n of notes || []) {
       const key = n.pageNumber ?? -1;
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(n);
     }
+
     for (const [, arr] of map.entries()) {
       arr.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     }
+
     const keys = Array.from(map.keys()).sort((a, b) => {
       if (a === -1) return 1;
       if (b === -1) return -1;
       return a - b;
     });
-    return keys.map((k) => ({ pageNumber: k === -1 ? null : k, items: map.get(k) }));
+
+    return keys.map((k) => ({
+      pageNumber: k === -1 ? null : k,
+      items: map.get(k),
+    }));
   }, [notes]);
 
   /* ==================================================
-     Go to page
+     Page jump helpers (Go to page)
      ================================================== */
   function openPageJump() {
     setPageJumpError("");
     setPageJumpValue(String(page));
     setShowPageJump(true);
-
-    setTimeout(() => {
-      const input = document.querySelector(".pagejump-input");
-      if (input) input.focus();
-      if (input && typeof input.select === "function") input.select();
-    }, 0);
   }
 
   function submitPageJump() {
@@ -750,6 +788,7 @@ export default function PdfViewer({
       setPageJumpError("Enter a valid page number.");
       return;
     }
+
     if (n < 1 || n > max) {
       setPageJumpError(`Page must be between 1 and ${max}.`);
       return;
@@ -757,56 +796,23 @@ export default function PdfViewer({
 
     setShowPageJump(false);
     setPageJumpError("");
+
+    // ✅ this updates page navigation AND scrolls (programmatic guard already inside)
     safeSetPage(n);
   }
 
   /* ==================================================
-     Render window
+     Render
      ================================================== */
-  const maxPageForRender = allowedMaxPage ?? numPages ?? 1;
-  const startRender = Math.max(1, page - WINDOW_BEHIND);
-  const endRender = Math.min(renderLimit, maxPageForRender);
-
-  /** Handle pdf load errors with auto fallback */
-  function handlePdfLoadError(err) {
-    console.error("PDF load error:", err);
-
-    // If we haven't tried fallback yet, retry once with noRangeMode
-    if (!fallbackTriedRef.current && shouldFallbackNoRange(err)) {
-      fallbackTriedRef.current = true;
-      setNoRangeMode(true);
-      setReady(false);
-      setNumPages(null);
-      setPdfReloadKey((k) => k + 1);
-      return;
-    }
-
-    // Otherwise, let it be (you can show UI toast here if you want)
-  }
-
   return (
     <div className={`reader-shell ${darkMode ? "dark" : ""}`}>
+      {/* Minimal “glass” top bar */}
       <div className="reader-topbar">
         <div className="reader-topbar-inner">
           <div className="reader-topbar-left">
             <div className="reader-chip" title="Current page">
               {page} / {numPages || "—"}
             </div>
-
-            <button
-              className="icon-btn"
-              onClick={openPageJump}
-              title="Go to page (G)"
-              style={{ marginLeft: 10 }}
-            >
-              🔎
-            </button>
-
-            {noRangeMode ? (
-              <div className="reader-chip" style={{ marginLeft: 10 }} title="Fallback mode">
-                Safe load
-              </div>
-            ) : null}
           </div>
 
           <div className="reader-topbar-right">
@@ -866,27 +872,74 @@ export default function PdfViewer({
             }, 120);
           }}
         >
-          <Document
-            key={`${documentId}-${pdfReloadKey}-${noRangeMode ? "norange" : "normal"}`}
-            file={fileSource}
-            options={{
-              disableFontFace: true,
-              ...(noRangeMode
-                ? {
-                    // ✅ the important fallback
-                    disableRange: true,
-                    disableStream: true,
-                    disableAutoFetch: false,
-                  }
-                : {}),
-            }}
-            loading={
-              <div style={{ padding: 18, color: "#6b7280", fontSize: 13, fontWeight: 800 }}>
-                Loading document…
+          {/* Loading overlay (fast feedback) */}
+          {!ready && (
+            <div className="reader-loadingOverlay">
+              <div className="reader-loadingCard">
+                <div style={{ fontWeight: 900, marginBottom: 6 }}>
+                  Loading document… {Math.min(99, Math.max(0, loadPct))}%
+                </div>
+                <div style={{ color: "#6b7280", fontSize: 13, marginBottom: 10 }}>
+                  Preparing pages for reading…
+                  {safeMode ? " (compatibility mode)" : ""}
+                </div>
+                <div className="reader-progressBar">
+                  <div
+                    className="reader-progressBarFill"
+                    style={{ width: `${Math.min(99, Math.max(0, loadPct))}%` }}
+                  />
+                </div>
+
+                {!!loadError && (
+                  <div style={{ marginTop: 10, color: "#b91c1c", fontSize: 13, fontWeight: 800 }}>
+                    {loadError}
+                  </div>
+                )}
               </div>
-            }
-            onLoadError={handlePdfLoadError}
-            onSourceError={handlePdfLoadError}
+            </div>
+          )}
+
+          <Document
+            key={docKey}
+            file={fileSource}
+            options={pdfOptions}
+            onLoadProgress={({ loaded, total }) => {
+              if (total && total > 0) {
+                const pct = Math.round((loaded / total) * 100);
+                setLoadPct(pct);
+              }
+            }}
+            onLoadError={(err) => {
+              console.error("react-pdf onLoadError:", err, "fileSource=", fileSource);
+
+              // ✅ Fallback once if we detect Range/Cache issues
+              if (!safeMode && looksLikeRangeCacheFailure(err)) {
+                setLoadError("Reloading in compatibility mode…");
+                setSafeMode(true);
+                setReady(false);
+                setNumPages(null);
+                setRenderLimit(10);
+                setDocKey((k) => k + 1);
+                return;
+              }
+
+              setLoadError("Failed to load PDF. Please refresh and try again.");
+            }}
+            onSourceError={(err) => {
+              console.error("react-pdf onSourceError:", err, "fileSource=", fileSource);
+
+              if (!safeMode && looksLikeRangeCacheFailure(err)) {
+                setLoadError("Reloading in compatibility mode…");
+                setSafeMode(true);
+                setReady(false);
+                setNumPages(null);
+                setRenderLimit(10);
+                setDocKey((k) => k + 1);
+                return;
+              }
+
+              setLoadError("Unable to load document source.");
+            }}
             onLoadSuccess={({ numPages }) => {
               setNumPages(numPages);
 
@@ -901,7 +954,9 @@ export default function PdfViewer({
               initial = Math.min(Math.max(1, initial), allowed);
 
               setPage(initial);
-              setRenderLimit(Math.min(allowed, Math.max(initial + WINDOW_AHEAD, 10)));
+              setRenderLimit(Math.min(allowed, Math.max(initial + 6, 10)));
+              setLoadPct(100);
+              setLoadError("");
               setReady(true);
 
               isProgrammaticNavRef.current = true;
@@ -911,12 +966,12 @@ export default function PdfViewer({
                   isProgrammaticNavRef.current = false;
                   scheduleComputePageFromScroll();
                 }, 250);
-              }, 80);
+              }, 60);
             }}
           >
             {ready &&
-              Array.from({ length: endRender - startRender + 1 }, (_, i) => {
-                const pageNumber = startRender + i;
+              Array.from({ length: renderLimit }, (_, i) => {
+                const pageNumber = i + 1;
 
                 return (
                   <div
@@ -927,7 +982,7 @@ export default function PdfViewer({
                   >
                     <svg className="highlight-layer" width="100%" height="100%">
                       {(highlightsByPage?.[pageNumber] || []).map((h) =>
-                        (h.rects || []).map((r, idx) => (
+                        (h.rects ||s || h.rects || []).map((r, idx) => (
                           <rect
                             key={`${h.id}-${idx}`}
                             x={r.x}
@@ -944,8 +999,15 @@ export default function PdfViewer({
                     <Page
                       pageNumber={pageNumber}
                       width={Math.round(820 * zoom)}
+                      // keep text layer for selection/notes
+                      renderTextLayer
+                      // annotation layer can be expensive; keep off unless you rely on PDF links
                       renderAnnotationLayer={false}
-                      renderTextLayer={true}
+                      loading={
+                        <div style={{ padding: 16, color: "#6b7280", fontSize: 13 }}>
+                          Rendering page {pageNumber}…
+                        </div>
+                      }
                       onRenderTextLayerSuccess={() => {
                         applyHighlightsForPage(pageNumber);
                         scheduleComputePageFromScroll();
@@ -960,7 +1022,7 @@ export default function PdfViewer({
         </div>
       </div>
 
-      {/* Floating nav pill */}
+      {/* Floating compact navigation pill */}
       <div className="reader-fab">
         <button
           className="fab-btn"
@@ -971,7 +1033,7 @@ export default function PdfViewer({
           ◀
         </button>
 
-        <button className="fab-mid" onClick={openPageJump} title="Go to page (G)">
+        <button className="fab-mid" onClick={openPageJump} title="Go to page">
           Page {page} / {numPages || "—"}
         </button>
 
@@ -987,15 +1049,11 @@ export default function PdfViewer({
         {showPageJump && (
           <div className="pagejump-popover" role="dialog" aria-modal="true">
             <div className="pagejump-title">Go to page</div>
-
             <div className="pagejump-row">
               <input
                 className="pagejump-input"
                 value={pageJumpValue}
-                onChange={(e) => {
-                  setPageJumpValue(e.target.value);
-                  if (pageJumpError) setPageJumpError("");
-                }}
+                onChange={(e) => setPageJumpValue(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") submitPageJump();
                   if (e.key === "Escape") setShowPageJump(false);
@@ -1007,9 +1065,7 @@ export default function PdfViewer({
                 Go
               </button>
             </div>
-
             {!!pageJumpError && <div className="pagejump-error">{pageJumpError}</div>}
-
             <button className="pagejump-close" onClick={() => setShowPageJump(false)}>
               Close
             </button>
@@ -1017,7 +1073,7 @@ export default function PdfViewer({
         )}
       </div>
 
-      {/* Note overlay */}
+      {/* NOTE OVERLAY */}
       {showNoteBox && (
         <div className="note-overlay">
           <div className="note-box">
@@ -1064,6 +1120,7 @@ export default function PdfViewer({
         </div>
       )}
 
+      {/* Notes sidebar + backdrop */}
       {showNotes && <div className="notes-backdrop" onClick={() => setShowNotes(false)} />}
 
       <div className={`notes-sidebar ${showNotes ? "open" : "closed"}`}>
@@ -1099,7 +1156,7 @@ export default function PdfViewer({
                   >
                     <div
                       className="note-meta"
-                      onClick={() => safeSetPage(note.pageNumber)}
+                      onClick={() => jumpToPage(note.pageNumber)}
                       style={{ cursor: "pointer" }}
                     >
                       <span className={`note-color-dot ${note.highlightColor || "yellow"}`} />
