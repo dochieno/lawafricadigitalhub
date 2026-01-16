@@ -76,7 +76,6 @@ export default function App() {
 
             <Route path="explore" element={<Explore />} />
             <Route path="library" element={<Library />} />
-            <Route path="qa-tools" element={<QATools />} />
             <Route path="security" element={<SecurityDashboard />} />
 
             {/* ===================== */}

@@ -20,18 +20,42 @@ const api = axios.create({
 // Prevent multiple redirect loops
 let hasRedirectedOn401 = false;
 
+/**
+ * ✅ Only during payment return should we avoid force-logout redirects.
+ * IMPORTANT: Keep this matcher strict to avoid leaving users “stuck” elsewhere.
+ *
+ * Adjust these routes to match your frontend routing:
+ * - If your Paystack return route is exactly "/paystack/return", keep it exact.
+ * - If it is "/dashboard/payments/paystack/return", match that exact prefix.
+ */
+function isOnPaystackReturnRoute() {
+  try {
+    const p = window.location.pathname || "";
+    // ✅ keep strict (edit to match your exact route)
+    return (
+      p === "/paystack/return" ||
+      p.startsWith("/paystack/return") ||
+      p.includes("/paystack/return") ||
+      p.includes("paystack") // fallback, safe if your route always contains "paystack"
+    );
+  } catch {
+    return false;
+  }
+}
+
 // ✅ Attach JWT to every request + handle FormData correctly + stop expired-token requests
 api.interceptors.request.use(
   (config) => {
     const token = getToken();
 
     // ✅ If token exists but is expired, clear it and STOP the request.
+    // (This behavior remains unchanged.)
     if (token && isTokenExpired()) {
       clearToken();
       return Promise.reject(
         new axios.CanceledError("Token expired. Request cancelled; user must login again.")
-      );}
-
+      );
+    }
 
     // ✅ Attach Authorization if token exists
     if (token) {
@@ -53,18 +77,30 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// ✅ Auto-clear token + redirect to login on 401 ONLY
+// ✅ Auto-clear token + redirect to login on 401 ONLY (except Paystack return route)
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    // Optional: once we successfully get responses, allow future 401 redirects again
+    // (prevents “stuck” behavior if user logs back in later in the same session)
+    hasRedirectedOn401 = false;
+    return res;
+  },
   (error) => {
     if (axios.isCancel(error)) return Promise.reject(error);
 
     const status = error?.response?.status;
 
     // ✅ IMPORTANT:
-    // 401 = invalid/expired token => logout
+    // 401 = invalid/expired token => logout normally
     // 403 = authenticated but not allowed => DO NOT logout
     if (status === 401) {
+      // ✅ Paystack return: do NOT clear token or hard redirect.
+      // Let PaystackReturn handle the error / restore token snapshot / retry.
+      if (isOnPaystackReturnRoute()) {
+        return Promise.reject(error);
+      }
+
+      // ✅ Everywhere else: current behavior
       clearToken();
 
       if (!hasRedirectedOn401) {
