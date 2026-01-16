@@ -19,6 +19,21 @@ const INSTITUTION_MEMBER_TYPES = [
   { value: "Staff", label: "Staff", sub: "Employee / lecturer" },
 ];
 
+// ✅ NEW: Username policy regex
+const USERNAME_REGEX = /^[A-Za-z]+(\.[A-Za-z]+)*$/;
+
+// ✅ NEW: Password policy helpers
+function getPasswordRules(pwd) {
+  const v = String(pwd || "");
+  return {
+    min8: v.length >= 8,
+    hasUpper: /[A-Z]/.test(v),
+    hasLower: /[a-z]/.test(v),
+    hasNumber: /[0-9]/.test(v),
+    hasSpecial: /[^A-Za-z0-9]/.test(v),
+  };
+}
+
 function isEmail(v) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 }
@@ -138,6 +153,9 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  // ✅ NEW: Touched tracking for live validation UX
+  const [touched, setTouched] = useState({});
+
   // Inline field errors
   const [fieldErrors, setFieldErrors] = useState({});
 
@@ -165,6 +183,10 @@ export default function Register() {
   const [info, setInfo] = useState("");
 
   const lockForm = waitingPayment || loading;
+
+  // ✅ NEW: live password rules
+  const passwordRules = useMemo(() => getPasswordRules(password), [password]);
+  const passwordRulesOk = useMemo(() => Object.values(passwordRules).every(Boolean), [passwordRules]);
 
   // -----------------------------
   // Load countries
@@ -260,6 +282,10 @@ export default function Register() {
   // -----------------------------
   // Validation helpers
   // -----------------------------
+  function markTouched(name) {
+    setTouched((prev) => ({ ...prev, [name]: true }));
+  }
+
   function setFieldError(name, message) {
     setFieldErrors((prev) => ({ ...prev, [name]: message }));
   }
@@ -273,7 +299,8 @@ export default function Register() {
   }
 
   function validateField(name, value) {
-    const v = (value ?? "").toString();
+    const raw = (value ?? "").toString();
+    const v = raw; // keep raw; validate on trim where appropriate
 
     if (name === "firstName") {
       if (!v.trim()) return "First name is required.";
@@ -281,10 +308,20 @@ export default function Register() {
     if (name === "lastName") {
       if (!v.trim()) return "Last name is required.";
     }
+
+    // ✅ UPDATED: Username policy
     if (name === "username") {
-      if (!v.trim()) return "Username is required.";
-      if (v.trim().length < 3) return "Username must be at least 3 characters.";
+      const u = v.trim();
+
+      if (!u) return "Username is required.";
+      // quick checks for clearer feedback
+      if (/\s/.test(u)) return "Username cannot contain spaces.";
+      if (!USERNAME_REGEX.test(u)) {
+        return "Username must contain letters only. Dots are allowed between letter groups (e.g. d.ochieno). No numbers, no leading/trailing dots, and no consecutive dots.";
+      }
+      if (u.length < 3) return "Username must be at least 3 characters.";
     }
+
     if (name === "email") {
       if (!v.trim()) return "Email is required.";
       if (!isEmail(v.trim())) return "Enter a valid email address.";
@@ -327,14 +364,19 @@ export default function Register() {
       }
     }
 
+    // ✅ UPDATED: Password policy (8+, upper, lower, number, special)
     if (name === "password") {
       if (!v) return "Password is required.";
-      if (v.length < 6) return "Password must be at least 6 characters.";
+      const rules = getPasswordRules(v);
+      const ok = Object.values(rules).every(Boolean);
+      if (!ok) return "Password must be at least 8 characters and include uppercase, lowercase, number, and special character.";
     }
+
     if (name === "confirmPassword") {
       if (!v) return "Confirm your password.";
       if (v !== password) return "Passwords do not match.";
     }
+
     if (name === "institutionId") {
       if (!isPublic && !v.trim()) return "Institution is required for institution users.";
       if (!isPublic && v.trim()) {
@@ -377,8 +419,103 @@ export default function Register() {
     }
 
     setFieldErrors(next);
+
+    // mark everything as touched so errors show
+    setTouched((prev) => ({
+      ...prev,
+      firstName: true,
+      lastName: true,
+      username: true,
+      email: true,
+      phoneNumber: true,
+      referenceNumber: true,
+      password: true,
+      confirmPassword: true,
+      institutionId: true,
+      institutionMemberType: true,
+      institutionAccessCode: true,
+    }));
+
     return Object.keys(next).length === 0;
   }
+
+  // ✅ NEW: helper to live-validate on change (after blur/touch)
+  function liveValidate(name, value) {
+    if (!touched?.[name]) return;
+    const msg = validateField(name, value);
+    msg ? setFieldError(name, msg) : clearFieldError(name);
+  }
+
+  // ✅ NEW: overall form readiness for submit (does not affect payment flows)
+  const isFormValidForSubmit = useMemo(() => {
+    // Require that required fields pass validation.
+    // We don't require institutions when Public.
+    const requiredNames = [
+      "firstName",
+      "lastName",
+      "username",
+      "email",
+      "referenceNumber",
+      "password",
+      "confirmPassword",
+    ];
+
+    if (isPublic && publicPayMethod === "MPESA") requiredNames.push("phoneNumber");
+    if (!isPublic) {
+      requiredNames.push("institutionId");
+      requiredNames.push("institutionMemberType");
+      // access code required only if institution says so (default required)
+      const requiredCode = selectedInstitution?.accessCodeRequired !== false;
+      if (requiredCode) requiredNames.push("institutionAccessCode");
+    }
+
+    // compute errors using validateField (not relying only on fieldErrors, so it works before touch too)
+    for (const n of requiredNames) {
+      const value =
+        n === "firstName"
+          ? firstName
+          : n === "lastName"
+          ? lastName
+          : n === "username"
+          ? username
+          : n === "email"
+          ? email
+          : n === "referenceNumber"
+          ? referenceNumber
+          : n === "password"
+          ? password
+          : n === "confirmPassword"
+          ? confirmPassword
+          : n === "phoneNumber"
+          ? phoneNumber
+          : n === "institutionId"
+          ? institutionId
+          : n === "institutionMemberType"
+          ? institutionMemberType
+          : n === "institutionAccessCode"
+          ? institutionAccessCode
+          : "";
+
+      if (validateField(n, value)) return false;
+    }
+
+    return true;
+  }, [
+    firstName,
+    lastName,
+    username,
+    email,
+    referenceNumber,
+    password,
+    confirmPassword,
+    phoneNumber,
+    institutionId,
+    institutionMemberType,
+    institutionAccessCode,
+    isPublic,
+    publicPayMethod,
+    selectedInstitution,
+  ]);
 
   // -----------------------------
   // API helpers
@@ -652,6 +789,7 @@ export default function Register() {
     setSuccessMessage("");
 
     setFieldErrors({});
+    setTouched({});
 
     localStorage.removeItem(LS_REG_INTENT);
     localStorage.removeItem(LS_REG_EMAIL);
@@ -664,12 +802,19 @@ export default function Register() {
   // -----------------------------
   function FieldError({ name }) {
     const msg = fieldErrors?.[name];
-    if (!msg) return null;
+    // show only after field has been touched OR after submit triggers validateAll (which sets touched)
+    if (!msg || !touched?.[name]) return null;
     return <div style={{ marginTop: 6, fontSize: 12, color: "#b91c1c" }}>{msg}</div>;
   }
 
   function inputStyle(name) {
-    return fieldErrors?.[name] ? { borderColor: "#ef4444", outlineColor: "#ef4444" } : undefined;
+    if (touched?.[name] && fieldErrors?.[name]) {
+      return { borderColor: "#ef4444", outlineColor: "#ef4444" };
+    }
+    if (touched?.[name] && !fieldErrors?.[name]) {
+      return { borderColor: "#22c55e", outlineColor: "#22c55e" };
+    }
+    return undefined;
   }
 
   function PillChoice({ items, value, onChange, disabled, tone = "default" }) {
@@ -688,7 +833,7 @@ export default function Register() {
               onClick={() => onChange(t.value)}
               style={{
                 padding: "12px 14px",
-                borderRadius: 14,
+                borderRadius: 16,
                 border: active ? `2px solid ${accent}` : "1px solid #e5e7eb",
                 background: active ? activeBg : "white",
                 color: "#111827",
@@ -769,6 +914,16 @@ export default function Register() {
     );
   }
 
+  // ✅ NEW: Password checklist row
+  function RuleItem({ ok, label }) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: ok ? "#065f46" : "#6b7280" }}>
+        <span aria-hidden="true">{ok ? "✅" : "❌"}</span>
+        <span>{label}</span>
+      </div>
+    );
+  }
+
   // -----------------------------
   // SUCCESS SCREEN
   // -----------------------------
@@ -810,6 +965,7 @@ export default function Register() {
                   padding: "10px 14px",
                   background: "#8b1c1c",
                   color: "white",
+                  borderRadius: 12,
                 }}
               >
                 Continue to 2FA setup →
@@ -823,6 +979,7 @@ export default function Register() {
                   padding: "10px 14px",
                   background: "#111827",
                   color: "white",
+                  borderRadius: 12,
                 }}
               >
                 Go to login
@@ -836,6 +993,7 @@ export default function Register() {
                   padding: "10px 14px",
                   background: "#6b7280",
                   color: "white",
+                  borderRadius: 12,
                 }}
               >
                 Start over
@@ -884,7 +1042,7 @@ export default function Register() {
       </div>
 
       <div className="register-form-panel" style={{ flex: "1 1 60%" }}>
-        <div className="register-card">
+        <div className="register-card" style={{ borderRadius: 18 }}>
           <h2>Sign up</h2>
           <p className="subtitle">
             {isPublic
@@ -904,7 +1062,7 @@ export default function Register() {
                 border: "1px solid #bae6fd",
                 color: "#0c4a6e",
                 padding: "12px 12px",
-                borderRadius: 14,
+                borderRadius: 16,
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
@@ -971,13 +1129,18 @@ export default function Register() {
                 <label className="field-label">First Name</label>
                 <input
                   value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
+                  onChange={(e) => {
+                    setFirstName(e.target.value);
+                    liveValidate("firstName", e.target.value);
+                  }}
                   onBlur={(e) => {
+                    markTouched("firstName");
                     const msg = validateField("firstName", e.target.value);
                     msg ? setFieldError("firstName", msg) : clearFieldError("firstName");
                   }}
                   disabled={lockForm}
                   style={inputStyle("firstName")}
+                  aria-invalid={!!(touched.firstName && fieldErrors.firstName)}
                 />
                 <FieldError name="firstName" />
               </div>
@@ -986,13 +1149,18 @@ export default function Register() {
                 <label className="field-label">Last Name</label>
                 <input
                   value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
+                  onChange={(e) => {
+                    setLastName(e.target.value);
+                    liveValidate("lastName", e.target.value);
+                  }}
                   onBlur={(e) => {
+                    markTouched("lastName");
                     const msg = validateField("lastName", e.target.value);
                     msg ? setFieldError("lastName", msg) : clearFieldError("lastName");
                   }}
                   disabled={lockForm}
                   style={inputStyle("lastName")}
+                  aria-invalid={!!(touched.lastName && fieldErrors.lastName)}
                 />
                 <FieldError name="lastName" />
               </div>
@@ -1001,26 +1169,45 @@ export default function Register() {
             <label className="field-label">Username</label>
             <input
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={(e) => {
+                setUsername(e.target.value);
+                liveValidate("username", e.target.value);
+              }}
               onBlur={(e) => {
-                const msg = validateField("username", e.target.value);
+                markTouched("username");
+                // optional: trim on blur to reduce accidental spaces
+                const trimmed = e.target.value.trim();
+                if (trimmed !== e.target.value) setUsername(trimmed);
+
+                const msg = validateField("username", trimmed);
                 msg ? setFieldError("username", msg) : clearFieldError("username");
               }}
               disabled={lockForm}
               style={inputStyle("username")}
+              placeholder="e.g. d.ochieno"
+              aria-invalid={!!(touched.username && fieldErrors.username)}
             />
+            <div style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>
+              Letters only. Dots allowed between letter groups (e.g. <code>d.ochieno</code>). No numbers/spaces, no
+              leading/trailing dots, no consecutive dots.
+            </div>
             <FieldError name="username" />
 
             <label className="field-label">Email</label>
             <input
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                liveValidate("email", e.target.value);
+              }}
               onBlur={(e) => {
+                markTouched("email");
                 const msg = validateField("email", e.target.value);
                 msg ? setFieldError("email", msg) : clearFieldError("email");
               }}
               disabled={lockForm}
               style={inputStyle("email")}
+              aria-invalid={!!(touched.email && fieldErrors.email)}
             />
             <FieldError name="email" />
 
@@ -1035,14 +1222,19 @@ export default function Register() {
             </label>
             <input
               value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
+              onChange={(e) => {
+                setPhoneNumber(e.target.value);
+                liveValidate("phoneNumber", e.target.value);
+              }}
               onBlur={(e) => {
+                markTouched("phoneNumber");
                 const msg = validateField("phoneNumber", e.target.value);
                 msg ? setFieldError("phoneNumber", msg) : clearFieldError("phoneNumber");
               }}
               disabled={lockForm}
               style={inputStyle("phoneNumber")}
               placeholder={isPublic && publicPayMethod === "MPESA" ? "e.g. 2547XXXXXXXX or 07XXXXXXXX" : "Optional"}
+              aria-invalid={!!(touched.phoneNumber && fieldErrors.phoneNumber)}
             />
             <FieldError name="phoneNumber" />
 
@@ -1073,20 +1265,25 @@ export default function Register() {
                 <label className="field-label">Reference Number (required)</label>
                 <input
                   value={referenceNumber}
-                  onChange={(e) => setReferenceNumber(e.target.value)}
+                  onChange={(e) => {
+                    setReferenceNumber(e.target.value);
+                    liveValidate("referenceNumber", e.target.value);
+                  }}
                   onBlur={(e) => {
+                    markTouched("referenceNumber");
                     const msg = validateField("referenceNumber", e.target.value);
                     msg ? setFieldError("referenceNumber", msg) : clearFieldError("referenceNumber");
                   }}
                   placeholder={isPublic ? "National ID / Passport" : "Student No / Employee No"}
                   disabled={lockForm}
                   style={inputStyle("referenceNumber")}
+                  aria-invalid={!!(touched.referenceNumber && fieldErrors.referenceNumber)}
                 />
                 <FieldError name="referenceNumber" />
               </div>
             </div>
 
-            {/* ✅ NEW: Institution dropdown (pulled from table via /institutions/public) */}
+            {/* Institution dropdown */}
             {!isPublic && (
               <>
                 <div className="divider" />
@@ -1102,16 +1299,19 @@ export default function Register() {
                     value={institutionId}
                     onChange={(e) => {
                       setInstitutionId(e.target.value);
+                      liveValidate("institutionId", e.target.value);
                       clearFieldError("institutionId");
                       clearFieldError("institutionAccessCode");
                       clearFieldError("email"); // domain validation depends on institution
                     }}
                     onBlur={(e) => {
+                      markTouched("institutionId");
                       const msg = validateField("institutionId", e.target.value);
                       msg ? setFieldError("institutionId", msg) : clearFieldError("institutionId");
                     }}
                     disabled={lockForm}
                     style={inputStyle("institutionId")}
+                    aria-invalid={!!(touched.institutionId && fieldErrors.institutionId)}
                   >
                     <option value="">Select institution</option>
                     {institutions
@@ -1139,23 +1339,30 @@ export default function Register() {
                     disabled={lockForm}
                   />
                 </div>
+                {/* mark touched when user interacts */}
+                <div style={{ display: "none" }}>{touched.institutionMemberType}</div>
                 <FieldError name="institutionMemberType" />
 
-                {(selectedInstitution?.accessCodeRequired !== false) && (
+                {selectedInstitution?.accessCodeRequired !== false && (
                   <>
                     <label className="field-label" style={{ marginTop: 10 }}>
                       Institution Access Code (required)
                     </label>
                     <input
                       value={institutionAccessCode}
-                      onChange={(e) => setInstitutionAccessCode(e.target.value)}
+                      onChange={(e) => {
+                        setInstitutionAccessCode(e.target.value);
+                        liveValidate("institutionAccessCode", e.target.value);
+                      }}
                       onBlur={(e) => {
+                        markTouched("institutionAccessCode");
                         const msg = validateField("institutionAccessCode", e.target.value);
                         msg ? setFieldError("institutionAccessCode", msg) : clearFieldError("institutionAccessCode");
                       }}
                       disabled={lockForm}
                       style={inputStyle("institutionAccessCode")}
                       placeholder="Enter access code provided by your institution"
+                      aria-invalid={!!(touched.institutionAccessCode && fieldErrors.institutionAccessCode)}
                     />
                     <FieldError name="institutionAccessCode" />
                   </>
@@ -1172,14 +1379,45 @@ export default function Register() {
                 <input
                   type="password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    liveValidate("password", e.target.value);
+
+                    // also revalidate confirm password live if touched
+                    if (touched.confirmPassword) {
+                      const msg = validateField("confirmPassword", confirmPassword);
+                      msg ? setFieldError("confirmPassword", msg) : clearFieldError("confirmPassword");
+                    }
+                  }}
                   onBlur={(e) => {
+                    markTouched("password");
                     const msg = validateField("password", e.target.value);
                     msg ? setFieldError("password", msg) : clearFieldError("password");
                   }}
                   disabled={lockForm}
                   style={inputStyle("password")}
+                  aria-invalid={!!(touched.password && fieldErrors.password)}
                 />
+
+                {/* ✅ NEW: Password checklist */}
+                <div
+                  style={{
+                    marginTop: 10,
+                    padding: "10px 12px",
+                    borderRadius: 14,
+                    border: "1px solid #e5e7eb",
+                    background: "#fafafa",
+                    display: "grid",
+                    gap: 6,
+                  }}
+                >
+                  <RuleItem ok={passwordRules.min8} label="At least 8 characters" />
+                  <RuleItem ok={passwordRules.hasUpper} label="Contains an uppercase letter (A–Z)" />
+                  <RuleItem ok={passwordRules.hasLower} label="Contains a lowercase letter (a–z)" />
+                  <RuleItem ok={passwordRules.hasNumber} label="Contains a number (0–9)" />
+                  <RuleItem ok={passwordRules.hasSpecial} label="Contains a special character (e.g. !@#)" />
+                </div>
+
                 <FieldError name="password" />
               </div>
 
@@ -1188,19 +1426,25 @@ export default function Register() {
                 <input
                   type="password"
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    liveValidate("confirmPassword", e.target.value);
+                  }}
                   onBlur={(e) => {
+                    markTouched("confirmPassword");
                     const msg = validateField("confirmPassword", e.target.value);
                     msg ? setFieldError("confirmPassword", msg) : clearFieldError("confirmPassword");
                   }}
                   disabled={lockForm}
                   style={inputStyle("confirmPassword")}
+                  aria-invalid={!!(touched.confirmPassword && fieldErrors.confirmPassword)}
                 />
                 <FieldError name="confirmPassword" />
               </div>
             </div>
 
-            <button type="submit" disabled={lockForm}>
+            {/* ✅ Prevent submit until valid (without breaking flows) */}
+            <button type="submit" disabled={lockForm || !isFormValidForSubmit}>
               {loading
                 ? isPublic
                   ? publicPayMethod === "MPESA"
@@ -1215,6 +1459,13 @@ export default function Register() {
                   : `Go to Paystack (KES ${SIGNUP_FEE_KES})`
                 : "Create Account"}
             </button>
+
+            {/* ✅ Small hint when disabled for validation reasons */}
+            {!lockForm && !isFormValidForSubmit && (
+              <div style={{ marginTop: 10, fontSize: 12, color: "#6b7280" }}>
+                Complete the required fields (including valid username + password) to continue.
+              </div>
+            )}
 
             {paymentInfo && (
               <div className="success-box" style={{ marginTop: 12 }}>
@@ -1267,7 +1518,7 @@ export default function Register() {
                 <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <button
                     type="button"
-                    style={{ width: "auto", padding: "10px 14px" }}
+                    style={{ width: "auto", padding: "10px 14px", borderRadius: 12 }}
                     onClick={() => {
                       const stored = localStorage.getItem(LS_REG_INTENT);
                       const useIntent = intentId || (stored ? Number(stored) : null);
@@ -1285,6 +1536,7 @@ export default function Register() {
                       padding: "10px 14px",
                       background: "#6b7280",
                       color: "white",
+                      borderRadius: 12,
                     }}
                     onClick={startOver}
                   >
