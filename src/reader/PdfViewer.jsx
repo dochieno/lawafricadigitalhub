@@ -13,16 +13,9 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 
 function looksLikeRangeCacheFailure(err) {
   const msg = String(err?.message || err || "").toLowerCase();
-
-  // Chrome/ServiceWorker/Cache API often throws this for Range requests
   if (msg.includes("err_cache_operation_not_supported")) return true;
-
-  // pdf.js / fetch failures often surface like this
   if (msg.includes("failed to fetch") || msg.includes("networkerror")) return true;
-
-  // Some environments report AbortError when SW cancels range chunks
   if (msg.includes("aborterror")) return true;
-
   return false;
 }
 
@@ -40,8 +33,8 @@ export default function PdfViewer({
   /* ---------------- Loading UX ---------------- */
   const [loadPct, setLoadPct] = useState(0);
   const [loadError, setLoadError] = useState("");
-  const [safeMode, setSafeMode] = useState(false); // fallback: disableRange/disableStream
-  const [docKey, setDocKey] = useState(0); // force remount of <Document> when switching modes
+  const [safeMode, setSafeMode] = useState(false);
+  const [docKey, setDocKey] = useState(0);
 
   /* ---------------- Reading Progress ---------------- */
   const [resumeLoaded, setResumeLoaded] = useState(false);
@@ -60,6 +53,7 @@ export default function PdfViewer({
   const [showPageJump, setShowPageJump] = useState(false);
   const [pageJumpValue, setPageJumpValue] = useState("");
   const [pageJumpError, setPageJumpError] = useState("");
+  const pageJumpInputRef = useRef(null);
 
   const isProgrammaticNavRef = useRef(false);
 
@@ -68,8 +62,6 @@ export default function PdfViewer({
   const [selectedText, setSelectedText] = useState("");
   const [noteContent, setNoteContent] = useState("");
   const [notes, setNotes] = useState([]);
-
-  // ✅ notes NOT persistent (closed by default)
   const [showNotes, setShowNotes] = useState(false);
 
   const [editingNoteId, setEditingNoteId] = useState(null);
@@ -90,7 +82,6 @@ export default function PdfViewer({
   const snapTimeoutRef = useRef(null);
   const isUserScrollingRef = useRef(false);
 
-  // ✅ robust scroll-based page detection
   const scrollRafRef = useRef(null);
   const lastScrollComputedPageRef = useRef(null);
 
@@ -102,8 +93,6 @@ export default function PdfViewer({
   const fileSource = useMemo(() => getPdfSource(documentId), [documentId]);
 
   const pdfOptions = useMemo(() => {
-    // Normal mode is fastest when the environment supports Range/streaming.
-    // Safe mode avoids cache/service-worker Range issues.
     return safeMode
       ? { disableRange: true, disableStream: true }
       : { disableRange: false, disableStream: false };
@@ -144,20 +133,16 @@ export default function PdfViewer({
     setLoadError("");
     setRenderLimit(10);
 
-    // reset fallback per document
     setSafeMode(false);
     setDocKey((k) => k + 1);
 
-    // reset page state per doc
     setPage(startPage || 1);
 
-    // reset resume flags
     setResumeLoaded(false);
     pendingJumpRef.current = null;
     resumeTargetRef.current = null;
     resumeAppliedRef.current = false;
 
-    // reset preview trigger
     previewLimitTriggeredRef.current = false;
   }, [documentId, startPage]);
 
@@ -222,16 +207,14 @@ export default function PdfViewer({
      ================================================== */
   useEffect(() => {
     if (!ready || !numPages) return;
-
     const maxPage = allowedMaxPage ?? numPages;
-
     if (page >= renderLimit - 4) {
       setRenderLimit((prev) => Math.min(maxPage, prev + 10));
     }
   }, [page, renderLimit, ready, numPages, allowedMaxPage]);
 
   /* ==================================================
-     APPLY RESUME (render enough pages, then scroll)
+     APPLY RESUME
      ================================================== */
   useEffect(() => {
     if (!ready || !numPages || !resumeLoaded) return;
@@ -264,7 +247,7 @@ export default function PdfViewer({
   }, [ready, numPages, resumeLoaded, allowedMaxPage]);
 
   /* ==================================================
-     SAFE PAGE SETTER (enforces preview limit)
+     SAFE PAGE SETTER
      ================================================== */
   function safeSetPage(nextPage) {
     if (allowedMaxPage && nextPage > allowedMaxPage) {
@@ -324,9 +307,7 @@ export default function PdfViewer({
     if (bestPage !== lastScrollComputedPageRef.current && !isProgrammaticNavRef.current) {
       lastScrollComputedPageRef.current = bestPage;
       clearTimeout(pageUpdateTimeoutRef.current);
-      pageUpdateTimeoutRef.current = setTimeout(() => {
-        setPage(bestPage);
-      }, 60);
+      pageUpdateTimeoutRef.current = setTimeout(() => setPage(bestPage), 60);
 
       if (
         allowedMaxPage &&
@@ -370,7 +351,6 @@ export default function PdfViewer({
         const visible = entries
           .filter((e) => e.isIntersecting)
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-
         if (!visible) return;
 
         const current = Number(visible.target.getAttribute("data-page-number"));
@@ -379,9 +359,7 @@ export default function PdfViewer({
         if (!isProgrammaticNavRef.current) {
           lastScrollComputedPageRef.current = current;
           clearTimeout(pageUpdateTimeoutRef.current);
-          pageUpdateTimeoutRef.current = setTimeout(() => {
-            setPage(current);
-          }, 40);
+          pageUpdateTimeoutRef.current = setTimeout(() => setPage(current), 40);
         }
       },
       {
@@ -404,6 +382,50 @@ export default function PdfViewer({
       .then((res) => setNotes(res.data || []))
       .catch(() => {});
   }, [documentId]);
+
+  /* ==================================================
+     Go-to-page helpers
+     ================================================== */
+  function openPageJump() {
+    setPageJumpError("");
+    setPageJumpValue(String(page));
+    setShowPageJump(true);
+  }
+
+  function submitPageJump() {
+    const raw = (pageJumpValue || "").trim();
+    const n = Number(raw);
+    const max = allowedMaxPage ?? numPages ?? 1;
+
+    if (!raw || Number.isNaN(n)) {
+      setPageJumpError("Enter a valid page number.");
+      return;
+    }
+
+    if (n < 1 || n > max) {
+      setPageJumpError(`Page must be between 1 and ${max}.`);
+      return;
+    }
+
+    setShowPageJump(false);
+    setPageJumpError("");
+    safeSetPage(n);
+  }
+
+  // ✅ Ensure typing works: force focus + select after popover mounts
+  useEffect(() => {
+    if (!showPageJump) return;
+    const t = setTimeout(() => {
+      const el = pageJumpInputRef.current;
+      if (el) {
+        el.focus();
+        try {
+          el.select();
+        } catch {}
+      }
+    }, 0);
+    return () => clearTimeout(t);
+  }, [showPageJump]);
 
   /* ==================================================
      KEYBOARD SHORTCUTS
@@ -441,7 +463,6 @@ export default function PdfViewer({
         setZoom((z) => Math.max(0.7, Math.round((z - 0.1) * 10) / 10));
       }
       if (e.key === "g" || e.key === "G") {
-        // ✅ quick shortcut for go-to-page
         e.preventDefault();
         openPageJump();
       }
@@ -457,15 +478,13 @@ export default function PdfViewer({
   }, [page, numPages, allowedMaxPage, showNoteBox, showNotes, showPageJump]);
 
   /* ==================================================
-     REAL HIGHLIGHT CAPTURE (unchanged)
+     Highlight capture (unchanged)
      ================================================== */
   function getPageWrapperFromSelection(selection) {
     const node = selection?.anchorNode;
     if (!node) return null;
-
     const el = node.nodeType === 1 ? node : node.parentElement;
     if (!el) return null;
-
     return el.closest(".pdf-page-wrapper");
   }
 
@@ -519,7 +538,6 @@ export default function PdfViewer({
 
   function jumpToPage(p) {
     if (!p) return;
-
     const target = Math.min(Math.max(1, p), allowedMaxPage ?? numPages ?? p);
 
     setRenderLimit((prev) =>
@@ -649,7 +667,7 @@ export default function PdfViewer({
   }
 
   /* ==================================================
-     NOTES CRUD
+     NOTES CRUD (unchanged)
      ================================================== */
   async function saveNote() {
     try {
@@ -776,37 +794,6 @@ export default function PdfViewer({
   }, [notes]);
 
   /* ==================================================
-     Page jump helpers (Go to page)
-     ================================================== */
-  function openPageJump() {
-    setPageJumpError("");
-    setPageJumpValue(String(page));
-    setShowPageJump(true);
-  }
-
-  function submitPageJump() {
-    const raw = (pageJumpValue || "").trim();
-    const n = Number(raw);
-    const max = allowedMaxPage ?? numPages ?? 1;
-
-    if (!raw || Number.isNaN(n)) {
-      setPageJumpError("Enter a valid page number.");
-      return;
-    }
-
-    if (n < 1 || n > max) {
-      setPageJumpError(`Page must be between 1 and ${max}.`);
-      return;
-    }
-
-    setShowPageJump(false);
-    setPageJumpError("");
-
-    // ✅ updates page navigation AND scrolls (safeSetPage already has guards)
-    safeSetPage(n);
-  }
-
-  /* ==================================================
      Render
      ================================================== */
   return (
@@ -814,15 +801,10 @@ export default function PdfViewer({
       {/* Minimal “glass” top bar */}
       <div className="reader-topbar">
         <div className="reader-topbar-inner">
-          <div className="reader-topbar-left" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div className="reader-topbar-left">
             <div className="reader-chip" title="Current page">
               {page} / {numPages || "—"}
             </div>
-
-            {/* ✅ Visible Go to Page button (does NOT affect scroll detection) */}
-            <button className="icon-btn" onClick={openPageJump} title="Go to page (G)">
-              🔎 Go to…
-            </button>
           </div>
 
           <div className="reader-topbar-right">
@@ -842,6 +824,10 @@ export default function PdfViewer({
               title="Zoom in (+)"
             >
               +
+            </button>
+
+            <button className="icon-btn" onClick={openPageJump} title="Go to page (G)">
+              🔎
             </button>
 
             <button
@@ -882,7 +868,6 @@ export default function PdfViewer({
             }, 120);
           }}
         >
-          {/* Loading overlay (fast feedback) */}
           {!ready && (
             <div className="reader-loadingOverlay">
               <div className="reader-loadingCard">
@@ -914,15 +899,11 @@ export default function PdfViewer({
             file={fileSource}
             options={pdfOptions}
             onLoadProgress={({ loaded, total }) => {
-              if (total && total > 0) {
-                const pct = Math.round((loaded / total) * 100);
-                setLoadPct(pct);
-              }
+              if (total && total > 0) setLoadPct(Math.round((loaded / total) * 100));
             }}
             onLoadError={(err) => {
               console.error("react-pdf onLoadError:", err, "fileSource=", fileSource);
 
-              // ✅ Fallback once if we detect Range/Cache issues
               if (!safeMode && looksLikeRangeCacheFailure(err)) {
                 setLoadError("Reloading in compatibility mode…");
                 setSafeMode(true);
@@ -992,7 +973,6 @@ export default function PdfViewer({
                   >
                     <svg className="highlight-layer" width="100%" height="100%">
                       {(highlightsByPage?.[pageNumber] || []).map((h) =>
-                        // ✅ FIX: removed the accidental "||s||" which caused runtime errors
                         (h.rects || []).map((r, idx) => (
                           <rect
                             key={`${h.id}-${idx}`}
@@ -1043,7 +1023,7 @@ export default function PdfViewer({
         </button>
 
         <button className="fab-mid" onClick={openPageJump} title="Go to page (G)">
-          Page {page} / {numPages || "—"}
+          {page} / {numPages || "—"}
         </button>
 
         <button
@@ -1056,10 +1036,28 @@ export default function PdfViewer({
         </button>
 
         {showPageJump && (
-          <div className="pagejump-popover" role="dialog" aria-modal="true">
-            <div className="pagejump-title">Go to page</div>
+          <div
+            className="pagejump-popover"
+            role="dialog"
+            aria-modal="true"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="pagejump-head">
+              <div className="pagejump-title">Go to page</div>
+              <button
+                className="pagejump-iconbtn"
+                onClick={() => setShowPageJump(false)}
+                title="Close"
+                type="button"
+              >
+                ✕
+              </button>
+            </div>
+
             <div className="pagejump-row">
               <input
+                ref={pageJumpInputRef}
                 className="pagejump-input"
                 value={pageJumpValue}
                 onChange={(e) => setPageJumpValue(e.target.value)}
@@ -1068,21 +1066,25 @@ export default function PdfViewer({
                   if (e.key === "Escape") setShowPageJump(false);
                 }}
                 inputMode="numeric"
-                placeholder="e.g. 12"
+                placeholder={`1 - ${allowedMaxPage ?? numPages ?? "?"}`}
+                autoFocus
               />
-              <button className="pagejump-go" onClick={submitPageJump}>
-                Go
+              <button
+                className="pagejump-iconbtn primary"
+                onClick={submitPageJump}
+                title="Go"
+                type="button"
+              >
+                ✓
               </button>
             </div>
+
             {!!pageJumpError && <div className="pagejump-error">{pageJumpError}</div>}
-            <button className="pagejump-close" onClick={() => setShowPageJump(false)}>
-              Close
-            </button>
           </div>
         )}
       </div>
 
-      {/* NOTE OVERLAY */}
+      {/* NOTE OVERLAY + Notes sidebar... (unchanged below) */}
       {showNoteBox && (
         <div className="note-overlay">
           <div className="note-box">
@@ -1129,7 +1131,6 @@ export default function PdfViewer({
         </div>
       )}
 
-      {/* Notes sidebar + backdrop */}
       {showNotes && <div className="notes-backdrop" onClick={() => setShowNotes(false)} />}
 
       <div className={`notes-sidebar ${showNotes ? "open" : "closed"}`}>
