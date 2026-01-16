@@ -1,3 +1,4 @@
+// src/reader/PdfViewer.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import api from "../api/client";
@@ -47,7 +48,7 @@ export default function PdfViewer({
   const [noteContent, setNoteContent] = useState("");
   const [notes, setNotes] = useState([]);
 
-  // ✅ Requirement: notes NOT persistent (closed by default)
+  // ✅ notes NOT persistent (closed by default)
   const [showNotes, setShowNotes] = useState(false);
 
   const [editingNoteId, setEditingNoteId] = useState(null);
@@ -67,6 +68,10 @@ export default function PdfViewer({
   const pageObserverRef = useRef(null);
   const snapTimeoutRef = useRef(null);
   const isUserScrollingRef = useRef(false);
+
+  // ✅ NEW: robust scroll-based page detection (fixes “page number not updating”)
+  const scrollRafRef = useRef(null);
+  const lastScrollComputedPageRef = useRef(null);
 
   const pageElsRef = useRef({});
   const previewLimitTriggeredRef = useRef(false);
@@ -193,14 +198,14 @@ export default function PdfViewer({
         resumeAppliedRef.current = true;
         setTimeout(() => {
           isProgrammaticNavRef.current = false;
-        }, 300);
+        }, 350);
         return;
       }
       setTimeout(attemptScroll, 80);
     };
 
     setTimeout(attemptScroll, 80);
-  }, [ready, numPages, resumeLoaded, allowedMaxPage, renderLimit]);
+  }, [ready, numPages, resumeLoaded, allowedMaxPage]);
 
   /* ==================================================
      SAFE PAGE SETTER (enforces preview limit)
@@ -210,12 +215,95 @@ export default function PdfViewer({
       if (typeof onPreviewLimitReached === "function") onPreviewLimitReached();
       return;
     }
+
+    isProgrammaticNavRef.current = true;
     setPage(nextPage);
-    requestAnimationFrame(() => scrollToPage(nextPage, "smooth"));
+
+    requestAnimationFrame(() => {
+      scrollToPage(nextPage, "smooth");
+      setTimeout(() => {
+        isProgrammaticNavRef.current = false;
+      }, 350);
+    });
   }
 
   /* ==================================================
-     INTERSECTION OBSERVER (updates page, triggers preview limit)
+     ✅ NEW: Scroll-based current-page detection
+     - This fixes cases where IntersectionObserver fails to update (common with react-pdf text/canvas layers)
+     ================================================== */
+  function computePageFromScroll() {
+    const root = scrollRootRef.current;
+    if (!root) return;
+
+    const maxPage = allowedMaxPage ?? numPages ?? null;
+    if (!maxPage) return;
+
+    const rootRect = root.getBoundingClientRect();
+    const anchorY = rootRect.top + 90; // “reading line” near top of viewport
+
+    let bestPage = null;
+    let bestDist = Infinity;
+
+    const keys = Object.keys(pageElsRef.current)
+      .map((k) => Number(k))
+      .filter((n) => Number.isFinite(n) && n > 0 && n <= maxPage)
+      .sort((a, b) => a - b);
+
+    for (const p of keys) {
+      const el = pageElsRef.current[p];
+      if (!el) continue;
+
+      const r = el.getBoundingClientRect();
+      // skip pages far outside viewport for perf
+      if (r.bottom < rootRect.top - 400) continue;
+      if (r.top > rootRect.bottom + 400) break;
+
+      const dist = Math.abs(r.top - anchorY);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestPage = p;
+      }
+    }
+
+    if (!bestPage) return;
+
+    // Update state only if it actually changed
+    if (
+      bestPage !== lastScrollComputedPageRef.current &&
+      !isProgrammaticNavRef.current
+    ) {
+      lastScrollComputedPageRef.current = bestPage;
+      clearTimeout(pageUpdateTimeoutRef.current);
+      pageUpdateTimeoutRef.current = setTimeout(() => {
+        setPage(bestPage);
+      }, 60);
+
+      // preview limit trigger
+      if (
+        allowedMaxPage &&
+        bestPage === allowedMaxPage &&
+        typeof onPreviewLimitReached === "function" &&
+        !previewLimitTriggeredRef.current
+      ) {
+        previewLimitTriggeredRef.current = true;
+        onPreviewLimitReached();
+      }
+      if (allowedMaxPage && bestPage < allowedMaxPage) {
+        previewLimitTriggeredRef.current = false;
+      }
+    }
+  }
+
+  function scheduleComputePageFromScroll() {
+    if (scrollRafRef.current) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null;
+      computePageFromScroll();
+    });
+  }
+
+  /* ==================================================
+     INTERSECTION OBSERVER (kept, but made more forgiving)
      ================================================== */
   useEffect(() => {
     if (!ready) return;
@@ -230,6 +318,7 @@ export default function PdfViewer({
 
     pageObserverRef.current = new IntersectionObserver(
       (entries) => {
+        // pick the most visible element
         const visible = entries
           .filter((e) => e.isIntersecting)
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
@@ -237,35 +326,26 @@ export default function PdfViewer({
         if (!visible) return;
 
         const current = Number(visible.target.getAttribute("data-page-number"));
+        if (!Number.isFinite(current)) return;
 
-        if (!Number.isNaN(current)) {
-          if (!isProgrammaticNavRef.current) {
-            clearTimeout(pageUpdateTimeoutRef.current);
-            pageUpdateTimeoutRef.current = setTimeout(() => {
-              setPage(current);
-            }, 100);
-          }
-
-          if (
-            allowedMaxPage &&
-            current === allowedMaxPage &&
-            typeof onPreviewLimitReached === "function" &&
-            !previewLimitTriggeredRef.current
-          ) {
-            previewLimitTriggeredRef.current = true;
-            onPreviewLimitReached();
-          }
-
-          if (allowedMaxPage && current < allowedMaxPage) {
-            previewLimitTriggeredRef.current = false;
-          }
+        // If IO fires, it’s a strong signal — update quickly
+        if (!isProgrammaticNavRef.current) {
+          lastScrollComputedPageRef.current = current;
+          clearTimeout(pageUpdateTimeoutRef.current);
+          pageUpdateTimeoutRef.current = setTimeout(() => {
+            setPage(current);
+          }, 40);
         }
       },
-      { root, threshold: 0.6 }
+      {
+        root,
+        // ✅ Helps with “top-of-viewport” reading; reduces flicker
+        rootMargin: "-10% 0px -55% 0px",
+        threshold: [0.15, 0.35, 0.55],
+      }
     );
 
     pages.forEach((p) => pageObserverRef.current.observe(p));
-
     return () => pageObserverRef.current?.disconnect();
   }, [ready, zoom, renderLimit, allowedMaxPage]);
 
@@ -280,11 +360,10 @@ export default function PdfViewer({
   }, [documentId]);
 
   /* ==================================================
-     KEYBOARD SHORTCUTS (modern reader feel)
+     KEYBOARD SHORTCUTS
      ================================================== */
   useEffect(() => {
     function onKeyDown(e) {
-      // ignore when typing
       const tag = document.activeElement?.tagName?.toLowerCase();
       const typing =
         tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable;
@@ -396,10 +475,16 @@ export default function PdfViewer({
       Math.max(prev, Math.min(target + 6, allowedMaxPage ?? numPages))
     );
 
+    isProgrammaticNavRef.current = true;
     setPage(target);
 
     requestAnimationFrame(() => {
-      setTimeout(() => scrollToPage(target, "smooth"), 60);
+      setTimeout(() => {
+        scrollToPage(target, "smooth");
+        setTimeout(() => {
+          isProgrammaticNavRef.current = false;
+        }, 350);
+      }, 60);
     });
   }
 
@@ -473,7 +558,6 @@ export default function PdfViewer({
   }
 
   function focusNote(noteId) {
-    // ✅ opens notes only when needed (user action / highlight click)
     setShowNotes(true);
     setActiveNoteId(noteId);
 
@@ -543,7 +627,6 @@ export default function PdfViewer({
       const res = await api.get(`/legal-document-notes/document/${documentId}`);
       setNotes(res.data || []);
 
-      // ✅ Requirement: open notes after saving (only time we auto-open)
       setShowNotes(true);
 
       setHighlights((prev) => [
@@ -728,10 +811,14 @@ export default function PdfViewer({
           ref={scrollRootRef}
           onMouseUp={handleMouseUp}
           onScroll={() => {
-            if (isProgrammaticNavRef.current) return;
+            if (!ready) return;
+
+            // always compute page from scroll (this is the fix)
+            if (!isProgrammaticNavRef.current) {
+              scheduleComputePageFromScroll();
+            }
 
             isUserScrollingRef.current = true;
-
             clearTimeout(snapTimeoutRef.current);
             snapTimeoutRef.current = setTimeout(() => {
               isUserScrollingRef.current = false;
@@ -766,7 +853,15 @@ export default function PdfViewer({
               setRenderLimit(Math.min(allowed, Math.max(initial + 6, 10)));
               setReady(true);
 
-              setTimeout(() => scrollToPage(initial, "auto"), 80);
+              isProgrammaticNavRef.current = true;
+              setTimeout(() => {
+                scrollToPage(initial, "auto");
+                setTimeout(() => {
+                  isProgrammaticNavRef.current = false;
+                  // ensure navigator syncs right after initial paint
+                  scheduleComputePageFromScroll();
+                }, 250);
+              }, 80);
             }}
           >
             {ready &&
@@ -799,7 +894,11 @@ export default function PdfViewer({
                     <Page
                       pageNumber={pageNumber}
                       width={Math.round(820 * zoom)}
-                      onRenderTextLayerSuccess={() => applyHighlightsForPage(pageNumber)}
+                      onRenderTextLayerSuccess={() => {
+                        applyHighlightsForPage(pageNumber);
+                        // when a page finishes rendering, it can change layout -> re-sync page calc
+                        scheduleComputePageFromScroll();
+                      }}
                     />
                   </div>
                 );
@@ -923,16 +1022,12 @@ export default function PdfViewer({
           {groupedNotes.length === 0 ? (
             <div className="notes-empty">
               <p>No notes yet</p>
-              <p className="notes-empty-hint">
-                Select text in the document to add your first note.
-              </p>
+              <p className="notes-empty-hint">Select text in the document to add your first note.</p>
             </div>
           ) : (
             groupedNotes.map((group) => (
               <div key={group.pageNumber ?? "unknown"} className="notes-group">
-                <div className="notes-group-title">
-                  Page {group.pageNumber ?? "—"}
-                </div>
+                <div className="notes-group-title">Page {group.pageNumber ?? "—"}</div>
 
                 {group.items.map((note) => (
                   <div
