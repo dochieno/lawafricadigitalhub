@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import api from "../../../api/client";
+import api from "../../../../api/client.js"; // ✅ FIXED PATH
 import "../../../styles/adminUsers.css";
 
 function num(v) {
@@ -15,16 +15,24 @@ function fmtDateTime(v) {
 }
 
 function friendlyApiError(e) {
+  // ✅ Better handling when request never reaches server / wrong baseURL / CORS
+  if (!e?.response) {
+    return (
+      e?.message ||
+      "Network error. Check API base URL / CORS / server availability (no response received)."
+    );
+  }
+
   const status = e?.response?.status;
   const title = e?.response?.data?.title;
   const detail = e?.response?.data?.detail;
 
   if (title || detail) return `${title ?? "Request failed"}${detail ? ` — ${detail}` : ""}`;
-
   if (typeof e?.response?.data === "string" && e.response.data.trim()) return e.response.data;
 
   if (status === 401) return "You are not authorized. Please log in again.";
   if (status === 403) return "You don’t have permission to manage users.";
+  if (status === 404) return "Endpoint not found. Check that the request is going to /api/admin/users.";
   if (status >= 500) return "Server error while loading users.";
   return "Request failed. Please try again.";
 }
@@ -140,38 +148,6 @@ function Icon({ name }) {
   }
 }
 
-// ✅ NEW: map UI filter values -> backend expected query values
-function mapTypeParam(type) {
-  if (type === "all") return undefined;
-  if (type === "public") return "Public";
-  if (type === "institution") return "Institution";
-  return undefined;
-}
-
-function mapStatusParam(status) {
-  if (status === "all") return undefined;
-  if (status === "active") return "Active";
-  if (status === "inactive") return "Inactive";
-  if (status === "locked") return "Locked";
-  return undefined;
-}
-
-// ✅ NEW: normalize response shape
-function normalizeUsersResponse(res, fallbackPageSize = 20) {
-  const raw = res?.data?.data ?? res?.data ?? {};
-  const items = raw.items ?? raw.Items ?? raw.data ?? raw.Data ?? [];
-  const total = raw.total ?? raw.Total ?? num(items?.length);
-  const page = raw.page ?? raw.Page ?? 1;
-  const pageSize = raw.pageSize ?? raw.PageSize ?? fallbackPageSize;
-
-  return {
-    items: Array.isArray(items) ? items : [],
-    total: num(total),
-    page: num(page) || 1,
-    pageSize: num(pageSize) || fallbackPageSize,
-  };
-}
-
 export default function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -199,31 +175,29 @@ export default function AdminUsers() {
     window.setTimeout(() => setToast(null), 2400);
   }
 
-  // prevent overlapping loads when fast typing (optional, safe)
   const loadSeq = useRef(0);
 
   async function load() {
     setErr("");
     setLoading(true);
-
     const seq = ++loadSeq.current;
 
     try {
       const res = await api.get("/admin/users", {
         params: {
-          q: q?.trim() || undefined,
-          type: mapTypeParam(type),
-          status: mapStatusParam(status),
-          online: online === "all" ? undefined : online === "true",
+          q: q?.trim() || null,
+          type,   // backend supports: all|public|institution
+          status, // backend supports: all|active|inactive|locked
+          online: online === "all" ? null : online === "true",
           page,
           pageSize,
         },
       });
 
-      // ignore stale results
       if (seq !== loadSeq.current) return;
 
-      setData(normalizeUsersResponse(res, pageSize));
+      // backend returns: { page, pageSize, total, summary, items }
+      setData(res.data);
     } catch (e) {
       console.error(e);
       setErr(friendlyApiError(e));
@@ -302,6 +276,7 @@ export default function AdminUsers() {
     }
   }
 
+  // NOTE: approve endpoint not present in your AdminController snippet.
   async function approveUser(userId, makeInstitutionAdmin = true) {
     try {
       setBusyId(userId);
@@ -337,7 +312,9 @@ export default function AdminUsers() {
   return (
     <div className="au-wrap">
       {toast ? (
-        <div className={`toast ${toast.type === "success" ? "toast-success" : "toast-error"}`}>{toast.text}</div>
+        <div className={`toast ${toast.type === "success" ? "toast-success" : "toast-error"}`}>
+          {toast.text}
+        </div>
       ) : null}
 
       <header className="au-hero">
@@ -381,31 +358,13 @@ export default function AdminUsers() {
               </div>
 
               <div className="au-chips">
-                <PillButton
-                  active={type === "all"}
-                  onClick={() => {
-                    setType("all");
-                    setPage(1);
-                  }}
-                >
+                <PillButton active={type === "all"} onClick={() => { setType("all"); setPage(1); }}>
                   All
                 </PillButton>
-                <PillButton
-                  active={type === "public"}
-                  onClick={() => {
-                    setType("public");
-                    setPage(1);
-                  }}
-                >
+                <PillButton active={type === "public"} onClick={() => { setType("public"); setPage(1); }}>
                   Public
                 </PillButton>
-                <PillButton
-                  active={type === "institution"}
-                  onClick={() => {
-                    setType("institution");
-                    setPage(1);
-                  }}
-                >
+                <PillButton active={type === "institution"} onClick={() => { setType("institution"); setPage(1); }}>
                   Institution
                 </PillButton>
               </div>
@@ -414,40 +373,16 @@ export default function AdminUsers() {
             <div className="au-filterGroup">
               <div className="au-filterLabel">Status</div>
               <div className="au-chips">
-                <PillButton
-                  active={status === "all"}
-                  onClick={() => {
-                    setStatus("all");
-                    setPage(1);
-                  }}
-                >
+                <PillButton active={status === "all"} onClick={() => { setStatus("all"); setPage(1); }}>
                   All
                 </PillButton>
-                <PillButton
-                  active={status === "active"}
-                  onClick={() => {
-                    setStatus("active");
-                    setPage(1);
-                  }}
-                >
+                <PillButton active={status === "active"} onClick={() => { setStatus("active"); setPage(1); }}>
                   Active
                 </PillButton>
-                <PillButton
-                  active={status === "inactive"}
-                  onClick={() => {
-                    setStatus("inactive");
-                    setPage(1);
-                  }}
-                >
+                <PillButton active={status === "inactive"} onClick={() => { setStatus("inactive"); setPage(1); }}>
                   Inactive
                 </PillButton>
-                <PillButton
-                  active={status === "locked"}
-                  onClick={() => {
-                    setStatus("locked");
-                    setPage(1);
-                  }}
-                >
+                <PillButton active={status === "locked"} onClick={() => { setStatus("locked"); setPage(1); }}>
                   Locked
                 </PillButton>
               </div>
@@ -456,31 +391,13 @@ export default function AdminUsers() {
             <div className="au-filterGroup">
               <div className="au-filterLabel">Presence</div>
               <div className="au-chips">
-                <PillButton
-                  active={online === "all"}
-                  onClick={() => {
-                    setOnline("all");
-                    setPage(1);
-                  }}
-                >
+                <PillButton active={online === "all"} onClick={() => { setOnline("all"); setPage(1); }}>
                   All
                 </PillButton>
-                <PillButton
-                  active={online === "true"}
-                  onClick={() => {
-                    setOnline("true");
-                    setPage(1);
-                  }}
-                >
+                <PillButton active={online === "true"} onClick={() => { setOnline("true"); setPage(1); }}>
                   Online
                 </PillButton>
-                <PillButton
-                  active={online === "false"}
-                  onClick={() => {
-                    setOnline("false");
-                    setPage(1);
-                  }}
-                >
+                <PillButton active={online === "false"} onClick={() => { setOnline("false"); setPage(1); }}>
                   Offline
                 </PillButton>
               </div>
@@ -647,7 +564,12 @@ export default function AdminUsers() {
                           <Icon name="ban" />
                         </IconBtn>
 
-                        <IconBtn tone="neutral" disabled={isBusy} title="Reset 2FA (email new setup)" onClick={() => reset2fa(u.id)}>
+                        <IconBtn
+                          tone="neutral"
+                          disabled={isBusy}
+                          title="Reset 2FA (email new setup)"
+                          onClick={() => reset2fa(u.id)}
+                        >
                           <Icon name="key" />
                         </IconBtn>
                       </div>
