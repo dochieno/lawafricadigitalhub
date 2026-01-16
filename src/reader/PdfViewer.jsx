@@ -440,6 +440,11 @@ export default function PdfViewer({
         e.preventDefault();
         setZoom((z) => Math.max(0.7, Math.round((z - 0.1) * 10) / 10));
       }
+      if (e.key === "g" || e.key === "G") {
+        // ✅ quick shortcut for go-to-page
+        e.preventDefault();
+        openPageJump();
+      }
       if (e.key === "Escape") {
         if (showNoteBox) setShowNoteBox(false);
         if (showNotes) setShowNotes(false);
@@ -797,7 +802,7 @@ export default function PdfViewer({
     setShowPageJump(false);
     setPageJumpError("");
 
-    // ✅ this updates page navigation AND scrolls (programmatic guard already inside)
+    // ✅ updates page navigation AND scrolls (safeSetPage already has guards)
     safeSetPage(n);
   }
 
@@ -809,10 +814,15 @@ export default function PdfViewer({
       {/* Minimal “glass” top bar */}
       <div className="reader-topbar">
         <div className="reader-topbar-inner">
-          <div className="reader-topbar-left">
+          <div className="reader-topbar-left" style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <div className="reader-chip" title="Current page">
               {page} / {numPages || "—"}
             </div>
+
+            {/* ✅ Visible Go to Page button (does NOT affect scroll detection) */}
+            <button className="icon-btn" onClick={openPageJump} title="Go to page (G)">
+              🔎 Go to…
+            </button>
           </div>
 
           <div className="reader-topbar-right">
@@ -982,7 +992,8 @@ export default function PdfViewer({
                   >
                     <svg className="highlight-layer" width="100%" height="100%">
                       {(highlightsByPage?.[pageNumber] || []).map((h) =>
-                        (h.rects ||s || h.rects || []).map((r, idx) => (
+                        // ✅ FIX: removed the accidental "||s||" which caused runtime errors
+                        (h.rects || []).map((r, idx) => (
                           <rect
                             key={`${h.id}-${idx}`}
                             x={r.x}
@@ -999,9 +1010,7 @@ export default function PdfViewer({
                     <Page
                       pageNumber={pageNumber}
                       width={Math.round(820 * zoom)}
-                      // keep text layer for selection/notes
                       renderTextLayer
-                      // annotation layer can be expensive; keep off unless you rely on PDF links
                       renderAnnotationLayer={false}
                       loading={
                         <div style={{ padding: 16, color: "#6b7280", fontSize: 13 }}>
@@ -1033,7 +1042,7 @@ export default function PdfViewer({
           ◀
         </button>
 
-        <button className="fab-mid" onClick={openPageJump} title="Go to page">
+        <button className="fab-mid" onClick={openPageJump} title="Go to page (G)">
           Page {page} / {numPages || "—"}
         </button>
 
