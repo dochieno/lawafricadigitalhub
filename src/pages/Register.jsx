@@ -34,7 +34,7 @@ function normalizePhone(phone) {
     p = "254" + p.slice(1);
   }
 
-  // 7XXXXXXXX -> 2547XXXXXXXX (if user omits leading 0)
+  // 7XXXXXXXX -> 2547XXXXXXXX
   if (/^7\d{8}$/.test(p)) {
     p = "254" + p;
   }
@@ -124,7 +124,6 @@ export default function Register() {
   // Institution fields (hidden for Public)
   const [institutionId, setInstitutionId] = useState("");
   const [institutionAccessCode, setInstitutionAccessCode] = useState("");
-
   const [institutionMemberType, setInstitutionMemberType] = useState("Student");
 
   const [institutions, setInstitutions] = useState([]);
@@ -197,7 +196,7 @@ export default function Register() {
   }, []);
 
   // -----------------------------
-  // Load institutions (PUBLIC)
+  // Load institutions (PUBLIC LIST)
   // -----------------------------
   useEffect(() => {
     (async () => {
@@ -248,6 +247,13 @@ export default function Register() {
       setInstitutionId("");
       setInstitutionAccessCode("");
       setInstitutionMemberType("Student");
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next.institutionId;
+        delete next.institutionMemberType;
+        delete next.institutionAccessCode;
+        return next;
+      });
     }
   }, [isPublic]);
 
@@ -298,7 +304,6 @@ export default function Register() {
         if (!v.trim()) return "Phone number is required for Mpesa payment.";
 
         const normalized = normalizePhone(v);
-        // ✅ enforce format so MPesa doesn't fail silently
         if (!/^2547\d{8}$/.test(normalized)) {
           return "Enter a valid Mpesa number like 2547XXXXXXXX (or 07XXXXXXXX).";
         }
@@ -313,9 +318,13 @@ export default function Register() {
       if (!isPublic && !v.trim()) return "Please select Student or Staff.";
     }
 
+    // ✅ CHANGED: Access code required ONLY if institution says so (default: required)
     if (name === "institutionAccessCode") {
-      if (!isPublic && !v.trim()) return "Institution access code is required.";
-      if (!isPublic && v.trim().length < 3) return "Access code looks too short.";
+      if (!isPublic) {
+        const required = selectedInstitution?.accessCodeRequired !== false;
+        if (required && !v.trim()) return "Institution access code is required.";
+        if (v.trim() && v.trim().length < 3) return "Access code looks too short.";
+      }
     }
 
     if (name === "password") {
@@ -388,11 +397,8 @@ export default function Register() {
       referenceNumber: referenceNumber.trim() || null,
 
       institutionAccessCode: !isPublic ? institutionAccessCode.trim().toUpperCase() : null,
-
       userType, // "Public" | "Institution"
-
       institutionId: !isPublic && institutionId ? Number(institutionId) : null,
-
       institutionMemberType: !isPublic ? institutionMemberType : null,
     };
 
@@ -432,10 +438,7 @@ export default function Register() {
     const data = res.data?.data ?? res.data;
 
     const authorizationUrl =
-      data?.authorization_url ||
-      data?.authorizationUrl ||
-      data?.data?.authorization_url ||
-      data?.authorizationUrl;
+      data?.authorization_url || data?.authorizationUrl || data?.data?.authorization_url || data?.authorizationUrl;
 
     if (!authorizationUrl) {
       throw new Error("Paystack initialize did not return authorizationUrl.");
@@ -449,7 +452,6 @@ export default function Register() {
     localStorage.setItem(LS_REG_USERNAME, username.trim());
     localStorage.setItem(LS_REG_PASSWORD, password);
 
-    // redirect
     window.location.href = authorizationUrl;
   }
 
@@ -470,17 +472,14 @@ export default function Register() {
         setWaitingPayment(false);
         setStatusText("");
 
-        // ✅ show success + move user forward
         setRegistrationComplete(true);
         setSuccessMessage("Payment confirmed and your account has been created. Proceed to set up 2FA.");
 
-        // ✅ Cleanup stored state now that we are done
         localStorage.removeItem(LS_REG_INTENT);
         localStorage.removeItem(LS_REG_EMAIL);
         localStorage.removeItem(LS_REG_USERNAME);
         localStorage.removeItem(LS_REG_PASSWORD);
 
-        // ✅ auto-navigate to setup (same info you already pass)
         nav("/twofactor-setup", {
           replace: true,
           state: { username: username.trim(), password },
@@ -539,7 +538,6 @@ export default function Register() {
     const storedEmail = localStorage.getItem(LS_REG_EMAIL) || "";
     if (!email && storedEmail) setEmail(storedEmail);
 
-    // ✅ Restore username/password after Paystack reload
     const storedUsername = localStorage.getItem(LS_REG_USERNAME) || "";
     const storedPassword = localStorage.getItem(LS_REG_PASSWORD) || "";
     if (!username && storedUsername) setUsername(storedUsername);
@@ -554,10 +552,8 @@ export default function Register() {
       setWaitingPayment(true);
       setStatusText("Finalizing account creation…");
 
-      // immediate status check
       checkIntentStatus(parsedIntent);
 
-      // clean URL so it doesn’t repeat
       qs.delete("paid");
       qs.delete("provider");
       nav(
@@ -598,7 +594,6 @@ export default function Register() {
         if (publicPayMethod === "MPESA") {
           setInfo(`Signup fee: KES ${SIGNUP_FEE_KES}. An Mpesa prompt is being sent — approve on your phone.`);
 
-          // ✅ FIX: Only enter waiting mode if initiate succeeded
           try {
             const pay = await initiateSignupPaymentMpesa(createdIntentId);
 
@@ -618,13 +613,11 @@ export default function Register() {
           }
         }
 
-        // PAYSTACK
         setInfo(`Signup fee: KES ${SIGNUP_FEE_KES}. Redirecting to Paystack checkout...`);
         await initiateSignupPaymentPaystack(createdIntentId);
         return;
       }
 
-      // no payment required
       await api.post(`/registration/complete/${createdIntentId}`);
 
       setRegistrationComplete(true);
@@ -660,11 +653,8 @@ export default function Register() {
 
     setFieldErrors({});
 
-    // clear stored return-state
     localStorage.removeItem(LS_REG_INTENT);
     localStorage.removeItem(LS_REG_EMAIL);
-
-    // clear stored creds too
     localStorage.removeItem(LS_REG_USERNAME);
     localStorage.removeItem(LS_REG_PASSWORD);
   }
@@ -683,7 +673,7 @@ export default function Register() {
   }
 
   function PillChoice({ items, value, onChange, disabled, tone = "default" }) {
-    const accent = tone === "payment" ? "#0f766e" : "#8b1c1c"; // teal for payment, red for type
+    const accent = tone === "payment" ? "#0f766e" : "#8b1c1c";
     const activeBg = tone === "payment" ? "#ecfeff" : "#fff1f2";
 
     return (
@@ -945,7 +935,16 @@ export default function Register() {
           <form onSubmit={onCreateAccount}>
             <label className="field-label">Account Type</label>
             <div style={{ marginBottom: 14 }}>
-              <PillChoice items={USER_TYPES} value={userType} onChange={setUserType} disabled={waitingPayment} />
+              <PillChoice
+                items={USER_TYPES}
+                value={userType}
+                onChange={(v) => {
+                  setUserType(v);
+                  setError("");
+                  setInfo("");
+                }}
+                disabled={waitingPayment}
+              />
             </div>
 
             {/* Public payment method choice */}
@@ -1043,11 +1042,9 @@ export default function Register() {
               }}
               disabled={lockForm}
               style={inputStyle("phoneNumber")}
-              placeholder={publicPayMethod === "MPESA" ? "e.g. 2547XXXXXXXX or 07XXXXXXXX" : "Optional"}
+              placeholder={isPublic && publicPayMethod === "MPESA" ? "e.g. 2547XXXXXXXX or 07XXXXXXXX" : "Optional"}
             />
             <FieldError name="phoneNumber" />
-
-            {/* ---- everything below remains unchanged ---- */}
 
             <div className="grid-2">
               <div>
@@ -1089,7 +1086,82 @@ export default function Register() {
               </div>
             </div>
 
-            {/* (rest of your file unchanged from here) */}
+            {/* ✅ NEW: Institution dropdown (pulled from table via /institutions/public) */}
+            {!isPublic && (
+              <>
+                <div className="divider" />
+                <h3 className="section-title">Institution Details</h3>
+
+                <label className="field-label">Institution (required)</label>
+                {institutionsLoadFailed ? (
+                  <div style={{ fontSize: 13, color: "#991b1b", marginBottom: 8 }}>
+                    Could not load institutions. Please refresh the page.
+                  </div>
+                ) : (
+                  <select
+                    value={institutionId}
+                    onChange={(e) => {
+                      setInstitutionId(e.target.value);
+                      clearFieldError("institutionId");
+                      clearFieldError("institutionAccessCode");
+                      clearFieldError("email"); // domain validation depends on institution
+                    }}
+                    onBlur={(e) => {
+                      const msg = validateField("institutionId", e.target.value);
+                      msg ? setFieldError("institutionId", msg) : clearFieldError("institutionId");
+                    }}
+                    disabled={lockForm}
+                    style={inputStyle("institutionId")}
+                  >
+                    <option value="">Select institution</option>
+                    {institutions
+                      .filter((i) => i.isActive !== false)
+                      .map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.name}
+                        </option>
+                      ))}
+                  </select>
+                )}
+                <FieldError name="institutionId" />
+
+                <label className="field-label" style={{ marginTop: 12 }}>
+                  Member Type (required)
+                </label>
+                <div style={{ marginBottom: 10 }}>
+                  <PillChoice
+                    items={INSTITUTION_MEMBER_TYPES}
+                    value={institutionMemberType}
+                    onChange={(v) => {
+                      setInstitutionMemberType(v);
+                      clearFieldError("institutionMemberType");
+                    }}
+                    disabled={lockForm}
+                  />
+                </div>
+                <FieldError name="institutionMemberType" />
+
+                {(selectedInstitution?.accessCodeRequired !== false) && (
+                  <>
+                    <label className="field-label" style={{ marginTop: 10 }}>
+                      Institution Access Code (required)
+                    </label>
+                    <input
+                      value={institutionAccessCode}
+                      onChange={(e) => setInstitutionAccessCode(e.target.value)}
+                      onBlur={(e) => {
+                        const msg = validateField("institutionAccessCode", e.target.value);
+                        msg ? setFieldError("institutionAccessCode", msg) : clearFieldError("institutionAccessCode");
+                      }}
+                      disabled={lockForm}
+                      style={inputStyle("institutionAccessCode")}
+                      placeholder="Enter access code provided by your institution"
+                    />
+                    <FieldError name="institutionAccessCode" />
+                  </>
+                )}
+              </>
+            )}
 
             <div className="divider" />
             <h3 className="section-title">Password</h3>
