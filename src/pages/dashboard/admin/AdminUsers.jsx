@@ -1,4 +1,3 @@
-// src/pages/dashboard/admin/AdminUsers.jsx
 import { useEffect, useMemo, useState } from "react";
 import api from "../../../api/client";
 import "../../../styles/adminUsers.css";
@@ -20,8 +19,10 @@ function friendlyApiError(e) {
   const title = e?.response?.data?.title;
   const detail = e?.response?.data?.detail;
 
-  if (title || detail) return `${title ?? "Request failed"}${detail ? ` — ${detail}` : ""}`;
-  if (typeof e?.response?.data === "string" && e.response.data.trim()) return e.response.data;
+  if (title || detail)
+    return `${title ?? "Request failed"}${detail ? ` — ${detail}` : ""}`;
+  if (typeof e?.response?.data === "string" && e.response.data.trim())
+    return e.response.data;
 
   if (status === 401) return "You are not authorized. Please log in again.";
   if (status === 403) return "You don’t have permission to manage users.";
@@ -41,21 +42,95 @@ function PillButton({ active, children, ...props }) {
   );
 }
 
+/** Icon button (compact) */
+function IconBtn({ tone = "neutral", disabled, title, label, onClick, children }) {
+  return (
+    <button
+      type="button"
+      className={`au-iconBtn au-iconBtn-${tone}`}
+      disabled={disabled}
+      onClick={onClick}
+      title={title}
+      data-tip={title}
+      aria-label={title}
+    >
+      {children}
+      <span className="au-iconBtnLabel">{label}</span>
+    </button>
+  );
+}
+
+/** Minimal inline icons (no deps) */
+function Icon({ name }) {
+  switch (name) {
+    case "power":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M12 2v10m6.36-7.36a9 9 0 1 1-12.72 0"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+      );
+    case "ban":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M12 21a9 9 0 1 0-9-9 9 9 0 0 0 9 9Zm-6.36-6.36L18.36 5.64"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+      );
+    case "key":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M7 14a5 5 0 1 1 4.9-6H22v4h-3v3h-3v3h-4.1A5 5 0 0 1 7 14Z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case "spinner":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" className="au-spin">
+          <path
+            d="M12 2a10 10 0 1 0 10 10"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
 export default function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
   const [q, setQ] = useState("");
-  const [type, setType] = useState("all"); // all | public | institution
-  const [status, setStatus] = useState("all"); // all | active | inactive | locked
-  const [online, setOnline] = useState("all"); // all | true | false
+  const [type, setType] = useState("all");
+  const [status, setStatus] = useState("all");
+  const [online, setOnline] = useState("all");
 
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
 
   const [data, setData] = useState({ items: [], total: 0, page: 1, pageSize: 20 });
 
-  const [toast, setToast] = useState(null); // { type, text }
+  const [toast, setToast] = useState(null);
   const [busyId, setBusyId] = useState(null);
 
   const totalPages = useMemo(() => {
@@ -93,9 +168,10 @@ export default function AdminUsers() {
     }
   }
 
-  // When filters change reset to page 1 (debounced) to avoid jumpy reloads
   useEffect(() => {
-    const t = window.setTimeout(() => setPage(1), 250);
+    const t = window.setTimeout(() => {
+      setPage(1);
+    }, 250);
     return () => window.clearTimeout(t);
   }, [q, type, status, online]);
 
@@ -104,9 +180,10 @@ export default function AdminUsers() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pageSize, type, status, online]);
 
-  // q changes => debounce load
   useEffect(() => {
-    const t = window.setTimeout(() => load(), 280);
+    const t = window.setTimeout(() => {
+      load();
+    }, 280);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
@@ -136,7 +213,7 @@ export default function AdminUsers() {
   async function setLock(userId, locked) {
     try {
       setBusyId(userId);
-      const minutes = locked ? 60 * 24 * 365 : undefined; // 1 year default
+      const minutes = locked ? 60 * 24 * 365 : undefined;
       await api.put(`/admin/users/${userId}/lock`, { locked, minutes });
       showToast("success", locked ? "Sign-in blocked." : "User unblocked.");
       await load();
@@ -173,14 +250,6 @@ export default function AdminUsers() {
     if (t === "institution") return "info";
     if (t === "student") return "warn";
     return "neutral";
-  }
-
-  // ✅ Single-row actions: derive a compact, readable label
-  function actionLabel(action, u) {
-    const isLocked = !!u.lockoutEndAt && new Date(u.lockoutEndAt) > new Date();
-    if (action === "active") return u.isActive ? "Deactivate" : "Activate";
-    if (action === "lock") return isLocked ? "Unblock" : "Block sign-in";
-    return "Reset 2FA";
   }
 
   return (
@@ -227,7 +296,10 @@ export default function AdminUsers() {
 
           <div className="au-filters">
             <div className="au-filterGroup">
-              <div className="au-filterLabel">Type</div>
+              <div className="au-filterLabel">
+                Type <span className="au-filterHint">Public vs Institution</span>
+              </div>
+
               <div className="au-chips">
                 <PillButton active={type === "all"} onClick={() => { setType("all"); setPage(1); }}>
                   All
@@ -354,10 +426,7 @@ export default function AdminUsers() {
                   <tr key={u.id}>
                     <td>
                       <div className="au-userCell">
-                        <div
-                          className={`au-dot ${u.isOnline ? "on" : ""}`}
-                          title={u.isOnline ? "Online" : "Offline"}
-                        />
+                        <div className={`au-dot ${u.isOnline ? "on" : ""}`} title={u.isOnline ? "Online" : "Offline"} />
                         <div className="au-userMeta">
                           <div className="au-userName">
                             {name}{" "}
@@ -403,37 +472,34 @@ export default function AdminUsers() {
                     </td>
 
                     <td className="au-tdRight">
-                      {/* ✅ Single-row actions */}
-                      <div className="au-actions au-actions-row">
-                        <button
-                          type="button"
-                          className={`au-action ${u.isActive ? "outline" : "primary"}`}
-                          disabled={isBusy}
-                          onClick={() => setActive(u.id, !u.isActive)}
-                          title={u.isActive ? "Deactivate user" : "Activate user"}
+                      <div className="au-actions au-actionsIcons">
+                        <IconBtn
+                        tone={u.isActive ? "neutral" : "success"}
+                        disabled={isBusy}
+                        title={u.isActive ? "Deactivate user" : "Activate user"}
+                        label={u.isActive ? "Deactivate" : "Activate"}
+                        onClick={() => setActive(u.id, !u.isActive)}
                         >
-                          {actionLabel("active", u)}
-                        </button>
+                        {isBusy ? <Icon name="spinner" /> : <Icon name="power" />}
+                        </IconBtn>
 
-                        <button
-                          type="button"
-                          className={`au-action ${isLocked ? "outline" : "danger"}`}
+                        <IconBtn
+                          tone={isLocked ? "neutral" : "danger"}
                           disabled={isBusy}
-                          onClick={() => setLock(u.id, !isLocked)}
                           title={isLocked ? "Unblock sign-in" : "Block sign-in"}
+                          onClick={() => setLock(u.id, !isLocked)}
                         >
-                          {actionLabel("lock", u)}
-                        </button>
+                          <Icon name="ban" />
+                        </IconBtn>
 
-                        <button
-                          type="button"
-                          className="au-action outline"
+                        <IconBtn
+                          tone="neutral"
                           disabled={isBusy}
+                          title="Reset 2FA (email new setup)"
                           onClick={() => reset2fa(u.id)}
-                          title="Regenerate 2FA and email QR"
                         >
-                          {actionLabel("2fa", u)}
-                        </button>
+                          <Icon name="key" />
+                        </IconBtn>
                       </div>
                     </td>
                   </tr>
