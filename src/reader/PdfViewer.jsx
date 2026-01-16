@@ -1,4 +1,3 @@
-// src/reader/PdfViewer.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import api from "../api/client";
@@ -20,7 +19,7 @@ export default function PdfViewer({
   const [numPages, setNumPages] = useState(null);
   const [page, setPage] = useState(startPage || 1);
   const [ready, setReady] = useState(false);
-  const [highlights, setHighlights] = useState([]); // rect-based overlay highlights (optional)
+  const [highlights, setHighlights] = useState([]);
 
   /* ---------------- Reading Progress ---------------- */
   const [resumeLoaded, setResumeLoaded] = useState(false);
@@ -28,7 +27,6 @@ export default function PdfViewer({
   const readingStartRef = useRef(Date.now());
   const pageUpdateTimeoutRef = useRef(null);
 
-  /* ✅ NEW: resume target tracking */
   const resumeTargetRef = useRef(null);
   const resumeAppliedRef = useRef(false);
 
@@ -36,9 +34,11 @@ export default function PdfViewer({
   const [zoom, setZoom] = useState(1);
   const [darkMode, setDarkMode] = useState(false);
 
-  /* ---------------- Go to Page ---------------- */
+  /* ---------------- Go to Page (popover) ---------------- */
+  const [showPageJump, setShowPageJump] = useState(false);
+  const [pageJumpValue, setPageJumpValue] = useState("");
   const [pageJumpError, setPageJumpError] = useState("");
-  const pageInputRef = useRef(null);
+
   const isProgrammaticNavRef = useRef(false);
 
   /* ---------------- Notes ---------------- */
@@ -47,25 +47,20 @@ export default function PdfViewer({
   const [noteContent, setNoteContent] = useState("");
   const [notes, setNotes] = useState([]);
 
-  // Sidebar always exists; "showNotes" controls open/closed
-  const [showNotes, setShowNotes] = useState(true);
+  // ✅ Requirement: notes NOT persistent (closed by default)
+  const [showNotes, setShowNotes] = useState(false);
 
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [editingContent, setEditingContent] = useState("");
 
-  // ✅ Feature: highlight click opens the note
   const [activeNoteId, setActiveNoteId] = useState(null);
   const [flashNoteId, setFlashNoteId] = useState(null);
 
-  // ✅ highlight colors
   const [highlightColor, setHighlightColor] = useState("yellow");
-
-  // ✅ Real highlight meta captured from selection (rect-based)
   const [highlightMeta, setHighlightMeta] = useState(null);
 
-  /* Reliable jump */
   const pendingJumpRef = useRef(null);
-  const noteRefs = useRef({}); // noteId -> HTMLElement
+  const noteRefs = useRef({});
 
   /* Scroll + observer */
   const scrollRootRef = useRef(null);
@@ -73,10 +68,9 @@ export default function PdfViewer({
   const snapTimeoutRef = useRef(null);
   const isUserScrollingRef = useRef(false);
 
-  const pageElsRef = useRef({}); // pageNumber -> wrapper HTMLElement
+  const pageElsRef = useRef({});
   const previewLimitTriggeredRef = useRef(false);
 
-  // ✅ progressive render: start with 10 and extend as user scrolls
   const [renderLimit, setRenderLimit] = useState(10);
 
   const fileSource = useMemo(() => getPdfSource(documentId), [documentId]);
@@ -102,11 +96,7 @@ export default function PdfViewer({
   function scrollToPage(targetPage, behavior = "auto") {
     const el = pageElsRef.current[targetPage];
     if (!el) return false;
-
-    el.scrollIntoView({
-      behavior,
-      block: "start",
-    });
+    el.scrollIntoView({ behavior, block: "start" });
     return true;
   }
 
@@ -125,13 +115,11 @@ export default function PdfViewer({
       .get(`/reading-progress/${documentId}`)
       .then((res) => {
         if (cancelled) return;
-
         const saved = res.data?.pageNumber;
         if (saved && saved > 0) {
           pendingJumpRef.current = saved;
           resumeTargetRef.current = saved;
         }
-
         setResumeLoaded(true);
       })
       .catch(() => {
@@ -169,7 +157,7 @@ export default function PdfViewer({
   }, [page, ready, numPages, resumeLoaded, documentId]);
 
   /* ==================================================
-     ✅ FIX: EXTEND RENDER LIMIT (keeps scrolling working)
+     EXTEND RENDER LIMIT
      ================================================== */
   useEffect(() => {
     if (!ready || !numPages) return;
@@ -182,8 +170,7 @@ export default function PdfViewer({
   }, [page, renderLimit, ready, numPages, allowedMaxPage]);
 
   /* ==================================================
-     ✅ NEW: APPLY RESUME (render enough pages, then scroll)
-     This is what makes "Read Now" open where you left off.
+     APPLY RESUME (render enough pages, then scroll)
      ================================================== */
   useEffect(() => {
     if (!ready || !numPages || !resumeLoaded) return;
@@ -195,32 +182,23 @@ export default function PdfViewer({
     const maxPage = allowedMaxPage ?? numPages;
     const target = Math.min(Math.max(1, Number(targetRaw)), maxPage);
 
-    // Ensure the target page is actually rendered in DOM
     setRenderLimit((prev) => Math.max(prev, Math.min(target + 6, maxPage)));
-
-    // Set page state too (nav indicator + progress)
     setPage(target);
 
-    // After render, do a reliable scroll
     const attemptScroll = () => {
       isProgrammaticNavRef.current = true;
 
       const ok = scrollToPage(target, "auto");
       if (ok) {
         resumeAppliedRef.current = true;
-
-        // release programmatic lock shortly after scroll settles
         setTimeout(() => {
           isProgrammaticNavRef.current = false;
         }, 300);
         return;
       }
-
-      // If not yet in DOM, try again shortly
       setTimeout(attemptScroll, 80);
     };
 
-    // Small delay to allow wrappers to mount
     setTimeout(attemptScroll, 80);
   }, [ready, numPages, resumeLoaded, allowedMaxPage, renderLimit]);
 
@@ -300,6 +278,53 @@ export default function PdfViewer({
       .then((res) => setNotes(res.data || []))
       .catch(() => {});
   }, [documentId]);
+
+  /* ==================================================
+     KEYBOARD SHORTCUTS (modern reader feel)
+     ================================================== */
+  useEffect(() => {
+    function onKeyDown(e) {
+      // ignore when typing
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      const typing =
+        tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable;
+
+      if (typing) return;
+
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        safeSetPage(Math.max(1, page - 1));
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        safeSetPage(Math.min((allowedMaxPage ?? numPages) || 1, page + 1));
+      }
+      if (e.key === "n" || e.key === "N") {
+        e.preventDefault();
+        setShowNotes((v) => !v);
+      }
+      if (e.key === "d" || e.key === "D") {
+        e.preventDefault();
+        setDarkMode((v) => !v);
+      }
+      if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        setZoom((z) => Math.min(1.6, Math.round((z + 0.1) * 10) / 10));
+      }
+      if (e.key === "-" || e.key === "_") {
+        e.preventDefault();
+        setZoom((z) => Math.max(0.7, Math.round((z - 0.1) * 10) / 10));
+      }
+      if (e.key === "Escape") {
+        if (showNoteBox) setShowNoteBox(false);
+        if (showNotes) setShowNotes(false);
+        if (showPageJump) setShowPageJump(false);
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [page, numPages, allowedMaxPage, showNoteBox, showNotes, showPageJump]);
 
   /* ==================================================
      REAL HIGHLIGHT CAPTURE (unchanged)
@@ -405,7 +430,6 @@ export default function PdfViewer({
       const spanText = span.textContent || "";
       const spanStart = pos;
       const spanEnd = pos + spanText.length;
-
       pos += spanText.length;
 
       if (spanEnd <= start) continue;
@@ -449,6 +473,7 @@ export default function PdfViewer({
   }
 
   function focusNote(noteId) {
+    // ✅ opens notes only when needed (user action / highlight click)
     setShowNotes(true);
     setActiveNoteId(noteId);
 
@@ -517,6 +542,8 @@ export default function PdfViewer({
 
       const res = await api.get(`/legal-document-notes/document/${documentId}`);
       setNotes(res.data || []);
+
+      // ✅ Requirement: open notes after saving (only time we auto-open)
       setShowNotes(true);
 
       setHighlights((prev) => [
@@ -615,24 +642,82 @@ export default function PdfViewer({
   }, [notes]);
 
   /* ==================================================
+     Page jump helpers
+     ================================================== */
+  function openPageJump() {
+    setPageJumpError("");
+    setPageJumpValue(String(page));
+    setShowPageJump(true);
+  }
+
+  function submitPageJump() {
+    const raw = (pageJumpValue || "").trim();
+    const n = Number(raw);
+    const max = allowedMaxPage ?? numPages ?? 1;
+
+    if (!raw || Number.isNaN(n)) {
+      setPageJumpError("Enter a valid page number.");
+      return;
+    }
+
+    if (n < 1 || n > max) {
+      setPageJumpError(`Page must be between 1 and ${max}.`);
+      return;
+    }
+
+    setShowPageJump(false);
+    setPageJumpError("");
+    safeSetPage(n);
+  }
+
+  /* ==================================================
      Render
      ================================================== */
   return (
     <div className={`reader-shell ${darkMode ? "dark" : ""}`}>
-      <div className="reader-top-nav">
-        <div className="reader-top-nav-inner go-only">
-          <div className="reader-tools">
-            <button onClick={() => setZoom((z) => Math.max(0.7, z - 0.1))}>
+      {/* Minimal “glass” top bar */}
+      <div className="reader-topbar">
+        <div className="reader-topbar-inner">
+          <div className="reader-topbar-left">
+            <div className="reader-chip" title="Current page">
+              {page} / {numPages || "—"}
+            </div>
+          </div>
+
+          <div className="reader-topbar-right">
+            <button
+              className="icon-btn"
+              onClick={() => setZoom((z) => Math.max(0.7, Math.round((z - 0.1) * 10) / 10))}
+              title="Zoom out (-)"
+            >
               −
             </button>
-            <span>{Math.round(zoom * 100)}%</span>
-            <button onClick={() => setZoom((z) => Math.min(1.6, z + 0.1))}>
+            <div className="reader-chip" title="Zoom">
+              {Math.round(zoom * 100)}%
+            </div>
+            <button
+              className="icon-btn"
+              onClick={() => setZoom((z) => Math.min(1.6, Math.round((z + 0.1) * 10) / 10))}
+              title="Zoom in (+)"
+            >
               +
             </button>
-            <button onClick={() => setDarkMode((d) => !d)}>
+
+            <button
+              className="icon-btn"
+              onClick={() => setDarkMode((d) => !d)}
+              title={darkMode ? "Light mode (D)" : "Dark mode (D)"}
+            >
               {darkMode ? "☀️" : "🌙"}
             </button>
-            <button onClick={() => setShowNotes((v) => !v)}>📝</button>
+
+            <button
+              className={`icon-btn ${showNotes ? "active" : ""}`}
+              onClick={() => setShowNotes((v) => !v)}
+              title="Notes (N)"
+            >
+              📝
+            </button>
           </div>
         </div>
       </div>
@@ -681,7 +766,6 @@ export default function PdfViewer({
               setRenderLimit(Math.min(allowed, Math.max(initial + 6, 10)));
               setReady(true);
 
-              // Note: resume effect will do the reliable scroll when needed
               setTimeout(() => scrollToPage(initial, "auto"), 80);
             }}
           >
@@ -715,43 +799,66 @@ export default function PdfViewer({
                     <Page
                       pageNumber={pageNumber}
                       width={Math.round(820 * zoom)}
-                      onRenderTextLayerSuccess={() =>
-                        applyHighlightsForPage(pageNumber)
-                      }
+                      onRenderTextLayerSuccess={() => applyHighlightsForPage(pageNumber)}
                     />
                   </div>
                 );
               })}
           </Document>
 
-          <div style={{ height: 32 }} />
+          <div style={{ height: 28 }} />
         </div>
       </div>
 
-      <div className="reader-nav">
-        <div className="reader-nav-inner">
-          <button
-            className="reader-btn secondary"
-            onClick={() => safeSetPage(Math.max(1, page - 1))}
-            disabled={page <= 1}
-          >
-            ◀ Previous
-          </button>
+      {/* Floating compact navigation pill */}
+      <div className="reader-fab">
+        <button
+          className="fab-btn"
+          onClick={() => safeSetPage(Math.max(1, page - 1))}
+          disabled={page <= 1}
+          title="Previous page (←)"
+        >
+          ◀
+        </button>
 
-          <div className="reader-page-indicator">
-            Page {page} / {numPages}
+        <button className="fab-mid" onClick={openPageJump} title="Go to page">
+          Page {page} / {numPages || "—"}
+        </button>
+
+        <button
+          className="fab-btn"
+          onClick={() => safeSetPage(Math.min((allowedMaxPage ?? numPages) || 1, page + 1))}
+          disabled={numPages ? page >= (allowedMaxPage ?? numPages) : true}
+          title="Next page (→)"
+        >
+          ▶
+        </button>
+
+        {showPageJump && (
+          <div className="pagejump-popover" role="dialog" aria-modal="true">
+            <div className="pagejump-title">Go to page</div>
+            <div className="pagejump-row">
+              <input
+                className="pagejump-input"
+                value={pageJumpValue}
+                onChange={(e) => setPageJumpValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") submitPageJump();
+                  if (e.key === "Escape") setShowPageJump(false);
+                }}
+                inputMode="numeric"
+                placeholder="e.g. 12"
+              />
+              <button className="pagejump-go" onClick={submitPageJump}>
+                Go
+              </button>
+            </div>
+            {!!pageJumpError && <div className="pagejump-error">{pageJumpError}</div>}
+            <button className="pagejump-close" onClick={() => setShowPageJump(false)}>
+              Close
+            </button>
           </div>
-
-          <button
-            className="reader-btn"
-            onClick={() =>
-              safeSetPage(Math.min((allowedMaxPage ?? numPages) || 1, page + 1))
-            }
-            disabled={numPages ? page >= (allowedMaxPage ?? numPages) : true}
-          >
-            Next ▶
-          </button>
-        </div>
+        )}
       </div>
 
       {/* NOTE OVERLAY */}
@@ -767,9 +874,7 @@ export default function PdfViewer({
                 <button
                   key={c}
                   type="button"
-                  className={`hl-color-chip ${c} ${
-                    highlightColor === c ? "active" : ""
-                  }`}
+                  className={`hl-color-chip ${c} ${highlightColor === c ? "active" : ""}`}
                   onClick={() => setHighlightColor(c)}
                   title={c}
                 />
@@ -803,11 +908,15 @@ export default function PdfViewer({
         </div>
       )}
 
-      {/* NOTES SIDEBAR */}
+      {/* Notes sidebar + backdrop (mobile-friendly) */}
+      {showNotes && <div className="notes-backdrop" onClick={() => setShowNotes(false)} />}
+
       <div className={`notes-sidebar ${showNotes ? "open" : "closed"}`}>
         <div className="notes-header">
           <h3>Notes</h3>
-          <button onClick={() => setShowNotes(false)}>✕</button>
+          <button onClick={() => setShowNotes(false)} title="Close (Esc)">
+            ✕
+          </button>
         </div>
 
         <div className="notes-list">
@@ -842,11 +951,7 @@ export default function PdfViewer({
                       onClick={() => jumpToPage(note.pageNumber)}
                       style={{ cursor: "pointer" }}
                     >
-                      <span
-                        className={`note-color-dot ${
-                          note.highlightColor || "yellow"
-                        }`}
-                      />
+                      <span className={`note-color-dot ${note.highlightColor || "yellow"}`} />
                       Page {note.pageNumber ?? "—"}
                     </div>
 

@@ -1,4 +1,3 @@
-// src/pages/dashboard/DocumentReader.jsx
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import api from "../../api/client";
@@ -67,8 +66,9 @@ export default function DocumentReader() {
     async function loadAll() {
       try {
         setLoading(true);
-        setLocked(false);
 
+        // ✅ important: reset per document
+        setLocked(false);
         setBlocked(false);
         setOffer(null);
 
@@ -107,9 +107,7 @@ export default function DocumentReader() {
           return;
         }
 
-        // 3) Verify content exists using LIGHTWEIGHT RANGE PREFLIGHT:
-        // GET /api/legal-documents/{id}/download with Range bytes=0-0
-        // This avoids downloading huge PDFs just to check.
+        // 3) Verify content exists using LIGHTWEIGHT RANGE PREFLIGHT
         try {
           await api.get(`/legal-documents/${id}/download`, {
             responseType: "blob",
@@ -121,25 +119,22 @@ export default function DocumentReader() {
 
           const status = err?.response?.status;
 
-          // 404 = file missing
           if (status === 404) {
             setContentAvailable(false);
             return;
           }
-
-          // 403 = not allowed (entitlement/access). Not "missing content".
-          // Do NOT mark as unavailable; /access + PdfViewer will handle messaging.
-          if (status === 403) {
-            return;
-          }
-
-          // 401 = auth issue; axios interceptor should redirect/login.
-          if (status === 401) {
+          if (status === 403 || status === 401) {
+            // handled elsewhere (auth/access); don't mark as missing
             return;
           }
 
           console.error("Content check failed:", err);
           setContentAvailable(false);
+        }
+
+        // ✅ If full access, make sure preview lock isn't showing
+        if (accessData?.hasFullAccess) {
+          setLocked(false);
         }
       } catch (err) {
         console.error("Failed to initialize reader", err);
@@ -156,8 +151,29 @@ export default function DocumentReader() {
     };
   }, [id]);
 
-  if (loading) return <p style={{ padding: 20 }}>Loading reader…</p>;
-  if (!access) return <p style={{ padding: 20 }}>Unable to open document.</p>;
+  if (loading) {
+    return (
+      <div className="reader-shell" style={{ display: "grid", placeItems: "center", minHeight: "100vh" }}>
+        <div style={{ textAlign: "center", padding: 20 }}>
+          <div style={{ fontWeight: 900, marginBottom: 8 }}>Loading reader…</div>
+          <div style={{ color: "#6b7280", fontSize: 13 }}>
+            Preparing your document
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!access) {
+    return (
+      <div className="reader-shell" style={{ padding: 20 }}>
+        <p>Unable to open document.</p>
+        <button className="outline-btn" onClick={() => navigate("/dashboard/explore")}>
+          Back to Explore
+        </button>
+      </div>
+    );
+  }
 
   // HARD BLOCK overlay
   if (blocked) {
@@ -169,7 +185,6 @@ export default function DocumentReader() {
     const primaryLabel = (() => {
       if (!canPurchaseIndividually) return "Purchases disabled";
       if (offer?.alreadyOwned) return "Already owned";
-      if (offer?.allowPublicPurchase) return "Purchase options";
       return "Purchase options";
     })();
 
