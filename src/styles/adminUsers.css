@@ -417,3 +417,19 @@
   flex-wrap: wrap;
   margin-top: 10px;
 }
+/* Force action buttons into a single row */
+.au-actions.au-actions-row {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+
+@media (max-width: 860px) {
+  /* On smaller screens allow wrap so it doesn't overflow */
+  .au-actions.au-actions-row {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}
