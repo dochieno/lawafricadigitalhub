@@ -1,19 +1,33 @@
-import { useEffect, useState } from "react";
+// src/pages/.../DocumentReader.jsx
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import api from "../../api/client";
+import api, { checkDocumentAvailability } from "../../api/client";
 import PdfViewer from "../../reader/PdfViewer";
 import "../../styles/reader.css";
+
+/**
+ * Speed upgrades (no behavior break):
+ * ✅ Only block on /access (must be first); everything else is parallel + non-blocking
+ * ✅ Avoid heavy blob/range preflight (use checkDocumentAvailability)
+ * ✅ Start rendering PdfViewer immediately after /access succeeds (don’t wait for offer/availability)
+ * ✅ Keep your existing blocked/unavailable/preview overlays exactly as-is
+ */
 
 export default function DocumentReader() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
 
+  const docId = useMemo(() => Number(id), [id]);
+
   const [access, setAccess] = useState(null);
   const [offer, setOffer] = useState(null);
   const [contentAvailable, setContentAvailable] = useState(true);
   const [locked, setLocked] = useState(false);
-  const [loading, setLoading] = useState(true);
+
+  // ✅ Split loading: gate only on access; keep soft loading for other data
+  const [loadingAccess, setLoadingAccess] = useState(true);
+  const [loadingMeta, setLoadingMeta] = useState(true);
 
   // hard-block overlay
   const [blocked, setBlocked] = useState(false);
@@ -29,6 +43,8 @@ export default function DocumentReader() {
   // success toast when landing from payment
   const [toast, setToast] = useState(null);
 
+  const aliveRef = useRef(true);
+
   function showToast(message, type = "success") {
     setToast({ message, type });
     setTimeout(() => setToast(null), 2500);
@@ -41,10 +57,7 @@ export default function DocumentReader() {
     const provider = (qs.get("provider") || "").trim();
 
     if (paid === "1") {
-      showToast(
-        `Payment successful ✅${provider ? ` (${provider})` : ""}`,
-        "success"
-      );
+      showToast(`Payment successful ✅${provider ? ` (${provider})` : ""}`, "success");
 
       qs.delete("paid");
       qs.delete("provider");
@@ -61,13 +74,14 @@ export default function DocumentReader() {
   }, []);
 
   useEffect(() => {
+    aliveRef.current = true;
     let cancelled = false;
 
-    async function loadAll() {
+    async function loadAccessOnly() {
       try {
-        setLoading(true);
+        setLoadingAccess(true);
 
-        // ✅ important: reset per document
+        // ✅ reset per document
         setLocked(false);
         setBlocked(false);
         setOffer(null);
@@ -79,9 +93,9 @@ export default function DocumentReader() {
         setContentAvailable(true);
         setBlockMessage("Access blocked. Please contact your administrator.");
 
-        // 1) Load access rules
-        const accessRes = await api.get(`/legal-documents/${id}/access`);
-        if (cancelled) return;
+        // 1) Load access rules (must be first)
+        const accessRes = await api.get(`/legal-documents/${docId}/access`);
+        if (cancelled || !aliveRef.current) return;
 
         const accessData = accessRes.data;
         setAccess(accessData);
@@ -89,76 +103,98 @@ export default function DocumentReader() {
         setCanPurchaseIndividually(accessData?.canPurchaseIndividually !== false);
         setPurchaseDisabledReason(accessData?.purchaseDisabledReason || null);
 
-        // 2) Load public offer (safe)
-        try {
-          const offerRes = await api.get(`/legal-documents/${id}/public-offer`);
-          if (!cancelled) setOffer(offerRes.data);
-        } catch {
-          // ignore
-        }
-
         // HARD BLOCK from backend decision
         if (accessData?.isBlocked) {
           setBlocked(true);
           setBlockReason(accessData?.blockReason || null);
-          setBlockMessage(
-            accessData?.blockMessage || accessData?.message || "Access blocked."
-          );
+          setBlockMessage(accessData?.blockMessage || accessData?.message || "Access blocked.");
           return;
         }
 
-        // 3) Verify content exists using LIGHTWEIGHT RANGE PREFLIGHT
-        try {
-          await api.get(`/legal-documents/${id}/download`, {
-            responseType: "blob",
-            headers: { Range: "bytes=0-0" },
-          });
-          if (!cancelled) setContentAvailable(true);
-        } catch (err) {
-          if (cancelled) return;
-
-          const status = err?.response?.status;
-
-          if (status === 404) {
-            setContentAvailable(false);
-            return;
-          }
-          if (status === 403 || status === 401) {
-            // handled elsewhere (auth/access); don't mark as missing
-            return;
-          }
-
-          console.error("Content check failed:", err);
-          setContentAvailable(false);
-        }
-
         // ✅ If full access, make sure preview lock isn't showing
-        if (accessData?.hasFullAccess) {
-          setLocked(false);
-        }
+        if (accessData?.hasFullAccess) setLocked(false);
       } catch (err) {
-        console.error("Failed to initialize reader", err);
-        if (!cancelled) setAccess(null);
+        console.error("Failed to load access", err);
+        if (!cancelled && aliveRef.current) setAccess(null);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && aliveRef.current) setLoadingAccess(false);
       }
     }
 
-    loadAll();
+    async function loadMetaInBackground() {
+      setLoadingMeta(true);
+
+      try {
+        // 2) Kick off the rest in parallel (non-blocking)
+        const offerPromise = api
+          .get(`/legal-documents/${docId}/public-offer`)
+          .then((r) => r.data)
+          .catch(() => null);
+
+        const availabilityPromise = (async () => {
+          try {
+            const data = await checkDocumentAvailability(docId);
+
+            if (data == null) return true;
+            if (typeof data === "boolean") return data;
+
+            if (typeof data.available === "boolean") return data.available;
+            if (typeof data.isAvailable === "boolean") return data.isAvailable;
+            if (typeof data.exists === "boolean") return data.exists;
+            if (typeof data.contentAvailable === "boolean") return data.contentAvailable;
+
+            return true;
+          } catch (err) {
+            const status = err?.response?.status;
+            if (status === 404) return false;
+            if (status === 401 || status === 403) return true; // auth/access handled elsewhere
+            console.warn("Availability check failed (non-blocking):", err);
+            return true;
+          }
+        })();
+
+        const [offerData, isAvailable] = await Promise.all([offerPromise, availabilityPromise]);
+        if (cancelled || !aliveRef.current) return;
+
+        if (offerData) setOffer(offerData);
+        setContentAvailable(!!isAvailable);
+      } finally {
+        if (!cancelled && aliveRef.current) setLoadingMeta(false);
+      }
+    }
+
+    // Guard bad ids
+    if (!Number.isFinite(docId) || docId <= 0) {
+      setAccess(null);
+      setLoadingAccess(false);
+      setLoadingMeta(false);
+      return;
+    }
+
+    // ✅ Access gates the page; meta does not
+    loadAccessOnly().then(() => {
+      // If blocked, meta doesn’t matter (but harmless); we can still skip to save requests
+      if (!cancelled && aliveRef.current) {
+        loadMetaInBackground();
+      }
+    });
 
     return () => {
       cancelled = true;
+      aliveRef.current = false;
     };
-  }, [id]);
+  }, [docId]);
 
-  if (loading) {
+  // ✅ Gate UI only on access
+  if (loadingAccess) {
     return (
-      <div className="reader-shell" style={{ display: "grid", placeItems: "center", minHeight: "100vh" }}>
+      <div
+        className="reader-shell"
+        style={{ display: "grid", placeItems: "center", minHeight: "100vh" }}
+      >
         <div style={{ textAlign: "center", padding: 20 }}>
           <div style={{ fontWeight: 900, marginBottom: 8 }}>Loading reader…</div>
-          <div style={{ color: "#6b7280", fontSize: 13 }}>
-            Preparing your document
-          </div>
+          <div style={{ color: "#6b7280", fontSize: 13 }}>Checking access</div>
         </div>
       </div>
     );
@@ -272,6 +308,8 @@ export default function DocumentReader() {
     );
   }
 
+  // ✅ If meta is still loading, don’t block reading; PdfViewer can start
+  // Only block if we have a definitive “not available”
   if (!contentAvailable) {
     return (
       <div className="reader-error-state">
@@ -299,8 +337,31 @@ export default function DocumentReader() {
     <div className="reader-shell">
       {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
 
+      {/* Optional tiny “loading meta” hint (non-blocking) */}
+      {loadingMeta ? (
+        <div
+          style={{
+            position: "fixed",
+            top: 62,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 20,
+            fontSize: 12,
+            fontWeight: 800,
+            color: "#6b7280",
+            background: "rgba(255,255,255,0.75)",
+            border: "1px solid rgba(229,231,235,0.9)",
+            padding: "6px 10px",
+            borderRadius: 999,
+            backdropFilter: "blur(6px)",
+          }}
+        >
+          Preparing document…
+        </div>
+      ) : null}
+
       <PdfViewer
-        documentId={Number(id)}
+        documentId={docId}
         maxAllowedPage={maxPages}
         onPreviewLimitReached={() => setLocked(true)}
       />
