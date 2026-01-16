@@ -141,6 +141,7 @@
   color: #9ca3af;
 }
 
+/* Default focus */
 .register-card input:focus,
 .register-card select:focus,
 .register-card textarea:focus {
@@ -148,12 +149,76 @@
   box-shadow: 0 0 0 4px rgba(139, 28, 28, 0.12);
 }
 
+/* Better keyboard focus */
+.register-card input:focus-visible,
+.register-card select:focus-visible,
+.register-card textarea:focus-visible {
+  outline: none;
+}
+
+/* Disabled */
 .register-card input:disabled,
 .register-card select:disabled,
 .register-card textarea:disabled {
   background: #f9fafb;
   color: #6b7280;
   cursor: not-allowed;
+}
+
+/* ✅ NEW: Valid/invalid states for live validation */
+.input-invalid {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.12) !important;
+}
+
+.input-valid {
+  border-color: #22c55e !important;
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.12) !important;
+}
+
+/* ✅ NEW: Inline helper + error text */
+.field-help {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.35;
+}
+
+.field-error {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #b91c1c;
+  line-height: 1.35;
+}
+
+/* ✅ NEW: Password checklist */
+.password-checklist {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  background: #fafafa;
+  display: grid;
+  gap: 6px;
+}
+
+.rule-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.rule-item.ok {
+  color: #065f46;
+}
+
+.rule-item .icon {
+  width: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Two-column grid for paired fields */

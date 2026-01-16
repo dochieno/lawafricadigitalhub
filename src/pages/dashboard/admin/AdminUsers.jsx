@@ -1,5 +1,4 @@
-// src/pages/dashboard/admin/users/AdminUsers.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../../../api/client";
 import "../../../styles/adminUsers.css";
 
@@ -20,10 +19,9 @@ function friendlyApiError(e) {
   const title = e?.response?.data?.title;
   const detail = e?.response?.data?.detail;
 
-  if (title || detail)
-    return `${title ?? "Request failed"}${detail ? ` — ${detail}` : ""}`;
-  if (typeof e?.response?.data === "string" && e.response.data.trim())
-    return e.response.data;
+  if (title || detail) return `${title ?? "Request failed"}${detail ? ` — ${detail}` : ""}`;
+
+  if (typeof e?.response?.data === "string" && e.response.data.trim()) return e.response.data;
 
   if (status === 401) return "You are not authorized. Please log in again.";
   if (status === 403) return "You don’t have permission to manage users.";
@@ -142,6 +140,38 @@ function Icon({ name }) {
   }
 }
 
+// ✅ NEW: map UI filter values -> backend expected query values
+function mapTypeParam(type) {
+  if (type === "all") return undefined;
+  if (type === "public") return "Public";
+  if (type === "institution") return "Institution";
+  return undefined;
+}
+
+function mapStatusParam(status) {
+  if (status === "all") return undefined;
+  if (status === "active") return "Active";
+  if (status === "inactive") return "Inactive";
+  if (status === "locked") return "Locked";
+  return undefined;
+}
+
+// ✅ NEW: normalize response shape
+function normalizeUsersResponse(res, fallbackPageSize = 20) {
+  const raw = res?.data?.data ?? res?.data ?? {};
+  const items = raw.items ?? raw.Items ?? raw.data ?? raw.Data ?? [];
+  const total = raw.total ?? raw.Total ?? num(items?.length);
+  const page = raw.page ?? raw.Page ?? 1;
+  const pageSize = raw.pageSize ?? raw.PageSize ?? fallbackPageSize;
+
+  return {
+    items: Array.isArray(items) ? items : [],
+    total: num(total),
+    page: num(page) || 1,
+    pageSize: num(pageSize) || fallbackPageSize,
+  };
+}
+
 export default function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -169,28 +199,36 @@ export default function AdminUsers() {
     window.setTimeout(() => setToast(null), 2400);
   }
 
+  // prevent overlapping loads when fast typing (optional, safe)
+  const loadSeq = useRef(0);
+
   async function load() {
     setErr("");
     setLoading(true);
+
+    const seq = ++loadSeq.current;
 
     try {
       const res = await api.get("/admin/users", {
         params: {
           q: q?.trim() || undefined,
-          type,
-          status,
+          type: mapTypeParam(type),
+          status: mapStatusParam(status),
           online: online === "all" ? undefined : online === "true",
           page,
           pageSize,
         },
       });
 
-      setData(res.data);
+      // ignore stale results
+      if (seq !== loadSeq.current) return;
+
+      setData(normalizeUsersResponse(res, pageSize));
     } catch (e) {
       console.error(e);
       setErr(friendlyApiError(e));
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   }
 
@@ -264,16 +302,6 @@ export default function AdminUsers() {
     }
   }
 
-  /**
-   * ✅ NEW: Global admin “Approve” button.
-   * Calls backend endpoint that should approve ANY user type (public/institution)
-   * and (per your requirement) also makes them an Institution Admin.
-   *
-   * Backend endpoint you should implement/confirm:
-   *   POST /api/admin/users/{id}/approve
-   * Body:
-   *   { makeInstitutionAdmin: true }
-   */
   async function approveUser(userId, makeInstitutionAdmin = true) {
     try {
       setBusyId(userId);
@@ -309,9 +337,7 @@ export default function AdminUsers() {
   return (
     <div className="au-wrap">
       {toast ? (
-        <div className={`toast ${toast.type === "success" ? "toast-success" : "toast-error"}`}>
-          {toast.text}
-        </div>
+        <div className={`toast ${toast.type === "success" ? "toast-success" : "toast-error"}`}>{toast.text}</div>
       ) : null}
 
       <header className="au-hero">
@@ -355,13 +381,31 @@ export default function AdminUsers() {
               </div>
 
               <div className="au-chips">
-                <PillButton active={type === "all"} onClick={() => { setType("all"); setPage(1); }}>
+                <PillButton
+                  active={type === "all"}
+                  onClick={() => {
+                    setType("all");
+                    setPage(1);
+                  }}
+                >
                   All
                 </PillButton>
-                <PillButton active={type === "public"} onClick={() => { setType("public"); setPage(1); }}>
+                <PillButton
+                  active={type === "public"}
+                  onClick={() => {
+                    setType("public");
+                    setPage(1);
+                  }}
+                >
                   Public
                 </PillButton>
-                <PillButton active={type === "institution"} onClick={() => { setType("institution"); setPage(1); }}>
+                <PillButton
+                  active={type === "institution"}
+                  onClick={() => {
+                    setType("institution");
+                    setPage(1);
+                  }}
+                >
                   Institution
                 </PillButton>
               </div>
@@ -370,16 +414,40 @@ export default function AdminUsers() {
             <div className="au-filterGroup">
               <div className="au-filterLabel">Status</div>
               <div className="au-chips">
-                <PillButton active={status === "all"} onClick={() => { setStatus("all"); setPage(1); }}>
+                <PillButton
+                  active={status === "all"}
+                  onClick={() => {
+                    setStatus("all");
+                    setPage(1);
+                  }}
+                >
                   All
                 </PillButton>
-                <PillButton active={status === "active"} onClick={() => { setStatus("active"); setPage(1); }}>
+                <PillButton
+                  active={status === "active"}
+                  onClick={() => {
+                    setStatus("active");
+                    setPage(1);
+                  }}
+                >
                   Active
                 </PillButton>
-                <PillButton active={status === "inactive"} onClick={() => { setStatus("inactive"); setPage(1); }}>
+                <PillButton
+                  active={status === "inactive"}
+                  onClick={() => {
+                    setStatus("inactive");
+                    setPage(1);
+                  }}
+                >
                   Inactive
                 </PillButton>
-                <PillButton active={status === "locked"} onClick={() => { setStatus("locked"); setPage(1); }}>
+                <PillButton
+                  active={status === "locked"}
+                  onClick={() => {
+                    setStatus("locked");
+                    setPage(1);
+                  }}
+                >
                   Locked
                 </PillButton>
               </div>
@@ -388,13 +456,31 @@ export default function AdminUsers() {
             <div className="au-filterGroup">
               <div className="au-filterLabel">Presence</div>
               <div className="au-chips">
-                <PillButton active={online === "all"} onClick={() => { setOnline("all"); setPage(1); }}>
+                <PillButton
+                  active={online === "all"}
+                  onClick={() => {
+                    setOnline("all");
+                    setPage(1);
+                  }}
+                >
                   All
                 </PillButton>
-                <PillButton active={online === "true"} onClick={() => { setOnline("true"); setPage(1); }}>
+                <PillButton
+                  active={online === "true"}
+                  onClick={() => {
+                    setOnline("true");
+                    setPage(1);
+                  }}
+                >
                   Online
                 </PillButton>
-                <PillButton active={online === "false"} onClick={() => { setOnline("false"); setPage(1); }}>
+                <PillButton
+                  active={online === "false"}
+                  onClick={() => {
+                    setOnline("false");
+                    setPage(1);
+                  }}
+                >
                   Offline
                 </PillButton>
               </div>
@@ -476,8 +562,8 @@ export default function AdminUsers() {
                 const isLocked = !!u.lockoutEndAt && new Date(u.lockoutEndAt) > new Date();
                 const isBusy = busyId === u.id;
 
-                const isApproved = !!u.isApproved; // backend should return this; if missing, button still shows
-                const canApprove = !isApproved; // show only when not approved
+                const isApproved = !!u.isApproved;
+                const canApprove = !isApproved;
 
                 return (
                   <tr key={u.id}>
@@ -506,15 +592,9 @@ export default function AdminUsers() {
 
                     <td>
                       <div className="au-badges">
-                        <Badge tone={u.isActive ? "success" : "danger"}>
-                          {u.isActive ? "Active" : "Inactive"}
-                        </Badge>
+                        <Badge tone={u.isActive ? "success" : "danger"}>{u.isActive ? "Active" : "Inactive"}</Badge>
                         {isLocked ? <Badge tone="warn">Locked</Badge> : <Badge tone="neutral">Normal</Badge>}
-                        {!u.isEmailVerified ? (
-                          <Badge tone="danger">Email unverified</Badge>
-                        ) : (
-                          <Badge tone="neutral">Email ok</Badge>
-                        )}
+                        {!u.isEmailVerified ? <Badge tone="danger">Email unverified</Badge> : <Badge tone="neutral">Email ok</Badge>}
                         {u.isApproved ? <Badge tone="success">Approved</Badge> : <Badge tone="warn">Pending</Badge>}
                       </div>
                     </td>
@@ -532,7 +612,6 @@ export default function AdminUsers() {
 
                     <td className="au-tdRight">
                       <div className="au-actions au-actionsIcons">
-                        {/* ✅ NEW: Approve + make Institution Admin (global admin action) */}
                         {canApprove ? (
                           <IconBtn
                             tone="success"
@@ -568,12 +647,7 @@ export default function AdminUsers() {
                           <Icon name="ban" />
                         </IconBtn>
 
-                        <IconBtn
-                          tone="neutral"
-                          disabled={isBusy}
-                          title="Reset 2FA (email new setup)"
-                          onClick={() => reset2fa(u.id)}
-                        >
+                        <IconBtn tone="neutral" disabled={isBusy} title="Reset 2FA (email new setup)" onClick={() => reset2fa(u.id)}>
                           <Icon name="key" />
                         </IconBtn>
                       </div>
