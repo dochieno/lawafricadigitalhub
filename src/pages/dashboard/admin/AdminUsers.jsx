@@ -15,6 +15,9 @@ function fmtDateTime(v) {
 }
 
 function friendlyApiError(e) {
+  // Abort is not an error we should show
+  if (e?.name === "CanceledError" || e?.code === "ERR_CANCELED") return "";
+
   if (!e?.response) {
     return (
       e?.message ||
@@ -114,18 +117,6 @@ function Icon({ name }) {
           />
         </svg>
       );
-    case "shield":
-      return (
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path
-            d="M12 2 20 6v6c0 5-3.4 9.4-8 10-4.6-.6-8-5-8-10V6l8-4Z"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
-        </svg>
-      );
     case "crown":
       return (
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
@@ -135,31 +126,6 @@ function Icon({ name }) {
             stroke="currentColor"
             strokeWidth="2"
             strokeLinejoin="round"
-          />
-        </svg>
-      );
-    case "userPlus":
-      return (
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path
-            d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-          <path
-            d="M8.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          />
-          <path
-            d="M20 8v6m-3-3h6"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
           />
         </svg>
       );
@@ -229,93 +195,126 @@ export default function AdminUsers() {
   const [type, setType] = useState("all");
   const [status, setStatus] = useState("all");
   const [online, setOnline] = useState("all");
+  const [sort, setSort] = useState("recent");
 
-  const [sort, setSort] = useState("recent"); // recent | username | email
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
 
-  const [data, setData] = useState({ items: [], total: 0, page: 1, pageSize: 20, summary: null });
+  const [data, setData] = useState({
+    items: [],
+    total: 0,
+    page: 1,
+    pageSize: 20,
+    summary: null,
+  });
 
   const [toast, setToast] = useState(null);
   const [busyId, setBusyId] = useState(null);
-
-  const totalPages = useMemo(() => {
-    const t = num(data.total);
-    return Math.max(1, Math.ceil(t / num(data.pageSize || pageSize)));
-  }, [data.total, data.pageSize, pageSize]);
 
   function showToast(type, text) {
     setToast({ type, text });
     window.setTimeout(() => setToast(null), 2200);
   }
 
-  const loadSeq = useRef(0);
+  const totalPages = useMemo(() => {
+    const t = num(data.total);
+    return Math.max(1, Math.ceil(t / num(data.pageSize || pageSize)));
+  }, [data.total, data.pageSize, pageSize]);
 
-  async function load() {
+  // ✅ Build params once (stable)
+  const params = useMemo(() => {
+    const qq = q?.trim();
+    return {
+      q: qq ? qq : null,
+      type,
+      status,
+      online: online === "all" ? null : online === "true",
+      page,
+      pageSize,
+    };
+  }, [q, type, status, online, page, pageSize]);
+
+  // ✅ Prevent storms: debounce + cancel + dedupe
+  const abortRef = useRef(null);
+  const debounceRef = useRef(null);
+  const lastKeyRef = useRef("");
+  const lastStartedAtRef = useRef(0);
+
+  async function loadUsers(force = false) {
+    const key = JSON.stringify(params);
+
+    // Deduplicate: if same params requested within 400ms and not forced, skip
+    const now = Date.now();
+    if (!force && key === lastKeyRef.current && now - lastStartedAtRef.current < 400) return;
+
+    lastKeyRef.current = key;
+    lastStartedAtRef.current = now;
+
+    // Cancel previous request
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setErr("");
     setLoading(true);
-    const seq = ++loadSeq.current;
 
     try {
       const res = await api.get("/admin/users", {
-        params: {
-          q: q?.trim() || null,
-          type,
-          status,
-          online: online === "all" ? null : online === "true",
-          page,
-          pageSize,
-        },
+        params,
+        signal: controller.signal,
       });
 
-      if (seq !== loadSeq.current) return;
       setData(res.data);
     } catch (e) {
-      console.error(e);
-      setErr(friendlyApiError(e));
+      const msg = friendlyApiError(e);
+      if (msg) setErr(msg);
     } finally {
-      if (seq === loadSeq.current) setLoading(false);
+      setLoading(false);
     }
   }
 
-  // reset page on filter changes
+  // ✅ Single effect: debounce only when q changes, immediate for others
+  const paramsKey = useMemo(() => JSON.stringify(params), [params]);
+
   useEffect(() => {
-    const t = window.setTimeout(() => setPage(1), 200);
-    return () => window.clearTimeout(t);
+    // Clear any pending debounce
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+
+    const isSearchTyping = true; // we debounce always for simplicity
+    const delay = isSearchTyping ? 260 : 0;
+
+    debounceRef.current = window.setTimeout(() => {
+      loadUsers(false);
+    }, delay);
+
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramsKey]);
+
+  // Reset page when filters/search change (but do NOT call load here)
+  useEffect(() => {
+    setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, type, status, online]);
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize, type, status, online]);
-
-  useEffect(() => {
-    const t = window.setTimeout(load, 260);
-    return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q]);
 
   const items = useMemo(() => {
     const arr = Array.isArray(data.items) ? [...data.items] : [];
-    const key = sort;
-
-    if (key === "username") {
+    if (sort === "username") {
       arr.sort((a, b) => String(a.username || "").localeCompare(String(b.username || "")));
-    } else if (key === "email") {
+    } else if (sort === "email") {
       arr.sort((a, b) => String(a.email || "").localeCompare(String(b.email || "")));
-    } else {
-      // recent: keep server order (already most recent)
     }
     return arr;
   }, [data.items, sort]);
 
   const counts = useMemo(() => {
     const arr = Array.isArray(data.items) ? data.items : [];
-    const active = arr.filter((x) => x.isActive).length;
     const locked = arr.filter((x) => !!x.lockoutEndAt && new Date(x.lockoutEndAt) > new Date()).length;
     const onlineNow = arr.filter((x) => x.isOnline).length;
     const pending = arr.filter((x) => !x.isApproved).length;
-    return { active, locked, onlineNow, pending, shown: arr.length };
+    return { shown: arr.length, pending, onlineNow, locked };
   }, [data.items]);
 
   async function setActive(userId, isActive) {
@@ -323,10 +322,9 @@ export default function AdminUsers() {
       setBusyId(userId);
       await api.put(`/admin/users/${userId}/active`, { isActive });
       showToast("success", isActive ? "Activated" : "Deactivated");
-      await load();
+      await loadUsers(true);
     } catch (e) {
-      console.error(e);
-      showToast("error", friendlyApiError(e));
+      showToast("error", friendlyApiError(e) || "Request failed.");
     } finally {
       setBusyId(null);
     }
@@ -338,10 +336,9 @@ export default function AdminUsers() {
       const minutes = locked ? 60 * 24 * 365 : undefined;
       await api.put(`/admin/users/${userId}/lock`, { locked, minutes });
       showToast("success", locked ? "Blocked" : "Unblocked");
-      await load();
+      await loadUsers(true);
     } catch (e) {
-      console.error(e);
-      showToast("error", friendlyApiError(e));
+      showToast("error", friendlyApiError(e) || "Request failed.");
     } finally {
       setBusyId(null);
     }
@@ -353,14 +350,12 @@ export default function AdminUsers() {
       await api.post(`/admin/users/${userId}/regenerate-2fa`);
       showToast("success", "2FA reset sent");
     } catch (e) {
-      console.error(e);
-      showToast("error", friendlyApiError(e));
+      showToast("error", friendlyApiError(e) || "Request failed.");
     } finally {
       setBusyId(null);
     }
   }
 
-  // ✅ Institution approval uses your existing membership endpoint
   async function approveMembership(u) {
     const institutionId = u.institutionId;
     const membershipId = u.membershipId;
@@ -373,13 +368,12 @@ export default function AdminUsers() {
     try {
       setBusyId(u.id);
       await api.post(`/institutions/${institutionId}/members/${membershipId}/approve`, {
-        adminNotes: "Approved from global admin dashboard",
+        adminNotes: "Approved from admin dashboard",
       });
       showToast("success", "Approved");
-      await load();
+      await loadUsers(true);
     } catch (e) {
-      console.error(e);
-      showToast("error", friendlyApiError(e));
+      showToast("error", friendlyApiError(e) || "Request failed.");
     } finally {
       setBusyId(null);
     }
@@ -400,10 +394,9 @@ export default function AdminUsers() {
         memberType: makeAdmin ? 3 : 2, // InstitutionAdmin=3, Staff=2
       });
       showToast("success", makeAdmin ? "Institution Admin set" : "Institution Admin removed");
-      await load();
+      await loadUsers(true);
     } catch (e) {
-      console.error(e);
-      showToast("error", friendlyApiError(e));
+      showToast("error", friendlyApiError(e) || "Request failed.");
     } finally {
       setBusyId(null);
     }
@@ -414,10 +407,9 @@ export default function AdminUsers() {
       setBusyId(u.id);
       await api.post(`/admin/users/${u.id}/role`, { newRole });
       showToast("success", `Role: ${newRole}`);
-      await load();
+      await loadUsers(true);
     } catch (e) {
-      console.error(e);
-      showToast("error", friendlyApiError(e));
+      showToast("error", friendlyApiError(e) || "Request failed.");
     } finally {
       setBusyId(null);
     }
@@ -470,8 +462,13 @@ export default function AdminUsers() {
                 </select>
               </div>
 
-              <button className="au-refresh au-refreshSmall" type="button" onClick={load} disabled={loading}>
-                {loading ? "…" : "Refresh"}
+              <button
+                className="au-refresh au-refreshSmall"
+                type="button"
+                onClick={() => loadUsers(true)}
+                disabled={loading}
+              >
+                Refresh
               </button>
             </div>
           </div>
@@ -499,13 +496,13 @@ export default function AdminUsers() {
             <div className="au-filterGroup">
               <div className="au-filterLabel">Type</div>
               <div className="au-chips">
-                <Chip active={type === "all"} onClick={() => { setType("all"); setPage(1); }}>
+                <Chip active={type === "all"} onClick={() => setType("all")}>
                   All
                 </Chip>
-                <Chip active={type === "public"} onClick={() => { setType("public"); setPage(1); }}>
+                <Chip active={type === "public"} onClick={() => setType("public")}>
                   Public
                 </Chip>
-                <Chip active={type === "institution"} onClick={() => { setType("institution"); setPage(1); }}>
+                <Chip active={type === "institution"} onClick={() => setType("institution")}>
                   Institution
                 </Chip>
               </div>
@@ -514,16 +511,16 @@ export default function AdminUsers() {
             <div className="au-filterGroup">
               <div className="au-filterLabel">Status</div>
               <div className="au-chips">
-                <Chip active={status === "all"} onClick={() => { setStatus("all"); setPage(1); }}>
+                <Chip active={status === "all"} onClick={() => setStatus("all")}>
                   All
                 </Chip>
-                <Chip active={status === "active"} onClick={() => { setStatus("active"); setPage(1); }}>
+                <Chip active={status === "active"} onClick={() => setStatus("active")}>
                   Active
                 </Chip>
-                <Chip active={status === "inactive"} onClick={() => { setStatus("inactive"); setPage(1); }}>
+                <Chip active={status === "inactive"} onClick={() => setStatus("inactive")}>
                   Inactive
                 </Chip>
-                <Chip active={status === "locked"} onClick={() => { setStatus("locked"); setPage(1); }}>
+                <Chip active={status === "locked"} onClick={() => setStatus("locked")}>
                   Locked
                 </Chip>
               </div>
@@ -532,13 +529,13 @@ export default function AdminUsers() {
             <div className="au-filterGroup">
               <div className="au-filterLabel">Presence</div>
               <div className="au-chips">
-                <Chip active={online === "all"} onClick={() => { setOnline("all"); setPage(1); }}>
+                <Chip active={online === "all"} onClick={() => setOnline("all")}>
                   All
                 </Chip>
-                <Chip active={online === "true"} onClick={() => { setOnline("true"); setPage(1); }}>
+                <Chip active={online === "true"} onClick={() => setOnline("true")}>
                   Online
                 </Chip>
-                <Chip active={online === "false"} onClick={() => { setOnline("false"); setPage(1); }}>
+                <Chip active={online === "false"} onClick={() => setOnline("false")}>
                   Offline
                 </Chip>
               </div>
@@ -557,6 +554,7 @@ export default function AdminUsers() {
               className="au-pageBtn"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={loading || page <= 1}
+              title="Previous page"
             >
               ←
             </button>
@@ -570,6 +568,7 @@ export default function AdminUsers() {
               className="au-pageBtn"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={loading || page >= totalPages}
+              title="Next page"
             >
               →
             </button>
@@ -610,25 +609,15 @@ export default function AdminUsers() {
                 const membershipApproved =
                   String(u.membershipStatus || "").toLowerCase().includes("approved");
 
-                // Approve logic:
-                // - For institution users: only if membership is pending and we have membershipId
-                // - For public users: "approve" usually handled by payment; we don't show approve here
                 const showApprove = isInstitutionUser && hasMembership && membershipPending;
-
-                const canMakeInstAdmin =
-                  isInstitutionUser && hasMembership && membershipApproved;
-
-                const showPromote =
-                  !isInstitutionUser && !u.isGlobalAdmin; // public users only
+                const canToggleInstAdmin = isInstitutionUser && hasMembership && membershipApproved;
+                const showPromote = !isInstitutionUser && !u.isGlobalAdmin;
 
                 return (
                   <tr key={u.id}>
                     <td>
                       <div className="au-userCell">
-                        <div
-                          className={`au-dot ${u.isOnline ? "on" : ""}`}
-                          title={u.isOnline ? "Online" : "Offline"}
-                        />
+                        <div className={`au-dot ${u.isOnline ? "on" : ""}`} title={u.isOnline ? "Online" : "Offline"} />
                         <div className="au-userMeta">
                           <div className="au-userName">
                             {name}{" "}
@@ -655,9 +644,7 @@ export default function AdminUsers() {
                                 {String(u.membershipStatus)}
                               </Badge>
                               {u.memberType ? <Badge tone="neutral">{String(u.memberType)}</Badge> : null}
-                              {u.referenceNumber ? (
-                                <span className="au-muted">Ref: {u.referenceNumber}</span>
-                              ) : null}
+                              {u.referenceNumber ? <span className="au-muted">Ref: {u.referenceNumber}</span> : null}
                             </div>
                           ) : null}
                         </div>
@@ -670,9 +657,7 @@ export default function AdminUsers() {
 
                     <td>
                       <div className="au-badges au-badgesWrap">
-                        <Badge tone={u.isActive ? "success" : "danger"}>
-                          {u.isActive ? "Active" : "Inactive"}
-                        </Badge>
+                        <Badge tone={u.isActive ? "success" : "danger"}>{u.isActive ? "Active" : "Inactive"}</Badge>
                         {isLocked ? <Badge tone="warn">Locked</Badge> : <Badge tone="neutral">Normal</Badge>}
                         {!u.isEmailVerified ? (
                           <Badge tone="danger">Email unverified</Badge>
@@ -691,20 +676,19 @@ export default function AdminUsers() {
                     </td>
 
                     <td className="au-tdRight">
-                      {/* ✅ Actions always one row */}
                       <div className="au-actionsRow">
                         {showApprove ? (
                           <IconBtn
                             tone="success"
                             disabled={isBusy}
-                            title="Approve membership (seat-safe)"
+                            title="Approve membership"
                             onClick={() => approveMembership(u)}
                           >
                             {isBusy ? <Icon name="spinner" /> : <Icon name="check" />}
                           </IconBtn>
                         ) : null}
 
-                        {canMakeInstAdmin ? (
+                        {canToggleInstAdmin ? (
                           <IconBtn
                             tone={u.isInstitutionAdmin ? "neutral" : "info"}
                             disabled={isBusy}
@@ -749,7 +733,7 @@ export default function AdminUsers() {
                         <IconBtn
                           tone="neutral"
                           disabled={isBusy}
-                          title="Reset 2FA (email new setup)"
+                          title="Reset 2FA"
                           onClick={() => reset2fa(u.id)}
                         >
                           {isBusy ? <Icon name="spinner" /> : <Icon name="key" />}

@@ -48,32 +48,78 @@ function isAuthEndpoint(url = "") {
 
 /**
  * ✅ Throttle identical requests to stop storms.
- * Key = METHOD + URL + (optional) small body signature
+ * IMPORTANT FIX: include query params in key (config.params).
+ *
+ * You can bypass per request by setting:
+ *   api.get("/x", { __skipThrottle: true })
  */
 const recentRequestMap = new Map();
+
+// Keep your original, but now it’s safe because keys are more accurate.
+// If you still want it more “responsive”, you can reduce to 500–800ms.
 const THROTTLE_MS = 1200;
+
+function stableStringify(obj) {
+  try {
+    if (!obj || typeof obj !== "object") return "";
+    const keys = Object.keys(obj).sort();
+    const out = {};
+    for (const k of keys) {
+      const v = obj[k];
+      // keep signature small and stable
+      if (v === undefined) continue;
+      if (v === null) out[k] = null;
+      else if (typeof v === "string") out[k] = v.slice(0, 80);
+      else if (typeof v === "number" || typeof v === "boolean") out[k] = v;
+      else out[k] = String(v).slice(0, 80);
+    }
+    return JSON.stringify(out);
+  } catch {
+    return "";
+  }
+}
 
 function makeReqKey(config) {
   const method = String(config?.method || "get").toUpperCase();
   const url = String(config?.url || "");
+
+  // ✅ include query params (critical)
+  const paramsSig = stableStringify(config?.params);
+
   // Keep signature small; enough to stop repeated identical storms
   let bodySig = "";
   try {
     if (config?.data && typeof config.data === "object" && !(config.data instanceof FormData)) {
-      const keys = Object.keys(config.data).slice(0, 6).sort();
-      bodySig = keys.map((k) => `${k}:${String(config.data[k]).slice(0, 16)}`).join("|");
+      const keys = Object.keys(config.data).slice(0, 10).sort();
+      bodySig = keys.map((k) => `${k}:${String(config.data[k]).slice(0, 32)}`).join("|");
     }
   } catch {
     // ignore
   }
-  return `${method} ${url} ${bodySig}`;
+
+  return `${method} ${url} params=${paramsSig} body=${bodySig}`;
+}
+
+function cleanupOldKeys(now) {
+  // Prevent unbounded growth
+  if (recentRequestMap.size < 500) return;
+  for (const [k, t] of recentRequestMap.entries()) {
+    if (now - t > THROTTLE_MS * 4) recentRequestMap.delete(k);
+  }
 }
 
 function shouldThrottle(config) {
+  // ✅ Allow bypass per request
+  if (config?.__skipThrottle) return false;
+
   const key = makeReqKey(config);
   const now = Date.now();
+
+  cleanupOldKeys(now);
+
   const last = recentRequestMap.get(key) || 0;
   if (now - last < THROTTLE_MS) return true;
+
   recentRequestMap.set(key, now);
   return false;
 }
@@ -81,7 +127,7 @@ function shouldThrottle(config) {
 // ✅ Attach JWT to every request + handle FormData correctly + stop expired-token requests
 api.interceptors.request.use(
   (config) => {
-    // ✅ Stop request storms early (but do NOT block user typing, etc.)
+    // ✅ Stop request storms early (now safe because params are part of signature)
     if (shouldThrottle(config)) {
       return Promise.reject(
         new axios.CanceledError("Throttled duplicate request (preventing request storm).")
@@ -124,6 +170,7 @@ api.interceptors.response.use(
     return res;
   },
   (error) => {
+    // ✅ Do not treat cancels as real errors
     if (axios.isCancel(error)) return Promise.reject(error);
 
     const status = error?.response?.status;
