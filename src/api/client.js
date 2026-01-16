@@ -47,8 +47,20 @@ function isAuthEndpoint(url = "") {
 }
 
 /**
+ * ✅ Detect PDF download endpoint (pdf.js uses MANY requests, often Range-based)
+ */
+function isPdfDownload(url = "") {
+  const u = String(url || "");
+  return /\/legal-documents\/[^/]+\/download/i.test(u);
+}
+
+/**
  * ✅ Throttle identical requests to stop storms.
  * IMPORTANT FIX: include query params in key (config.params).
+ *
+ * PDF FIX:
+ * - Never throttle requests with Range headers, binary responseTypes, or /download endpoint
+ *   (pdf.js will break if those are canceled).
  *
  * You can bypass per request by setting:
  *   api.get("/x", { __skipThrottle: true })
@@ -79,12 +91,34 @@ function stableStringify(obj) {
   }
 }
 
+function getHeader(config, name) {
+  try {
+    const h = config?.headers || {};
+    return (
+      h?.[name] ??
+      h?.[name.toLowerCase()] ??
+      h?.[name.toUpperCase()] ??
+      h?.common?.[name] ??
+      h?.common?.[name.toLowerCase()] ??
+      undefined
+    );
+  } catch {
+    return undefined;
+  }
+}
+
 function makeReqKey(config) {
   const method = String(config?.method || "get").toUpperCase();
   const url = String(config?.url || "");
 
   // ✅ include query params (critical)
   const paramsSig = stableStringify(config?.params);
+
+  // ✅ include Range header signature (critical for pdf.js)
+  const rangeSig = String(getHeader(config, "Range") || "");
+
+  // ✅ include responseType (blob/arraybuffer should never collide with json)
+  const rt = String(config?.responseType || "");
 
   // Keep signature small; enough to stop repeated identical storms
   let bodySig = "";
@@ -97,7 +131,7 @@ function makeReqKey(config) {
     // ignore
   }
 
-  return `${method} ${url} params=${paramsSig} body=${bodySig}`;
+  return `${method} ${url} rt=${rt} range=${rangeSig} params=${paramsSig} body=${bodySig}`;
 }
 
 function cleanupOldKeys(now) {
@@ -111,6 +145,15 @@ function cleanupOldKeys(now) {
 function shouldThrottle(config) {
   // ✅ Allow bypass per request
   if (config?.__skipThrottle) return false;
+
+  const url = String(config?.url || "");
+  const range = getHeader(config, "Range");
+  const rt = String(config?.responseType || "").toLowerCase();
+
+  // ✅ PDF safety: never throttle these, otherwise pdf.js breaks
+  if (isPdfDownload(url)) return false;
+  if (range) return false;
+  if (rt === "blob" || rt === "arraybuffer") return false;
 
   const key = makeReqKey(config);
   const now = Date.now();
@@ -127,7 +170,8 @@ function shouldThrottle(config) {
 // ✅ Attach JWT to every request + handle FormData correctly + stop expired-token requests
 api.interceptors.request.use(
   (config) => {
-    // ✅ Stop request storms early (now safe because params are part of signature)
+    // ✅ Stop request storms early (now safe because params+range are part of signature,
+    // and PDF downloads are excluded)
     if (shouldThrottle(config)) {
       return Promise.reject(
         new axios.CanceledError("Throttled duplicate request (preventing request storm).")
@@ -201,6 +245,7 @@ api.interceptors.response.use(
 export default api;
 
 export async function checkDocumentAvailability(documentId) {
-  const res = await api.get(`/legal-documents/${documentId}/availability`);
+  // Optional: skip throttle just in case multiple components call this quickly
+  const res = await api.get(`/legal-documents/${documentId}/availability`, { __skipThrottle: true });
   return res.data?.data ?? res.data;
 }
