@@ -488,6 +488,44 @@ export default function PdfViewer({
     return el.closest(".pdf-page-wrapper");
   }
 
+  //Additional Helper:
+
+  function computeOffsetsFromRange(textLayerEl, range) {
+  const spans = Array.from(textLayerEl.querySelectorAll("span"));
+  if (!spans.length) return { start: null, end: null };
+
+  function findSpan(elOrNode) {
+    const el = elOrNode?.nodeType === 1 ? elOrNode : elOrNode?.parentElement;
+    return el?.closest?.("span") || null;
+  }
+
+  const startSpan = findSpan(range.startContainer);
+  const endSpan = findSpan(range.endContainer);
+  if (!startSpan || !endSpan) return { start: null, end: null };
+
+  // index spans
+  const startIdx = spans.indexOf(startSpan);
+  const endIdx = spans.indexOf(endSpan);
+  if (startIdx < 0 || endIdx < 0) return { start: null, end: null };
+
+  const startLocal = range.startContainer?.nodeType === 3 ? range.startOffset : 0;
+  const endLocal = range.endContainer?.nodeType === 3 ? range.endOffset : (endSpan.textContent?.length || 0);
+
+  let start = 0;
+  for (let i = 0; i < startIdx; i++) start += (spans[i].textContent || "").length;
+  start += startLocal;
+
+  let end = 0;
+  for (let i = 0; i < endIdx; i++) end += (spans[i].textContent || "").length;
+  end += endLocal;
+
+  // normalize
+  if (end < start) [start, end] = [end, start];
+
+  return { start, end };
+}
+
+
   function handleMouseUp() {
     setTimeout(() => {
       if (isUserScrollingRef.current) return;
@@ -525,6 +563,8 @@ export default function PdfViewer({
         page: pageNumber,
         text,
         rects,
+         charOffsetStart: offsets.start,
+         charOffsetEnd: offsets.end,
       });
 
       setHighlightColor("yellow");
@@ -666,6 +706,23 @@ export default function PdfViewer({
     attachHighlightClickHandler(textLayer);
   }
 
+  // ✅ Re-apply highlights whenever notes change or more pages are rendered
+  useEffect(() => {
+    if (!ready) return;
+
+    const max = Math.min(renderLimit, allowedMaxPage ?? renderLimit);
+
+    for (let p = 1; p <= max; p++) {
+      applyHighlightsForPage(p);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notes, ready, renderLimit, allowedMaxPage]);
+
+  /* ==================================================
+     NOTES CRUD
+     ================================================== */
+
+
   /* ==================================================
      NOTES CRUD (unchanged)
      ================================================== */
@@ -687,8 +744,8 @@ export default function PdfViewer({
         legalDocumentId: Number(documentId),
         highlightedText: highlightMeta.text,
         pageNumber: highlightMeta.page,
-        charOffsetStart: null,
-        charOffsetEnd: null,
+        charOffsetStart: highlightMeta.charOffsetStart,
+        charOffsetEnd: highlightMeta.charOffsetEnd,
         content: finalContent,
         highlightColor: highlightColor,
       });

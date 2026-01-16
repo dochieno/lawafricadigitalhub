@@ -1,16 +1,16 @@
-// src/pages/.../DocumentReader.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
+import axios from "axios";
 import api, { checkDocumentAvailability } from "../../api/client";
 import PdfViewer from "../../reader/PdfViewer";
 import "../../styles/reader.css";
 
 /**
- * Speed upgrades (no behavior break):
- * ✅ Only block on /access (must be first); everything else is parallel + non-blocking
- * ✅ Avoid heavy blob/range preflight (use checkDocumentAvailability)
- * ✅ Start rendering PdfViewer immediately after /access succeeds (don’t wait for offer/availability)
- * ✅ Keep your existing blocked/unavailable/preview overlays exactly as-is
+ * Speed upgrades + MPESA safety:
+ * ✅ Gate only on /access
+ * ✅ Load offer + availability in background
+ * ✅ When landing from payment (?paid=1), retry /access for a short window (MPESA is async)
+ * ✅ Ignore axios cancels (throttle) so “Profile load failed” style noise doesn’t break reader
  */
 
 export default function DocumentReader() {
@@ -28,6 +28,7 @@ export default function DocumentReader() {
   // ✅ Split loading: gate only on access; keep soft loading for other data
   const [loadingAccess, setLoadingAccess] = useState(true);
   const [loadingMeta, setLoadingMeta] = useState(true);
+  const [loadingAccessHint, setLoadingAccessHint] = useState("Checking access");
 
   // hard-block overlay
   const [blocked, setBlocked] = useState(false);
@@ -43,6 +44,10 @@ export default function DocumentReader() {
   // success toast when landing from payment
   const [toast, setToast] = useState(null);
 
+  // ✅ payment landing flag (important for MPESA async finalization)
+  const [justPaid, setJustPaid] = useState(false);
+  const [paidProvider, setPaidProvider] = useState("");
+
   const aliveRef = useRef(true);
 
   function showToast(message, type = "success") {
@@ -50,15 +55,19 @@ export default function DocumentReader() {
     setTimeout(() => setToast(null), 2500);
   }
 
-  // show success toast when redirected from Paystack/MPesa return
+  // Detect landing from Paystack/MPESA
   useEffect(() => {
     const qs = new URLSearchParams(location.search);
     const paid = (qs.get("paid") || "").trim();
     const provider = (qs.get("provider") || "").trim();
 
     if (paid === "1") {
+      setJustPaid(true);
+      setPaidProvider(provider);
+
       showToast(`Payment successful ✅${provider ? ` (${provider})` : ""}`, "success");
 
+      // remove params from url
       qs.delete("paid");
       qs.delete("provider");
 
@@ -77,7 +86,21 @@ export default function DocumentReader() {
     aliveRef.current = true;
     let cancelled = false;
 
-    async function loadAccessOnly() {
+    function sleep(ms) {
+      return new Promise((r) => setTimeout(r, ms));
+    }
+
+    function isIgnorable(err) {
+      return axios.isCancel(err) || err?.code === "ERR_CANCELED";
+    }
+
+    async function fetchAccessOnce() {
+      // 1) Load access rules (must be first)
+      const accessRes = await api.get(`/legal-documents/${docId}/access`);
+      return accessRes.data;
+    }
+
+    async function loadAccessOnlyWithRetryIfPaid() {
       try {
         setLoadingAccess(true);
 
@@ -93,26 +116,75 @@ export default function DocumentReader() {
         setContentAvailable(true);
         setBlockMessage("Access blocked. Please contact your administrator.");
 
-        // 1) Load access rules (must be first)
-        const accessRes = await api.get(`/legal-documents/${docId}/access`);
-        if (cancelled || !aliveRef.current) return;
+        // If we just paid, MPESA may still be finalizing in backend -> retry a few times
+        const maxAttempts = justPaid ? 10 : 1; // ~ (10 attempts) * delays below = short grace period
+        let attempt = 0;
 
-        const accessData = accessRes.data;
-        setAccess(accessData);
+        // delays: quick at first, then slower
+        const delays = [400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200];
 
-        setCanPurchaseIndividually(accessData?.canPurchaseIndividually !== false);
-        setPurchaseDisabledReason(accessData?.purchaseDisabledReason || null);
+        while (!cancelled && aliveRef.current) {
+          attempt += 1;
 
-        // HARD BLOCK from backend decision
-        if (accessData?.isBlocked) {
-          setBlocked(true);
-          setBlockReason(accessData?.blockReason || null);
-          setBlockMessage(accessData?.blockMessage || accessData?.message || "Access blocked.");
-          return;
+          if (justPaid) {
+            setLoadingAccessHint(
+              `Finalizing payment${paidProvider ? ` (${paidProvider})` : ""}… (${attempt}/${maxAttempts})`
+            );
+          } else {
+            setLoadingAccessHint("Checking access");
+          }
+
+          try {
+            const accessData = await fetchAccessOnce();
+            if (cancelled || !aliveRef.current) return;
+
+            setAccess(accessData);
+
+            setCanPurchaseIndividually(accessData?.canPurchaseIndividually !== false);
+            setPurchaseDisabledReason(accessData?.purchaseDisabledReason || null);
+
+            // HARD BLOCK from backend decision
+            if (accessData?.isBlocked) {
+              setBlocked(true);
+              setBlockReason(accessData?.blockReason || null);
+              setBlockMessage(accessData?.blockMessage || accessData?.message || "Access blocked.");
+              return;
+            }
+
+            // ✅ If full access, make sure preview lock isn't showing
+            if (accessData?.hasFullAccess) setLocked(false);
+
+            // If we successfully loaded access after payment, clear justPaid flag
+            if (justPaid) setJustPaid(false);
+
+            return;
+          } catch (err) {
+            if (cancelled || !aliveRef.current) return;
+
+            if (isIgnorable(err)) {
+              // throttle cancel etc. -> do not treat as failure
+              // try again quickly if we are in payment grace period
+            } else {
+              const status = err?.response?.status;
+
+              // If justPaid: allow a grace period for entitlement to update
+              // Common transient: 403/404 while webhook/payment finalization catches up
+              if (!justPaid) throw err;
+
+              // If auth failed, don’t keep looping forever
+              if (status === 401) throw err;
+
+              // Otherwise keep retrying until attempts are exhausted
+            }
+
+            if (attempt >= maxAttempts) {
+              // Exhausted retries -> show normal failure
+              throw err;
+            }
+
+            await sleep(delays[Math.min(attempt - 1, delays.length - 1)]);
+          }
         }
-
-        // ✅ If full access, make sure preview lock isn't showing
-        if (accessData?.hasFullAccess) setLocked(false);
       } catch (err) {
         console.error("Failed to load access", err);
         if (!cancelled && aliveRef.current) setAccess(null);
@@ -125,7 +197,6 @@ export default function DocumentReader() {
       setLoadingMeta(true);
 
       try {
-        // 2) Kick off the rest in parallel (non-blocking)
         const offerPromise = api
           .get(`/legal-documents/${docId}/public-offer`)
           .then((r) => r.data)
@@ -147,7 +218,7 @@ export default function DocumentReader() {
           } catch (err) {
             const status = err?.response?.status;
             if (status === 404) return false;
-            if (status === 401 || status === 403) return true; // auth/access handled elsewhere
+            if (status === 401 || status === 403) return true; // access/auth handled elsewhere
             console.warn("Availability check failed (non-blocking):", err);
             return true;
           }
@@ -172,18 +243,15 @@ export default function DocumentReader() {
     }
 
     // ✅ Access gates the page; meta does not
-    loadAccessOnly().then(() => {
-      // If blocked, meta doesn’t matter (but harmless); we can still skip to save requests
-      if (!cancelled && aliveRef.current) {
-        loadMetaInBackground();
-      }
+    loadAccessOnlyWithRetryIfPaid().then(() => {
+      if (!cancelled && aliveRef.current) loadMetaInBackground();
     });
 
     return () => {
       cancelled = true;
       aliveRef.current = false;
     };
-  }, [docId]);
+  }, [docId, justPaid, paidProvider]);
 
   // ✅ Gate UI only on access
   if (loadingAccess) {
@@ -194,7 +262,7 @@ export default function DocumentReader() {
       >
         <div style={{ textAlign: "center", padding: 20 }}>
           <div style={{ fontWeight: 900, marginBottom: 8 }}>Loading reader…</div>
-          <div style={{ color: "#6b7280", fontSize: 13 }}>Checking access</div>
+          <div style={{ color: "#6b7280", fontSize: 13 }}>{loadingAccessHint}</div>
         </div>
       </div>
     );
@@ -271,7 +339,10 @@ export default function DocumentReader() {
             )}
 
             <div className="preview-lock-actions">
-              <button className="outline-btn" onClick={() => navigate(`/dashboard/documents/${id}`)}>
+              <button
+                className="outline-btn"
+                onClick={() => navigate(`/dashboard/documents/${id}`)}
+              >
                 Back to Details
               </button>
 
@@ -308,8 +379,6 @@ export default function DocumentReader() {
     );
   }
 
-  // ✅ If meta is still loading, don’t block reading; PdfViewer can start
-  // Only block if we have a definitive “not available”
   if (!contentAvailable) {
     return (
       <div className="reader-error-state">
@@ -337,7 +406,7 @@ export default function DocumentReader() {
     <div className="reader-shell">
       {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
 
-      {/* Optional tiny “loading meta” hint (non-blocking) */}
+      {/* Non-blocking meta hint */}
       {loadingMeta ? (
         <div
           style={{
