@@ -1,3 +1,4 @@
+// src/pages/dashboard/admin/users/AdminUsers.jsx
 import { useEffect, useMemo, useState } from "react";
 import api from "../../../api/client";
 import "../../../styles/adminUsers.css";
@@ -55,7 +56,7 @@ function IconBtn({ tone = "neutral", disabled, title, label, onClick, children }
       aria-label={title}
     >
       {children}
-      <span className="au-iconBtnLabel">{label}</span>
+      {label ? <span className="au-iconBtnLabel">{label}</span> : null}
     </button>
   );
 }
@@ -92,6 +93,31 @@ function Icon({ name }) {
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
           <path
             d="M7 14a5 5 0 1 1 4.9-6H22v4h-3v3h-3v3h-4.1A5 5 0 0 1 7 14Z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case "check":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M20 6 9 17l-5-5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case "shield":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M12 2 20 6v6c0 5-3.4 9.4-8 10-4.6-.6-8-5-8-10V6l8-4Z"
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
@@ -238,6 +264,34 @@ export default function AdminUsers() {
     }
   }
 
+  /**
+   * ✅ NEW: Global admin “Approve” button.
+   * Calls backend endpoint that should approve ANY user type (public/institution)
+   * and (per your requirement) also makes them an Institution Admin.
+   *
+   * Backend endpoint you should implement/confirm:
+   *   POST /api/admin/users/{id}/approve
+   * Body:
+   *   { makeInstitutionAdmin: true }
+   */
+  async function approveUser(userId, makeInstitutionAdmin = true) {
+    try {
+      setBusyId(userId);
+
+      await api.post(`/admin/users/${userId}/approve`, {
+        makeInstitutionAdmin: !!makeInstitutionAdmin,
+      });
+
+      showToast("success", makeInstitutionAdmin ? "User approved + set as Institution Admin." : "User approved.");
+      await load();
+    } catch (e) {
+      console.error(e);
+      showToast("error", friendlyApiError(e));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   function roleTone(role) {
     const r = String(role || "").toLowerCase();
     if (r === "admin") return "success";
@@ -268,7 +322,7 @@ export default function AdminUsers() {
           </div>
 
           <p className="au-subtitle">
-            Manage user access: activate/deactivate, block sign-in, and monitor online presence.
+            Manage user access: approve users, activate/deactivate, block sign-in, reset 2FA, and monitor presence.
           </p>
 
           {err ? <div className="au-error">{err}</div> : null}
@@ -422,6 +476,9 @@ export default function AdminUsers() {
                 const isLocked = !!u.lockoutEndAt && new Date(u.lockoutEndAt) > new Date();
                 const isBusy = busyId === u.id;
 
+                const isApproved = !!u.isApproved; // backend should return this; if missing, button still shows
+                const canApprove = !isApproved; // show only when not approved
+
                 return (
                   <tr key={u.id}>
                     <td>
@@ -431,7 +488,8 @@ export default function AdminUsers() {
                           <div className="au-userName">
                             {name}{" "}
                             {u.isGlobalAdmin ? <Badge tone="success">Global Admin</Badge> : null}{" "}
-                            <Badge tone={roleTone(u.role)}>{u.role}</Badge>
+                            <Badge tone={roleTone(u.role)}>{u.role}</Badge>{" "}
+                            {u.isInstitutionAdmin ? <Badge tone="info">Institution Admin</Badge> : null}
                           </div>
                           <div className="au-userSub">
                             <span className="au-mono">{u.email}</span>
@@ -457,6 +515,7 @@ export default function AdminUsers() {
                         ) : (
                           <Badge tone="neutral">Email ok</Badge>
                         )}
+                        {u.isApproved ? <Badge tone="success">Approved</Badge> : <Badge tone="warn">Pending</Badge>}
                       </div>
                     </td>
 
@@ -473,14 +532,31 @@ export default function AdminUsers() {
 
                     <td className="au-tdRight">
                       <div className="au-actions au-actionsIcons">
+                        {/* ✅ NEW: Approve + make Institution Admin (global admin action) */}
+                        {canApprove ? (
+                          <IconBtn
+                            tone="success"
+                            disabled={isBusy}
+                            title="Approve user (also make Institution Admin)"
+                            label="Approve"
+                            onClick={() => approveUser(u.id, true)}
+                          >
+                            {isBusy ? <Icon name="spinner" /> : <Icon name="check" />}
+                          </IconBtn>
+                        ) : (
+                          <IconBtn tone="neutral" disabled title="Already approved" label="Approved">
+                            <Icon name="shield" />
+                          </IconBtn>
+                        )}
+
                         <IconBtn
-                        tone={u.isActive ? "neutral" : "success"}
-                        disabled={isBusy}
-                        title={u.isActive ? "Deactivate user" : "Activate user"}
-                        label={u.isActive ? "Deactivate" : "Activate"}
-                        onClick={() => setActive(u.id, !u.isActive)}
+                          tone={u.isActive ? "neutral" : "success"}
+                          disabled={isBusy}
+                          title={u.isActive ? "Deactivate user" : "Activate user"}
+                          label={u.isActive ? "Deactivate" : "Activate"}
+                          onClick={() => setActive(u.id, !u.isActive)}
                         >
-                        {isBusy ? <Icon name="spinner" /> : <Icon name="power" />}
+                          {isBusy ? <Icon name="spinner" /> : <Icon name="power" />}
                         </IconBtn>
 
                         <IconBtn
