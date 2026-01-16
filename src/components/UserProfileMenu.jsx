@@ -5,25 +5,43 @@ import "../styles/userProfileMenu.css";
 
 const API_ORIGIN = "https://lawafricaapi.onrender.com";
 
+/**
+ * Converts whatever backend returns into a browser-loadable absolute URL.
+ * Supports:
+ *  - "/storage/ProfileImages/x.jpg" ✅ canonical
+ *  - "Storage/ProfileImages/x.jpg" ✅ legacy
+ *  - "user_1_x.jpg" ✅ legacy
+ *  - wrong slashes "\" ✅ legacy
+ */
 function resolveAvatarUrl(user) {
-  // Prefer ProfileImageUrl coming from /api/profile/me (backend)
-  const raw = user?.profileImageUrl || user?.ProfileImageUrl || user?.avatarUrl;
+  const raw =
+    user?.profileImageUrl ||
+    user?.ProfileImageUrl ||
+    user?.avatarUrl ||
+    user?.ProfileImageURL; // just in case older shape
+
   if (!raw) return null;
 
   // Already absolute
   if (/^https?:\/\//i.test(raw)) return raw;
 
-  // Ensure leading slash
-  const path = raw.startsWith("/") ? raw : `/${raw}`;
+  const cleaned = String(raw).trim().replaceAll("\\", "/");
 
-  // If backend stored "/storage/..." just prefix API origin
-  if (path.startsWith("/storage/")) return `${API_ORIGIN}${path}`;
+  // canonical
+  if (cleaned.startsWith("/storage/")) return `${API_ORIGIN}${cleaned}`;
 
-  // If backend stored "Storage/..." (older DB rows), normalize to "/storage/..."
-  if (path.toLowerCase().startsWith("/storage/")) return `${API_ORIGIN}${path}`;
+  // legacy "Storage/..."
+  if (cleaned.toLowerCase().startsWith("storage/")) {
+    return `${API_ORIGIN}/storage/${cleaned.substring("storage/".length)}`;
+  }
 
-  // If backend stored plain filename by mistake, fall back to profile images directory
-  return `${API_ORIGIN}/storage/ProfileImages/${raw}`;
+  // filename-only
+  if (!cleaned.includes("/")) {
+    return `${API_ORIGIN}/storage/ProfileImages/${cleaned}`;
+  }
+
+  // other relative paths
+  return `${API_ORIGIN}/${cleaned.startsWith("/") ? cleaned.slice(1) : cleaned}`;
 }
 
 export default function UserProfileMenu({ user, onLogout }) {
@@ -57,7 +75,7 @@ export default function UserProfileMenu({ user, onLogout }) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // ✅ validations
+    // validations
     if (!file.type.startsWith("image/")) {
       setMsg("Please select a valid image file.");
       e.target.value = "";
@@ -79,18 +97,20 @@ export default function UserProfileMenu({ user, onLogout }) {
       setUploading(true);
       setProgress(0);
 
-      await api.post("/Profile/image", formData, {
+      // ✅ IMPORTANT: your route is /api/profile/image (lowercase controller)
+      await api.post("/profile/image", formData, {
         headers: { "Content-Type": "multipart/form-data" },
         onUploadProgress: (evt) => {
           if (!evt.total) return;
-          const percent = Math.round((evt.loaded * 100) / evt.total);
-          setProgress(percent);
+          setProgress(Math.round((evt.loaded * 100) / evt.total));
         },
       });
 
+      // Pull latest /api/profile/me
       await refreshUser();
-      setOpen(false);
+
       setMsg("Profile photo updated.");
+      setOpen(false);
     } catch (err) {
       console.error("Upload failed", err);
       setMsg("Failed to upload image. Please try again.");
@@ -108,10 +128,10 @@ export default function UserProfileMenu({ user, onLogout }) {
   const handleRemoveImage = async () => {
     setMsg("");
     try {
-      await api.delete("/Profile/image");
+      await api.delete("/profile/image");
       await refreshUser();
-      setOpen(false);
       setMsg("Profile photo removed.");
+      setOpen(false);
     } catch (err) {
       console.error("Remove failed", err);
       setMsg("Failed to remove image. Please try again.");
@@ -144,8 +164,12 @@ export default function UserProfileMenu({ user, onLogout }) {
       {open && (
         <div className="profile-dropdown" role="menu">
           <div className="profile-info">
-            <div className="profile-name">{user?.name || user?.Username || "User"}</div>
-            <div className="profile-email">{user?.email || user?.Email || ""}</div>
+            <div className="profile-name">
+              {user?.name || user?.Username || "User"}
+            </div>
+            <div className="profile-email">
+              {user?.email || user?.Email || ""}
+            </div>
           </div>
 
           {msg && <div className="profile-msg">{msg}</div>}
@@ -157,12 +181,15 @@ export default function UserProfileMenu({ user, onLogout }) {
               disabled={uploading}
               type="button"
             >
-              {uploading ? "Uploading..." : (avatarSrc ? "Change photo" : "Upload photo")}
+              {uploading ? "Uploading..." : avatarSrc ? "Change photo" : "Upload photo"}
             </button>
 
             {uploading && (
               <div className="upload-progress" aria-label="Upload progress">
-                <div className="upload-progress-bar" style={{ width: `${progress}%` }} />
+                <div
+                  className="upload-progress-bar"
+                  style={{ width: `${progress}%` }}
+                />
               </div>
             )}
 
