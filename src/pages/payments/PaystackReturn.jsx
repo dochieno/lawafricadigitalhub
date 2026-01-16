@@ -33,9 +33,8 @@ function extractAxiosError(e) {
 
 // localStorage keys for signup flow
 const LS_REG_INTENT = "la_reg_intent_id";
-const LS_REG_EMAIL = "la_reg_email";
 
-// ✅ new key for paystack return context
+// ✅ paystack return context key
 function ctxKey(ref) {
   return `la_paystack_ctx_${ref}`;
 }
@@ -98,7 +97,7 @@ export default function PaystackReturn() {
     }
   }
 
-  // Only call this for authenticated purchases (NOT signup)
+  // best-effort only (Authorized endpoint)
   async function logReturnVisit(ref) {
     try {
       if (!ref) return;
@@ -108,7 +107,7 @@ export default function PaystackReturn() {
         userAgent: navigator.userAgent,
       });
     } catch {
-      // best-effort only
+      // ignore
     }
   }
 
@@ -176,12 +175,11 @@ export default function PaystackReturn() {
     }
 
     // ✅ Authenticated purchase flow
-    // Restore token snapshot if needed (fixes “You’re not logged in” after Paystack redirect)
     const token = restoreTokenIfMissing(reference);
     if (!token) {
       setPhase("FAILED");
       setMessage("You’re not logged in.");
-      setError("Please log in first, then click Refresh to retry the payment return.");
+      setError("Please log in first, then come back to this return URL and click Refresh.");
       return;
     }
 
@@ -189,7 +187,9 @@ export default function PaystackReturn() {
       setPhase("LOADING");
       setMessage("Finalizing payment… please wait.");
 
+      // best-effort audit; ignore failures
       await logReturnVisit(reference);
+
       clearLocalStorageMapping(reference);
 
       const resolved = await fetchIntentByReference(reference);
@@ -202,7 +202,6 @@ export default function PaystackReturn() {
 
       const intent = await pollIntent(intentId);
 
-      // ✅ Resolve docId from intent/meta, then fall back to stored context, then route state.
       const ctx = readCtx(reference);
 
       const docId =
@@ -216,7 +215,6 @@ export default function PaystackReturn() {
       setMessage("Payment confirmed ✅ Redirecting…");
       await sleep(600);
 
-      // ✅ cleanup context once we’re done
       clearCtx(reference);
 
       if (docId) {
@@ -226,6 +224,14 @@ export default function PaystackReturn() {
 
       nav("/dashboard/library", { replace: true });
     } catch (e) {
+      // ✅ If we got a 401 here, the token snapshot is invalid.
+      // Clear it so we don't keep restoring a bad token forever.
+      const status = e?.response?.status;
+      if (status === 401) {
+        clearToken();
+        clearCtx(reference);
+      }
+
       setPhase("FAILED");
       setMessage("Payment confirmation issue");
       setError(extractAxiosError(e));
@@ -320,7 +326,6 @@ export default function PaystackReturn() {
               Refresh
             </button>
 
-            {/* ✅ Better than “Back to Register” for logged-in purchase flow */}
             <button
               onClick={() => nav("/login", { replace: true })}
               style={{

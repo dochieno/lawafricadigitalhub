@@ -22,22 +22,14 @@ let hasRedirectedOn401 = false;
 
 /**
  * ✅ Only during payment return should we avoid force-logout redirects.
- * IMPORTANT: Keep this matcher strict to avoid leaving users “stuck” elsewhere.
- *
- * Adjust these routes to match your frontend routing:
- * - If your Paystack return route is exactly "/paystack/return", keep it exact.
- * - If it is "/dashboard/payments/paystack/return", match that exact prefix.
+ * Keep this matcher strict to avoid masking real auth problems elsewhere.
  */
 function isOnPaystackReturnRoute() {
   try {
     const p = window.location.pathname || "";
-    // ✅ keep strict (edit to match your exact route)
-    return (
-      p === "/paystack/return" ||
-      p.startsWith("/paystack/return") ||
-      p.includes("/paystack/return") ||
-      p.includes("paystack") // fallback, safe if your route always contains "paystack"
-    );
+    // ✅ YOUR ROUTE (based on backend redirect + frontend page):
+    // https://.../payments/paystack/return
+    return p === "/payments/paystack/return" || p.startsWith("/payments/paystack/return");
   } catch {
     return false;
   }
@@ -49,7 +41,6 @@ api.interceptors.request.use(
     const token = getToken();
 
     // ✅ If token exists but is expired, clear it and STOP the request.
-    // (This behavior remains unchanged.)
     if (token && isTokenExpired()) {
       clearToken();
       return Promise.reject(
@@ -64,8 +55,7 @@ api.interceptors.request.use(
     }
 
     // ✅ If sending FormData, remove JSON Content-Type so browser sets boundary
-    const isFormData =
-      typeof FormData !== "undefined" && config.data instanceof FormData;
+    const isFormData = typeof FormData !== "undefined" && config.data instanceof FormData;
 
     if (isFormData && config.headers) {
       delete config.headers["Content-Type"];
@@ -80,8 +70,7 @@ api.interceptors.request.use(
 // ✅ Auto-clear token + redirect to login on 401 ONLY (except Paystack return route)
 api.interceptors.response.use(
   (res) => {
-    // Optional: once we successfully get responses, allow future 401 redirects again
-    // (prevents “stuck” behavior if user logs back in later in the same session)
+    // Allow future redirects if needed after successful responses
     hasRedirectedOn401 = false;
     return res;
   },
@@ -90,12 +79,11 @@ api.interceptors.response.use(
 
     const status = error?.response?.status;
 
-    // ✅ IMPORTANT:
     // 401 = invalid/expired token => logout normally
     // 403 = authenticated but not allowed => DO NOT logout
     if (status === 401) {
       // ✅ Paystack return: do NOT clear token or hard redirect.
-      // Let PaystackReturn handle the error / restore token snapshot / retry.
+      // Let PaystackReturn handle retry / messaging.
       if (isOnPaystackReturnRoute()) {
         return Promise.reject(error);
       }
@@ -115,9 +103,6 @@ api.interceptors.response.use(
 
 export default api;
 
-/* -------------------------------------------------------
-   Optional helpers (keep if you were using them already)
--------------------------------------------------------- */
 export async function checkDocumentAvailability(documentId) {
   const res = await api.get(`/legal-documents/${documentId}/availability`);
   return res.data?.data ?? res.data;
