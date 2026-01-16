@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import api from "../../../../api/client.js"; // ✅ FIXED PATH
+import api from "../../../api/client.js";
 import "../../../styles/adminUsers.css";
 
 function num(v) {
