@@ -84,14 +84,10 @@ function isPdfDownload(url = "") {
 
 /* ============================================================
    ✅ OPTION A: In-flight de-dupe (NO CANCELLATION)
-   - If an identical GET request is already in progress, we reuse
-     the same Promise instead of canceling the new request.
-   - This fixes “Network tab has nothing / white screen” caused by
-     canceled boot requests (e.g., /Profile/me) that the UI awaits.
 ============================================================ */
 
 const inflight = new Map();
-const INFLIGHT_TTL_MS = 12_000; // safety cleanup if a promise never settles
+const INFLIGHT_TTL_MS = 12_000;
 
 function stableStringify(obj) {
   try {
@@ -135,7 +131,6 @@ function bodySignature(data) {
     if (typeof data === "string") return data.slice(0, 180);
     if (typeof data !== "object") return String(data).slice(0, 180);
 
-    // small stable signature (not full JSON to avoid huge keys)
     const keys = Object.keys(data).slice(0, 12).sort();
     return keys.map((k) => `${k}:${String(data[k]).slice(0, 60)}`).join("|");
   } catch {
@@ -146,12 +141,9 @@ function bodySignature(data) {
 function makeReqKey(config) {
   const method = String(config?.method || "get").toUpperCase();
   const url = String(config?.url || "");
-
   const paramsSig = stableStringify(config?.params);
   const rangeSig = String(getHeader(config, "Range") || "");
   const rt = String(config?.responseType || "");
-
-  // For GETs, body is normally empty; if present we still include a small signature
   const dataSig = bodySignature(config?.data);
 
   return `${method} ${url} rt=${rt} range=${rangeSig} params=${paramsSig} data=${dataSig}`;
@@ -167,12 +159,6 @@ function cleanupInflight(now = Date.now()) {
   }
 }
 
-/**
- * Decide if this request can be deduped.
- * ✅ Only dedupe idempotent requests by default (GET/HEAD).
- * ✅ Never dedupe pdf.js critical flows.
- * ✅ Allow opt-out: config.__skipDedupe = true
- */
 function canDedupe(config) {
   if (config?.__skipDedupe) return false;
 
@@ -191,10 +177,28 @@ function canDedupe(config) {
 }
 
 /**
- * Attach an adapter wrapper that:
- * - reuses the same in-flight Promise for identical requests
- * - cleans up once resolved/rejected
+ * ✅ Axios v1 fix:
+ * In browsers, axios.defaults.adapter can be an ARRAY, not a function.
+ * We must resolve it to a real function via axios.getAdapter when available.
  */
+function resolveAdapter(config) {
+  // If caller already provided a function adapter, use it.
+  if (typeof config?.adapter === "function") return config.adapter;
+
+  const candidate = config?.adapter ?? api.defaults.adapter ?? axios.defaults.adapter;
+
+  // Axios v1+ provides getAdapter()
+  if (typeof axios.getAdapter === "function") {
+    return axios.getAdapter(candidate);
+  }
+
+  // Fallback: if it's already a function, use it
+  if (typeof candidate === "function") return candidate;
+
+  // Last resort: throw a clear error rather than "r is not a function"
+  throw new Error("Axios adapter could not be resolved to a function.");
+}
+
 function attachInflightDedupeAdapter(config) {
   if (!canDedupe(config)) return;
 
@@ -204,22 +208,18 @@ function attachInflightDedupeAdapter(config) {
   const existing = inflight.get(key);
 
   if (existing?.promise) {
-    // ✅ Reuse the same Promise (no cancellation)
+    // ✅ Reuse same Promise (no cancellation)
     config.adapter = () => existing.promise;
     return;
   }
 
-  const baseAdapter =
-    config.adapter || api.defaults.adapter || axios.defaults.adapter;
+  const baseAdapter = resolveAdapter(config);
 
-  // Wrap the adapter so the first request stores its promise
   config.adapter = (cfg) => {
-    const p = Promise.resolve(baseAdapter(cfg))
-      .finally(() => {
-        // ensure we only delete if still mapped to this promise
-        const cur = inflight.get(key);
-        if (cur?.promise === p) inflight.delete(key);
-      });
+    const p = Promise.resolve(baseAdapter(cfg)).finally(() => {
+      const cur = inflight.get(key);
+      if (cur?.promise === p) inflight.delete(key);
+    });
 
     inflight.set(key, { promise: p, ts: Date.now() });
     return p;
@@ -230,7 +230,6 @@ function attachInflightDedupeAdapter(config) {
    Interceptors
 ========================= */
 
-// ✅ Attach JWT + handle FormData + stop expired-token requests
 api.interceptors.request.use(
   (config) => {
     // ✅ NEW: de-dupe identical GETs by sharing the same in-flight Promise
@@ -239,13 +238,7 @@ api.interceptors.request.use(
     const token = getToken();
     const url = String(config?.url || "");
 
-    /**
-     * ✅ IMPORTANT:
-     * If token exists but is expired, clear it and STOP the request,
-     * EXCEPT for:
-     * - auth endpoints
-     * - public payment endpoints (paystack confirm / intent-by-reference / return-visit)
-     */
+    // ✅ Expired token: stop request except auth + public payment endpoints
     if (token && isTokenExpired() && !isAuthEndpoint(url) && !isPublicPaymentEndpoint(url)) {
       clearToken();
       return Promise.reject(
@@ -271,14 +264,12 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// ✅ Auto-clear token + redirect to login on 401 ONLY (except Paystack return/paid context)
 api.interceptors.response.use(
   (res) => {
     hasRedirectedOn401 = false;
     return res;
   },
   (error) => {
-    // ✅ Do not treat cancels as real errors (but still propagate to caller)
     if (axios.isCancel(error) || error?.code === "ERR_CANCELED") {
       return Promise.reject(error);
     }
@@ -286,16 +277,10 @@ api.interceptors.response.use(
     const status = error?.response?.status;
     const url = error?.config?.url || "";
 
-    // ✅ Never redirect from auth endpoints (prevents loops if a screen is already handling it)
-    if (isAuthEndpoint(url)) {
-      return Promise.reject(error);
-    }
+    if (isAuthEndpoint(url)) return Promise.reject(error);
 
     if (status === 401) {
-      // ✅ KEY FIX: do NOT redirect away while confirming paystack payment
-      if (isInPaystackReturnOrPaidContext()) {
-        return Promise.reject(error);
-      }
+      if (isInPaystackReturnOrPaidContext()) return Promise.reject(error);
 
       clearToken();
 
@@ -312,7 +297,6 @@ api.interceptors.response.use(
 export default api;
 
 export async function checkDocumentAvailability(documentId) {
-  // Safe: availability may be called by multiple components; dedupe will share the same promise anyway.
   const res = await api.get(`/legal-documents/${documentId}/availability`, { __skipThrottle: true });
   return res.data?.data ?? res.data;
 }
