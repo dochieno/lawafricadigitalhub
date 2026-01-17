@@ -15,7 +15,7 @@ import ResetPassword from "./pages/ResetPassword";
 
 import SecurityDashboard from "./pages/dashboard/SecurityDashboard";
 import InstitutionApprovalDashboard from "./pages/dashboard/InstitutionApprovalDashboard";
-
+import AdminReportContent from "./pages/dashboard/admin/AdminReportContent";
 import AdminInstitutions from "./pages/dashboard/admin/AdminInstitutions";
 import AdminContentProducts from "./pages/dashboard/admin/AdminContentProducts";
 import AdminInstitutionAdmins from "./pages/dashboard/admin/AdminInstitutionAdmins";
@@ -98,6 +98,8 @@ export default function App() {
               <Route path="admin/content-products" element={<AdminContentProducts />} />
               <Route path="admin/documents" element={<AdminDocuments />} />
               <Route path="admin/llr-services" element={<AdminLLRServices />} />
+              <Route  path="admin/llr-services/:legalDocumentId/content"  element={<AdminReportContent />}/>
+              
               <Route
                 path="admin/institution-subscriptions"
                 element={<AdminInstitutionSubscriptions />}

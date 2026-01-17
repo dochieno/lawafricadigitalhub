@@ -1,5 +1,6 @@
 // src/pages/dashboard/admin/AdminLLRServices.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api, { API_BASE_URL } from "../../../api/client";
 import "../../../styles/adminCrud.css";
 
@@ -182,6 +183,8 @@ const emptyForm = {
 };
 
 export default function AdminLLRServices() {
+  const navigate = useNavigate();
+
   const [rows, setRows] = useState([]);
   const [countries, setCountries] = useState([]);
 
@@ -216,10 +219,7 @@ export default function AdminLLRServices() {
     setLoading(true);
 
     try {
-      const [docsRes, countriesRes] = await Promise.all([
-        api.get("/legal-documents/admin"),
-        api.get("/Country"),
-      ]);
+      const [docsRes, countriesRes] = await Promise.all([api.get("/legal-documents/admin"), api.get("/Country")]);
 
       let all = Array.isArray(docsRes.data) ? docsRes.data : [];
 
@@ -230,15 +230,17 @@ export default function AdminLLRServices() {
       all = await enrichAdminListIfNeeded(all);
       const reports = all.filter(isReportRow);
 
-      // ✅ show banner ONLY when there are NO reports to show
-      // and we needed extra work OR we suspect user expects something
-      if (reports.length === 0) {
+      // ✅ Always hide banner when there is at least one report record
+      if (reports.length > 0) {
+        setBanner("");
+      } else {
+        // ✅ Banner only for empty states (no reports)
         if (all.length > 0 && beforeMatched === 0) {
-          setBanner(
-            "We couldn’t identify any reports in the current list. If you just created one, click Refresh or confirm it was saved as a Report."
-          );
+          setBanner("No reports found in the list. If you just created one, click Refresh or confirm it was saved as a Report.");
         } else if (all.length === 0) {
-          setBanner("No items found yet. Create a report using “+ New Report”.");
+          setBanner("No reports yet. Click “+ New Report” to create one.");
+        } else {
+          setBanner("No reports found.");
         }
       }
 
@@ -420,10 +422,8 @@ export default function AdminLLRServices() {
 
     if (form.isPremium && form.allowPublicPurchase) {
       const priceNum = Number(form.publicPrice);
-      if (!form.publicCurrency?.trim())
-        return setError("Currency is required when public purchase is ON.");
-      if (!Number.isFinite(priceNum) || priceNum <= 0)
-        return setError("Price must be greater than 0.");
+      if (!form.publicCurrency?.trim()) return setError("Currency is required when public purchase is ON.");
+      if (!Number.isFinite(priceNum) || priceNum <= 0) return setError("Price must be greater than 0.");
     }
 
     setBusy(true);
@@ -524,9 +524,7 @@ export default function AdminLLRServices() {
       <div className="admin-header">
         <div>
           <h1 className="admin-title">Admin · LLR Services (Reports)</h1>
-          <p className="admin-subtitle">
-            Reports are subscription-only and text-based. Create here, then open “Report Content” to add the text.
-          </p>
+          <p className="admin-subtitle">Reports are subscription-only and text-based. Create here, then open “Report Content” to add the text.</p>
         </div>
 
         <div className="admin-actions">
@@ -540,7 +538,9 @@ export default function AdminLLRServices() {
       </div>
 
       {(error || info) && <div className={`admin-alert ${error ? "error" : "ok"}`}>{error || info}</div>}
-      {banner && <div className="minihelp ok">{banner}</div>}
+
+      {/* ✅ Show banner ONLY when there are no report rows */}
+      {!loading && rows.length === 0 && banner && <div className="minihelp ok">{banner}</div>}
 
       <div className="admin-card admin-card-fill">
         <div className="admin-toolbar">
@@ -560,9 +560,13 @@ export default function AdminLLRServices() {
                 <th style={{ width: "44%" }}>Title</th>
                 <th style={{ width: "12%" }}>Status</th>
                 <th style={{ width: "10%" }}>Premium</th>
-                <th style={{ width: "8%" }} className="num-cell">Pages</th>
+                <th style={{ width: "8%" }} className="num-cell">
+                  Pages
+                </th>
                 <th style={{ width: "10%" }}>Public</th>
-                <th style={{ width: "10%" }} className="num-cell">Price</th>
+                <th style={{ width: "10%" }} className="num-cell">
+                  Price
+                </th>
                 <th style={{ width: "6%" }}>Type</th>
                 <th style={{ textAlign: "right", width: "10%" }}>Actions</th>
               </tr>
@@ -572,7 +576,7 @@ export default function AdminLLRServices() {
               {!loading && filtered.length === 0 && (
                 <tr>
                   <td colSpan={8} style={{ color: "#6b7280", padding: "14px" }}>
-                    No reports found.
+                    No reports found. Click “+ New Report” to create one.
                   </td>
                 </tr>
               )}
@@ -636,9 +640,13 @@ export default function AdminLLRServices() {
 
                         <button
                           className="admin-action-btn small"
-                          onClick={() => setInfo(`Next: open Report Content for LegalDocumentId=${r.id}`)}
+                          onClick={() =>
+                            navigate(`/dashboard/admin/llr-services/${r.id}/content`, {
+                              state: { title: r.title || "" },
+                            })
+                          }
                           disabled={busy}
-                          title="We will wire this to the Report Content editor page"
+                          title="Open the report text editor"
                         >
                           Report Content
                         </button>
@@ -854,9 +862,7 @@ export default function AdminLLRServices() {
                       </div>
                     )}
 
-                    <div className="minihelp.warn">
-                      Ebook uploads are disabled here. Reports are text-based and managed in the Reports module.
-                    </div>
+                    <div className="minihelp.warn">Ebook uploads are disabled here. Reports are text-based and managed in the Reports module.</div>
                   </div>
                 </div>
               </div>
