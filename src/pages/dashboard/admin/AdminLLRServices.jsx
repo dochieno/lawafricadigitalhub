@@ -6,8 +6,9 @@ import "../../../styles/adminCrud.css";
 /**
  * LLR Services = Report-kind LegalDocuments only.
  *
- * 🔧 FIX: /legal-documents/admin may not return Kind/FileType
- * - We now "enrich" missing rows by calling /legal-documents/{id}
+ * FIX:
+ * - /legal-documents/admin may not return Kind/FileType
+ * - We "enrich" missing rows by calling /legal-documents/{id}
  * - Then filter report rows reliably.
  *
  * Create defaults: Kind=Report + FileType=report
@@ -114,7 +115,7 @@ function isReportRow(r) {
 }
 
 /**
- * 🔧 Enrich missing Kind/FileType by calling /legal-documents/{id}.
+ * Enrich missing Kind/FileType by calling /legal-documents/{id}.
  */
 async function enrichAdminListIfNeeded(all) {
   if (!Array.isArray(all) || all.length === 0) return all;
@@ -191,7 +192,8 @@ export default function AdminLLRServices() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
-  const [debugBanner, setDebugBanner] = useState("");
+  // Improved message: show only when helpful, and non-technical wording
+  const [banner, setBanner] = useState("");
 
   // Modal state
   const [open, setOpen] = useState(false);
@@ -210,7 +212,7 @@ export default function AdminLLRServices() {
   async function loadAll() {
     setError("");
     setInfo("");
-    setDebugBanner("");
+    setBanner("");
     setLoading(true);
 
     try {
@@ -221,21 +223,23 @@ export default function AdminLLRServices() {
 
       let all = Array.isArray(docsRes.data) ? docsRes.data : [];
 
-      // 🔧 key fix: enrich missing Kind/FileType
+      // detect if list data is missing report markers
       const beforeMatched = all.filter(isReportRow).length;
+
+      // enrich if needed
       all = await enrichAdminListIfNeeded(all);
       const reports = all.filter(isReportRow);
 
-      // Helpful banner: tells you projection is missing and enrichment kicked in
-      if (all.length > 0 && beforeMatched === 0 && reports.length > 0) {
-        setDebugBanner(
-          `Reports were not detectable from /legal-documents/admin (missing Kind/FileType). ` +
-            `We fetched details per row to classify them. Backend improvement: include Kind + FileType in the admin list DTO/projection.`
-        );
-      } else if (all.length > 0 && reports.length === 0) {
-        setDebugBanner(
-          `No items matched as Report after enrichment. If you expected reports, confirm they are saved with Kind=Report or fileType="report".`
-        );
+      // ✅ show banner ONLY when there are NO reports to show
+      // and we needed extra work OR we suspect user expects something
+      if (reports.length === 0) {
+        if (all.length > 0 && beforeMatched === 0) {
+          setBanner(
+            "We couldn’t identify any reports in the current list. If you just created one, click Refresh or confirm it was saved as a Report."
+          );
+        } else if (all.length === 0) {
+          setBanner("No items found yet. Create a report using “+ New Report”.");
+        }
       }
 
       setRows(reports);
@@ -393,7 +397,6 @@ export default function AdminLLRServices() {
       publicPrice: allowPublicPurchase ? toDecimalOrNull(form.publicPrice) : null,
       publicCurrency: allowPublicPurchase ? (form.publicCurrency?.trim() || "KES") : "KES",
 
-      // If your PUT supports it:
       kind: "Report",
       contentProductId: toIntOrNull(form.contentProductId),
     };
@@ -439,7 +442,7 @@ export default function AdminLLRServices() {
       if (newId) {
         setEditing({ id: newId, title: form.title, coverImagePath: null });
         setInfo(`Report created (#${newId}). Upload cover below, then open Report Content to add text.`);
-        await loadAll(); // will now correctly show because we enrich if needed
+        await loadAll();
       } else {
         setInfo("Report created. Refresh list.");
         await loadAll();
@@ -537,7 +540,7 @@ export default function AdminLLRServices() {
       </div>
 
       {(error || info) && <div className={`admin-alert ${error ? "error" : "ok"}`}>{error || info}</div>}
-      {debugBanner && <div className="minihelp ok">{debugBanner}</div>}
+      {banner && <div className="minihelp ok">{banner}</div>}
 
       <div className="admin-card admin-card-fill">
         <div className="admin-toolbar">
@@ -851,7 +854,7 @@ export default function AdminLLRServices() {
                       </div>
                     )}
 
-                    <div className="minihelp warn">
+                    <div className="minihelp.warn">
                       Ebook uploads are disabled here. Reports are text-based and managed in the Reports module.
                     </div>
                   </div>
