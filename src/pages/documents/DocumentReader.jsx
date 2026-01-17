@@ -29,6 +29,7 @@ export default function DocumentReader() {
   const [loadingAccess, setLoadingAccess] = useState(true);
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [loadingAccessHint, setLoadingAccessHint] = useState("Checking access");
+  
 
   // hard-block overlay
   const [blocked, setBlocked] = useState(false);
@@ -96,7 +97,7 @@ export default function DocumentReader() {
 
     async function fetchAccessOnce() {
       // 1) Load access rules (must be first)
-      const accessRes = await api.get(`/legal-documents/${docId}/access`);
+      const accessRes = await api.get(`/legal-documents/${docId}/access`, { __skipThrottle: true });
       return accessRes.data;
     }
 
@@ -185,10 +186,14 @@ export default function DocumentReader() {
             await sleep(delays[Math.min(attempt - 1, delays.length - 1)]);
           }
         }
-      } catch (err) {
-        console.error("Failed to load access", err);
-        if (!cancelled && aliveRef.current) setAccess(null);
-      } finally {
+        } catch (err) {
+          // ✅ If request was canceled by our throttle, don't treat it as a real failure
+          if (err?.code === "ERR_CANCELED") return;
+
+          console.error("Failed to load access", err);
+          if (!cancelled && aliveRef.current) setAccess(null);
+        } finally {
+
         if (!cancelled && aliveRef.current) setLoadingAccess(false);
       }
     }
