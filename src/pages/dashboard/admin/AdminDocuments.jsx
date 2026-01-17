@@ -9,9 +9,14 @@ import "../../../styles/adminCrud.css";
  * - Create defaults to Kind=Standard
  * - Does NOT show Report-only fields (Kind, ContentProductId)
  *
+ * 🔧 FIX: /legal-documents/admin may not return Kind/FileType
+ * - We now "enrich" missing rows by calling /legal-documents/{id}
+ * - Then filter out report rows reliably.
+ *
  * Covers are served from /storage (NOT /api/storage)
  * API_BASE_URL is usually: https://localhost:7033/api
  */
+
 function getServerOrigin() {
   return String(API_BASE_URL || "").replace(/\/api\/?$/i, "");
 }
@@ -24,7 +29,6 @@ function buildCoverUrl(coverImagePath) {
 function getApiErrorMessage(err, fallback = "Request failed.") {
   const data = err?.response?.data;
 
-  // ASP.NET validation often looks like { errors: { Field: [msg] } }
   if (data && typeof data === "object") {
     if (typeof data.message === "string") return data.message;
     if (typeof data.error === "string") return data.error;
@@ -98,17 +102,67 @@ const CATEGORY_OPTIONS = [
   "LLRServices",
 ];
 
+function pickKind(r) {
+  return r?.kind ?? r?.Kind ?? null;
+}
+function pickFileType(r) {
+  const ft = r?.fileType ?? r?.FileType ?? null;
+  return ft == null ? "" : String(ft);
+}
+
 /**
- * ✅ Detect report rows from API:
- * - backend might return enum string ("Report") or int (2)
- * - BUT /legal-documents/admin may not include Kind
- * - fallback: fileType === "report"
+ * ✅ Detect report rows robustly:
+ * - Kind may be "Report" or 2
+ * - fileType may be "report"
  */
 function isReportRow(r) {
-  const k = r?.kind ?? r?.Kind;
-  const ft = String(r?.fileType ?? r?.FileType ?? "").toLowerCase();
-
+  const k = pickKind(r);
+  const ft = pickFileType(r).toLowerCase();
   return k === "Report" || k === 2 || ft === "report";
+}
+
+/**
+ * 🔧 Enrich missing Kind/FileType by calling /legal-documents/{id}.
+ * We only do this when the admin list projection is missing those fields.
+ */
+async function enrichAdminListIfNeeded(all) {
+  if (!Array.isArray(all) || all.length === 0) return all;
+
+  const needs = all.filter((r) => {
+    const k = pickKind(r);
+    const ft = pickFileType(r);
+    return (k === null || k === undefined || k === "") && (!ft || ft === "");
+  });
+
+  if (needs.length === 0) return all;
+
+  // limit concurrency by chunking
+  const byId = new Map(all.map((r) => [r.id, { ...r }]));
+  const ids = needs.map((r) => r.id).filter(Boolean);
+
+  const CHUNK = 8;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const slice = ids.slice(i, i + CHUNK);
+    const results = await Promise.all(
+      slice.map(async (id) => {
+        try {
+          const res = await api.get(`/legal-documents/${id}`);
+          return res.data;
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    for (const d of results) {
+      if (!d?.id) continue;
+      const existing = byId.get(d.id) || {};
+      // merge: keep list fields, overlay detail fields (kind/fileType/contentProductId/etc)
+      byId.set(d.id, { ...existing, ...d });
+    }
+  }
+
+  return Array.from(byId.values());
 }
 
 const emptyForm = {
@@ -122,7 +176,6 @@ const emptyForm = {
   category: "Commentaries",
   countryId: "",
 
-  // ✅ pages
   pageCount: "",
 
   isPremium: true,
@@ -167,13 +220,18 @@ export default function AdminDocuments() {
     setError("");
     setInfo("");
     setLoading(true);
+
     try {
       const [docsRes, countriesRes] = await Promise.all([
         api.get("/legal-documents/admin"),
         api.get("/Country"),
       ]);
 
-      const all = Array.isArray(docsRes.data) ? docsRes.data : [];
+      let all = Array.isArray(docsRes.data) ? docsRes.data : [];
+
+      // 🔧 key fix: enrich missing Kind/FileType
+      all = await enrichAdminListIfNeeded(all);
+
       // ✅ filter out reports (this page is Standard-only)
       setRows(all.filter((r) => !isReportRow(r)));
 

@@ -5,11 +5,13 @@ import "../../../styles/adminCrud.css";
 
 /**
  * LLR Services = Report-kind LegalDocuments only.
- * IMPORTANT:
- * - Your /legal-documents/admin list DTO may NOT include Kind.
- * - Fallback filter uses FileType === "report" (since DB has fileType=report).
- * - Create defaults: Kind=Report + FileType=report
- * - No ebook upload (cover only)
+ *
+ * 🔧 FIX: /legal-documents/admin may not return Kind/FileType
+ * - We now "enrich" missing rows by calling /legal-documents/{id}
+ * - Then filter report rows reliably.
+ *
+ * Create defaults: Kind=Report + FileType=report
+ * No ebook upload (cover only)
  */
 
 function getServerOrigin() {
@@ -97,6 +99,61 @@ const CATEGORY_OPTIONS = [
   "LLRServices",
 ];
 
+function pickKind(r) {
+  return r?.kind ?? r?.Kind ?? null;
+}
+function pickFileType(r) {
+  const ft = r?.fileType ?? r?.FileType ?? null;
+  return ft == null ? "" : String(ft);
+}
+
+function isReportRow(r) {
+  const k = pickKind(r);
+  const ft = pickFileType(r).toLowerCase();
+  return k === "Report" || k === 2 || ft === "report";
+}
+
+/**
+ * 🔧 Enrich missing Kind/FileType by calling /legal-documents/{id}.
+ */
+async function enrichAdminListIfNeeded(all) {
+  if (!Array.isArray(all) || all.length === 0) return all;
+
+  const needs = all.filter((r) => {
+    const k = pickKind(r);
+    const ft = pickFileType(r);
+    return (k === null || k === undefined || k === "") && (!ft || ft === "");
+  });
+
+  if (needs.length === 0) return all;
+
+  const byId = new Map(all.map((r) => [r.id, { ...r }]));
+  const ids = needs.map((r) => r.id).filter(Boolean);
+
+  const CHUNK = 8;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const slice = ids.slice(i, i + CHUNK);
+    const results = await Promise.all(
+      slice.map(async (id) => {
+        try {
+          const res = await api.get(`/legal-documents/${id}`);
+          return res.data;
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    for (const d of results) {
+      if (!d?.id) continue;
+      const existing = byId.get(d.id) || {};
+      byId.set(d.id, { ...existing, ...d });
+    }
+  }
+
+  return Array.from(byId.values());
+}
+
 const emptyForm = {
   title: "",
   description: "",
@@ -123,13 +180,6 @@ const emptyForm = {
   publicCurrency: "KES",
 };
 
-function isReportRow(r) {
-  // backend might return enum string ("Report") or int (2) OR not return Kind at all.
-  const k = r?.kind ?? r?.Kind;
-  const ft = String(r?.fileType ?? r?.FileType ?? "").toLowerCase();
-  return k === "Report" || k === 2 || ft === "report";
-}
-
 export default function AdminLLRServices() {
   const [rows, setRows] = useState([]);
   const [countries, setCountries] = useState([]);
@@ -141,7 +191,6 @@ export default function AdminLLRServices() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
-  // Debug banner: helps confirm endpoint missing Kind
   const [debugBanner, setDebugBanner] = useState("");
 
   // Modal state
@@ -170,14 +219,22 @@ export default function AdminLLRServices() {
         api.get("/Country"),
       ]);
 
-      const all = Array.isArray(docsRes.data) ? docsRes.data : [];
+      let all = Array.isArray(docsRes.data) ? docsRes.data : [];
+
+      // 🔧 key fix: enrich missing Kind/FileType
+      const beforeMatched = all.filter(isReportRow).length;
+      all = await enrichAdminListIfNeeded(all);
       const reports = all.filter(isReportRow);
 
-      // If none matched, it usually means the endpoint is not returning Kind and also not returning fileType.
-      if (all.length > 0 && reports.length === 0) {
+      // Helpful banner: tells you projection is missing and enrichment kicked in
+      if (all.length > 0 && beforeMatched === 0 && reports.length > 0) {
         setDebugBanner(
-          `No items matched as Report. This usually means /legal-documents/admin is not returning Kind or FileType. ` +
-            `Quick fix: include Kind + FileType in the admin list DTO/projection.`
+          `Reports were not detectable from /legal-documents/admin (missing Kind/FileType). ` +
+            `We fetched details per row to classify them. Backend improvement: include Kind + FileType in the admin list DTO/projection.`
+        );
+      } else if (all.length > 0 && reports.length === 0) {
+        setDebugBanner(
+          `No items matched as Report after enrichment. If you expected reports, confirm they are saved with Kind=Report or fileType="report".`
         );
       }
 
@@ -204,7 +261,7 @@ export default function AdminLLRServices() {
       const status = String(r.status ?? "").toLowerCase();
       const premium = r.isPremium ? "premium" : "free";
       const pages = String(r.pageCount ?? "").toLowerCase();
-      const ft = String(r.fileType ?? r.FileType ?? "").toLowerCase();
+      const ft = pickFileType(r).toLowerCase();
 
       const allow = safeBool(r.allowPublicPurchase ?? r.AllowPublicPurchase, false);
       const currency = String((r.publicCurrency ?? r.PublicCurrency ?? "") || "").toLowerCase();
@@ -225,7 +282,7 @@ export default function AdminLLRServices() {
     setError("");
     setInfo("");
     setEditing(null);
-    setForm({ ...emptyForm }); // ✅ always defaults to Report
+    setForm({ ...emptyForm }); // defaults to Report
     resetCoverInput();
     setOpen(true);
   }
@@ -254,7 +311,6 @@ export default function AdminLLRServices() {
 
         pageCount: d.pageCount ?? "",
 
-        // ✅ keep Report fixed
         kind: "Report",
         contentProductId: d.contentProductId ?? "",
 
@@ -383,7 +439,7 @@ export default function AdminLLRServices() {
       if (newId) {
         setEditing({ id: newId, title: form.title, coverImagePath: null });
         setInfo(`Report created (#${newId}). Upload cover below, then open Report Content to add text.`);
-        await loadAll();
+        await loadAll(); // will now correctly show because we enrich if needed
       } else {
         setInfo("Report created. Refresh list.");
         await loadAll();
@@ -523,7 +579,7 @@ export default function AdminLLRServices() {
                 const currency = getCurrency(r);
                 const price = getPrice(r);
                 const isPremium = !!r.isPremium;
-                const ft = String(r.fileType ?? r.FileType ?? "—").toLowerCase();
+                const ft = pickFileType(r).toLowerCase() || "—";
 
                 return (
                   <tr key={r.id} className={`${idx % 2 === 1 ? "row-zebra" : ""} row-hover`}>
@@ -575,7 +631,6 @@ export default function AdminLLRServices() {
                           Edit
                         </button>
 
-                        {/* Placeholder: we will wire this to a ReportContent page */}
                         <button
                           className="admin-action-btn small"
                           onClick={() => setInfo(`Next: open Report Content for LegalDocumentId=${r.id}`)}
