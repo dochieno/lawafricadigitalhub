@@ -102,7 +102,7 @@ const emptyForm = {
   countryId: "",
   pageCount: "",
 
-  // ✅ optional mapping so it counts under DOCS for product
+  // optional mapping so it counts under DOCS for a product
   contentProductId: "",
 
   // pricing
@@ -115,9 +115,42 @@ const emptyForm = {
   publicCurrency: "KES",
 };
 
+/**
+ * Robust detector:
+ * backend could return:
+ * - kind: 2
+ * - kind: "Report"
+ * - kind: "report"
+ * - kind: "2"
+ * - Kind / legalDocumentKind / documentKind
+ * - OR no kind at all (admin list DTO missing field)
+ */
+function readKindValue(r) {
+  return (
+    r?.kind ??
+    r?.Kind ??
+    r?.legalDocumentKind ??
+    r?.LegalDocumentKind ??
+    r?.documentKind ??
+    r?.DocumentKind ??
+    null
+  );
+}
 function isReportRow(r) {
-  const k = r?.kind ?? r?.Kind;
-  return k === "Report" || k === 2;
+  const k = readKindValue(r);
+  if (k === null || k === undefined) return false;
+
+  // numeric or numeric-string
+  if (k === 2 || k === "2") return true;
+
+  // string enums
+  const s = String(k).trim().toLowerCase();
+  if (s === "report") return true;
+
+  // sometimes APIs serialize as "LegalDocumentKind.Report"
+  if (s.endsWith(".report")) return true;
+
+  return false;
 }
 
 export default function AdminLLRServices() {
@@ -158,8 +191,19 @@ export default function AdminLLRServices() {
       ]);
 
       const all = Array.isArray(docsRes.data) ? docsRes.data : [];
-      setRows(all.filter(isReportRow));
+
+      // ✅ Filter to reports only
+      const reportsOnly = all.filter(isReportRow);
+
+      setRows(reportsOnly);
       setCountries(Array.isArray(countriesRes.data) ? countriesRes.data : []);
+
+      // Helpful message if nothing matched (usually means admin list isn't returning kind)
+      if (all.length > 0 && reportsOnly.length === 0) {
+        setInfo(
+          "No items matched as Report. This usually means /legal-documents/admin is not returning the Kind field. Add Kind to the admin list DTO or endpoint projection."
+        );
+      }
     } catch (e) {
       setRows([]);
       setError(getApiErrorMessage(e, "Failed to load LLR Services."));
@@ -211,7 +255,7 @@ export default function AdminLLRServices() {
       const res = await api.get(`/legal-documents/${row.id}`);
       const d = res.data;
 
-      // ✅ safety: this page only edits reports
+      // Safety: this page only edits reports
       if (!isReportRow(d)) {
         setInfo("This item is not a Report. Please edit it from the Books page.");
         setOpen(false);
@@ -225,6 +269,7 @@ export default function AdminLLRServices() {
         countryId: d.countryId ?? "",
         pageCount: d.pageCount ?? "",
 
+        // your details endpoint might not return this; keep whatever you had typed
         contentProductId: d.contentProductId ?? "",
 
         isPremium: !!d.isPremium,
@@ -256,8 +301,8 @@ export default function AdminLLRServices() {
       category: form.category,
       countryId: Number(form.countryId),
 
-      // ✅ fixed for Reports
-      kind: "Report",
+      // ✅ force report
+      kind: 2, // <= safest if backend isn't using string enums
       contentProductId: toIntOrNull(form.contentProductId),
 
       filePath: "",
@@ -299,8 +344,8 @@ export default function AdminLLRServices() {
       publicPrice: allowPublicPurchase ? toDecimalOrNull(form.publicPrice) : null,
       publicCurrency: allowPublicPurchase ? (form.publicCurrency?.trim() || "KES") : "KES",
 
-      // ✅ keep report fixed and optional mapping
-      kind: "Report",
+      // keep report fixed
+      kind: 2,
       contentProductId: toIntOrNull(form.contentProductId),
     };
   }
@@ -454,20 +499,21 @@ export default function AdminLLRServices() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th style={{ width: "44%" }}>Title</th>
+                <th style={{ width: "40%" }}>Title</th>
                 <th style={{ width: "10%" }}>Status</th>
                 <th style={{ width: "10%" }}>Premium</th>
                 <th style={{ width: "8%" }} className="num-cell">Pages</th>
                 <th style={{ width: "10%" }}>Public</th>
                 <th style={{ width: "10%" }} className="num-cell">Price</th>
-                <th style={{ textAlign: "right", width: "18%" }}>Actions</th>
+                <th style={{ width: "8%" }}>Kind</th>
+                <th style={{ textAlign: "right", width: "14%" }}>Actions</th>
               </tr>
             </thead>
 
             <tbody>
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ color: "#6b7280", padding: "14px" }}>
+                  <td colSpan={8} style={{ color: "#6b7280", padding: "14px" }}>
                     No reports found.
                   </td>
                 </tr>
@@ -478,6 +524,7 @@ export default function AdminLLRServices() {
                 const currency = getCurrency(r);
                 const price = getPrice(r);
                 const isPremium = !!r.isPremium;
+                const kindVal = readKindValue(r);
 
                 return (
                   <tr key={r.id} className={`${idx % 2 === 1 ? "row-zebra" : ""} row-hover`}>
@@ -506,8 +553,11 @@ export default function AdminLLRServices() {
                     </td>
 
                     <td className="num-cell">
-                      {!isPremium ? "—" : !allow ? "—" : price == null ? "—" : `${currency || ""} ${formatMoney(price)}`}
-                    </td>
+                      {!isPremium ? "—" : !allow ? "—" : price == null ? "—" : `${currency || ""} ${formatMoney(price)}`
+              }</td>
+
+                    {/* DEBUG COLUMN: shows actual returned kind */}
+                    <td title="Returned kind value from API">{kindVal == null ? "—" : String(kindVal)}</td>
 
                     <td>
                       <div className="actions">
@@ -609,9 +659,6 @@ export default function AdminLLRServices() {
                     onChange={(e) => setField("contentProductId", e.target.value)}
                     placeholder="e.g. 1 (LawAfrica Reports)"
                   />
-                  <div className="minihelp">
-                    Optional. If set, this report appears under that Product’s DOCS count.
-                  </div>
                 </div>
 
                 <div className="admin-field admin-span2">
@@ -620,58 +667,11 @@ export default function AdminLLRServices() {
                 </div>
               </div>
 
-              <div className="admin-form-section">
-                <div className="admin-form-section-title">Pricing</div>
-                <div className="admin-form-section-sub">Only premium documents can be sold publicly.</div>
+              <div className="minihelp warn" style={{ marginTop: 10 }}>
+                Ebook uploads are disabled for reports. Use “Report Content” to add the text.
               </div>
 
-              <div className="admin-grid">
-                <div className="admin-field">
-                  <label>Premium?</label>
-                  <select
-                    value={String(!!form.isPremium)}
-                    onChange={(e) => setField("isPremium", e.target.value === "true")}
-                  >
-                    <option value="true">Yes</option>
-                    <option value="false">No</option>
-                  </select>
-                </div>
-
-                <div className="admin-field">
-                  <label>Allow public purchase?</label>
-                  <select
-                    value={String(!!form.allowPublicPurchase)}
-                    onChange={(e) => setField("allowPublicPurchase", e.target.value === "true")}
-                    disabled={!form.isPremium}
-                  >
-                    <option value="true">Yes</option>
-                    <option value="false">No</option>
-                  </select>
-                </div>
-
-                <div className="admin-field">
-                  <label>Currency</label>
-                  <input
-                    value={form.publicCurrency}
-                    onChange={(e) => setField("publicCurrency", e.target.value)}
-                    disabled={!form.isPremium || !form.allowPublicPurchase}
-                  />
-                </div>
-
-                <div className="admin-field">
-                  <label>Public price</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.publicPrice}
-                    onChange={(e) => setField("publicPrice", e.target.value)}
-                    disabled={!form.isPremium || !form.allowPublicPurchase}
-                  />
-                </div>
-              </div>
-
-              <div className="admin-form-section">
+              <div className="admin-form-section" style={{ marginTop: 12 }}>
                 <div className="admin-form-section-title">Cover image</div>
                 <div className="admin-form-section-sub">Save first, then upload a cover (optional).</div>
               </div>
@@ -715,10 +715,6 @@ export default function AdminLLRServices() {
                         </div>
                       </div>
                     )}
-
-                    <div className="minihelp warn">
-                      Ebook uploads are disabled for reports. Use “Report Content” to add the text.
-                    </div>
                   </div>
                 </div>
               </div>
