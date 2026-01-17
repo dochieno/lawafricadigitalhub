@@ -6,16 +6,151 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>LawAfricadigitalhub</title>
 
-        <!-- Optional but recommended -->
+    <!-- Optional but recommended -->
     <meta name="application-name" content="LawAfricadigitalhub" />
     <meta name="apple-mobile-web-app-title" content="LawAfricadigitalhub" />
     <meta name="theme-color" content="#8f0f18" />
-
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    
   </head>
+
   <body>
     <div id="root"></div>
+
+    <!-- ✅ DEBUG (safe): catches silent runtime crashes + shows on-screen overlay -->
+    <script>
+      (function () {
+        // Turn off by setting window.__LA_DEBUG__ = false in console if needed.
+        window.__LA_DEBUG__ = true;
+
+        function ensureOverlay() {
+          let el = document.getElementById("__la_debug_overlay");
+          if (el) return el;
+
+          el = document.createElement("div");
+          el.id = "__la_debug_overlay";
+          el.style.position = "fixed";
+          el.style.inset = "0";
+          el.style.zIndex = "999999";
+          el.style.background = "rgba(0,0,0,0.72)";
+          el.style.color = "white";
+          el.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
+          el.style.fontSize = "12px";
+          el.style.padding = "14px";
+          el.style.display = "none";
+          el.style.whiteSpace = "pre-wrap";
+          el.style.overflow = "auto";
+
+          const header = document.createElement("div");
+          header.style.display = "flex";
+          header.style.alignItems = "center";
+          header.style.justifyContent = "space-between";
+          header.style.gap = "10px";
+          header.style.marginBottom = "10px";
+
+          const title = document.createElement("div");
+          title.textContent = "LawAfrica Debug Overlay (runtime error detected)";
+          title.style.fontWeight = "900";
+          title.style.fontSize = "13px";
+
+          const btn = document.createElement("button");
+          btn.textContent = "Close";
+          btn.style.cursor = "pointer";
+          btn.style.background = "white";
+          btn.style.color = "#111";
+          btn.style.border = "none";
+          btn.style.borderRadius = "10px";
+          btn.style.padding = "8px 10px";
+          btn.style.fontWeight = "800";
+          btn.onclick = function () {
+            el.style.display = "none";
+          };
+
+          header.appendChild(title);
+          header.appendChild(btn);
+
+          const body = document.createElement("div");
+          body.id = "__la_debug_overlay_body";
+
+          el.appendChild(header);
+          el.appendChild(body);
+          document.body.appendChild(el);
+          return el;
+        }
+
+        function showOverlay(text) {
+          if (!window.__LA_DEBUG__) return;
+          const overlay = ensureOverlay();
+          const body = document.getElementById("__la_debug_overlay_body");
+          if (body) body.textContent = text;
+          overlay.style.display = "block";
+        }
+
+        function fmtError(prefix, err, extra) {
+          const parts = [];
+          parts.push(prefix);
+          parts.push("Time: " + new Date().toISOString());
+          parts.push("URL: " + location.href);
+
+          if (extra) parts.push("Extra: " + extra);
+
+          if (err) {
+            parts.push("Name: " + (err.name || "(no name)"));
+            parts.push("Message: " + (err.message || String(err)));
+            if (err.stack) parts.push("Stack:\n" + err.stack);
+          } else {
+            parts.push("Error: (no error object)");
+          }
+
+          return parts.join("\n");
+        }
+
+        // 1) Catch runtime JS errors
+        window.addEventListener("error", function (e) {
+          const err = e.error || new Error(e.message || "Unknown error");
+          console.error("[LA DEBUG] window.error:", e);
+          showOverlay(fmtError("WINDOW ERROR", err, "Source: " + (e.filename || "") + ":" + (e.lineno || "") + ":" + (e.colno || "")));
+        });
+
+        // 2) Catch unhandled promise rejections
+        window.addEventListener("unhandledrejection", function (e) {
+          console.error("[LA DEBUG] unhandledrejection:", e);
+          const reason = e.reason;
+          const err =
+            reason instanceof Error ? reason : new Error(typeof reason === "string" ? reason : JSON.stringify(reason));
+          showOverlay(fmtError("UNHANDLED PROMISE REJECTION", err));
+        });
+
+        // 3) Confirm whether the app mounts
+        document.addEventListener("DOMContentLoaded", function () {
+          console.log("[LA DEBUG] DOMContentLoaded. Root exists:", !!document.getElementById("root"));
+          // If root stays empty after a few seconds, show a hint overlay (common in white screen cases)
+          setTimeout(function () {
+            const root = document.getElementById("root");
+            const isEmpty = root && root.childNodes && root.childNodes.length === 0;
+            if (window.__LA_DEBUG__ && isEmpty) {
+              showOverlay(
+                [
+                  "APP DID NOT MOUNT (root is empty after 4s)",
+                  "Time: " + new Date().toISOString(),
+                  "URL: " + location.href,
+                  "",
+                  "Most common causes:",
+                  "1) main.jsx crashed before render (check console logs above)",
+                  "2) React route chunk crashed (lazy import failure)",
+                  "3) Infinite redirect / navigation loop",
+                  "4) Build asset mismatch or cached broken deploy",
+                  "",
+                  "Next steps:",
+                  "- Open DevTools Console and look for [LA DEBUG] lines.",
+                  "- Hard refresh (Ctrl+Shift+R).",
+                  "- Check Application -> Service Workers (unregister if any)."
+                ].join("\n")
+              );
+            }
+          }, 4000);
+        });
+      })();
+    </script>
+
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

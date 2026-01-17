@@ -3,7 +3,7 @@ import axios from "axios";
 import { getToken, clearToken, isTokenExpired } from "../auth/auth";
 
 // Base = https://localhost:7033 (dev) OR https://lawafricaapi.onrender.com (prod)
-const BASE = (import.meta.env.VITE_API_BASE_URL || "https://lawafricaapi.onrender.com")
+const BASE = String(import.meta.env.VITE_API_BASE_URL || "https://lawafricaapi.onrender.com")
   .trim()
   .replace(/\/$/, "");
 
@@ -21,12 +21,28 @@ const api = axios.create({
 let hasRedirectedOn401 = false;
 
 /**
- * ✅ Only during payment return should we avoid force-logout redirects.
+ * ✅ Only during payment return / payment confirmation should we avoid force-logout redirects.
+ * Includes:
+ * - /payments/paystack/return...
+ * - /dashboard/documents/:id?paid=1&provider=paystack...
+ * - /dashboard/documents/:id/read?paid=1&provider=paystack...
  */
-function isOnPaystackReturnRoute() {
+function isInPaystackReturnOrPaidContext() {
   try {
     const p = window.location.pathname || "";
-    return p === "/payments/paystack/return" || p.startsWith("/payments/paystack/return");
+    const qs = new URLSearchParams(window.location.search || "");
+    const paid = (qs.get("paid") || "").trim();
+    const provider = (qs.get("provider") || "").trim().toLowerCase();
+
+    const isReturn =
+      p === "/payments/paystack/return" || p.startsWith("/payments/paystack/return");
+
+    const isPaidContext =
+      paid === "1" &&
+      provider === "paystack" &&
+      (p.startsWith("/dashboard/documents/") || p.startsWith("/dashboard/library"));
+
+    return isReturn || isPaidContext;
   } catch {
     return false;
   }
@@ -43,6 +59,19 @@ function isAuthEndpoint(url = "") {
     /\/Auth\/confirm-2fa/i.test(u) ||
     /\/Security\/verify-2fa-setup/i.test(u) ||
     /\/Security\/resend-2fa-setup/i.test(u)
+  );
+}
+
+/**
+ * ✅ Public payment endpoints that must still work even if token is expired
+ * (important for paystack return + confirmation UX).
+ */
+function isPublicPaymentEndpoint(url = "") {
+  const u = String(url || "");
+  return (
+    /\/payments\/paystack\/confirm/i.test(u) ||
+    /\/payments\/paystack\/intent-by-reference/i.test(u) ||
+    /\/payments\/paystack\/return-visit/i.test(u)
   );
 }
 
@@ -67,7 +96,6 @@ function isPdfDownload(url = "") {
  */
 const recentRequestMap = new Map();
 
-// Keep your original, but now it’s safe because keys are more accurate.
 // If you still want it more “responsive”, you can reduce to 500–800ms.
 const THROTTLE_MS = 1200;
 
@@ -78,7 +106,6 @@ function stableStringify(obj) {
     const out = {};
     for (const k of keys) {
       const v = obj[k];
-      // keep signature small and stable
       if (v === undefined) continue;
       if (v === null) out[k] = null;
       else if (typeof v === "string") out[k] = v.slice(0, 80);
@@ -120,7 +147,6 @@ function makeReqKey(config) {
   // ✅ include responseType (blob/arraybuffer should never collide with json)
   const rt = String(config?.responseType || "");
 
-  // Keep signature small; enough to stop repeated identical storms
   let bodySig = "";
   try {
     if (config?.data && typeof config.data === "object" && !(config.data instanceof FormData)) {
@@ -170,8 +196,6 @@ function shouldThrottle(config) {
 // ✅ Attach JWT to every request + handle FormData correctly + stop expired-token requests
 api.interceptors.request.use(
   (config) => {
-    // ✅ Stop request storms early (now safe because params+range are part of signature,
-    // and PDF downloads are excluded)
     if (shouldThrottle(config)) {
       return Promise.reject(
         new axios.CanceledError("Throttled duplicate request (preventing request storm).")
@@ -179,18 +203,24 @@ api.interceptors.request.use(
     }
 
     const token = getToken();
+    const url = String(config?.url || "");
 
-    // ✅ If token exists but is expired, clear it and STOP the request,
-    // EXCEPT for auth endpoints (login / 2fa actions).
-    if (token && isTokenExpired() && !isAuthEndpoint(config?.url)) {
+    /**
+     * ✅ IMPORTANT:
+     * If token exists but is expired, clear it and STOP the request,
+     * EXCEPT for:
+     * - auth endpoints
+     * - public payment endpoints (paystack confirm / intent-by-reference / return-visit)
+     */
+    if (token && isTokenExpired() && !isAuthEndpoint(url) && !isPublicPaymentEndpoint(url)) {
       clearToken();
       return Promise.reject(
         new axios.CanceledError("Token expired. Request cancelled; user must login again.")
       );
     }
 
-    // ✅ Attach Authorization if token exists (avoid attaching on login endpoints)
-    if (token && !isAuthEndpoint(config?.url)) {
+    // ✅ Attach Authorization if token exists (avoid attaching on auth endpoints)
+    if (token && !isAuthEndpoint(url)) {
       config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -207,7 +237,7 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// ✅ Auto-clear token + redirect to login on 401 ONLY (except Paystack return route)
+// ✅ Auto-clear token + redirect to login on 401 ONLY (except Paystack return/paid context)
 api.interceptors.response.use(
   (res) => {
     hasRedirectedOn401 = false;
@@ -226,7 +256,8 @@ api.interceptors.response.use(
     }
 
     if (status === 401) {
-      if (isOnPaystackReturnRoute()) {
+      // ✅ KEY FIX: do NOT redirect away while confirming paystack payment
+      if (isInPaystackReturnOrPaidContext()) {
         return Promise.reject(error);
       }
 
@@ -245,7 +276,6 @@ api.interceptors.response.use(
 export default api;
 
 export async function checkDocumentAvailability(documentId) {
-  // Optional: skip throttle just in case multiple components call this quickly
   const res = await api.get(`/legal-documents/${documentId}/availability`, { __skipThrottle: true });
   return res.data?.data ?? res.data;
 }
