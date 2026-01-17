@@ -37,6 +37,23 @@ const CASETYPE_OPTIONS = [
   { label: "Constitutional", value: 6 },
 ];
 
+// ✅ Service options (enum int values) — keep in sync with backend enum values
+const SERVICE_OPTIONS = [
+  { label: "LawAfrica Law Reports (LLR)", value: 1 },
+  { label: "Odunga's Digest", value: 2 },
+  { label: "Uganda Law Reports (ULR)", value: 3 },
+  { label: "Tanzania Law Reports (TLR)", value: 4 },
+  { label: "Southern Sudan Law Reports & Journal (SSLRJ)", value: 5 },
+  { label: "East Africa Law Reports (EALR)", value: 6 },
+  { label: "East Africa Court of Appeal Reports (EACA)", value: 7 },
+  { label: "East Africa General Reports (EAGR)", value: 8 },
+  { label: "East Africa Protectorate Law Reports (EAPLR)", value: 9 },
+  { label: "Zanzibar Protectorate Law Reports (ZPLR)", value: 10 },
+  { label: "Company Registry Search", value: 11 },
+  { label: "Uganda Law Society Reports (ULSR)", value: 12 },
+  { label: "Kenya Industrial Property Institute", value: 13 },
+];
+
 function toInt(v, fallback = 0) {
   const n = Number(v);
   return Number.isFinite(n) ? Math.floor(n) : fallback;
@@ -67,13 +84,9 @@ function dateInputFromIso(iso) {
   }
 }
 
-// ✅ must start with 3 letters then digits (CAR353)
-function isValidReportNumber(value) {
-  const s = String(value || "").trim();
-  return /^[A-Za-z]{3}\d+$/.test(s);
-}
-
 const emptyForm = {
+  countryId: "",
+  service: 1,
   citation: "",
   reportNumber: "",
   year: "",
@@ -98,25 +111,16 @@ export default function AdminLLRServices() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
+  // Countries
+  const [countries, setCountries] = useState([]);
+  const [countriesLoading, setCountriesLoading] = useState(true);
+
   // Create/Edit modal
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ ...emptyForm });
 
-  // Import
-  const [importOpen, setImportOpen] = useState(false);
-  const [importBusy, setImportBusy] = useState(false);
-  const [importError, setImportError] = useState("");
-  const [importInfo, setImportInfo] = useState("");
-
-  const [preview, setPreview] = useState(null);
-  const [dupStrategy, setDupStrategy] = useState("Skip");
-
-  const excelInputRef = useRef(null);
-  const wordInputRef = useRef(null);
-
-  const [wordReportNumber, setWordReportNumber] = useState("");
-  const [wordYear, setWordYear] = useState("");
+  const didInitRef = useRef(false);
 
   function setField(k, v) {
     setForm((p) => ({ ...p, [k]: v }));
@@ -132,17 +136,19 @@ export default function AdminLLRServices() {
     setOpen(false);
   }
 
-  function closeImport() {
-    if (importBusy) return;
-    setImportOpen(false);
-    setPreview(null);
-    setImportError("");
-    setImportInfo("");
-    setDupStrategy("Skip");
-    setWordReportNumber("");
-    setWordYear("");
-    if (excelInputRef.current) excelInputRef.current.value = "";
-    if (wordInputRef.current) wordInputRef.current.value = "";
+  async function fetchCountries() {
+    setCountriesLoading(true);
+    try {
+      // your controller route is /api/country
+      const res = await api.get("/country");
+      const list = Array.isArray(res.data) ? res.data : [];
+      setCountries(list);
+    } catch (e) {
+      // don’t hard-fail the page
+      setCountries([]);
+    } finally {
+      setCountriesLoading(false);
+    }
   }
 
   async function fetchList() {
@@ -151,18 +157,8 @@ export default function AdminLLRServices() {
     setInfo("");
 
     try {
-      // Prefer /admin (exists), but root /law-reports also exists now
-      let res;
-      try {
-        res = await api.get("/law-reports/admin");
-      } catch (e) {
-        const st = e?.response?.status;
-        if (st === 404 || st === 405) res = await api.get("/law-reports");
-        else throw e;
-      }
-
-      const list = Array.isArray(res.data) ? res.data : [];
-      setRows(list);
+      const res = await api.get("/law-reports/admin");
+      setRows(Array.isArray(res.data) ? res.data : []);
     } catch (e) {
       setRows([]);
       setError(getApiErrorMessage(e, "Failed to load law reports."));
@@ -172,8 +168,20 @@ export default function AdminLLRServices() {
   }
 
   useEffect(() => {
+    // init once
+    if (didInitRef.current) return;
+    didInitRef.current = true;
+    fetchCountries();
     fetchList();
   }, []);
+
+  const countriesById = useMemo(() => {
+    const m = new Map();
+    for (const c of countries) {
+      if (c && c.id != null) m.set(Number(c.id), c);
+    }
+    return m;
+  }, [countries]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -189,27 +197,35 @@ export default function AdminLLRServices() {
       const caseNo = String(r.caseNumber ?? "").toLowerCase();
       const judges = String(r.judges ?? "").toLowerCase();
 
-      const meta = `${reportNumber} ${year} ${citation} ${parties} ${court} ${caseNo} ${judges}`;
+      const serviceLabel =
+        SERVICE_OPTIONS.find((x) => x.value === toInt(r.service))?.label?.toLowerCase() || "";
+
+      const countryName =
+        countriesById.get(Number(r.countryId))?.name?.toLowerCase() || "";
+
+      const meta = `${reportNumber} ${year} ${citation} ${parties} ${court} ${caseNo} ${judges} ${serviceLabel} ${countryName}`;
       return title.includes(s) || meta.includes(s);
     });
-  }, [rows, q]);
+  }, [rows, q, countriesById]);
 
   function openCreate() {
     setError("");
     setInfo("");
     resetForm();
+
     setForm((p) => ({
       ...p,
       decisionType: 1,
       caseType: 2,
+      service: 1,
       year: String(new Date().getUTCFullYear()),
+      countryId: countries?.[0]?.id ? String(countries[0].id) : "",
     }));
+
     setOpen(true);
   }
 
   async function openEdit(row) {
-    if (!row?.id) return;
-
     setError("");
     setInfo("");
     setBusy(true);
@@ -221,8 +237,9 @@ export default function AdminLLRServices() {
       const d = res.data;
 
       setEditing(d);
-
       setForm({
+        countryId: d.countryId != null ? String(d.countryId) : "",
+        service: toInt(d.service, 1),
         citation: d.citation ?? "",
         reportNumber: d.reportNumber ?? "",
         year: d.year ?? "",
@@ -243,8 +260,15 @@ export default function AdminLLRServices() {
     }
   }
 
+  // ✅ Mirrors backend LawReportUpsertDto
+  // - CountryId included
+  // - Service included
+  // - Category is NOT sent (backend enforces LLRServices)
   function buildPayload() {
     return {
+      countryId: toIntOrNull(form.countryId) ?? 0,
+      service: toInt(form.service, 1),
+
       citation: form.citation?.trim() || null,
       reportNumber: String(form.reportNumber || "").trim(),
       year: toIntOrNull(form.year) ?? new Date().getUTCFullYear(),
@@ -263,14 +287,19 @@ export default function AdminLLRServices() {
   }
 
   function validate() {
-    const rn = String(form.reportNumber || "").trim();
-    if (!rn) return "Report number is required (e.g. CAR353).";
-    if (!isValidReportNumber(rn)) return "Report number must start with 3 letters then digits (e.g. CAR353).";
+    const countryId = toIntOrNull(form.countryId);
+    if (!countryId || countryId <= 0) return "Country is required.";
+
+    const service = toInt(form.service, 0);
+    if (!service || service <= 0) return "Service is required.";
+
+    if (!String(form.reportNumber || "").trim()) return "Report number is required (e.g. CAR353).";
 
     const year = toIntOrNull(form.year);
     if (!year || year < 1900 || year > 2100) return "Year must be between 1900 and 2100.";
 
     if (!String(form.contentText ?? "").trim()) return "Content text is required.";
+
     return "";
   }
 
@@ -290,7 +319,7 @@ export default function AdminLLRServices() {
         setInfo("Law report updated.");
       } else {
         const res = await api.post("/law-reports", payload);
-        const newId = res.data?.id ?? res.data?.data?.id ?? null;
+        const newId = res.data?.id ?? null;
         setInfo(newId ? `Law report created (#${newId}).` : "Law report created.");
       }
 
@@ -323,87 +352,6 @@ export default function AdminLLRServices() {
     }
   }
 
-  // -------- Import handlers --------
-
-  async function importExcel(file) {
-    setImportError("");
-    setImportInfo("");
-    setPreview(null);
-    if (!file) return;
-
-    setImportBusy(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file, file.name);
-
-      const res = await api.post("/law-reports/import/excel", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      setPreview(res.data);
-      setImportInfo("Preview ready. Review and confirm.");
-    } catch (e) {
-      setImportError(getApiErrorMessage(e, "Excel import preview failed."));
-    } finally {
-      setImportBusy(false);
-    }
-  }
-
-  async function importWord(file) {
-    setImportError("");
-    setImportInfo("");
-    setPreview(null);
-
-    if (!file) return;
-    if (!String(wordReportNumber || "").trim()) return setImportError("Report number is required for Word import.");
-    if (!isValidReportNumber(wordReportNumber)) return setImportError("Report number must be like CAR353.");
-
-    const y = toIntOrNull(wordYear);
-    if (!y || y < 1900 || y > 2100) return setImportError("Year must be between 1900 and 2100.");
-
-    setImportBusy(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file, file.name);
-      fd.append("reportNumber", String(wordReportNumber).trim());
-      fd.append("year", String(y));
-
-      const res = await api.post("/law-reports/import/word", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      setPreview(res.data);
-      setImportInfo("Preview ready. Review and confirm.");
-    } catch (e) {
-      setImportError(getApiErrorMessage(e, "Word import preview failed."));
-    } finally {
-      setImportBusy(false);
-    }
-  }
-
-  async function confirmImport() {
-    if (!preview?.items?.length) return setImportError("No preview items to confirm.");
-
-    setImportBusy(true);
-    setImportError("");
-    setImportInfo("");
-
-    try {
-      await api.post("/law-reports/import/confirm", {
-        duplicateStrategy: dupStrategy,
-        items: preview.items,
-      });
-
-      setImportInfo("Import completed.");
-      setPreview(null);
-      await fetchList();
-    } catch (e) {
-      setImportError(getApiErrorMessage(e, "Import confirm failed."));
-    } finally {
-      setImportBusy(false);
-    }
-  }
-
   function openContent(row) {
     navigate(`/dashboard/admin/llr-services/${row.id}/content`, {
       state: { title: row.title || "" },
@@ -419,35 +367,20 @@ export default function AdminLLRServices() {
         .row-hover:hover td { background: #fbfbff; }
         .num-cell { text-align:right; font-variant-numeric: tabular-nums; }
         .tight { white-space: nowrap; }
-        .pill2 { display:inline-flex; align-items:center; gap:6px; padding: 6px 10px; border-radius:999px; border:1px solid #e5e7eb; background:#fff; font-weight:900; font-size:12px; }
-        .import-box { border: 1px dashed #d1d5db; border-radius: 14px; background:#fff; padding: 12px; }
-        .import-row { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
-        .import-col { display:flex; flex-direction:column; gap:6px; min-width: 200px; }
-        .import-label { font-weight: 900; font-size: 12px; color:#374151; }
         .hint { color:#6b7280; font-size:12px; font-weight:700; }
-        .preview-wrap { margin-top: 10px; border-radius: 14px; border: 1px solid #e5e7eb; overflow:hidden; background:#fff; }
-        .preview-head { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; padding: 10px 12px; background:#fafafa; border-bottom: 1px solid #e5e7eb; }
-        .preview-table { width:100%; border-collapse: collapse; font-size: 12px; }
-        .preview-table th, .preview-table td { border-bottom: 1px solid #f3f4f6; padding: 8px 10px; vertical-align: top; }
-        .err { color:#991b1b; font-weight:900; }
-        .oktxt { color:#065f46; font-weight:900; }
       `}</style>
 
       <div className="admin-header">
         <div>
           <h1 className="admin-title">Admin · LLR Services (Reports)</h1>
           <p className="admin-subtitle">
-            Create and manage law reports. Saving a report automatically creates its linked LegalDocument.
+            Create and manage law reports. Category is fixed to LLR Services.
           </p>
         </div>
 
         <div className="admin-actions">
-          <button className="admin-btn" onClick={fetchList} disabled={busy || loading}>
+          <button className="admin-btn" onClick={() => { fetchCountries(); fetchList(); }} disabled={busy || loading}>
             Refresh
-          </button>
-
-          <button className="admin-btn" onClick={() => setImportOpen(true)} disabled={busy}>
-            Import
           </button>
 
           <button className="admin-btn primary compact" onClick={openCreate} disabled={busy}>
@@ -462,24 +395,27 @@ export default function AdminLLRServices() {
         <div className="admin-toolbar">
           <input
             className="admin-search admin-search-wide"
-            placeholder="Search by title, report number, year, parties, citation, court..."
+            placeholder="Search by title, report number, year, service, country, parties, citation, court..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
-          <div className="admin-pill muted">{loading ? "Loading…" : `${filtered.length} report(s)`}</div>
+          <div className="admin-pill muted">
+            {loading ? "Loading…" : `${filtered.length} report(s)`}
+          </div>
         </div>
 
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
               <tr>
-                <th style={{ width: "28%" }}>Title</th>
+                <th style={{ width: "22%" }}>Title</th>
+                <th style={{ width: "12%" }}>Country</th>
+                <th style={{ width: "14%" }}>Service</th>
                 <th style={{ width: "10%" }}>Report No.</th>
                 <th style={{ width: "6%" }} className="num-cell">Year</th>
                 <th style={{ width: "10%" }}>Decision</th>
                 <th style={{ width: "10%" }}>Case Type</th>
                 <th style={{ width: "18%" }}>Parties</th>
-                <th style={{ width: "10%" }}>Court</th>
                 <th style={{ width: "8%" }} className="tight">Date</th>
                 <th style={{ width: "10%", textAlign: "right" }}>Actions</th>
               </tr>
@@ -488,195 +424,53 @@ export default function AdminLLRServices() {
             <tbody>
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={9} style={{ color: "#6b7280", padding: 14 }}>
-                    No reports found. Click “+ New Report” or use Import.
+                  <td colSpan={10} style={{ color: "#6b7280", padding: 14 }}>
+                    No reports found. Click “+ New Report”.
                   </td>
                 </tr>
               )}
 
-              {filtered.map((r, idx) => (
-                <tr key={r.id} className={`${idx % 2 === 1 ? "row-zebra" : ""} row-hover`}>
-                  <td style={{ fontWeight: 900 }}>{r.title || "—"}</td>
-                  <td className="tight">{r.reportNumber || "—"}</td>
-                  <td className="num-cell">{r.year ?? "—"}</td>
-                  <td>{DECISION_OPTIONS.find((x) => x.value === toInt(r.decisionType))?.label || "—"}</td>
-                  <td>{CASETYPE_OPTIONS.find((x) => x.value === toInt(r.caseType))?.label || "—"}</td>
-                  <td>{r.parties || "—"}</td>
-                  <td>{r.court || "—"}</td>
-                  <td className="tight">{r.decisionDate ? String(r.decisionDate).slice(0, 10) : "—"}</td>
-                  <td>
-                    <div className="admin-row-actions" style={{ justifyContent: "flex-end", gap: 10 }}>
-                      <button className="admin-action-btn neutral small" onClick={() => openEdit(r)} disabled={busy}>
-                        Edit
-                      </button>
+              {filtered.map((r, idx) => {
+                const countryName =
+                  countriesById.get(Number(r.countryId))?.name || (r.countryId ? `#${r.countryId}` : "—");
+                const serviceName =
+                  SERVICE_OPTIONS.find((x) => x.value === toInt(r.service))?.label || "—";
 
-                      <button className="admin-action-btn small" onClick={() => openContent(r)} disabled={busy}>
-                        Report Content
-                      </button>
+                return (
+                  <tr key={r.id} className={`${idx % 2 === 1 ? "row-zebra" : ""} row-hover`}>
+                    <td style={{ fontWeight: 900 }}>{r.title || "—"}</td>
+                    <td className="tight">{countriesLoading ? "…" : countryName}</td>
+                    <td>{serviceName}</td>
+                    <td className="tight">{r.reportNumber || "—"}</td>
+                    <td className="num-cell">{r.year ?? "—"}</td>
+                    <td>{DECISION_OPTIONS.find((x) => x.value === toInt(r.decisionType))?.label || "—"}</td>
+                    <td>{CASETYPE_OPTIONS.find((x) => x.value === toInt(r.caseType))?.label || "—"}</td>
+                    <td>{r.parties || "—"}</td>
+                    <td className="tight">{r.decisionDate ? String(r.decisionDate).slice(0, 10) : "—"}</td>
+                    <td>
+                      <div className="admin-row-actions" style={{ justifyContent: "flex-end", gap: 10 }}>
+                        <button className="admin-action-btn neutral small" onClick={() => openEdit(r)} disabled={busy}>
+                          Edit
+                        </button>
 
-                      <button className="admin-action-btn danger small" onClick={() => remove(r)} disabled={busy}>
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        <button className="admin-action-btn small" onClick={() => openContent(r)} disabled={busy}>
+                          Report Content
+                        </button>
+
+                        <button className="admin-action-btn danger small" onClick={() => remove(r)} disabled={busy}>
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* IMPORT MODAL */}
-      {importOpen && (
-        <div className="admin-modal-overlay" onClick={closeImport}>
-          <div className="admin-modal" style={{ maxWidth: 1100 }} onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-head">
-              <div>
-                <h3 className="admin-modal-title">Import Reports</h3>
-                <div className="admin-modal-subtitle">Upload Excel (many rows) or Word (one report).</div>
-              </div>
-
-              <button className="admin-btn" onClick={closeImport} disabled={importBusy}>
-                Close
-              </button>
-            </div>
-
-            <div className="admin-modal-body admin-modal-scroll">
-              {(importError || importInfo) && (
-                <div className={`admin-alert ${importError ? "error" : "ok"}`}>{importError || importInfo}</div>
-              )}
-
-              <div className="import-box">
-                <div className="import-row">
-                  <div className="import-col">
-                    <div className="import-label">Excel import</div>
-                    <input
-                      ref={excelInputRef}
-                      type="file"
-                      accept=".xlsx,.xls"
-                      disabled={importBusy}
-                      onChange={(e) => importExcel(e.target.files?.[0] || null)}
-                    />
-                    <div className="hint">
-                      Expected columns: ReportNumber, Year, CaseNumber, Citation, Parties, Court, Judges, DecisionType, CaseType, DecisionDate, ContentText
-                    </div>
-                  </div>
-
-                  <div className="import-col" style={{ minWidth: 260 }}>
-                    <div className="import-label">Word import</div>
-                    <input
-                      ref={wordInputRef}
-                      type="file"
-                      accept=".docx"
-                      disabled={importBusy}
-                      onChange={(e) => importWord(e.target.files?.[0] || null)}
-                    />
-                    <div className="hint">Word file provides ContentText; you supply ReportNumber + Year.</div>
-                  </div>
-
-                  <div className="import-col" style={{ minWidth: 180 }}>
-                    <div className="import-label">ReportNumber *</div>
-                    <input
-                      value={wordReportNumber}
-                      onChange={(e) => setWordReportNumber(e.target.value)}
-                      disabled={importBusy}
-                      placeholder="e.g. CAR353"
-                    />
-                  </div>
-
-                  <div className="import-col" style={{ minWidth: 140 }}>
-                    <div className="import-label">Year *</div>
-                    <input
-                      value={wordYear}
-                      onChange={(e) => setWordYear(e.target.value)}
-                      disabled={importBusy}
-                      placeholder="e.g. 2020"
-                    />
-                  </div>
-
-                  <div className="import-col" style={{ minWidth: 220 }}>
-                    <div className="import-label">Duplicate strategy</div>
-                    <select value={dupStrategy} onChange={(e) => setDupStrategy(e.target.value)} disabled={importBusy}>
-                      <option value="Skip">Skip duplicates</option>
-                      <option value="Update">Update existing</option>
-                    </select>
-                    <div className="hint">If duplicates are found: skip or overwrite.</div>
-                  </div>
-
-                  <div className="import-col" style={{ minWidth: 150 }}>
-                    <button
-                      className="admin-btn primary"
-                      onClick={confirmImport}
-                      disabled={importBusy || !preview?.items?.length}
-                    >
-                      {importBusy ? "Working…" : "Confirm import"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {preview && (
-                <div className="preview-wrap">
-                  <div className="preview-head">
-                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                      <span className="pill2">Total: {preview.total ?? 0}</span>
-                      <span className="pill2">Valid: {preview.valid ?? 0}</span>
-                      <span className="pill2">Invalid: {preview.invalid ?? 0}</span>
-                      <span className="pill2">Duplicates: {preview.duplicates ?? 0}</span>
-                    </div>
-                    <div className="hint">Fix invalid rows before confirming.</div>
-                  </div>
-
-                  <div style={{ maxHeight: 380, overflow: "auto" }}>
-                    <table className="preview-table">
-                      <thead>
-                        <tr>
-                          <th>Row</th>
-                          <th>ReportNumber</th>
-                          <th>Year</th>
-                          <th>Citation</th>
-                          <th>DecisionType</th>
-                          <th>CaseType</th>
-                          <th>Duplicate</th>
-                          <th>Status</th>
-                          <th>Errors</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(preview.items || []).map((it, i) => (
-                          <tr key={i}>
-                            <td className="tight">{it.rowNumber ?? i + 1}</td>
-                            <td className="tight">{it.reportNumber || "—"}</td>
-                            <td className="tight">{it.year ?? "—"}</td>
-                            <td>{it.citation || "—"}</td>
-                            <td className="tight">{it.decisionType || "—"}</td>
-                            <td className="tight">{it.caseType || "—"}</td>
-                            <td className="tight">
-                              {it.isDuplicate ? <span className="err">Yes</span> : <span className="oktxt">No</span>}
-                            </td>
-                            <td className="tight">
-                              {it.isValid ? <span className="oktxt">Valid</span> : <span className="err">Invalid</span>}
-                            </td>
-                            <td className="err">{(it.errors || []).join("; ")}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="admin-modal-foot">
-              <button className="admin-btn" onClick={closeImport} disabled={importBusy}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* CREATE/EDIT MODAL */}
+      {/* ===================== CREATE/EDIT MODAL ===================== */}
       {open && (
         <div className="admin-modal-overlay" onClick={closeModal}>
           <div className="admin-modal" style={{ maxWidth: 1100 }} onClick={(e) => e.stopPropagation()}>
@@ -684,7 +478,7 @@ export default function AdminLLRServices() {
               <div>
                 <h3 className="admin-modal-title">{editing ? `Edit Report #${editing.id}` : "Create Law Report"}</h3>
                 <div className="admin-modal-subtitle">
-                  Fill the fields below. Saving will create/update the LawReport and its linked LegalDocument.
+                  Category is fixed to <b>LLR Services</b>. Choose Country and Service.
                 </div>
               </div>
 
@@ -696,78 +490,158 @@ export default function AdminLLRServices() {
             <div className="admin-modal-body admin-modal-scroll">
               <div className="admin-grid">
                 <div className="admin-field">
+                  <label>Country *</label>
+                  <select
+                    value={String(form.countryId || "")}
+                    onChange={(e) => setField("countryId", e.target.value)}
+                    disabled={countriesLoading}
+                  >
+                    <option value="">{countriesLoading ? "Loading..." : "Select country"}</option>
+                    {countries.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="hint">Source: /api/country</div>
+                </div>
+
+                <div className="admin-field">
+                  <label>Service *</label>
+                  <select
+                    value={String(form.service)}
+                    onChange={(e) => setField("service", toInt(e.target.value, 1))}
+                  >
+                    {SERVICE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="admin-field">
                   <label>Report Number *</label>
-                  <input value={form.reportNumber} onChange={(e) => setField("reportNumber", e.target.value)} placeholder="e.g. CAR353" />
-                  {form.reportNumber && !isValidReportNumber(form.reportNumber) && (
-                    <div className="hint" style={{ color: "#991b1b" }}>
-                      Must start with 3 letters then digits (e.g. CAR353).
-                    </div>
-                  )}
+                  <input
+                    value={form.reportNumber}
+                    onChange={(e) => setField("reportNumber", e.target.value)}
+                    placeholder="e.g. CAR353"
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Year *</label>
-                  <input type="number" min="1900" max="2100" value={form.year} onChange={(e) => setField("year", e.target.value)} placeholder="e.g. 2020" />
+                  <input
+                    type="number"
+                    min="1900"
+                    max="2100"
+                    value={form.year}
+                    onChange={(e) => setField("year", e.target.value)}
+                    placeholder="e.g. 2020"
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Case Number</label>
-                  <input value={form.caseNumber} onChange={(e) => setField("caseNumber", e.target.value)} placeholder="e.g. Petition 12 of 2020" />
+                  <input
+                    value={form.caseNumber}
+                    onChange={(e) => setField("caseNumber", e.target.value)}
+                    placeholder="e.g. Petition 12 of 2020"
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Citation</label>
-                  <input value={form.citation} onChange={(e) => setField("citation", e.target.value)} placeholder="Optional (preferred if available)" />
+                  <input
+                    value={form.citation}
+                    onChange={(e) => setField("citation", e.target.value)}
+                    placeholder="Optional (preferred if available)"
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Decision Type *</label>
-                  <select value={String(form.decisionType)} onChange={(e) => setField("decisionType", toInt(e.target.value, 1))}>
+                  <select
+                    value={String(form.decisionType)}
+                    onChange={(e) => setField("decisionType", toInt(e.target.value, 1))}
+                  >
                     {DECISION_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
                     ))}
                   </select>
                 </div>
 
                 <div className="admin-field">
                   <label>Case Type *</label>
-                  <select value={String(form.caseType)} onChange={(e) => setField("caseType", toInt(e.target.value, 2))}>
+                  <select
+                    value={String(form.caseType)}
+                    onChange={(e) => setField("caseType", toInt(e.target.value, 2))}
+                  >
                     {CASETYPE_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
                     ))}
                   </select>
                 </div>
 
                 <div className="admin-field">
                   <label>Court</label>
-                  <input value={form.court} onChange={(e) => setField("court", e.target.value)} placeholder="e.g. Court of Appeal" />
+                  <input
+                    value={form.court}
+                    onChange={(e) => setField("court", e.target.value)}
+                    placeholder="e.g. Court of Appeal"
+                  />
                 </div>
 
                 <div className="admin-field admin-span2">
                   <label>Parties</label>
-                  <input value={form.parties} onChange={(e) => setField("parties", e.target.value)} placeholder="e.g. A v B" />
+                  <input
+                    value={form.parties}
+                    onChange={(e) => setField("parties", e.target.value)}
+                    placeholder="e.g. A v B"
+                  />
                 </div>
 
                 <div className="admin-field admin-span2">
                   <label>Judges</label>
-                  <textarea rows={2} value={form.judges} onChange={(e) => setField("judges", e.target.value)} placeholder="Separate by newline or semicolon" />
+                  <textarea
+                    rows={2}
+                    value={form.judges}
+                    onChange={(e) => setField("judges", e.target.value)}
+                    placeholder="Separate by newline or semicolon"
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Decision Date</label>
-                  <input type="date" value={form.decisionDate} onChange={(e) => setField("decisionDate", e.target.value)} />
+                  <input
+                    type="date"
+                    value={form.decisionDate}
+                    onChange={(e) => setField("decisionDate", e.target.value)}
+                  />
                 </div>
 
                 <div className="admin-field admin-span2">
                   <label>Content Text *</label>
-                  <textarea rows={16} value={form.contentText} onChange={(e) => setField("contentText", e.target.value)} placeholder="Paste the full report text here..." />
-                  <div className="hint">Tip: You can still use “Report Content” for a focused editor after saving.</div>
+                  <textarea
+                    rows={16}
+                    value={form.contentText}
+                    onChange={(e) => setField("contentText", e.target.value)}
+                    placeholder="Paste the full report text here..."
+                  />
+                  <div className="hint">Tip: Use “Report Content” for a focused editor after saving.</div>
                 </div>
               </div>
             </div>
 
             <div className="admin-modal-foot">
-              <button className="admin-btn" onClick={closeModal} disabled={busy}>Cancel</button>
+              <button className="admin-btn" onClick={closeModal} disabled={busy}>
+                Cancel
+              </button>
+
               <button className="admin-btn primary" onClick={save} disabled={busy}>
                 {busy ? "Saving…" : editing ? "Save changes" : "Create"}
               </button>

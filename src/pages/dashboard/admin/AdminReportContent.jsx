@@ -44,7 +44,7 @@ function isoOrNullFromDateInput(yyyyMmDd) {
 }
 
 export default function AdminReportContent() {
-  const { id } = useParams(); // ✅ LawReportId
+  const { id } = useParams(); // LawReportId
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -60,6 +60,7 @@ export default function AdminReportContent() {
   const [title, setTitle] = useState(initialTitle);
   const [legalDocumentId, setLegalDocumentId] = useState(null);
 
+  // Keep full DTO so PUT can send required metadata
   const [dto, setDto] = useState(null);
   const [contentText, setContentText] = useState("");
   const [lastSavedAt, setLastSavedAt] = useState(null);
@@ -77,6 +78,7 @@ export default function AdminReportContent() {
       setTitle(d.title || initialTitle || `Report #${reportId}`);
       setLegalDocumentId(d.legalDocumentId ?? null);
       setContentText(d.contentText ?? "");
+      setLastSavedAt(d.updatedAt ?? null);
     } catch (e) {
       setError(getApiErrorMessage(e, "Failed to load report."));
     } finally {
@@ -92,7 +94,11 @@ export default function AdminReportContent() {
     setInfo("");
 
     try {
+      // Mirrors backend LawReportUpsertDto
       const payload = {
+        countryId: dto.countryId ?? 0,
+        service: toInt(dto.service, 1),
+
         citation: dto.citation ?? null,
         reportNumber: String(dto.reportNumber || "").trim(),
         year: dto.year ?? new Date().getUTCFullYear(),
@@ -106,13 +112,22 @@ export default function AdminReportContent() {
         contentText: String(contentText ?? ""),
       };
 
-      if (!payload.reportNumber) throw new Error("ReportNumber is missing; open Edit to set it.");
-      if (!payload.contentText.trim()) throw new Error("ContentText is required.");
+      if (!payload.countryId || payload.countryId <= 0) {
+        throw new Error("Country is missing. Go back and Edit the report to set Country.");
+      }
+      if (!payload.service || payload.service <= 0) {
+        throw new Error("Service is missing. Go back and Edit the report to set Service.");
+      }
+      if (!payload.reportNumber) {
+        throw new Error("ReportNumber is missing; open Edit to set it.");
+      }
+      if (!payload.contentText.trim()) {
+        throw new Error("ContentText is required.");
+      }
 
       await api.put(`/law-reports/${reportId}`, payload);
 
-      const now = new Date().toISOString();
-      setLastSavedAt(now);
+      setLastSavedAt(new Date().toISOString());
       setInfo("Saved.");
       await load();
     } catch (e) {
