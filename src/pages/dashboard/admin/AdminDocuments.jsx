@@ -93,6 +93,11 @@ const CATEGORY_OPTIONS = [
   "LLRServices",
 ];
 
+// ✅ Must match your backend enum names for LegalDocumentKind
+// namespace LawAfrica.API.Models.LawReports.Enums
+// enum LegalDocumentKind { Standard = 1, Report = 2 }
+const KIND_OPTIONS = ["Standard", "Report"];
+
 const emptyForm = {
   title: "",
   description: "",
@@ -104,8 +109,12 @@ const emptyForm = {
   category: "Commentaries",
   countryId: "",
 
-  // ✅ NEW
+  // ✅ pages
   pageCount: "",
+
+  // ✅ NEW: kind + optional product mapping (adds to ContentProductLegalDocuments)
+  kind: "Standard", // Standard | Report
+  contentProductId: "",
 
   isPremium: true,
   status: "Published",
@@ -145,6 +154,9 @@ export default function AdminDocuments() {
     setForm((p) => ({ ...p, [k]: v }));
   }
 
+  const isReportKind = String(form.kind) === "Report";
+  const showPricing = !!form.isPremium;
+
   async function loadAll() {
     setError("");
     setInfo("");
@@ -183,8 +195,12 @@ export default function AdminDocuments() {
       const price = String((r.publicPrice ?? r.PublicPrice ?? "") || "").toLowerCase();
 
       const pages = String(r.pageCount ?? "").toLowerCase();
+
+      // Optional: include kind in search
+      const kind = String(r.kind ?? r.Kind ?? "").toLowerCase();
+
       const pricing = `${allow ? "on" : "off"} ${currency} ${price} ${pages}`;
-      const meta = `${status} ${premium} ${pricing}`.toLowerCase();
+      const meta = `${status} ${premium} ${pricing} ${kind}`.toLowerCase();
 
       return title.includes(s) || meta.includes(s);
     });
@@ -228,8 +244,12 @@ export default function AdminDocuments() {
         category: d.category ?? "Commentaries",
         countryId: d.countryId ?? "",
 
-        // ✅ NEW
         pageCount: d.pageCount ?? "",
+
+        // ✅ NEW
+        kind: d.kind ?? "Standard",
+        // may not exist on details endpoint yet; keep empty if missing
+        contentProductId: d.contentProductId ?? "",
 
         isPremium: !!d.isPremium,
         status: d.status ?? "Published",
@@ -263,11 +283,15 @@ export default function AdminDocuments() {
       category: form.category,
       countryId: Number(form.countryId),
 
+      // ✅ NEW
+      kind: form.kind,
+      contentProductId: toIntOrNull(form.contentProductId),
+
+      // Reports don't upload ebooks; keep file metadata empty + safe defaults
       filePath: "",
-      fileType: "pdf",
+      fileType: isReportKind ? "report" : "pdf",
       fileSizeBytes: 0,
 
-      // ✅ send user entered pages
       pageCount: toIntOrNull(form.pageCount),
       chapterCount: null,
 
@@ -276,7 +300,6 @@ export default function AdminDocuments() {
       status: form.status,
       publishedAt: form.publishedAt ? new Date(form.publishedAt).toISOString() : null,
 
-      // ✅ For free docs: always off/null
       allowPublicPurchase,
       publicPrice: allowPublicPurchase ? toDecimalOrNull(form.publicPrice) : null,
       publicCurrency: allowPublicPurchase ? (form.publicCurrency?.trim() || "KES") : "KES",
@@ -287,7 +310,11 @@ export default function AdminDocuments() {
     const isPremium = !!form.isPremium;
     const allowPublicPurchase = isPremium ? !!form.allowPublicPurchase : false;
 
-    return {
+    // NOTE: If your backend PUT DTO doesn't support Kind/ContentProductId yet,
+    // leaving them in won't break if the backend ignores unknown fields,
+    // but ASP.NET usually rejects unknown fields only if you validate strictly.
+    // To be safe, we include them only if set.
+    const payload = {
       title: form.title.trim(),
       description: form.description?.trim() || null,
       author: form.author?.trim() || null,
@@ -297,7 +324,6 @@ export default function AdminDocuments() {
       category: form.category,
       countryId: Number(form.countryId),
 
-      // ✅ NEW: update pages
       pageCount: toIntOrNull(form.pageCount),
 
       isPremium,
@@ -309,6 +335,13 @@ export default function AdminDocuments() {
       publicPrice: allowPublicPurchase ? toDecimalOrNull(form.publicPrice) : null,
       publicCurrency: allowPublicPurchase ? (form.publicCurrency?.trim() || "KES") : "KES",
     };
+
+    // ✅ Optional: allow updating kind/product mapping if your backend supports it
+    // If not supported yet, comment these 2 lines out.
+    payload.kind = form.kind;
+    payload.contentProductId = toIntOrNull(form.contentProductId);
+
+    return payload;
   }
 
   async function save() {
@@ -318,9 +351,12 @@ export default function AdminDocuments() {
     if (!form.title.trim()) return setError("Title is required.");
     if (!form.countryId) return setError("Country is required.");
 
-    // ✅ Hard guard: category must match enum
     if (!CATEGORY_OPTIONS.includes(form.category)) {
       return setError("Invalid category selected. Please choose a valid category.");
+    }
+
+    if (!KIND_OPTIONS.includes(form.kind)) {
+      return setError("Invalid kind selected. Please choose Standard or Report.");
     }
 
     // ✅ If not premium, pricing must be off
@@ -332,9 +368,13 @@ export default function AdminDocuments() {
 
     if (form.isPremium && form.allowPublicPurchase) {
       const priceNum = Number(form.publicPrice);
-      if (!form.publicCurrency?.trim()) return setError("Currency is required when public purchase is ON.");
-      if (!Number.isFinite(priceNum) || priceNum <= 0) return setError("Price must be greater than 0.");
+      if (!form.publicCurrency?.trim())
+        return setError("Currency is required when public purchase is ON.");
+      if (!Number.isFinite(priceNum) || priceNum <= 0)
+        return setError("Price must be greater than 0.");
     }
+
+    // For Report, pageCount is optional; ebook uploads disabled anyway.
 
     setBusy(true);
     try {
@@ -351,7 +391,11 @@ export default function AdminDocuments() {
 
       if (newId) {
         setEditing({ id: newId, title: form.title, coverImagePath: null });
-        setInfo(`Document created (#${newId}). Now upload the ebook and cover below.`);
+        setInfo(
+          isReportKind
+            ? `Report document created (#${newId}). Ebook upload is disabled. Upload a cover if you want.`
+            : `Document created (#${newId}). Now upload the ebook and cover below.`
+        );
         await loadAll();
       } else {
         setInfo("Document created. Refresh the list, then edit to upload files.");
@@ -366,6 +410,7 @@ export default function AdminDocuments() {
   }
 
   async function uploadEbook() {
+    if (isReportKind) return setError("Ebook uploads are not allowed for Report documents.");
     if (!editing?.id) return setError("Save the document first, then upload an ebook.");
     if (!ebookFile) return setError("Select a PDF or EPUB first.");
 
@@ -427,8 +472,6 @@ export default function AdminDocuments() {
   function getAllow(r) {
     return !!(r.allowPublicPurchase ?? r.AllowPublicPurchase ?? false);
   }
-
-  const showPricing = !!form.isPremium;
 
   return (
     <div className="admin-page admin-page-wide">
@@ -651,7 +694,38 @@ export default function AdminDocuments() {
                   </div>
                 </div>
 
-                {/* ✅ NEW FIELD */}
+                {/* ✅ NEW: Kind */}
+                <div className="admin-field">
+                  <label>Kind</label>
+                  <select value={form.kind} onChange={(e) => setField("kind", e.target.value)}>
+                    {KIND_OPTIONS.map((k) => (
+                      <option key={k} value={k}>
+                        {k}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="minihelp">
+                    Report = subscription-only text content (no ebook upload). Standard = PDF/EPUB.
+                  </div>
+                </div>
+
+                {/* ✅ NEW: optional product mapping */}
+                <div className="admin-field">
+                  <label>ContentProductId (optional)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={form.contentProductId}
+                    onChange={(e) => setField("contentProductId", e.target.value)}
+                    placeholder="e.g. 1 (LawAfrica Reports)"
+                  />
+                  <div className="minihelp">
+                    If set, this document is immediately added to that product (shows under DOCS).
+                  </div>
+                </div>
+
+                {/* ✅ pages */}
                 <div className="admin-field">
                   <label>No of Pages</label>
                   <input
@@ -771,20 +845,32 @@ export default function AdminDocuments() {
                       type="file"
                       accept=".pdf,.epub"
                       onChange={(e) => setEbookFile(e.target.files?.[0] || null)}
-                      disabled={!editing || uploadingEbook || uploadingCover || busy}
-                      title={!editing ? "Save first, then upload." : ""}
+                      disabled={isReportKind || !editing || uploadingEbook || uploadingCover || busy}
+                      title={
+                        isReportKind
+                          ? "Reports do not accept ebook uploads."
+                          : !editing
+                          ? "Save first, then upload."
+                          : ""
+                      }
                     />
 
                     <div className="admin-upload-actions">
                       <button
                         className="admin-btn"
                         onClick={uploadEbook}
-                        disabled={!editing || uploadingEbook || uploadingCover || busy}
+                        disabled={isReportKind || !editing || uploadingEbook || uploadingCover || busy}
                       >
                         {uploadingEbook ? "Uploading…" : "Upload ebook"}
                       </button>
                       <span className="filehint">{ebookFile ? ebookFile.name : "No file selected."}</span>
                     </div>
+
+                    {isReportKind && (
+                      <div className="minihelp warn">
+                        This is a REPORT document. Ebook upload is disabled. You will add the report text using the Reports module.
+                      </div>
+                    )}
                   </div>
                 </div>
 
