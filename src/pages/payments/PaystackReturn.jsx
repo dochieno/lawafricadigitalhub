@@ -101,28 +101,50 @@ export default function PaystackReturn() {
   async function logReturnVisit(ref) {
     try {
       if (!ref) return;
-      await api.post("/payments/paystack/return-visit", {
-        reference: ref,
-        currentUrl: window.location.href,
-        userAgent: navigator.userAgent,
-      });
+      await api.post(
+        "/payments/paystack/return-visit",
+        {
+          reference: ref,
+          currentUrl: window.location.href,
+          userAgent: navigator.userAgent,
+        },
+        { __skipThrottle: true }
+      );
     } catch {
-      // ignore
+      // ignore (never block the user)
     }
   }
 
   async function fetchIntentByReference(ref) {
-    const res = await api.get(`/payments/paystack/intent-by-reference/${encodeURIComponent(ref)}`);
+    const res = await api.get(
+      `/payments/paystack/intent-by-reference/${encodeURIComponent(ref)}`,
+      { __skipThrottle: true }
+    );
+    return res.data?.data ?? res.data;
+  }
+
+  // ✅ NEW: force-confirm payment on return (avoids webhook timing)
+  async function confirmPaystack(ref) {
+    const res = await api.post(
+      "/payments/paystack/confirm",
+      { reference: ref },
+      { __skipThrottle: true }
+    );
+    return res.data?.data ?? res.data;
+  }
+
+  async function getIntent(intentId) {
+    const res = await api.get(`/payments/intent/${intentId}`, { __skipThrottle: true });
     return res.data?.data ?? res.data;
   }
 
   async function pollIntent(intentId) {
-    const deadline = Date.now() + 120000;
+    // keep this shorter now that we have confirm
+    const deadline = Date.now() + 45000;
 
     while (Date.now() < deadline) {
       try {
-        const res = await api.get(`/payments/intent/${intentId}`);
-        const intent = res.data?.data ?? res.data;
+        const intent = await getIntent(intentId);
 
         const status = intent?.status;
         const isSuccess = status === 3 || status === "Success";
@@ -130,13 +152,17 @@ export default function PaystackReturn() {
 
         if (isFailed) throw new Error(intent?.providerResultDesc || "Payment failed.");
         if (isSuccess) return intent;
-      } catch {
-        // ignore transient errors
+      } catch (e) {
+        // Ignore throttled cancels or transient network hiccups during polling
+        if (e?.code === "ERR_CANCELED") {
+          await sleep(600);
+          continue;
+        }
       }
 
       setPhase("WAITING");
       setMessage("Payment received. Confirming on the server…");
-      await sleep(2000);
+      await sleep(1500);
     }
 
     throw new Error("Payment is taking longer to confirm. Please refresh in a moment.");
@@ -160,7 +186,7 @@ export default function PaystackReturn() {
       return;
     }
 
-    // ✅ SIGNUP FLOW MUST WIN — regardless of existing token
+    // ✅ SIGNUP FLOW MUST WIN — regardless of existing token (DO NOT CHANGE)
     const storedRegIntent = localStorage.getItem(LS_REG_INTENT);
     if (storedRegIntent) {
       clearToken();
@@ -188,10 +214,11 @@ export default function PaystackReturn() {
       setMessage("Finalizing payment… please wait.");
 
       // best-effort audit; ignore failures
-      await logReturnVisit(reference);
+      logReturnVisit(reference);
 
       clearLocalStorageMapping(reference);
 
+      // 1) Resolve intent
       const resolved = await fetchIntentByReference(reference);
       const intentId = resolved?.paymentIntentId || null;
       const meta = resolved?.meta || null;
@@ -200,7 +227,33 @@ export default function PaystackReturn() {
 
       setPaymentIntentId(intentId);
 
-      const intent = await pollIntent(intentId);
+      // 2) ✅ Force-confirm immediately (this is the key fix)
+      // If confirm fails for some reason, we fall back to poll.
+      try {
+        await confirmPaystack(reference);
+      } catch (e) {
+        // If confirm endpoint isn't available / returns error, just continue to poll
+        if (e?.code !== "ERR_CANCELED") {
+          console.warn("Paystack confirm failed (fallback to poll):", e);
+        }
+      }
+
+      // 3) Fetch/poll for final state (short)
+      let intent;
+      try {
+        intent = await getIntent(intentId);
+        const status = intent?.status;
+        const isSuccess = status === 3 || status === "Success";
+        const isFailed = status === 4 || status === "Failed";
+        if (isFailed) throw new Error(intent?.providerResultDesc || "Payment failed.");
+        if (!isSuccess) intent = await pollIntent(intentId);
+      } catch (e) {
+        if (e?.code === "ERR_CANCELED") {
+          intent = await pollIntent(intentId);
+        } else {
+          throw e;
+        }
+      }
 
       const ctx = readCtx(reference);
 
@@ -213,7 +266,7 @@ export default function PaystackReturn() {
 
       setPhase("SUCCESS");
       setMessage("Payment confirmed ✅ Redirecting…");
-      await sleep(600);
+      await sleep(500);
 
       clearCtx(reference);
 
@@ -224,8 +277,6 @@ export default function PaystackReturn() {
 
       nav("/dashboard/library", { replace: true });
     } catch (e) {
-      // ✅ If we got a 401 here, the token snapshot is invalid.
-      // Clear it so we don't keep restoring a bad token forever.
       const status = e?.response?.status;
       if (status === 401) {
         clearToken();
@@ -349,9 +400,9 @@ export default function PaystackReturn() {
       )}
 
       <style>{`
-        @keyframes spin { 
-          from { transform: rotate(0deg); } 
-          to { transform: rotate(360deg); } 
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
         }
       `}</style>
     </div>
