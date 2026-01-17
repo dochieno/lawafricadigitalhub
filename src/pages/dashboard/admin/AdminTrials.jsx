@@ -59,7 +59,7 @@ export default function AdminTrials() {
 
   async function grant() {
     if (!canSubmit) return;
-    await call("/api/admin/trials/grant", {
+    await call("/admin/trials/grant", {
       userId: userIdNum,
       contentProductId: productIdNum,
       unit: normalizeUnit(unit),
@@ -70,7 +70,7 @@ export default function AdminTrials() {
 
   async function extend() {
     if (!canSubmit) return;
-    await call("/api/admin/trials/extend", {
+    await call("/admin/trials/extend", {
       userId: userIdNum,
       contentProductId: productIdNum,
       unit: normalizeUnit(unit),
@@ -80,7 +80,7 @@ export default function AdminTrials() {
 
   async function revoke() {
     if (!canSubmit) return;
-    await call("/api/admin/trials/revoke", {
+    await call("/admin/trials/revoke", {
       userId: userIdNum,
       contentProductId: productIdNum,
     });
