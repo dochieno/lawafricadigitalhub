@@ -1,4 +1,3 @@
-// src/pages/dashboard/admin/AdminReportContent.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import api from "../../../api/client";
@@ -23,15 +22,34 @@ function getApiErrorMessage(err, fallback = "Request failed.") {
   return fallback;
 }
 
+function toInt(v, fallback = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.floor(n) : fallback;
+}
+
+function dateInputFromIso(iso) {
+  if (!iso) return "";
+  try {
+    return String(iso).slice(0, 10);
+  } catch {
+    return "";
+  }
+}
+
+function isoOrNullFromDateInput(yyyyMmDd) {
+  const s = String(yyyyMmDd || "").trim();
+  if (!s) return null;
+  const d = new Date(`${s}T00:00:00.000Z`);
+  return Number.isFinite(d.getTime()) ? d.toISOString() : null;
+}
+
 export default function AdminReportContent() {
-  const { legalDocumentId } = useParams();
+  const { id } = useParams(); // ✅ LawReportId now
   const navigate = useNavigate();
   const location = useLocation();
 
-  // optional state passed from list page
   const initialTitle = location.state?.title || "";
-
-  const docIdNum = useMemo(() => Number(legalDocumentId), [legalDocumentId]);
+  const reportId = useMemo(() => Number(id), [id]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -40,7 +58,10 @@ export default function AdminReportContent() {
   const [info, setInfo] = useState("");
 
   const [title, setTitle] = useState(initialTitle);
-  const [lawReportId, setLawReportId] = useState(null);
+  const [legalDocumentId, setLegalDocumentId] = useState(null);
+
+  // We keep full DTO fields so PUT can send required metadata
+  const [dto, setDto] = useState(null);
   const [contentText, setContentText] = useState("");
   const [lastSavedAt, setLastSavedAt] = useState(null);
 
@@ -50,30 +71,58 @@ export default function AdminReportContent() {
     setInfo("");
 
     try {
-      const res = await api.get(`/law-reports/by-document/${docIdNum}/content`);
-      setTitle(res.data?.title || initialTitle || `Report #${docIdNum}`);
-      setLawReportId(res.data?.lawReportId ?? null);
-      setContentText(res.data?.contentText ?? "");
-      setLastSavedAt(res.data?.updatedAt ?? null);
+      const res = await api.get(`/law-reports/${reportId}`);
+      const d = res.data;
+
+      setDto(d);
+      setTitle(d.title || initialTitle || `Report #${reportId}`);
+      setLegalDocumentId(d.legalDocumentId ?? null);
+      setContentText(d.contentText ?? "");
+      setLastSavedAt(d.updatedAt ?? null);
     } catch (e) {
-      setError(getApiErrorMessage(e, "Failed to load report content."));
+      setError(getApiErrorMessage(e, "Failed to load report."));
     } finally {
       setLoading(false);
     }
   }
 
   async function save() {
+    if (!dto) return;
+
     setSaving(true);
     setError("");
     setInfo("");
 
     try {
-      await api.put(`/law-reports/by-document/${docIdNum}/content`, {
-        contentText: contentText ?? "",
-      });
+      // PUT expects full LawReportUpsertDto, not only content
+      const payload = {
+        citation: dto.citation ?? null,
+        reportNumber: String(dto.reportNumber || "").trim(),
+        year: dto.year ?? new Date().getUTCFullYear(),
+        caseNumber: dto.caseNumber ?? null,
+        decisionType: toInt(dto.decisionType, 1),
+        caseType: toInt(dto.caseType, 2),
+        court: dto.court ?? null,
+        parties: dto.parties ?? null,
+        judges: dto.judges ?? null,
+        decisionDate: isoOrNullFromDateInput(dateInputFromIso(dto.decisionDate)),
+        contentText: String(contentText ?? ""),
+      };
+
+      // basic safety
+      if (!payload.reportNumber) {
+        throw new Error("ReportNumber is missing; open Edit to set it.");
+      }
+      if (!payload.contentText.trim()) {
+        throw new Error("ContentText is required.");
+      }
+
+      await api.put(`/law-reports/${reportId}`, payload);
+
       const nowIso = new Date().toISOString();
       setLastSavedAt(nowIso);
       setInfo("Saved.");
+      await load();
     } catch (e) {
       setError(getApiErrorMessage(e, "Failed to save report content."));
     } finally {
@@ -82,14 +131,14 @@ export default function AdminReportContent() {
   }
 
   useEffect(() => {
-    if (!Number.isFinite(docIdNum) || docIdNum <= 0) {
+    if (!Number.isFinite(reportId) || reportId <= 0) {
       setError("Invalid report id in the link.");
       setLoading(false);
       return;
     }
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [docIdNum]);
+  }, [reportId]);
 
   return (
     <div className="admin-page admin-page-wide">
@@ -107,16 +156,14 @@ export default function AdminReportContent() {
       <div className="rc-head">
         <div>
           <h1 className="rc-title">Report Content</h1>
-          <div className="rc-sub">
-            {title ? title : "—"}
-          </div>
+          <div className="rc-sub">{title ? title : "—"}</div>
 
           <div className="rc-sub" style={{ marginTop: 8 }}>
-            LegalDocumentId: <b>{Number.isFinite(docIdNum) ? docIdNum : "—"}</b>
-            {lawReportId ? (
+            LawReportId: <b>{Number.isFinite(reportId) ? reportId : "—"}</b>
+            {legalDocumentId ? (
               <>
                 {" "}
-                · LawReportId: <b>{lawReportId}</b>
+                · LegalDocumentId: <b>{legalDocumentId}</b>
               </>
             ) : null}
           </div>
@@ -141,7 +188,9 @@ export default function AdminReportContent() {
 
       <div className="rc-card">
         <div className="rc-meta">
-          <span className="rc-pill">Auto-save: <span style={{ fontWeight: 900 }}>Off</span></span>
+          <span className="rc-pill">
+            Auto-save: <span style={{ fontWeight: 900 }}>Off</span>
+          </span>
           <span className="rc-pill">
             Last saved:{" "}
             <span style={{ fontWeight: 900 }}>

@@ -1,29 +1,24 @@
-// src/pages/dashboard/admin/AdminLLRServices.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api, { API_BASE_URL } from "../../../api/client";
+import api from "../../../api/client";
 import "../../../styles/adminCrud.css";
 
 /**
- * LLR Services = Report-kind LegalDocuments only.
+ * Admin · LLR Services (Law Reports)
  *
- * FIX:
- * - /legal-documents/admin may not return Kind/FileType
- * - We "enrich" missing rows by calling /legal-documents/{id}
- * - Then filter report rows reliably.
+ * ✅ This page is now the REAL LawReports admin module.
+ * - Create/Edit LawReport (creates its LegalDocument parent on create)
+ * - Import Excel/Word preview + confirm
+ * - List/Search
+ * - Open Report Content editor (by LawReportId)
  *
- * Create defaults: Kind=Report + FileType=report
- * No ebook upload (cover only)
+ * NOTE:
+ * - This expects a list endpoint:
+ *   GET /api/law-reports/admin   (recommended)
+ *   Fallback: GET /api/law-reports (if you implement list there)
+ *
+ * If you don't have a list endpoint yet, add one (simple projection).
  */
-
-function getServerOrigin() {
-  return String(API_BASE_URL || "").replace(/\/api\/?$/i, "");
-}
-function buildCoverUrl(coverImagePath) {
-  if (!coverImagePath) return null;
-  const clean = String(coverImagePath).replace(/^Storage\//i, "").replace(/^\/+/, "");
-  return `${getServerOrigin()}/storage/${clean}`;
-}
 
 function getApiErrorMessage(err, fallback = "Request failed.") {
   const data = err?.response?.data;
@@ -45,17 +40,23 @@ function getApiErrorMessage(err, fallback = "Request failed.") {
   return fallback;
 }
 
-function formatMoney(val) {
-  const n = typeof val === "number" ? val : Number(val);
-  if (!Number.isFinite(n)) return "—";
-  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+const DECISION_OPTIONS = [
+  { label: "Judgment", value: 1 },
+  { label: "Ruling", value: 2 },
+];
 
-function safeBool(v, fallback = false) {
-  if (typeof v === "boolean") return v;
-  if (typeof v === "string") return v.toLowerCase() === "true";
-  if (typeof v === "number") return v !== 0;
-  return fallback;
+const CASETYPE_OPTIONS = [
+  { label: "Criminal", value: 1 },
+  { label: "Civil", value: 2 },
+  { label: "Environmental", value: 3 },
+  { label: "Family", value: 4 },
+  { label: "Commercial", value: 5 },
+  { label: "Constitutional", value: 6 },
+];
+
+function toInt(v, fallback = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.floor(n) : fallback;
 }
 
 function toIntOrNull(v) {
@@ -64,130 +65,44 @@ function toIntOrNull(v) {
   if (!s) return null;
   const n = Number(s);
   if (!Number.isFinite(n)) return null;
-  return Math.max(0, Math.floor(n));
+  return Math.floor(n);
 }
 
-function toDecimalOrNull(v) {
-  if (v === null || v === undefined) return null;
-  const s = String(v).trim();
+function isoOrNullFromDateInput(yyyyMmDd) {
+  const s = String(yyyyMmDd || "").trim();
   if (!s) return null;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
+  // date input gives YYYY-MM-DD; convert to ISO
+  const d = new Date(`${s}T00:00:00.000Z`);
+  return Number.isFinite(d.getTime()) ? d.toISOString() : null;
 }
 
-// Cover upload helper
-async function postMultipartWithFallback(paths, formData) {
-  let lastErr = null;
-  for (const p of paths) {
-    try {
-      return await api.post(p, formData, { headers: { "Content-Type": "multipart/form-data" } });
-    } catch (e) {
-      lastErr = e;
-      const status = e?.response?.status;
-      if (status === 404 || status === 405) continue;
-      throw e;
-    }
+function dateInputFromIso(iso) {
+  if (!iso) return "";
+  try {
+    return String(iso).slice(0, 10);
+  } catch {
+    return "";
   }
-  throw lastErr || new Error("Upload failed.");
-}
-
-/** Must match backend enum names (you already use strings) */
-const CATEGORY_OPTIONS = [
-  "Commentaries",
-  "InternationalTitles",
-  "Journals",
-  "LawReports",
-  "Statutes",
-  "LLRServices",
-];
-
-function pickKind(r) {
-  return r?.kind ?? r?.Kind ?? null;
-}
-function pickFileType(r) {
-  const ft = r?.fileType ?? r?.FileType ?? null;
-  return ft == null ? "" : String(ft);
-}
-
-function isReportRow(r) {
-  const k = pickKind(r);
-  const ft = pickFileType(r).toLowerCase();
-  return k === "Report" || k === 2 || ft === "report";
-}
-
-/**
- * Enrich missing Kind/FileType by calling /legal-documents/{id}.
- */
-async function enrichAdminListIfNeeded(all) {
-  if (!Array.isArray(all) || all.length === 0) return all;
-
-  const needs = all.filter((r) => {
-    const k = pickKind(r);
-    const ft = pickFileType(r);
-    return (k === null || k === undefined || k === "") && (!ft || ft === "");
-  });
-
-  if (needs.length === 0) return all;
-
-  const byId = new Map(all.map((r) => [r.id, { ...r }]));
-  const ids = needs.map((r) => r.id).filter(Boolean);
-
-  const CHUNK = 8;
-  for (let i = 0; i < ids.length; i += CHUNK) {
-    const slice = ids.slice(i, i + CHUNK);
-    const results = await Promise.all(
-      slice.map(async (id) => {
-        try {
-          const res = await api.get(`/legal-documents/${id}`);
-          return res.data;
-        } catch {
-          return null;
-        }
-      })
-    );
-
-    for (const d of results) {
-      if (!d?.id) continue;
-      const existing = byId.get(d.id) || {};
-      byId.set(d.id, { ...existing, ...d });
-    }
-  }
-
-  return Array.from(byId.values());
 }
 
 const emptyForm = {
-  title: "",
-  description: "",
-  author: "",
-  publisher: "",
-  edition: "",
-  version: "1",
-
-  category: "LawReports",
-  countryId: "",
-
-  pageCount: "",
-
-  // ✅ fixed defaults for this page
-  kind: "Report",
-  contentProductId: "",
-
-  isPremium: true,
-  status: "Published",
-  publishedAt: "",
-
-  allowPublicPurchase: false,
-  publicPrice: "",
-  publicCurrency: "KES",
+  citation: "",
+  reportNumber: "",
+  year: "",
+  caseNumber: "",
+  decisionType: 1,
+  caseType: 2,
+  court: "",
+  parties: "",
+  judges: "",
+  decisionDate: "",
+  contentText: "",
 };
 
 export default function AdminLLRServices() {
   const navigate = useNavigate();
 
   const [rows, setRows] = useState([]);
-  const [countries, setCountries] = useState([]);
-
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -195,67 +110,82 @@ export default function AdminLLRServices() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
-  // Improved message: show only when helpful, and non-technical wording
-  const [banner, setBanner] = useState("");
-
-  // Modal state
+  // Create/Edit modal
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
+  const [editing, setEditing] = useState(null); // LawReportDto
   const [form, setForm] = useState({ ...emptyForm });
 
-  // Cover upload only
-  const [coverFile, setCoverFile] = useState(null);
-  const [uploadingCover, setUploadingCover] = useState(false);
-  const coverInputRef = useRef(null);
+  // Import
+  const [importOpen, setImportOpen] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [importInfo, setImportInfo] = useState("");
+
+  const [preview, setPreview] = useState(null); // ReportImportPreviewDto
+  const [dupStrategy, setDupStrategy] = useState("Skip");
+
+  const excelInputRef = useRef(null);
+  const wordInputRef = useRef(null);
+
+  const [wordReportNumber, setWordReportNumber] = useState("");
+  const [wordYear, setWordYear] = useState("");
 
   function setField(k, v) {
     setForm((p) => ({ ...p, [k]: v }));
   }
 
-  async function loadAll() {
+  function resetForm() {
+    setEditing(null);
+    setForm({ ...emptyForm });
+  }
+
+  function closeModal() {
+    if (busy) return;
+    setOpen(false);
+  }
+
+  function closeImport() {
+    if (importBusy) return;
+    setImportOpen(false);
+    setPreview(null);
+    setImportError("");
+    setImportInfo("");
+    setDupStrategy("Skip");
+    setWordReportNumber("");
+    setWordYear("");
+    if (excelInputRef.current) excelInputRef.current.value = "";
+    if (wordInputRef.current) wordInputRef.current.value = "";
+  }
+
+  async function fetchList() {
+    setLoading(true);
     setError("");
     setInfo("");
-    setBanner("");
-    setLoading(true);
 
     try {
-      const [docsRes, countriesRes] = await Promise.all([api.get("/legal-documents/admin"), api.get("/Country")]);
-
-      let all = Array.isArray(docsRes.data) ? docsRes.data : [];
-
-      // detect if list data is missing report markers
-      const beforeMatched = all.filter(isReportRow).length;
-
-      // enrich if needed
-      all = await enrichAdminListIfNeeded(all);
-      const reports = all.filter(isReportRow);
-
-      // ✅ Always hide banner when there is at least one report record
-      if (reports.length > 0) {
-        setBanner("");
-      } else {
-        // ✅ Banner only for empty states (no reports)
-        if (all.length > 0 && beforeMatched === 0) {
-          setBanner("No reports found in the list. If you just created one, click Refresh or confirm it was saved as a Report.");
-        } else if (all.length === 0) {
-          setBanner("No reports yet. Click “+ New Report” to create one.");
-        } else {
-          setBanner("No reports found.");
-        }
+      // Prefer /law-reports/admin (recommended)
+      let res;
+      try {
+        res = await api.get("/law-reports/admin");
+      } catch (e) {
+        const st = e?.response?.status;
+        // Fallback: /law-reports (if you implement list there)
+        if (st === 404 || st === 405) res = await api.get("/law-reports");
+        else throw e;
       }
 
-      setRows(reports);
-      setCountries(Array.isArray(countriesRes.data) ? countriesRes.data : []);
+      const list = Array.isArray(res.data) ? res.data : [];
+      setRows(list);
     } catch (e) {
       setRows([]);
-      setError(getApiErrorMessage(e, "Failed to load LLR Services."));
+      setError(getApiErrorMessage(e, "Failed to load law reports."));
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadAll();
+    fetchList();
   }, []);
 
   const filtered = useMemo(() => {
@@ -264,190 +194,118 @@ export default function AdminLLRServices() {
 
     return rows.filter((r) => {
       const title = String(r.title ?? "").toLowerCase();
-      const status = String(r.status ?? "").toLowerCase();
-      const premium = r.isPremium ? "premium" : "free";
-      const pages = String(r.pageCount ?? "").toLowerCase();
-      const ft = pickFileType(r).toLowerCase();
+      const reportNumber = String(r.reportNumber ?? "").toLowerCase();
+      const year = String(r.year ?? "").toLowerCase();
+      const citation = String(r.citation ?? "").toLowerCase();
+      const parties = String(r.parties ?? "").toLowerCase();
+      const court = String(r.court ?? "").toLowerCase();
+      const caseNo = String(r.caseNumber ?? "").toLowerCase();
+      const judges = String(r.judges ?? "").toLowerCase();
 
-      const allow = safeBool(r.allowPublicPurchase ?? r.AllowPublicPurchase, false);
-      const currency = String((r.publicCurrency ?? r.PublicCurrency ?? "") || "").toLowerCase();
-      const price = String((r.publicPrice ?? r.PublicPrice ?? "") || "").toLowerCase();
-      const pricing = `${allow ? "on" : "off"} ${currency} ${price}`;
-
-      const meta = `${status} ${premium} ${pages} ${pricing} ${ft}`.toLowerCase();
+      const meta = `${reportNumber} ${year} ${citation} ${parties} ${court} ${caseNo} ${judges}`;
       return title.includes(s) || meta.includes(s);
     });
   }, [rows, q]);
 
-  function resetCoverInput() {
-    setCoverFile(null);
-    if (coverInputRef.current) coverInputRef.current.value = "";
-  }
-
   function openCreate() {
     setError("");
     setInfo("");
-    setEditing(null);
-    setForm({ ...emptyForm }); // defaults to Report
-    resetCoverInput();
+    resetForm();
+    // sensible defaults
+    setForm((p) => ({
+      ...p,
+      decisionType: 1,
+      caseType: 2,
+      year: String(new Date().getUTCFullYear()),
+    }));
     setOpen(true);
   }
 
   async function openEdit(row) {
     setError("");
     setInfo("");
-    setEditing(row);
-    resetCoverInput();
+    setBusy(true);
     setOpen(true);
+    setEditing(row);
 
     try {
-      const res = await api.get(`/legal-documents/${row.id}`);
+      // Load full report to ensure we have ContentText etc
+      const res = await api.get(`/law-reports/${row.id}`);
       const d = res.data;
 
+      setEditing(d);
+
       setForm({
-        title: d.title ?? "",
-        description: d.description ?? "",
-        author: d.author ?? "",
-        publisher: d.publisher ?? "",
-        edition: d.edition ?? "",
-        version: d.version ?? "1",
-
-        category: d.category ?? "LawReports",
-        countryId: d.countryId ?? "",
-
-        pageCount: d.pageCount ?? "",
-
-        kind: "Report",
-        contentProductId: d.contentProductId ?? "",
-
-        isPremium: !!d.isPremium,
-        status: d.status ?? "Published",
-        publishedAt: d.publishedAt ? String(d.publishedAt).slice(0, 10) : "",
-
-        allowPublicPurchase: !!(d.allowPublicPurchase ?? d.AllowPublicPurchase ?? false),
-        publicPrice: d.publicPrice ?? d.PublicPrice ?? "",
-        publicCurrency: d.publicCurrency ?? d.PublicCurrency ?? "KES",
+        citation: d.citation ?? "",
+        reportNumber: d.reportNumber ?? "",
+        year: d.year ?? "",
+        caseNumber: d.caseNumber ?? "",
+        decisionType: toInt(d.decisionType, 1),
+        caseType: toInt(d.caseType, 2),
+        court: d.court ?? "",
+        parties: d.parties ?? "",
+        judges: d.judges ?? "",
+        decisionDate: dateInputFromIso(d.decisionDate),
+        contentText: d.contentText ?? "",
       });
-    } catch {
-      setInfo("Loaded partial row (details endpoint failed).");
+    } catch (e) {
+      setError(getApiErrorMessage(e, "Failed to load report details."));
+      closeModal();
+    } finally {
+      setBusy(false);
     }
   }
 
-  function closeModal() {
-    if (busy || uploadingCover) return;
-    setOpen(false);
-  }
-
-  function buildCreatePayload() {
-    const isPremium = !!form.isPremium;
-    const allowPublicPurchase = isPremium ? !!form.allowPublicPurchase : false;
-
+  function buildPayload() {
     return {
-      title: form.title.trim(),
-      description: form.description?.trim() || null,
-      author: form.author?.trim() || null,
-      publisher: form.publisher?.trim() || null,
-      edition: form.edition?.trim() || null,
+      citation: form.citation?.trim() || null,
+      reportNumber: String(form.reportNumber || "").trim(),
+      year: toIntOrNull(form.year) ?? new Date().getUTCFullYear(),
+      caseNumber: form.caseNumber?.trim() || null,
 
-      category: form.category,
-      countryId: Number(form.countryId),
+      // enums as ints (safer for System.Text.Json)
+      decisionType: toInt(form.decisionType, 1),
+      caseType: toInt(form.caseType, 2),
 
-      // ✅ Force Report
-      kind: "Report",
-      contentProductId: toIntOrNull(form.contentProductId),
+      court: form.court?.trim() || null,
+      parties: form.parties?.trim() || null,
+      judges: form.judges?.trim() || null,
+      decisionDate: isoOrNullFromDateInput(form.decisionDate),
 
-      filePath: "",
-      fileType: "report",
-      fileSizeBytes: 0,
-
-      pageCount: toIntOrNull(form.pageCount),
-      chapterCount: null,
-
-      isPremium,
-      version: form.version?.trim() || "1",
-      status: form.status,
-      publishedAt: form.publishedAt ? new Date(form.publishedAt).toISOString() : null,
-
-      allowPublicPurchase,
-      publicPrice: allowPublicPurchase ? toDecimalOrNull(form.publicPrice) : null,
-      publicCurrency: allowPublicPurchase ? (form.publicCurrency?.trim() || "KES") : "KES",
+      contentText: String(form.contentText ?? ""),
     };
   }
 
-  function buildUpdatePayload() {
-    const isPremium = !!form.isPremium;
-    const allowPublicPurchase = isPremium ? !!form.allowPublicPurchase : false;
-
-    return {
-      title: form.title.trim(),
-      description: form.description?.trim() || null,
-      author: form.author?.trim() || null,
-      publisher: form.publisher?.trim() || null,
-      edition: form.edition?.trim() || null,
-
-      category: form.category,
-      countryId: Number(form.countryId),
-
-      pageCount: toIntOrNull(form.pageCount),
-
-      isPremium,
-      version: form.version?.trim() || "1",
-      status: form.status,
-      publishedAt: form.publishedAt ? new Date(form.publishedAt).toISOString() : null,
-
-      allowPublicPurchase,
-      publicPrice: allowPublicPurchase ? toDecimalOrNull(form.publicPrice) : null,
-      publicCurrency: allowPublicPurchase ? (form.publicCurrency?.trim() || "KES") : "KES",
-
-      kind: "Report",
-      contentProductId: toIntOrNull(form.contentProductId),
-    };
+  function validate() {
+    if (!String(form.reportNumber || "").trim()) return "Report number is required (e.g. CAR353).";
+    const year = toIntOrNull(form.year);
+    if (!year || year < 1900 || year > 2100) return "Year must be between 1900 and 2100.";
+    if (!String(form.contentText ?? "").trim()) return "Content text is required.";
+    return "";
   }
 
   async function save() {
+    const msg = validate();
+    if (msg) return setError(msg);
+
+    setBusy(true);
     setError("");
     setInfo("");
 
-    if (!form.title.trim()) return setError("Title is required.");
-    if (!form.countryId) return setError("Country is required.");
-    if (!CATEGORY_OPTIONS.includes(form.category)) {
-      return setError("Invalid category selected. Please choose a valid category.");
-    }
-
-    if (!form.isPremium) {
-      setField("allowPublicPurchase", false);
-      setField("publicPrice", "");
-      setField("publicCurrency", "KES");
-    }
-
-    if (form.isPremium && form.allowPublicPurchase) {
-      const priceNum = Number(form.publicPrice);
-      if (!form.publicCurrency?.trim()) return setError("Currency is required when public purchase is ON.");
-      if (!Number.isFinite(priceNum) || priceNum <= 0) return setError("Price must be greater than 0.");
-    }
-
-    setBusy(true);
     try {
+      const payload = buildPayload();
+
       if (editing?.id) {
-        await api.put(`/legal-documents/${editing.id}`, buildUpdatePayload());
-        setInfo("LLR Service (Report) updated.");
-        await loadAll();
-        closeModal();
-        return;
-      }
-
-      const res = await api.post("/legal-documents", buildCreatePayload());
-      const newId = res.data?.id ?? res.data?.data?.id;
-
-      if (newId) {
-        setEditing({ id: newId, title: form.title, coverImagePath: null });
-        setInfo(`Report created (#${newId}). Upload cover below, then open Report Content to add text.`);
-        await loadAll();
+        await api.put(`/law-reports/${editing.id}`, payload);
+        setInfo("Law report updated.");
       } else {
-        setInfo("Report created. Refresh list.");
-        await loadAll();
-        closeModal();
+        const res = await api.post("/law-reports", payload);
+        const newId = res.data?.id ?? res.data?.data?.id ?? null;
+        setInfo(newId ? `Law report created (#${newId}).` : "Law report created.");
       }
+
+      await fetchList();
+      closeModal();
     } catch (e) {
       setError(getApiErrorMessage(e, "Save failed."));
     } finally {
@@ -455,82 +313,153 @@ export default function AdminLLRServices() {
     }
   }
 
-  async function uploadCover() {
-    if (!editing?.id) return setError("Save the report first, then upload a cover.");
-    if (!coverFile) return setError("Select an image file first.");
+  async function remove(row) {
+    if (!row?.id) return;
+    const ok = window.confirm(`Delete this report?\n\n${row.title || row.reportNumber || ""}`);
+    if (!ok) return;
 
+    setBusy(true);
     setError("");
     setInfo("");
-    setUploadingCover(true);
 
     try {
-      const fd = new FormData();
-      fd.append("file", coverFile, coverFile.name);
-      fd.append("File", coverFile, coverFile.name);
-
-      await postMultipartWithFallback([`/legal-documents/${editing.id}/cover`], fd);
-
-      setInfo("Cover uploaded successfully.");
-      resetCoverInput();
-      await loadAll();
+      await api.delete(`/law-reports/${row.id}`);
+      setInfo("Deleted.");
+      await fetchList();
     } catch (e) {
-      setError(getApiErrorMessage(e, "Cover upload failed."));
+      setError(getApiErrorMessage(e, "Delete failed."));
     } finally {
-      setUploadingCover(false);
+      setBusy(false);
     }
   }
 
-  function getCurrency(r) {
-    return r.publicCurrency ?? r.PublicCurrency ?? null;
+  // -------- Import handlers --------
+
+  async function importExcel(file) {
+    setImportError("");
+    setImportInfo("");
+    setPreview(null);
+    if (!file) return;
+
+    setImportBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file, file.name);
+
+      const res = await api.post("/law-reports/import/excel", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      setPreview(res.data);
+      setImportInfo("Preview ready. Review and confirm.");
+    } catch (e) {
+      setImportError(getApiErrorMessage(e, "Excel import preview failed."));
+    } finally {
+      setImportBusy(false);
+    }
   }
-  function getPrice(r) {
-    const v = r.publicPrice ?? r.PublicPrice ?? null;
-    return v == null ? null : v;
+
+  async function importWord(file) {
+    setImportError("");
+    setImportInfo("");
+    setPreview(null);
+
+    if (!file) return;
+    if (!String(wordReportNumber || "").trim()) return setImportError("Report number is required for Word import.");
+    const y = toIntOrNull(wordYear);
+    if (!y || y < 1900 || y > 2100) return setImportError("Year must be between 1900 and 2100.");
+
+    setImportBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file, file.name);
+      fd.append("reportNumber", String(wordReportNumber).trim());
+      fd.append("year", String(y));
+
+      const res = await api.post("/law-reports/import/word", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      setPreview(res.data);
+      setImportInfo("Preview ready. Review and confirm.");
+    } catch (e) {
+      setImportError(getApiErrorMessage(e, "Word import preview failed."));
+    } finally {
+      setImportBusy(false);
+    }
   }
-  function getAllow(r) {
-    return !!(r.allowPublicPurchase ?? r.AllowPublicPurchase ?? false);
+
+  async function confirmImport() {
+    if (!preview?.items?.length) return setImportError("No preview items to confirm.");
+
+    setImportBusy(true);
+    setImportError("");
+    setImportInfo("");
+
+    try {
+      await api.post("/law-reports/import/confirm", {
+        duplicateStrategy: dupStrategy, // "Skip" | "Update"
+        items: preview.items,
+      });
+
+      setImportInfo("Import completed.");
+      setPreview(null);
+      await fetchList();
+    } catch (e) {
+      setImportError(getApiErrorMessage(e, "Import confirm failed."));
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
+  function openContent(row) {
+    // Route stays under /admin/llr-services/... to keep naming,
+    // but param is now LawReportId, NOT LegalDocumentId.
+    navigate(`/dashboard/admin/llr-services/${row.id}/content`, {
+      state: { title: row.title || "" },
+    });
   }
 
   return (
     <div className="admin-page admin-page-wide">
       <style>{`
-        .admin-table-wrap { max-height: 68vh; overflow: auto; border-radius: 14px; }
+        .admin-table-wrap { max-height: 68vh; overflow:auto; border-radius: 14px; }
         .admin-table thead th { position: sticky; top: 0; z-index: 2; background: #fafafa; }
         .row-zebra { background: #fafafa; }
         .row-hover:hover td { background: #fbfbff; }
-        .num-cell { text-align: right; font-variant-numeric: tabular-nums; }
-        .price-on { font-weight: 900; }
-        .admin-upload-box {
-          border: 1px dashed #d1d5db;
-          background: #fff;
-          border-radius: 14px;
-          padding: 12px;
-        }
-        .admin-upload-actions { display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap; }
-        .filehint { color: #6b7280; font-weight: 700; font-size: 12px; }
-        .minihelp { color:#6b7280; font-size:12px; margin-top:6px; line-height:1.35; }
-        .minihelp.warn {
-          background:#fffbeb; border:1px solid #fcd34d; color:#92400e;
-          padding:8px 10px; border-radius:12px; margin-top:8px;
-          font-size:12px; font-weight:800;
-        }
-        .minihelp.ok {
-          background:#ecfdf5; border:1px solid #34d399; color:#065f46;
-          padding:10px 12px; border-radius:12px; margin:10px 0;
-          font-size:12px; font-weight:800;
-        }
+        .num-cell { text-align:right; font-variant-numeric: tabular-nums; }
+        .tight { white-space: nowrap; }
+        .pill2 { display:inline-flex; align-items:center; gap:6px; padding: 6px 10px; border-radius:999px; border:1px solid #e5e7eb; background:#fff; font-weight:900; font-size:12px; }
+        .import-box { border: 1px dashed #d1d5db; border-radius: 14px; background:#fff; padding: 12px; }
+        .import-row { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+        .import-col { display:flex; flex-direction:column; gap:6px; min-width: 200px; }
+        .import-label { font-weight: 900; font-size: 12px; color:#374151; }
+        .hint { color:#6b7280; font-size:12px; font-weight:700; }
+        .preview-wrap { margin-top: 10px; border-radius: 14px; border: 1px solid #e5e7eb; overflow:hidden; background:#fff; }
+        .preview-head { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; padding: 10px 12px; background:#fafafa; border-bottom: 1px solid #e5e7eb; }
+        .preview-table { width:100%; border-collapse: collapse; font-size: 12px; }
+        .preview-table th, .preview-table td { border-bottom: 1px solid #f3f4f6; padding: 8px 10px; vertical-align: top; }
+        .err { color:#991b1b; font-weight:900; }
+        .oktxt { color:#065f46; font-weight:900; }
       `}</style>
 
       <div className="admin-header">
         <div>
           <h1 className="admin-title">Admin · LLR Services (Reports)</h1>
-          <p className="admin-subtitle">Reports are subscription-only and text-based. Create here, then open “Report Content” to add the text.</p>
+          <p className="admin-subtitle">
+            Create and manage law reports. Saving a report automatically creates its linked LegalDocument.
+          </p>
         </div>
 
         <div className="admin-actions">
-          <button className="admin-btn" onClick={loadAll} disabled={busy || loading}>
+          <button className="admin-btn" onClick={fetchList} disabled={busy || loading}>
             Refresh
           </button>
+
+          <button className="admin-btn" onClick={() => setImportOpen(true)} disabled={busy}>
+            Import
+          </button>
+
           <button className="admin-btn primary compact" onClick={openCreate} disabled={busy}>
             + New Report
           </button>
@@ -539,14 +468,11 @@ export default function AdminLLRServices() {
 
       {(error || info) && <div className={`admin-alert ${error ? "error" : "ok"}`}>{error || info}</div>}
 
-      {/* ✅ Show banner ONLY when there are no report rows */}
-      {!loading && rows.length === 0 && banner && <div className="minihelp ok">{banner}</div>}
-
       <div className="admin-card admin-card-fill">
         <div className="admin-toolbar">
           <input
             className="admin-search admin-search-wide"
-            placeholder="Search reports by title, status, premium, pages, file type…"
+            placeholder="Search by title, report number, year, parties, citation, court..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -557,323 +483,294 @@ export default function AdminLLRServices() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th style={{ width: "44%" }}>Title</th>
-                <th style={{ width: "12%" }}>Status</th>
-                <th style={{ width: "10%" }}>Premium</th>
-                <th style={{ width: "8%" }} className="num-cell">
-                  Pages
+                <th style={{ width: "28%" }}>Title</th>
+                <th style={{ width: "10%" }}>Report No.</th>
+                <th style={{ width: "6%" }} className="num-cell">
+                  Year
                 </th>
-                <th style={{ width: "10%" }}>Public</th>
-                <th style={{ width: "10%" }} className="num-cell">
-                  Price
+                <th style={{ width: "10%" }}>Decision</th>
+                <th style={{ width: "10%" }}>Case Type</th>
+                <th style={{ width: "18%" }}>Parties</th>
+                <th style={{ width: "10%" }}>Court</th>
+                <th style={{ width: "8%" }} className="tight">
+                  Date
                 </th>
-                <th style={{ width: "6%" }}>Type</th>
-                <th style={{ textAlign: "right", width: "10%" }}>Actions</th>
+                <th style={{ width: "10%", textAlign: "right" }}>Actions</th>
               </tr>
             </thead>
 
             <tbody>
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} style={{ color: "#6b7280", padding: "14px" }}>
-                    No reports found. Click “+ New Report” to create one.
+                  <td colSpan={9} style={{ color: "#6b7280", padding: 14 }}>
+                    No reports found. Click “+ New Report” or use Import.
                   </td>
                 </tr>
               )}
 
-              {filtered.map((r, idx) => {
-                const allow = getAllow(r);
-                const currency = getCurrency(r);
-                const price = getPrice(r);
-                const isPremium = !!r.isPremium;
-                const ft = pickFileType(r).toLowerCase() || "—";
+              {filtered.map((r, idx) => (
+                <tr key={r.id} className={`${idx % 2 === 1 ? "row-zebra" : ""} row-hover`}>
+                  <td style={{ fontWeight: 900 }}>{r.title || "—"}</td>
+                  <td className="tight">{r.reportNumber || "—"}</td>
+                  <td className="num-cell">{r.year ?? "—"}</td>
+                  <td>{DECISION_OPTIONS.find((x) => x.value === toInt(r.decisionType))?.label || "—"}</td>
+                  <td>{CASETYPE_OPTIONS.find((x) => x.value === toInt(r.caseType))?.label || "—"}</td>
+                  <td>{r.parties || "—"}</td>
+                  <td>{r.court || "—"}</td>
+                  <td className="tight">{r.decisionDate ? String(r.decisionDate).slice(0, 10) : "—"}</td>
+                  <td>
+                    <div className="admin-row-actions" style={{ justifyContent: "flex-end", gap: 10 }}>
+                      <button className="admin-action-btn neutral small" onClick={() => openEdit(r)} disabled={busy}>
+                        Edit
+                      </button>
 
-                return (
-                  <tr key={r.id} className={`${idx % 2 === 1 ? "row-zebra" : ""} row-hover`}>
-                    <td style={{ fontWeight: 900 }}>{r.title}</td>
+                      <button className="admin-action-btn small" onClick={() => openContent(r)} disabled={busy}>
+                        Report Content
+                      </button>
 
-                    <td>
-                      <span className={`admin-pill ${String(r.status).toLowerCase() === "published" ? "ok" : "muted"}`}>
-                        {r.status}
-                      </span>
-                    </td>
-
-                    <td>
-                      <span className={`admin-pill ${isPremium ? "warn" : "muted"}`}>{isPremium ? "Yes" : "No"}</span>
-                    </td>
-
-                    <td className="num-cell">{r.pageCount ?? "—"}</td>
-
-                    <td>
-                      {!isPremium ? (
-                        <span className="admin-pill muted">N/A</span>
-                      ) : allow ? (
-                        <span className="admin-pill ok">On</span>
-                      ) : (
-                        <span className="admin-pill muted">Off</span>
-                      )}
-                    </td>
-
-                    <td className="num-cell">
-                      {!isPremium ? (
-                        <span className="admin-pill muted">N/A</span>
-                      ) : !allow ? (
-                        <span className="admin-pill muted">Off</span>
-                      ) : price == null ? (
-                        "—"
-                      ) : (
-                        <span className="price-on">
-                          {currency || "—"} {formatMoney(price)}
-                        </span>
-                      )}
-                    </td>
-
-                    <td>
-                      <span className="admin-pill muted">{ft}</span>
-                    </td>
-
-                    <td>
-                      <div className="admin-row-actions" style={{ justifyContent: "flex-end", gap: 10 }}>
-                        <button className="admin-action-btn neutral small" onClick={() => openEdit(r)} disabled={busy}>
-                          Edit
-                        </button>
-
-                        <button
-                          className="admin-action-btn small"
-                          onClick={() =>
-                            navigate(`/dashboard/admin/llr-services/${r.id}/content`, {
-                              state: { title: r.title || "" },
-                            })
-                          }
-                          disabled={busy}
-                          title="Open the report text editor"
-                        >
-                          Report Content
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                      <button className="admin-action-btn danger small" onClick={() => remove(r)} disabled={busy}>
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       </div>
 
-      {open && (
-        <div className="admin-modal-overlay" onClick={closeModal}>
-          <div className="admin-modal admin-modal-tight" onClick={(e) => e.stopPropagation()}>
+      {/* ===================== IMPORT MODAL ===================== */}
+      {importOpen && (
+        <div className="admin-modal-overlay" onClick={closeImport}>
+          <div className="admin-modal" style={{ maxWidth: 1100 }} onClick={(e) => e.stopPropagation()}>
             <div className="admin-modal-head">
               <div>
-                <h3 className="admin-modal-title">{editing ? `Edit Report #${editing.id}` : "Create Report"}</h3>
-                <div className="admin-modal-subtitle">Metadata only. (Text content is in the Reports module.)</div>
+                <h3 className="admin-modal-title">Import Reports</h3>
+                <div className="admin-modal-subtitle">Upload Excel (many rows) or Word (one report).</div>
               </div>
 
-              <button className="admin-btn" onClick={closeModal} disabled={busy || uploadingCover}>
+              <button className="admin-btn" onClick={closeImport} disabled={importBusy}>
+                Close
+              </button>
+            </div>
+
+            <div className="admin-modal-body admin-modal-scroll">
+              {(importError || importInfo) && (
+                <div className={`admin-alert ${importError ? "error" : "ok"}`}>{importError || importInfo}</div>
+              )}
+
+              <div className="import-box">
+                <div className="import-row">
+                  <div className="import-col">
+                    <div className="import-label">Excel import</div>
+                    <input
+                      ref={excelInputRef}
+                      type="file"
+                      accept=".xlsx,.xls"
+                      disabled={importBusy}
+                      onChange={(e) => importExcel(e.target.files?.[0] || null)}
+                    />
+                    <div className="hint">Expected columns: ReportNumber, Year, CaseNumber, Citation, Parties, Court, Judges, DecisionType, CaseType, DecisionDate, ContentText</div>
+                  </div>
+
+                  <div className="import-col" style={{ minWidth: 260 }}>
+                    <div className="import-label">Word import</div>
+                    <input
+                      ref={wordInputRef}
+                      type="file"
+                      accept=".docx"
+                      disabled={importBusy}
+                      onChange={(e) => importWord(e.target.files?.[0] || null)}
+                    />
+                    <div className="hint">Word file provides ContentText; you supply ReportNumber + Year.</div>
+                  </div>
+
+                  <div className="import-col" style={{ minWidth: 180 }}>
+                    <div className="import-label">ReportNumber *</div>
+                    <input value={wordReportNumber} onChange={(e) => setWordReportNumber(e.target.value)} disabled={importBusy} placeholder="e.g. CAR353" />
+                  </div>
+
+                  <div className="import-col" style={{ minWidth: 140 }}>
+                    <div className="import-label">Year *</div>
+                    <input value={wordYear} onChange={(e) => setWordYear(e.target.value)} disabled={importBusy} placeholder="e.g. 2020" />
+                  </div>
+
+                  <div className="import-col" style={{ minWidth: 220 }}>
+                    <div className="import-label">Duplicate strategy</div>
+                    <select value={dupStrategy} onChange={(e) => setDupStrategy(e.target.value)} disabled={importBusy}>
+                      <option value="Skip">Skip duplicates</option>
+                      <option value="Update">Update existing</option>
+                    </select>
+                    <div className="hint">If duplicates are found: skip or overwrite.</div>
+                  </div>
+
+                  <div className="import-col" style={{ minWidth: 150 }}>
+                    <button className="admin-btn primary" onClick={confirmImport} disabled={importBusy || !preview?.items?.length}>
+                      {importBusy ? "Working…" : "Confirm import"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {preview && (
+                <div className="preview-wrap">
+                  <div className="preview-head">
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                      <span className="pill2">Total: {preview.total ?? 0}</span>
+                      <span className="pill2">Valid: {preview.valid ?? 0}</span>
+                      <span className="pill2">Invalid: {preview.invalid ?? 0}</span>
+                      <span className="pill2">Duplicates: {preview.duplicates ?? 0}</span>
+                    </div>
+                    <div className="hint">Fix invalid rows before confirming.</div>
+                  </div>
+
+                  <div style={{ maxHeight: 380, overflow: "auto" }}>
+                    <table className="preview-table">
+                      <thead>
+                        <tr>
+                          <th>Row</th>
+                          <th>ReportNumber</th>
+                          <th>Year</th>
+                          <th>Citation</th>
+                          <th>DecisionType</th>
+                          <th>CaseType</th>
+                          <th>Duplicate</th>
+                          <th>Status</th>
+                          <th>Errors</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(preview.items || []).map((it, i) => (
+                          <tr key={i}>
+                            <td className="tight">{it.rowNumber ?? i + 1}</td>
+                            <td className="tight">{it.reportNumber || "—"}</td>
+                            <td className="tight">{it.year ?? "—"}</td>
+                            <td>{it.citation || "—"}</td>
+                            <td className="tight">{it.decisionType || "—"}</td>
+                            <td className="tight">{it.caseType || "—"}</td>
+                            <td className="tight">
+                              {it.isDuplicate ? (
+                                <span className="err">Yes</span>
+                              ) : (
+                                <span className="oktxt">No</span>
+                              )}
+                            </td>
+                            <td className="tight">{it.isValid ? <span className="oktxt">Valid</span> : <span className="err">Invalid</span>}</td>
+                            <td className="err">{(it.errors || []).join("; ")}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="admin-modal-foot">
+              <button className="admin-btn" onClick={closeImport} disabled={importBusy}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== CREATE/EDIT MODAL ===================== */}
+      {open && (
+        <div className="admin-modal-overlay" onClick={closeModal}>
+          <div className="admin-modal" style={{ maxWidth: 1100 }} onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-head">
+              <div>
+                <h3 className="admin-modal-title">{editing ? `Edit Report #${editing.id}` : "Create Law Report"}</h3>
+                <div className="admin-modal-subtitle">
+                  Fill the fields below. Saving will create/update the LawReport and its linked LegalDocument.
+                </div>
+              </div>
+
+              <button className="admin-btn" onClick={closeModal} disabled={busy}>
                 Close
               </button>
             </div>
 
             <div className="admin-modal-body admin-modal-scroll">
               <div className="admin-grid">
-                <div className="admin-field admin-span2">
-                  <label>Title *</label>
-                  <input value={form.title} onChange={(e) => setField("title", e.target.value)} />
+                <div className="admin-field">
+                  <label>Report Number *</label>
+                  <input value={form.reportNumber} onChange={(e) => setField("reportNumber", e.target.value)} placeholder="e.g. CAR353" />
                 </div>
 
                 <div className="admin-field">
-                  <label>Country *</label>
-                  <select value={String(form.countryId)} onChange={(e) => setField("countryId", e.target.value)}>
-                    <option value="">Select…</option>
-                    {countries.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
+                  <label>Year *</label>
+                  <input type="number" min="1900" max="2100" value={form.year} onChange={(e) => setField("year", e.target.value)} placeholder="e.g. 2020" />
+                </div>
+
+                <div className="admin-field">
+                  <label>Case Number</label>
+                  <input value={form.caseNumber} onChange={(e) => setField("caseNumber", e.target.value)} placeholder="e.g. Petition 12 of 2020" />
+                </div>
+
+                <div className="admin-field">
+                  <label>Citation</label>
+                  <input value={form.citation} onChange={(e) => setField("citation", e.target.value)} placeholder="Optional (preferred if available)" />
+                </div>
+
+                <div className="admin-field">
+                  <label>Decision Type *</label>
+                  <select value={String(form.decisionType)} onChange={(e) => setField("decisionType", toInt(e.target.value, 1))}>
+                    {DECISION_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
                       </option>
                     ))}
                   </select>
                 </div>
 
                 <div className="admin-field">
-                  <label>Status</label>
-                  <select value={form.status} onChange={(e) => setField("status", e.target.value)}>
-                    <option value="Published">Published</option>
-                    <option value="Draft">Draft</option>
-                    <option value="Archived">Archived</option>
-                  </select>
-                </div>
-
-                <div className="admin-field">
-                  <label>Category</label>
-                  <select value={form.category} onChange={(e) => setField("category", e.target.value)}>
-                    {CATEGORY_OPTIONS.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
+                  <label>Case Type *</label>
+                  <select value={String(form.caseType)} onChange={(e) => setField("caseType", toInt(e.target.value, 2))}>
+                    {CASETYPE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
                       </option>
                     ))}
                   </select>
                 </div>
 
                 <div className="admin-field">
-                  <label>No of Pages</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={form.pageCount}
-                    onChange={(e) => setField("pageCount", e.target.value)}
-                    placeholder="e.g. 12"
-                  />
-                </div>
-
-                <div className="admin-field">
-                  <label>ContentProductId (optional)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={form.contentProductId}
-                    onChange={(e) => setField("contentProductId", e.target.value)}
-                    placeholder="e.g. 1 (LawAfrica Reports)"
-                  />
-                  <div className="minihelp">If set, report is mapped to that product (shows under DOCS).</div>
-                </div>
-
-                <div className="admin-field">
-                  <label>Premium?</label>
-                  <select value={String(!!form.isPremium)} onChange={(e) => setField("isPremium", e.target.value === "true")}>
-                    <option value="true">Yes</option>
-                    <option value="false">No</option>
-                  </select>
-                </div>
-
-                <div className="admin-field">
-                  <label>Version</label>
-                  <input value={form.version} onChange={(e) => setField("version", e.target.value)} />
-                </div>
-
-                <div className="admin-field">
-                  <label>Published date</label>
-                  <input type="date" value={form.publishedAt} onChange={(e) => setField("publishedAt", e.target.value)} />
+                  <label>Court</label>
+                  <input value={form.court} onChange={(e) => setField("court", e.target.value)} placeholder="e.g. Court of Appeal" />
                 </div>
 
                 <div className="admin-field admin-span2">
-                  <label>Description</label>
-                  <textarea rows={4} value={form.description} onChange={(e) => setField("description", e.target.value)} />
+                  <label>Parties</label>
+                  <input value={form.parties} onChange={(e) => setField("parties", e.target.value)} placeholder="e.g. A v B" />
                 </div>
 
-                <div className="admin-field">
-                  <label>Author</label>
-                  <input value={form.author} onChange={(e) => setField("author", e.target.value)} />
-                </div>
-
-                <div className="admin-field">
-                  <label>Publisher</label>
-                  <input value={form.publisher} onChange={(e) => setField("publisher", e.target.value)} />
-                </div>
-
-                <div className="admin-field">
-                  <label>Edition</label>
-                  <input value={form.edition} onChange={(e) => setField("edition", e.target.value)} />
-                </div>
-              </div>
-
-              <div className="admin-form-section">
-                <div className="admin-form-section-title">Pricing</div>
-                <div className="admin-form-section-sub">Only premium documents can be sold publicly.</div>
-              </div>
-
-              <div className="admin-grid">
-                <div className="admin-field">
-                  <label>Allow public purchase?</label>
-                  <select
-                    value={String(!!form.allowPublicPurchase)}
-                    onChange={(e) => setField("allowPublicPurchase", e.target.value === "true")}
-                    disabled={!form.isPremium}
-                  >
-                    <option value="true">Yes</option>
-                    <option value="false">No</option>
-                  </select>
-                </div>
-
-                <div className="admin-field">
-                  <label>Currency</label>
-                  <input
-                    value={form.publicCurrency}
-                    onChange={(e) => setField("publicCurrency", e.target.value)}
-                    disabled={!form.isPremium || !form.allowPublicPurchase}
-                  />
-                </div>
-
-                <div className="admin-field">
-                  <label>Public price</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.publicPrice}
-                    onChange={(e) => setField("publicPrice", e.target.value)}
-                    disabled={!form.isPremium || !form.allowPublicPurchase}
-                  />
-                </div>
-              </div>
-
-              <div className="admin-form-section">
-                <div className="admin-form-section-title">Cover image</div>
-                <div className="admin-form-section-sub">Save first, then upload a cover (optional).</div>
-              </div>
-
-              <div className="admin-grid">
                 <div className="admin-field admin-span2">
-                  <label>Cover image</label>
-                  <div className="admin-upload-box">
-                    <input
-                      ref={coverInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => setCoverFile(e.target.files?.[0] || null)}
-                      disabled={!editing || uploadingCover || busy}
-                      title={!editing ? "Save first, then upload." : ""}
-                    />
+                  <label>Judges</label>
+                  <textarea rows={2} value={form.judges} onChange={(e) => setField("judges", e.target.value)} placeholder="Separate by newline or semicolon" />
+                </div>
 
-                    <div className="admin-upload-actions">
-                      <button className="admin-btn" onClick={uploadCover} disabled={!editing || uploadingCover || busy}>
-                        {uploadingCover ? "Uploading…" : "Upload cover"}
-                      </button>
-                      <span className="filehint">{coverFile ? coverFile.name : "No file selected."}</span>
-                    </div>
+                <div className="admin-field">
+                  <label>Decision Date</label>
+                  <input type="date" value={form.decisionDate} onChange={(e) => setField("decisionDate", e.target.value)} />
+                </div>
 
-                    {editing?.coverImagePath && (
-                      <div style={{ marginTop: 10, display: "flex", gap: 12, alignItems: "center" }}>
-                        <img
-                          src={buildCoverUrl(editing.coverImagePath)}
-                          alt="cover"
-                          style={{
-                            width: 110,
-                            height: 140,
-                            objectFit: "cover",
-                            borderRadius: 12,
-                            border: "1px solid #e5e7eb",
-                          }}
-                          onError={(e) => (e.currentTarget.style.display = "none")}
-                        />
-                        <div className="filehint" style={{ maxWidth: 520 }}>
-                          Current cover is shown if available.
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="minihelp.warn">Ebook uploads are disabled here. Reports are text-based and managed in the Reports module.</div>
-                  </div>
+                <div className="admin-field admin-span2">
+                  <label>Content Text *</label>
+                  <textarea rows={16} value={form.contentText} onChange={(e) => setField("contentText", e.target.value)} placeholder="Paste the full report text here..." />
+                  <div className="hint">Tip: You can still use “Report Content” for a focused editor after saving.</div>
                 </div>
               </div>
             </div>
 
             <div className="admin-modal-foot">
-              <button className="admin-btn" onClick={closeModal} disabled={busy || uploadingCover}>
+              <button className="admin-btn" onClick={closeModal} disabled={busy}>
                 Cancel
               </button>
 
-              <button className="admin-btn primary" onClick={save} disabled={busy || uploadingCover}>
+              <button className="admin-btn primary" onClick={save} disabled={busy}>
                 {busy ? "Saving…" : editing ? "Save changes" : "Create"}
               </button>
             </div>
