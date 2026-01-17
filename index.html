@@ -104,11 +104,37 @@
         }
 
         // 1) Catch runtime JS errors
-        window.addEventListener("error", function (e) {
-          const err = e.error || new Error(e.message || "Unknown error");
-          console.error("[LA DEBUG] window.error:", e);
-          showOverlay(fmtError("WINDOW ERROR", err, "Source: " + (e.filename || "") + ":" + (e.lineno || "") + ":" + (e.colno || "")));
-        });
+window.addEventListener(
+  "error",
+  function (e) {
+    // This catches both runtime errors AND resource load failures (script/css 404)
+    const isResourceError = e && e.target && (e.target.tagName === "SCRIPT" || e.target.tagName === "LINK");
+
+    if (isResourceError) {
+      const el = e.target;
+      const url = el.src || el.href || "(no src/href)";
+      console.error("[LA DEBUG] Resource failed to load:", el.tagName, url);
+      showOverlay(
+        [
+          "RESOURCE FAILED TO LOAD",
+          "Time: " + new Date().toISOString(),
+          "URL: " + location.href,
+          "Tag: " + el.tagName,
+          "Resource: " + url,
+          "",
+          "This usually means your built assets are being requested from a wrong path.",
+          "Fix: set Vite base:'/' and redeploy.",
+        ].join("\n")
+      );
+      return;
+    }
+
+    const err = e.error || new Error(e.message || "Unknown error");
+    console.error("[LA DEBUG] window.error:", e);
+    showOverlay(fmtError("WINDOW ERROR", err, "Source: " + (e.filename || "") + ":" + (e.lineno || "") + ":" + (e.colno || "")));
+  },
+  true // ✅ CAPTURE PHASE (critical)
+);
 
         // 2) Catch unhandled promise rejections
         window.addEventListener("unhandledrejection", function (e) {
