@@ -1,5 +1,5 @@
-import { useState } from "react";
-import api from "../../../api/client"; // assuming this is your axios instance
+import { useMemo, useState } from "react";
+import api from "../../../api/client"; // axios instance
 
 export default function AdminTrials() {
   const [userId, setUserId] = useState("");
@@ -12,9 +12,35 @@ export default function AdminTrials() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
 
+  const userIdNum = useMemo(() => Number(userId), [userId]);
+  const productIdNum = useMemo(() => Number(contentProductId), [contentProductId]);
+  const valueNum = useMemo(() => Number(value), [value]);
+
+  const canSubmit = Number.isFinite(userIdNum) && userIdNum > 0 &&
+                    Number.isFinite(productIdNum) && productIdNum > 0;
+
   function normalizeUnit(u) {
-    // Your API expects enum int: Days=1 Months=2 (from DTO)
+    // API enum int: Days=1 Months=2
     return u === "Months" ? 2 : 1;
+  }
+
+  function extractErrorMessage(e) {
+    const data = e?.response?.data;
+
+    // Common API pattern: { message: "..." }
+    if (data?.message) return data.message;
+
+    // ASP.NET validation errors: { errors: { Field: ["msg"] } }
+    if (data?.errors && typeof data.errors === "object") {
+      const firstKey = Object.keys(data.errors)[0];
+      const firstVal = Array.isArray(data.errors[firstKey]) ? data.errors[firstKey][0] : null;
+      if (firstVal) return `${firstKey}: ${firstVal}`;
+    }
+
+    // String responses
+    if (typeof data === "string") return data;
+
+    return e?.message || "Request failed";
   }
 
   async function call(endpoint, payload) {
@@ -25,40 +51,38 @@ export default function AdminTrials() {
       const res = await api.post(endpoint, payload);
       setResult(res.data);
     } catch (e) {
-      const msg =
-        e?.response?.data?.message ||
-        (typeof e?.response?.data === "string" ? e.response.data : null) ||
-        e.message ||
-        "Request failed";
-      setError(msg);
+      setError(extractErrorMessage(e));
     } finally {
       setBusy(false);
     }
   }
 
   async function grant() {
+    if (!canSubmit) return;
     await call("/api/admin/trials/grant", {
-      userId: Number(userId),
-      contentProductId: Number(contentProductId),
+      userId: userIdNum,
+      contentProductId: productIdNum,
       unit: normalizeUnit(unit),
-      value: Number(value),
+      value: valueNum,
       extendIfActive: !!extendIfActive,
     });
   }
 
-  async function extendvoke() {
-    await call("/api/admin/trials/revoke", {
-      userId: Number(userId),
-      contentProductId: Number(contentProductId),
+  async function extend() {
+    if (!canSubmit) return;
+    await call("/api/admin/trials/extend", {
+      userId: userIdNum,
+      contentProductId: productIdNum,
+      unit: normalizeUnit(unit),
+      value: valueNum,
     });
   }
 
-  async function extend() {
-    await call("/api/admin/trials/extend", {
-      userId: Number(userId),
-      contentProductId: Number(contentProductId),
-      unit: normalizeUnit(unit),
-      value: Number(value),
+  async function revoke() {
+    if (!canSubmit) return;
+    await call("/api/admin/trials/revoke", {
+      userId: userIdNum,
+      contentProductId: productIdNum,
     });
   }
 
@@ -77,6 +101,7 @@ export default function AdminTrials() {
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
               placeholder="e.g. 123"
+              inputMode="numeric"
             />
           </label>
 
@@ -86,6 +111,7 @@ export default function AdminTrials() {
               value={contentProductId}
               onChange={(e) => setContentProductId(e.target.value)}
               placeholder="e.g. 9"
+              inputMode="numeric"
             />
           </label>
         </div>
@@ -122,16 +148,22 @@ export default function AdminTrials() {
           </label>
         </div>
 
+        {!canSubmit && (
+          <div style={{ padding: 10, border: "1px solid #ddd", background: "#fafafa" }}>
+            Enter a valid <b>UserId</b> and <b>ContentProductId</b> to enable actions.
+          </div>
+        )}
+
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button disabled={busy} onClick={grant}>
+          <button disabled={busy || !canSubmit} onClick={grant}>
             {busy ? "Working..." : "Grant Trial"}
           </button>
 
-          <button disabled={busy} onClick={extend}>
+          <button disabled={busy || !canSubmit} onClick={extend}>
             {busy ? "Working..." : "Extend Trial"}
           </button>
 
-          <button disabled={busy} onClick={Rvoke}>
+          <button disabled={busy || !canSubmit} onClick={revoke}>
             {busy ? "Working..." : "Revoke Trial"}
           </button>
         </div>
@@ -157,12 +189,9 @@ export default function AdminTrials() {
       <div style={{ opacity: 0.8 }}>
         <b>Notes:</b>
         <ul>
+          <li>Unit values sent to API: Days=1, Months=2.</li>
           <li>
-            Unit values sent to API: Days=1, Months=2 (matches your backend DTO enum).
-          </li>
-          <li>
-            If you want, next we can fetch product list automatically and let you pick “Reports”
-            instead of typing the product id.
+            Next improvement: fetch products and let you pick “Reports” instead of typing the id.
           </li>
         </ul>
       </div>
