@@ -9,6 +9,9 @@ import "react-pdf/dist/esm/Page/AnnotationLayer.css";
 
 const root = document.getElementById("root");
 
+console.log("[LA DEBUG] main.jsx executing", location.href);
+
+
 ReactDOM.createRoot(root).render(
   <React.StrictMode>
   <AuthProvider>

@@ -1,40 +1,45 @@
+// src/auth/AuthContext.jsx
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import axios from "axios";
-import api from "../api/client";
+import api, { API_BASE_URL } from "../api/client";
 import { getToken, logout as clearToken } from "./auth";
 
 const AuthContext = createContext(null);
 
-// NOTE: This is used for building avatar URLs only
-const API_BASE = String(import.meta.env.VITE_API_BASE_URL || "https://lawafricaapi.onrender.com")
-  .trim()
-  .replace(/\/$/, "");
+function getServerOrigin() {
+  // API_BASE_URL is like https://lawafricaapi.onrender.com/api
+  return String(API_BASE_URL || "").replace(/\/api\/?$/i, "");
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // ✅ Prevent double in-flight profile loads (helps StrictMode / fast re-renders)
+  // ✅ prevents double profile fetch (React StrictMode / fast re-renders)
   const inFlightRef = useRef(null);
 
   // -------------------------
   // REFRESH USER PROFILE
   // -------------------------
   const refreshUser = async () => {
-    // If one is already running, reuse it
+    // ✅ if a refresh is already happening, reuse it
     if (inFlightRef.current) return inFlightRef.current;
 
-    inFlightRef.current = (async () => {
+    const run = (async () => {
       try {
-        // ✅ Never throttle profile load
         const res = await api.get("/Profile/me", { __skipThrottle: true });
         const data = res.data;
 
+        const API_ORIGIN = getServerOrigin();
+
         let avatarUrl = null;
         if (data?.profileImageUrl) {
-          avatarUrl = String(data.profileImageUrl).startsWith("http")
-            ? data.profileImageUrl
-            : `${API_BASE}/${String(data.profileImageUrl).replace(/^\/?storage/i, "storage")}`;
+          const p = String(data.profileImageUrl).trim();
+          if (p) {
+            avatarUrl = p.startsWith("http")
+              ? p
+              : `${API_ORIGIN}/${p.replace(/^\/?storage/i, "storage")}`;
+          }
         }
 
         setUser({
@@ -47,29 +52,30 @@ export function AuthProvider({ children }) {
           avatarUrl,
         });
 
-        return data;
+        return true;
       } catch (err) {
-        // ✅ Treat request cancels (throttle, route change, abort) as non-errors
+        // ✅ CRITICAL: ignore cancellations (throttle / route changes / aborted requests)
         if (axios.isCancel(err) || err?.code === "ERR_CANCELED") {
-          return null;
+          return false;
         }
 
         // ✅ Only handle auth failures here
         if (err?.response?.status === 401) {
           clearToken();
           setUser(null);
-          return null;
+          return false;
         }
 
-        // ✅ Log but DO NOT crash app boot
         console.error("Profile load failed", err);
-        return null;
+        // ✅ DO NOT throw — never block app mount
+        return false;
       } finally {
         inFlightRef.current = null;
       }
     })();
 
-    return inFlightRef.current;
+    inFlightRef.current = run;
+    return run;
   };
 
   // -------------------------

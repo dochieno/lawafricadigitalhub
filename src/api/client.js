@@ -1,27 +1,24 @@
+// src/api/client.js
 import axios from "axios";
 import { getToken, clearToken, isTokenExpired } from "../auth/auth";
 
-// Base = https://localhost:7033 (dev) OR https://lawafricaapi.onrender.com (prod)
 const BASE = String(import.meta.env.VITE_API_BASE_URL || "https://lawafricaapi.onrender.com")
   .trim()
   .replace(/\/$/, "");
 
-// Final API base = .../api
 export const API_BASE_URL = `${BASE}/api`;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
+  headers: { "Content-Type": "application/json" },
 });
+
+// ✅ throttle only in dev (simplest “stop the circles” fix)
+const ENABLE_THROTTLE = import.meta.env.DEV;
 
 // Prevent multiple redirect loops
 let hasRedirectedOn401 = false;
 
-/**
- * ✅ Only during payment return / payment confirmation should we avoid force-logout redirects.
- */
 function isInPaystackReturnOrPaidContext() {
   try {
     const p = window.location.pathname || "";
@@ -42,9 +39,6 @@ function isInPaystackReturnOrPaidContext() {
   }
 }
 
-/**
- * ✅ Detect auth endpoints so we don't create loops or redirects on them.
- */
 function isAuthEndpoint(url = "") {
   const u = String(url || "");
   return (
@@ -55,9 +49,6 @@ function isAuthEndpoint(url = "") {
   );
 }
 
-/**
- * ✅ Public payment endpoints that must still work even if token is expired
- */
 function isPublicPaymentEndpoint(url = "") {
   const u = String(url || "");
   return (
@@ -67,31 +58,19 @@ function isPublicPaymentEndpoint(url = "") {
   );
 }
 
-/**
- * ✅ Boot-critical endpoints: never throttle these
- */
 function isBootCritical(url = "") {
   const u = String(url || "");
-  return (
-    /\/Profile\/me/i.test(u) ||
-    /\/my-library/i.test(u) || // safe to keep fast
-    /\/legal-documents\/[^/]+\/access/i.test(u)
-  );
+  return /\/Profile\/me/i.test(u) || /\/my-library/i.test(u) || /\/legal-documents\/[^/]+\/access/i.test(u);
 }
 
-/**
- * ✅ Detect PDF download endpoint (pdf.js uses MANY requests, often Range-based)
- */
 function isPdfDownload(url = "") {
   const u = String(url || "");
   return /\/legal-documents\/[^/]+\/download/i.test(u);
 }
 
-/**
- * ✅ Throttle identical requests to stop storms.
- */
+/** throttle (dev only) **/
 const recentRequestMap = new Map();
-const THROTTLE_MS = 800; // ✅ reduced (less likely to break boot)
+const THROTTLE_MS = 800;
 
 function stableStringify(obj) {
   try {
@@ -155,16 +134,15 @@ function cleanupOldKeys(now) {
 }
 
 function shouldThrottle(config) {
+  if (!ENABLE_THROTTLE) return false;          // ✅ PROD: never cancel requests
   if (config?.__skipThrottle) return false;
 
   const url = String(config?.url || "");
   const range = getHeader(config, "Range");
   const rt = String(config?.responseType || "").toLowerCase();
 
-  // ✅ Never throttle boot-critical requests
   if (isBootCritical(url)) return false;
 
-  // ✅ PDF safety
   if (isPdfDownload(url)) return false;
   if (range) return false;
   if (rt === "blob" || rt === "arraybuffer") return false;
@@ -181,13 +159,10 @@ function shouldThrottle(config) {
   return false;
 }
 
-// ✅ Attach JWT + handle FormData + stop expired-token requests
 api.interceptors.request.use(
   (config) => {
     if (shouldThrottle(config)) {
-      return Promise.reject(
-        new axios.CanceledError("Throttled duplicate request (preventing request storm).")
-      );
+      return Promise.reject(new axios.CanceledError("Throttled duplicate request (preventing request storm)."));
     }
 
     const token = getToken();
@@ -195,9 +170,7 @@ api.interceptors.request.use(
 
     if (token && isTokenExpired() && !isAuthEndpoint(url) && !isPublicPaymentEndpoint(url)) {
       clearToken();
-      return Promise.reject(
-        new axios.CanceledError("Token expired. Request cancelled; user must login again.")
-      );
+      return Promise.reject(new axios.CanceledError("Token expired. Request cancelled; user must login again."));
     }
 
     if (token && !isAuthEndpoint(url)) {
@@ -216,14 +189,14 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// ✅ Auto-clear token + redirect to login on 401 ONLY (except Paystack return/paid context)
 api.interceptors.response.use(
   (res) => {
     hasRedirectedOn401 = false;
     return res;
   },
   (error) => {
-    if (axios.isCancel(error) || error?.code === "ERR_CANCELED") {
+    // ✅ Do not treat cancels as real errors
+    if (axios.isCancel(error) || error?.code === "ERR_CANCELED" || error?.name === "CanceledError") {
       return Promise.reject(error);
     }
 
