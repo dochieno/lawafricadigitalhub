@@ -488,43 +488,44 @@ export default function PdfViewer({
     return el.closest(".pdf-page-wrapper");
   }
 
-  //Additional Helper:
-
+  // Additional Helper:
   function computeOffsetsFromRange(textLayerEl, range) {
-  const spans = Array.from(textLayerEl.querySelectorAll("span"));
-  if (!spans.length) return { start: null, end: null };
+    const spans = Array.from(textLayerEl.querySelectorAll("span"));
+    if (!spans.length) return { start: null, end: null };
 
-  function findSpan(elOrNode) {
-    const el = elOrNode?.nodeType === 1 ? elOrNode : elOrNode?.parentElement;
-    return el?.closest?.("span") || null;
+    function findSpan(elOrNode) {
+      const el = elOrNode?.nodeType === 1 ? elOrNode : elOrNode?.parentElement;
+      return el?.closest?.("span") || null;
+    }
+
+    const startSpan = findSpan(range.startContainer);
+    const endSpan = findSpan(range.endContainer);
+    if (!startSpan || !endSpan) return { start: null, end: null };
+
+    // index spans
+    const startIdx = spans.indexOf(startSpan);
+    const endIdx = spans.indexOf(endSpan);
+    if (startIdx < 0 || endIdx < 0) return { start: null, end: null };
+
+    const startLocal = range.startContainer?.nodeType === 3 ? range.startOffset : 0;
+    const endLocal =
+      range.endContainer?.nodeType === 3
+        ? range.endOffset
+        : endSpan.textContent?.length || 0;
+
+    let start = 0;
+    for (let i = 0; i < startIdx; i++) start += (spans[i].textContent || "").length;
+    start += startLocal;
+
+    let end = 0;
+    for (let i = 0; i < endIdx; i++) end += (spans[i].textContent || "").length;
+    end += endLocal;
+
+    // normalize
+    if (end < start) [start, end] = [end, start];
+
+    return { start, end };
   }
-
-  const startSpan = findSpan(range.startContainer);
-  const endSpan = findSpan(range.endContainer);
-  if (!startSpan || !endSpan) return { start: null, end: null };
-
-  // index spans
-  const startIdx = spans.indexOf(startSpan);
-  const endIdx = spans.indexOf(endSpan);
-  if (startIdx < 0 || endIdx < 0) return { start: null, end: null };
-
-  const startLocal = range.startContainer?.nodeType === 3 ? range.startOffset : 0;
-  const endLocal = range.endContainer?.nodeType === 3 ? range.endOffset : (endSpan.textContent?.length || 0);
-
-  let start = 0;
-  for (let i = 0; i < startIdx; i++) start += (spans[i].textContent || "").length;
-  start += startLocal;
-
-  let end = 0;
-  for (let i = 0; i < endIdx; i++) end += (spans[i].textContent || "").length;
-  end += endLocal;
-
-  // normalize
-  if (end < start) [start, end] = [end, start];
-
-  return { start, end };
-}
-
 
   function handleMouseUp() {
     setTimeout(() => {
@@ -555,16 +556,30 @@ export default function PdfViewer({
         height: r.height,
       }));
 
+      // =========================
+      // ✅ PATCH A: offsets were referenced but never defined.
+      // Compute offsets from text layer if available.
+      // =========================
+      let offsets = { start: null, end: null };
+      try {
+        const textLayerEl = wrapper.querySelector(".react-pdf__Page__textContent");
+        if (textLayerEl) {
+          offsets = computeOffsetsFromRange(textLayerEl, range);
+        }
+      } catch {
+        // best-effort only
+      }
+
       setSelectedText(text);
       setNoteContent("");
 
       setHighlightMeta({
-        id: crypto.randomUUID(),
+        id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
         page: pageNumber,
         text,
         rects,
-         charOffsetStart: offsets.start,
-         charOffsetEnd: offsets.end,
+        charOffsetStart: offsets.start,
+        charOffsetEnd: offsets.end,
       });
 
       setHighlightColor("yellow");
@@ -717,11 +732,6 @@ export default function PdfViewer({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notes, ready, renderLimit, allowedMaxPage]);
-
-  /* ==================================================
-     NOTES CRUD
-     ================================================== */
-
 
   /* ==================================================
      NOTES CRUD (unchanged)
@@ -925,6 +935,54 @@ export default function PdfViewer({
             }, 120);
           }}
         >
+          {/* =========================
+              ✅ PATCH B: never “silent white screen”.
+              If PDF fails, show a clear error panel even if overlay CSS doesn't show.
+             ========================= */}
+          {!ready && !!loadError && (
+            <div style={{ padding: 16 }}>
+              <div
+                style={{
+                  border: "1px solid #fecaca",
+                  background: "#fff1f2",
+                  borderRadius: 14,
+                  padding: 14,
+                  color: "#7f1d1d",
+                  fontWeight: 800,
+                }}
+              >
+                {loadError}
+                <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <button
+                    className="outline-btn"
+                    onClick={() => window.location.reload()}
+                    type="button"
+                  >
+                    Refresh
+                  </button>
+                  <button
+                    className="outline-btn"
+                    onClick={() => {
+                      // force compatibility mode retry
+                      setLoadError("Reloading in compatibility mode…");
+                      setSafeMode(true);
+                      setReady(false);
+                      setNumPages(null);
+                      setRenderLimit(10);
+                      setDocKey((k) => k + 1);
+                    }}
+                    type="button"
+                  >
+                    Try compatibility mode
+                  </button>
+                </div>
+                <div style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: "#6b7280" }}>
+                  If this only happens after Paystack return, it’s usually a token/session timing issue.
+                </div>
+              </div>
+            </div>
+          )}
+
           {!ready && (
             <div className="reader-loadingOverlay">
               <div className="reader-loadingCard">
@@ -971,6 +1029,10 @@ export default function PdfViewer({
                 return;
               }
 
+              // ✅ PATCH B (continued): ensure we don’t remain in a “blank” ready state
+              setReady(false);
+              setNumPages(null);
+
               setLoadError("Failed to load PDF. Please refresh and try again.");
             }}
             onSourceError={(err) => {
@@ -985,6 +1047,10 @@ export default function PdfViewer({
                 setDocKey((k) => k + 1);
                 return;
               }
+
+              // ✅ PATCH B (continued)
+              setReady(false);
+              setNumPages(null);
 
               setLoadError("Unable to load document source.");
             }}

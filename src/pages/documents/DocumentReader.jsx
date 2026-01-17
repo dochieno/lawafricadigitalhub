@@ -57,21 +57,26 @@ export default function DocumentReader() {
   }
 
   // Detect landing from Paystack/MPESA
-  useEffect(() => {
-    const qs = new URLSearchParams(location.search);
-    const paid = (qs.get("paid") || "").trim();
-    const provider = (qs.get("provider") || "").trim();
+useEffect(() => {
+  const qs = new URLSearchParams(location.search);
+  const paidQs = (qs.get("paid") || "").trim();
+  const providerQs = (qs.get("provider") || "").trim();
 
-    if (paid === "1") {
-      setJustPaid(true);
-      setPaidProvider(provider);
+  const paidState = location.state?.paid === true;
+  const providerState = (location.state?.provider || "").trim();
 
-      showToast(`Payment successful ✅${provider ? ` (${provider})` : ""}`, "success");
+  const paid = paidState || paidQs === "1";
+  const provider = providerState || providerQs;
 
-      // remove params from url
+  if (paid) {
+    setJustPaid(true);
+    setPaidProvider(provider);
+    showToast(`Payment successful ✅${provider ? ` (${provider})` : ""}`, "success");
+
+    // Only strip URL params if we used query params
+    if (paidQs === "1") {
       qs.delete("paid");
       qs.delete("provider");
-
       navigate(
         {
           pathname: location.pathname,
@@ -80,8 +85,10 @@ export default function DocumentReader() {
         { replace: true }
       );
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
 
   useEffect(() => {
     aliveRef.current = true;

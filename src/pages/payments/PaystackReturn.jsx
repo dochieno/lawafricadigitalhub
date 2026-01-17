@@ -1,3 +1,4 @@
+// PaystackReturn.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../../api/client";
@@ -123,7 +124,7 @@ export default function PaystackReturn() {
     return res.data?.data ?? res.data;
   }
 
-  // ✅ NEW: force-confirm payment on return (avoids webhook timing)
+  // ✅ confirm payment server-side (avoids webhook timing)
   async function confirmPaystack(ref) {
     const res = await api.post(
       "/payments/paystack/confirm",
@@ -139,7 +140,6 @@ export default function PaystackReturn() {
   }
 
   async function pollIntent(intentId) {
-    // keep this shorter now that we have confirm
     const deadline = Date.now() + 45000;
 
     while (Date.now() < deadline) {
@@ -153,7 +153,6 @@ export default function PaystackReturn() {
         if (isFailed) throw new Error(intent?.providerResultDesc || "Payment failed.");
         if (isSuccess) return intent;
       } catch (e) {
-        // Ignore throttled cancels or transient network hiccups during polling
         if (e?.code === "ERR_CANCELED") {
           await sleep(600);
           continue;
@@ -227,18 +226,16 @@ export default function PaystackReturn() {
 
       setPaymentIntentId(intentId);
 
-      // 2) ✅ Force-confirm immediately (this is the key fix)
-      // If confirm fails for some reason, we fall back to poll.
+      // 2) Force-confirm immediately (best-effort)
       try {
         await confirmPaystack(reference);
       } catch (e) {
-        // If confirm endpoint isn't available / returns error, just continue to poll
         if (e?.code !== "ERR_CANCELED") {
           console.warn("Paystack confirm failed (fallback to poll):", e);
         }
       }
 
-      // 3) Fetch/poll for final state (short)
+      // 3) Fetch/poll final state
       let intent;
       try {
         intent = await getIntent(intentId);
@@ -270,8 +267,12 @@ export default function PaystackReturn() {
 
       clearCtx(reference);
 
+      // ✅ IMPORTANT: redirect to reader WITHOUT query params; use state instead
       if (docId) {
-        nav(`/dashboard/documents/${docId}/read?paid=1&provider=paystack`, { replace: true });
+        nav(`/dashboard/documents/${docId}/read`, {
+          replace: true,
+          state: { paid: true, provider: "paystack", reference },
+        });
         return;
       }
 

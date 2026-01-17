@@ -7,17 +7,25 @@ const BASE = String(import.meta.env.VITE_API_BASE_URL || "https://lawafricaapi.o
   .replace(/\/$/, "");
 
 export function getPdfSource(documentId) {
-  const token = getToken();
-
   // defensive: allow string/number ids
   const id = encodeURIComponent(String(documentId ?? "").trim());
 
+  // ✅ Trim + guard against empty strings
+  const token = String(getToken?.() || "").trim();
+
+  // ✅ pdf.js / react-pdf uses these headers for fetch
+  const httpHeaders = {
+    Accept: "application/pdf",
+  };
+
+  // ✅ Only attach Authorization if token exists
+  if (token) {
+    httpHeaders.Authorization = `Bearer ${token}`;
+  }
+
   return {
     url: `${BASE}/api/legal-documents/${id}/download`,
-    httpHeaders: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      Accept: "application/pdf",
-    },
+    httpHeaders,
     withCredentials: false,
   };
 }
