@@ -99,12 +99,16 @@ const CATEGORY_OPTIONS = [
 ];
 
 /**
- * Detect report rows from API:
- * backend might return enum string ("Report") or int (2)
+ * ✅ Detect report rows from API:
+ * - backend might return enum string ("Report") or int (2)
+ * - BUT /legal-documents/admin may not include Kind
+ * - fallback: fileType === "report"
  */
 function isReportRow(r) {
   const k = r?.kind ?? r?.Kind;
-  return k === "Report" || k === 2;
+  const ft = String(r?.fileType ?? r?.FileType ?? "").toLowerCase();
+
+  return k === "Report" || k === 2 || ft === "report";
 }
 
 const emptyForm = {
