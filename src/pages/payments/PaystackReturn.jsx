@@ -1,4 +1,3 @@
-// PaystackReturn.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../../api/client";
@@ -48,19 +47,12 @@ export default function PaystackReturn() {
   const reference = (query.get("reference") || query.get("trxref") || "").trim();
   const fallbackDocId = state?.docId ? Number(state.docId) : null;
 
-  const [phase, setPhase] = useState("LOADING"); // LOADING | WAITING | SUCCESS | FAILED
-  const [message, setMessage] = useState("Finalizing payment… please wait.");
+  const [phase, setPhase] = useState("LOADING"); // LOADING | SUCCESS | FAILED
+  const [message, setMessage] = useState("Processing Paystack return…");
   const [error, setError] = useState("");
   const [paymentIntentId, setPaymentIntentId] = useState(null);
 
   const didRunRef = useRef(false);
-
-  function clearLocalStorageMapping(ref) {
-    try {
-      if (!ref) return;
-      localStorage.removeItem(`paystack_intent_${ref}`);
-    } catch {}
-  }
 
   function readCtx(ref) {
     try {
@@ -98,7 +90,7 @@ export default function PaystackReturn() {
     }
   }
 
-  // best-effort only (Authorized endpoint)
+  // best-effort only (safe even if endpoint doesn't exist)
   async function logReturnVisit(ref) {
     try {
       if (!ref) return;
@@ -112,7 +104,7 @@ export default function PaystackReturn() {
         { __skipThrottle: true }
       );
     } catch {
-      // ignore (never block the user)
+      // ignore
     }
   }
 
@@ -124,55 +116,23 @@ export default function PaystackReturn() {
     return res.data?.data ?? res.data;
   }
 
-  // ✅ confirm payment server-side (avoids webhook timing)
-  async function confirmPaystack(ref) {
-    const res = await api.post(
-      "/payments/paystack/confirm",
-      { reference: ref },
-      { __skipThrottle: true }
-    );
-    return res.data?.data ?? res.data;
-  }
-
-  async function getIntent(intentId) {
-    const res = await api.get(`/payments/intent/${intentId}`, { __skipThrottle: true });
-    return res.data?.data ?? res.data;
-  }
-
-  async function pollIntent(intentId) {
-    const deadline = Date.now() + 45000;
-
-    while (Date.now() < deadline) {
-      try {
-        const intent = await getIntent(intentId);
-
-        const status = intent?.status;
-        const isSuccess = status === 3 || status === "Success";
-        const isFailed = status === 4 || status === "Failed";
-
-        if (isFailed) throw new Error(intent?.providerResultDesc || "Payment failed.");
-        if (isSuccess) return intent;
-      } catch (e) {
-        if (e?.code === "ERR_CANCELED") {
-          await sleep(600);
-          continue;
-        }
-      }
-
-      setPhase("WAITING");
-      setMessage("Payment received. Confirming on the server…");
-      await sleep(1500);
-    }
-
-    throw new Error("Payment is taking longer to confirm. Please refresh in a moment.");
-  }
-
-  function redirectToRegisterPaid() {
+  function redirectToRegisterPaid(ref) {
     const qs = new URLSearchParams();
     qs.set("paid", "1");
     qs.set("provider", "paystack");
-    if (reference) qs.set("reference", reference);
+    if (ref) qs.set("reference", ref);
     nav(`/register?${qs.toString()}`, { replace: true });
+  }
+
+  function redirectToDocumentDetailsPaid(docId, intentId, ref) {
+    const qs = new URLSearchParams();
+    qs.set("paid", "1");
+    qs.set("provider", "paystack");
+    if (ref) qs.set("reference", ref);
+    if (intentId) qs.set("paymentIntentId", String(intentId));
+
+    // ✅ IMPORTANT: Details page will do the confirm modal + refresh access then open reader.
+    nav(`/dashboard/documents/${docId}?${qs.toString()}`, { replace: true });
   }
 
   async function run() {
@@ -185,21 +145,20 @@ export default function PaystackReturn() {
       return;
     }
 
-    // ✅ SIGNUP FLOW MUST WIN — regardless of existing token (DO NOT CHANGE)
+    // ✅ SIGNUP FLOW MUST WIN — DO NOT CHANGE
     const storedRegIntent = localStorage.getItem(LS_REG_INTENT);
     if (storedRegIntent) {
       clearToken();
       setPhase("SUCCESS");
-      setMessage("Payment received ✅ Returning to registration to finalize your account…");
+      setMessage("Payment received ✅ Returning to registration…");
 
-      clearLocalStorageMapping(reference);
       clearCtx(reference);
-      await sleep(400);
-      redirectToRegisterPaid();
+      await sleep(350);
+      redirectToRegisterPaid(reference);
       return;
     }
 
-    // ✅ Authenticated purchase flow
+    // ✅ Authenticated purchase flow: token required for the user experience
     const token = restoreTokenIfMissing(reference);
     if (!token) {
       setPhase("FAILED");
@@ -210,72 +169,40 @@ export default function PaystackReturn() {
 
     try {
       setPhase("LOADING");
-      setMessage("Finalizing payment… please wait.");
+      setMessage("Resolving your payment…");
+      await logReturnVisit(reference);
 
-      // best-effort audit; ignore failures
-      logReturnVisit(reference);
-
-      clearLocalStorageMapping(reference);
-
-      // 1) Resolve intent
+      // 1) Resolve intent & meta (docId)
       const resolved = await fetchIntentByReference(reference);
-      const intentId = resolved?.paymentIntentId || null;
+      const intentId = resolved?.paymentIntentId || resolved?.id || null;
       const meta = resolved?.meta || null;
 
       if (!intentId) throw new Error("Could not resolve payment intent from reference.");
 
       setPaymentIntentId(intentId);
 
-      // 2) Force-confirm immediately (best-effort)
-      try {
-        await confirmPaystack(reference);
-      } catch (e) {
-        if (e?.code !== "ERR_CANCELED") {
-          console.warn("Paystack confirm failed (fallback to poll):", e);
-        }
-      }
-
-      // 3) Fetch/poll final state
-      let intent;
-      try {
-        intent = await getIntent(intentId);
-        const status = intent?.status;
-        const isSuccess = status === 3 || status === "Success";
-        const isFailed = status === 4 || status === "Failed";
-        if (isFailed) throw new Error(intent?.providerResultDesc || "Payment failed.");
-        if (!isSuccess) intent = await pollIntent(intentId);
-      } catch (e) {
-        if (e?.code === "ERR_CANCELED") {
-          intent = await pollIntent(intentId);
-        } else {
-          throw e;
-        }
-      }
-
       const ctx = readCtx(reference);
 
+      // 2) Pick docId from best sources (intent/meta > ctx > location.state)
       const docId =
-        intent?.legalDocumentId ??
         meta?.legalDocumentId ??
         ctx?.docId ??
         fallbackDocId ??
         null;
 
       setPhase("SUCCESS");
-      setMessage("Payment confirmed ✅ Redirecting…");
-      await sleep(500);
+      setMessage("Payment received ✅ Redirecting…");
+      await sleep(350);
 
+      // Keep ctx around until after redirect if you want, but safe to clear now
       clearCtx(reference);
 
-      // ✅ IMPORTANT: redirect to reader WITHOUT query params; use state instead
       if (docId) {
-        nav(`/dashboard/documents/${docId}/read`, {
-          replace: true,
-          state: { paid: true, provider: "paystack", reference },
-        });
+        redirectToDocumentDetailsPaid(docId, intentId, reference);
         return;
       }
 
+      // No docId means not a doc purchase; go to library
       nav("/dashboard/library", { replace: true });
     } catch (e) {
       const status = e?.response?.status;
@@ -312,6 +239,7 @@ export default function PaystackReturn() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {/* ✅ Use shared spinner class if you added it in CSS */}
             <div
               style={{
                 width: 22,
@@ -325,7 +253,7 @@ export default function PaystackReturn() {
             <div>
               <div style={{ fontWeight: 900 }}>{message}</div>
               <div style={{ marginTop: 4, fontSize: 13, color: "#6b7280" }}>
-                Don’t close this page. We’re confirming your payment.
+                Don’t close this page. We’re redirecting you back.
               </div>
               {paymentIntentId && (
                 <div style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>
@@ -346,7 +274,7 @@ export default function PaystackReturn() {
                 color: "#065f46",
               }}
             >
-              Payment confirmed ✅ Redirecting…
+              Payment received ✅ Redirecting…
             </div>
           )}
         </div>

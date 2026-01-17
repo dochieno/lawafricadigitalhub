@@ -1,53 +1,35 @@
-// src/pages/dashboard/DocumentDetails.jsx
-import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import api, { API_BASE_URL } from "../../api/client";
-import { getToken } from "../../auth/auth"; //
+import { getToken } from "../../auth/auth";
 import { getAuthClaims } from "../../auth/auth";
 import { useAuth } from "../../auth/AuthContext";
 import "../../styles/document-details.css";
 
 function getServerOrigin() {
-  // API_BASE_URL: e.g. https://lawafricaapi.onrender.com/api
-  // origin needed for static: https://lawafricaapi.onrender.com
   return String(API_BASE_URL || "").replace(/\/api\/?$/i, "");
 }
 
-/**
- * ✅ FIXED:
- * - do NOT lowercase paths (Linux case-sensitive)
- * - normalize "\" -> "/"
- * - accept:
- *   - "Storage/covers/x.jpg"
- *   - "/Storage/covers/x.jpg"
- *   - "storage/covers/x.jpg"
- *   - "/storage/covers/x.jpg"
- *   - already full URL: "https://..."
- */
 function buildCoverUrl(coverImagePath) {
   if (!coverImagePath) return null;
 
   const raw = String(coverImagePath).trim();
   if (!raw) return null;
 
-  // Already a full URL
   if (/^https?:\/\//i.test(raw)) return raw;
 
   let clean = raw.replace(/\\/g, "/").replace(/^\/+/, "");
 
-  // If backend stored "storage/..." or "/storage/..."
   if (clean.toLowerCase().startsWith("storage/")) {
     clean = clean.slice("storage/".length);
     return `${getServerOrigin()}/storage/${clean}`;
   }
 
-  // If backend stored "Storage/..."
   if (clean.startsWith("Storage/")) {
     clean = clean.slice("Storage/".length);
     return `${getServerOrigin()}/storage/${clean}`;
   }
 
-  // Otherwise treat it as already relative within storage
   return `${getServerOrigin()}/storage/${clean}`;
 }
 
@@ -69,7 +51,6 @@ function savePaystackCtx(ref, ctx) {
     localStorage.setItem(paystackCtxKey(ref), JSON.stringify(ctx));
   } catch {}
 }
-
 
 function toBool(v) {
   if (v === true || v === false) return v;
@@ -93,7 +74,6 @@ function formatMoney(n) {
   }).format(num);
 }
 
-// Accepts 07..., 2547..., +2547...
 function normalizeKenyanPhone(raw) {
   const s = String(raw || "").trim().replace(/\s+/g, "");
   if (!s) return "";
@@ -130,10 +110,18 @@ function extractEmailFromClaims(claims) {
   return null;
 }
 
+function extractAxiosError(e) {
+  const data = e?.response?.data;
+  if (!data) return e?.message || "Request failed.";
+  if (typeof data === "string") return data;
+  if (typeof data === "object") return data.detail || data.title || data.message || e?.message || "Request failed.";
+  return e?.message || "Request failed.";
+}
+
 export default function DocumentDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-
+  const location = useLocation();
   const { user } = useAuth();
 
   const [doc, setDoc] = useState(null);
@@ -160,13 +148,56 @@ export default function DocumentDetails() {
   const [pendingPaymentId, setPendingPaymentId] = useState(null);
 
   const isInst = isInstitutionUser();
-
-  // ✅ NEW: cover image state so we can show placeholder if it fails
   const [coverFailed, setCoverFailed] = useState(false);
+
+  // ✅ Paystack post-return confirmation overlay state
+  const [paystackFinal, setPaystackFinal] = useState({
+    open: false,
+    phase: "LOADING", // LOADING | SUCCESS | FAILED
+    title: "Confirming payment…",
+    message: "Please wait while we confirm your Paystack payment.",
+    error: "",
+    reference: "",
+    paymentIntentId: null,
+  });
+
+  // ✅ NEW: MPESA status modal (waiting/success/failed)
+  const [mpesaFinal, setMpesaFinal] = useState({
+    open: false,
+    phase: "LOADING", // LOADING | SUCCESS | FAILED
+    title: "Waiting for M-PESA confirmation…",
+    message: "Check your phone and enter your M-PESA PIN to complete payment.",
+    error: "",
+    paymentIntentId: null,
+  });
+
+  const paystackRanRef = useRef(false);
+
+  const qs = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const paid = (qs.get("paid") || "").trim();
+  const provider = (qs.get("provider") || "").trim();
+  const paystackReference = (qs.get("reference") || "").trim();
+  const paystackIntentId = qs.get("paymentIntentId") ? Number(qs.get("paymentIntentId")) : null;
 
   function showToast(message, type = "success") {
     setToast({ message, type });
     setTimeout(() => setToast(null), 2500);
+  }
+
+  function clearPaystackReturnParams() {
+    const next = new URLSearchParams(location.search);
+    next.delete("paid");
+    next.delete("provider");
+    next.delete("reference");
+    next.delete("paymentIntentId");
+
+    navigate(
+      {
+        pathname: location.pathname,
+        search: next.toString() ? `?${next.toString()}` : "",
+      },
+      { replace: true }
+    );
   }
 
   async function refreshOffer(docId) {
@@ -246,6 +277,76 @@ export default function DocumentDetails() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // ✅ Paystack: when coming back from Paystack, confirm here (signup-style UX)
+  useEffect(() => {
+    if (paystackRanRef.current) return;
+    if (!(paid === "1" && provider.toLowerCase() === "paystack")) return;
+    if (!doc?.id) return;
+
+    paystackRanRef.current = true;
+
+    (async () => {
+      try {
+        if (!paystackReference) {
+          setPaystackFinal({
+            open: true,
+            phase: "FAILED",
+            title: "Payment confirmation issue",
+            message: "Missing Paystack reference.",
+            error: "We couldn’t confirm your payment because the return URL has no reference.",
+            reference: "",
+            paymentIntentId: paystackIntentId,
+          });
+          return;
+        }
+
+        setPaystackFinal({
+          open: true,
+          phase: "LOADING",
+          title: "Confirming Paystack payment…",
+          message: "Please wait while we confirm your payment and unlock this document.",
+          error: "",
+          reference: paystackReference,
+          paymentIntentId: paystackIntentId,
+        });
+
+        // 1) Confirm on server (truth source; handles delayed webhook)
+        await api.post("/payments/paystack/confirm", { reference: paystackReference }, { __skipThrottle: true });
+
+        // 2) Refresh access/offer/library so UI updates immediately
+        await refreshOffer(doc.id);
+        await refreshLibrary(doc.id);
+        await refreshAccess(doc.id);
+
+        setPaystackFinal((s) => ({
+          ...s,
+          phase: "SUCCESS",
+          title: "Payment confirmed ✅",
+          message: "Unlocking your reader…",
+          error: "",
+        }));
+
+        // 3) Clear params then open reader
+        clearPaystackReturnParams();
+
+        setTimeout(() => {
+          navigate(`/dashboard/documents/${doc.id}/read?paid=1&provider=paystack`, { replace: false });
+        }, 450);
+      } catch (e) {
+        const msg = extractAxiosError(e);
+        setPaystackFinal((s) => ({
+          ...s,
+          open: true,
+          phase: "FAILED",
+          title: "Payment failed",
+          message: "We could not confirm your Paystack payment.",
+          error: msg,
+        }));
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paid, provider, paystackReference, paystackIntentId, doc?.id]);
+
   async function addToLibrary() {
     try {
       setActionLoading(true);
@@ -253,11 +354,7 @@ export default function DocumentDetails() {
       setInLibrary(true);
       showToast("Added to your library");
     } catch (e) {
-      const msg =
-        e?.response?.data?.message ||
-        e?.response?.data ||
-        e?.message ||
-        "Failed to add to library";
+      const msg = extractAxiosError(e);
       showToast(String(msg), "error");
     } finally {
       setActionLoading(false);
@@ -310,6 +407,7 @@ export default function DocumentDetails() {
     return offerPrice ?? docPrice ?? 0;
   }
 
+  // ✅ NEW: MPESA now shows a proper “Waiting / Failed / Success” modal
   async function startMpesaPayment(phoneNumber) {
     if (!doc) return;
 
@@ -339,11 +437,28 @@ export default function DocumentDetails() {
 
       setPendingPaymentId(paymentIntentId);
 
-      showToast("STK sent. Check your phone and enter your M-PESA PIN to complete payment.");
+      // ✅ Show MPESA waiting modal
+      setMpesaFinal({
+        open: true,
+        phase: "LOADING",
+        title: "Waiting for M-PESA confirmation…",
+        message: "Check your phone and enter your M-PESA PIN to complete payment.",
+        error: "",
+        paymentIntentId,
+      });
+
+      // Keep toast (some users like it)
+      showToast("STK sent. Check your phone to complete payment.");
 
       await pollPayment(paymentIntentId);
 
-      showToast("Payment successful. You now own this document.");
+      setMpesaFinal((s) => ({
+        ...s,
+        phase: "SUCCESS",
+        title: "Payment confirmed ✅",
+        message: "Unlocking your reader…",
+        error: "",
+      }));
 
       await refreshOffer(doc.id);
       await refreshLibrary(doc.id);
@@ -352,11 +467,23 @@ export default function DocumentDetails() {
       setMpesaPhone("");
       setShowPayModal(false);
 
-      if (hasContent) {
-        navigate(`/dashboard/documents/${doc.id}/read`);
-      }
+      setTimeout(() => {
+        setMpesaFinal((s) => ({ ...s, open: false }));
+        if (hasContent) navigate(`/dashboard/documents/${doc.id}/read`);
+      }, 450);
     } catch (e) {
-      const msg = e?.response?.data?.message || e?.response?.data || e?.message || "Payment failed.";
+      const msg = extractAxiosError(e);
+
+      // ✅ Show MPESA failed modal + allow retry
+      setMpesaFinal((s) => ({
+        ...s,
+        open: true,
+        phase: "FAILED",
+        title: "Payment failed",
+        message: "We could not confirm your M-PESA payment.",
+        error: msg,
+      }));
+
       showToast(String(msg), "error");
     } finally {
       setPurchaseLoading(false);
@@ -364,82 +491,71 @@ export default function DocumentDetails() {
     }
   }
 
-  //here
   async function startPaystackPayment() {
-  if (!doc) return;
+    if (!doc) return;
 
-  const claims = getAuthClaims() || {};
-  const email = String(user?.email || "").trim() || extractEmailFromClaims(claims);
+    const claims = getAuthClaims() || {};
+    const email = String(user?.email || "").trim() || extractEmailFromClaims(claims);
 
-  if (!email) {
-    showToast(
-      "Missing account email for Paystack. Please update your profile email or log out and log in again.",
-      "error"
-    );
-    return;
-  }
-
-  const amount = Number(priceToPay() || 0);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    showToast("This document does not have a valid price set.", "error");
-    return;
-  }
-
-  const currency =
-    pick(publicOffer, ["currency", "Currency"]) ||
-    pick(doc, ["publicCurrency", "PublicCurrency"]) ||
-    "KES";
-
-  setPurchaseLoading(true);
-  try {
-    const initRes = await api.post("/payments/paystack/initialize", {
-      purpose: 4,
-      amount,
-      currency,
-      email,
-      legalDocumentId: doc.id,
-    });
-
-    const data = initRes.data?.data ?? initRes.data;
-
-    const authorizationUrl =
-      data?.authorization_url ||
-      data?.authorizationUrl ||
-      data?.data?.authorization_url;
-
-    // ✅ Paystack reference often comes back on initialize response
-    const reference =
-      data?.reference ||
-      data?.data?.reference ||
-      data?.trxref ||
-      null;
-
-    if (!authorizationUrl) {
-      throw new Error("Paystack initialize did not return authorization_url.");
+    if (!email) {
+      showToast(
+        "Missing account email for Paystack. Please update your profile email or log out and log in again.",
+        "error"
+      );
+      return;
     }
 
-    // ✅ Save return context so PaystackReturn can recover token + docId even if state is lost
-    // This fixes “You're not logged in” after Paystack redirects back.
-    if (reference) {
-      savePaystackCtx(reference, {
-        docId: doc.id,
-        tokenSnapshot: getToken?.() || null,
-        ts: Date.now(),
+    const amount = Number(priceToPay() || 0);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showToast("This document does not have a valid price set.", "error");
+      return;
+    }
+
+    const currency =
+      pick(publicOffer, ["currency", "Currency"]) ||
+      pick(doc, ["publicCurrency", "PublicCurrency"]) ||
+      "KES";
+
+    setPurchaseLoading(true);
+    try {
+      const initRes = await api.post("/payments/paystack/initialize", {
+        purpose: 4,
+        amount,
+        currency,
+        email,
+        legalDocumentId: doc.id,
       });
-    }
 
-    showToast("Redirecting to Paystack checkout...");
-    window.location.href = authorizationUrl;
-  } catch (e) {
-    const msg =
-      e?.response?.data?.message ||
-      e?.response?.data ||
-      e?.message ||
-      "Paystack payment failed.";
-    showToast(String(msg), "error");
-    setPurchaseLoading(false);
+      const data = initRes.data?.data ?? initRes.data;
+
+      const authorizationUrl =
+        data?.authorization_url ||
+        data?.authorizationUrl ||
+        data?.data?.authorization_url;
+
+      const reference = data?.reference || data?.data?.reference || data?.trxref || null;
+
+      if (!authorizationUrl) {
+        throw new Error("Paystack initialize did not return authorization_url.");
+      }
+
+      // Save return context (optional)
+      if (reference) {
+        savePaystackCtx(reference, {
+          docId: doc.id,
+          tokenSnapshot: getToken?.() || null,
+          ts: Date.now(),
+        });
+      }
+
+      showToast("Redirecting to Paystack checkout...");
+      window.location.href = authorizationUrl;
+    } catch (e) {
+      const msg = extractAxiosError(e);
+      showToast(String(msg), "error");
+      setPurchaseLoading(false);
+    }
   }
-}
 
   if (loading) return <p className="doc-loading">Loading…</p>;
   if (!doc) return <p className="doc-error">Document not found.</p>;
@@ -513,6 +629,133 @@ export default function DocumentDetails() {
     <div className="doc-detail-container">
       {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
 
+      {/* ✅ Paystack confirmation overlay */}
+      {paystackFinal.open && (
+        <div className="modal-overlay" style={{ zIndex: 1000 }}>
+          <div className="modal" style={{ maxWidth: 520 }}>
+            <h3 style={{ marginBottom: 8 }}>{paystackFinal.title}</h3>
+            <p style={{ marginTop: 0, color: "#6b7280" }}>{paystackFinal.message}</p>
+
+            {paystackFinal.phase === "LOADING" && (
+              <div style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center" }}>
+                <div className="la-spinner" />
+                <div style={{ fontSize: 13, color: "#6b7280" }}>
+                  Reference: <b>{paystackFinal.reference}</b>
+                  {paystackFinal.paymentIntentId ? (
+                    <>
+                      {" "}
+                      • Intent: <b>#{paystackFinal.paymentIntentId}</b>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            )}
+
+            {paystackFinal.phase === "FAILED" && (
+              <div className="status-box error">
+                {paystackFinal.error || "Payment confirmation failed."}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+              {paystackFinal.phase === "FAILED" ? (
+                <>
+                  <button className="btn btn-primary" onClick={() => window.location.reload()}>
+                    Retry confirmation
+                  </button>
+                  <button
+                    className="btn btn-outline-danger"
+                    onClick={() => {
+                      setPaystackFinal((s) => ({ ...s, open: false }));
+                      clearPaystackReturnParams();
+                    }}
+                  >
+                    Close
+                  </button>
+                </>
+              ) : (
+                <button className="btn btn-outline-danger" disabled>
+                  Please wait…
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ NEW: MPESA status overlay */}
+      {mpesaFinal.open && (
+        <div className="modal-overlay" style={{ zIndex: 1000 }}>
+          <div className="modal" style={{ maxWidth: 520 }}>
+            <h3 style={{ marginBottom: 8 }}>{mpesaFinal.title}</h3>
+            <p style={{ marginTop: 0, color: "#6b7280" }}>{mpesaFinal.message}</p>
+
+            {mpesaFinal.phase === "LOADING" && (
+              <div style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center" }}>
+                <div className="la-spinner" />
+                <div style={{ fontSize: 13, color: "#6b7280" }}>
+                  Payment Intent: <b>#{mpesaFinal.paymentIntentId}</b>
+                </div>
+              </div>
+            )}
+
+            {mpesaFinal.phase === "FAILED" && (
+              <div className="status-box error">
+                {mpesaFinal.error || "Payment failed. Please try again."}
+              </div>
+            )}
+
+            {mpesaFinal.phase === "SUCCESS" && (
+              <div className="status-box success">
+                Payment confirmed. You now own this document.
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap", justifyContent: "center" }}>
+              {mpesaFinal.phase === "FAILED" ? (
+                <>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => {
+                      // keep modal open; user can retry from payment modal
+                      setMpesaFinal((s) => ({ ...s, open: false }));
+                      setPayMethod("MPESA");
+                      setShowPayModal(true);
+                    }}
+                  >
+                    Retry M-PESA
+                  </button>
+                  <button
+                    className="btn btn-outline-danger"
+                    onClick={() => setMpesaFinal((s) => ({ ...s, open: false }))}
+                  >
+                    Close
+                  </button>
+                </>
+              ) : mpesaFinal.phase === "SUCCESS" ? (
+                <button className="btn btn-outline-danger" disabled>
+                  Opening reader…
+                </button>
+              ) : (
+                <button
+                  className="btn btn-outline-danger"
+                  onClick={() => setMpesaFinal((s) => ({ ...s, open: false }))}
+                  disabled={purchaseLoading}
+                >
+                  Hide
+                </button>
+              )}
+            </div>
+
+            {mpesaFinal.phase === "LOADING" && (
+              <div className="doc-offer-note" style={{ marginTop: 12 }}>
+                Tip: If you didn’t receive the prompt, confirm your number and try again. Some prompts arrive within 30–60 seconds.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="doc-detail-grid">
         <div className="doc-detail-cover">
           {!coverFailed && coverUrl ? (
@@ -535,12 +778,7 @@ export default function DocumentDetails() {
           </p>
 
           <div className="doc-badge">
-            {doc.isPremium ? (
-              <span className="badge premium">Premium</span>
-            ) : (
-              <span className="badge free">Free</span>
-            )}
-
+            {doc.isPremium ? <span className="badge premium">Premium</span> : <span className="badge free">Free</span>}
             {!hasContent && <span className="badge coming-soon">Coming soon</span>}
 
             {showIncludedActiveBadge && (
@@ -696,8 +934,7 @@ export default function DocumentDetails() {
         <div className="doc-footer-explore-inner">
           <h2>Continue Your Legal Research</h2>
           <p>
-            Discover more free and premium legal publications across jurisdictions, categories, and practice areas
-            curated by LawAfrica.
+            Discover more free and premium legal publications across jurisdictions, categories, and practice areas curated by LawAfrica.
           </p>
 
           <div className="doc-footer-explore-actions">
@@ -717,8 +954,7 @@ export default function DocumentDetails() {
           <div className="modal">
             <h3>Content not available</h3>
             <p>
-              Great news! This document is in our catalog, but the content isn’t ready just yet. Check back soon we are
-              working on it!
+              Great news! This document is in our catalog, but the content isn’t ready just yet. Check back soon we are working on it!
             </p>
 
             <button className="btn btn-primary" onClick={() => setShowUnavailable(false)}>
@@ -733,8 +969,7 @@ export default function DocumentDetails() {
           <div className="modal">
             <h3>Choose payment method</h3>
             <p style={{ marginTop: 6 }}>
-              MPesa is Kenya-only. Paystack supports card/bank/international. After payment, fulfillment runs
-              automatically.
+              MPesa is Kenya-only. Paystack supports card/bank/international. After payment, fulfillment runs automatically.
             </p>
 
             <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>

@@ -1,96 +1,50 @@
-.doc-container {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 24px;
+/* ======================================================
+   Document Details - Clean + Consolidated Styles
+   - Keeps your existing class names
+   - Removes duplicates + conflicting re-definitions
+   - Adds missing UI bits: toast, spinner, status badges
+====================================================== */
+
+:root {
+  --la-red: #a31616;
+  --la-red-dark: #8f1313;
+  --la-dark: #111827;
+  --la-gray: #6b7280;
+  --la-border: #e5e7eb;
+  --la-bg: #ffffff;
 }
 
-.doc-title {
-  font-size: 28px;
-  color: var(--la-dark);
-  margin-bottom: 8px;
-}
-
-.doc-meta {
-  color: var(--la-gray);
-  font-size: 14px;
-  margin-bottom: 24px;
-}
-
-.doc-meta span {
-  margin-right: 6px;
-}
-
-.doc-main {
-  display: grid;
-  grid-template-columns: 260px 1fr;
-  gap: 32px;
-}
-
-.doc-cover {
-  height: 360px;
-  background: linear-gradient(135deg, var(--la-red), var(--la-dark));
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: 700;
-  letter-spacing: 2px;
-}
-
-.doc-description {
-  margin-bottom: 16px;
-  line-height: 1.6;
-}
-
-.doc-info div {
-  margin-bottom: 6px;
-  font-size: 14px;
-}
-
-.doc-badges {
-  margin: 16px 0;
-}
-
-.badge {
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-}
-
-.badge.free {
-  background: #e6f7ee;
-  color: #1e7f4f;
-}
-
-.badge.premium {
-  background: #fdecea;
-  color: #a11212;
-}
-
-.doc-actions button {
-  padding: 12px 20px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-}
-
-button.primary {
-  background: var(--la-red);
-  color: white;
-}
-
-button.secondary {
-  background: transparent;
-  border: 1px solid var(--la-red);
-  color: var(--la-red);
-}
+/* ------------------------------
+   PAGE WRAPPER
+-------------------------------- */
 .doc-detail-container {
   max-width: 1260px;
   margin: 40px auto;
   padding: 0 24px;
 }
 
+/* Loading / Error placeholders (you use these in JSX) */
+.doc-loading,
+.doc-error {
+  max-width: 960px;
+  margin: 60px auto;
+  padding: 18px 20px;
+  border-radius: 14px;
+  border: 1px solid var(--la-border);
+  background: var(--la-bg);
+  color: var(--la-dark);
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.06);
+}
+.doc-error {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #7f1d1d;
+  font-weight: 700;
+}
+
+/* ------------------------------
+   GRID LAYOUT
+-------------------------------- */
 .doc-detail-grid {
   display: grid;
   grid-template-columns: 360px 1fr;
@@ -98,19 +52,35 @@ button.secondary {
   align-items: start;
 }
 
-/* COVER */
+@media (max-width: 900px) {
+  .doc-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ------------------------------
+   COVER
+-------------------------------- */
 .doc-detail-cover {
   width: 100%;
 }
 
+.doc-cover-img,
 .doc-detail-cover img {
   width: 100%;
   height: auto;
   max-height: 520px;
-  object-fit: contain;           /* 🔑 FULL IMAGE, NO CROPPING */
+  object-fit: contain; /* full image */
   border-radius: 16px;
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.18);
   background: #7a1e1e;
+}
+
+@media (max-width: 900px) {
+  .doc-detail-cover {
+    max-width: 320px;
+    margin: 0 auto;
+  }
 }
 
 .doc-cover-placeholder {
@@ -121,75 +91,123 @@ button.secondary {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-weight: 700;
+  color: #fff;
+  font-weight: 900;
   font-size: 24px;
   letter-spacing: 2px;
 }
 
-/* INFO */
+/* ------------------------------
+   INFO
+-------------------------------- */
 .doc-title {
   font-size: 30px;
-  font-weight: 700;
-  margin-bottom: 10px;
+  font-weight: 800;
+  margin: 0 0 10px;
+  color: var(--la-dark);
 }
 
-.doc-meta {
-  color: #666;
-  font-size: 14px;
-  margin-bottom: 20px;
-}
-
-.doc-description {
-  font-size: 16px;
-  line-height: 1.65;
-  margin-bottom: 24px;
-}
-
-.doc-specs {
-  display: grid;
-  gap: 8px;
-  margin-bottom: 20px;
-}
-
-.doc-badge {
-  margin-bottom: 24px;
-}
-
-
-
-.doc-action-btn.premium {
-  background: #b11212;
-}
-
-.doc-action-btn:hover {
-  opacity: 0.95;
-}
-
-/* RESPONSIVE */
-@media (max-width: 900px) {
-  .doc-detail-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .doc-detail-cover {
-    max-width: 320px;
-    margin: 0 auto;
-    
-  }
-}
-/* --- META --- */
 .doc-meta {
   margin-top: 8px;
-  color: #6b7280;
+  color: var(--la-gray);
   font-size: 0.95rem;
+  margin-bottom: 20px;
 }
 
 .doc-badge {
   margin-top: 10px;
+  margin-bottom: 24px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
-/* --- ACTIONS --- */
+/* Badge system */
+.badge {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  border: 1px solid transparent;
+}
+
+.badge.free {
+  background: #e6f7ee;
+  color: #1e7f4f;
+  border-color: #b7ebc9;
+}
+
+.badge.premium {
+  background: #fdecea;
+  color: #a11212;
+  border-color: #fecaca;
+}
+
+.badge.coming-soon {
+  background: #fff3cd;
+  color: #821010;
+  border-color: #f5d08a;
+}
+
+/* ------------------------------
+   OFFER / PRICING CARD
+-------------------------------- */
+.doc-offer-card {
+  margin-top: 10px;
+  border: 1px solid var(--la-border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: var(--la-bg);
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.06);
+}
+
+.doc-offer-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.doc-offer-title {
+  font-weight: 900;
+  color: var(--la-dark);
+  font-size: 14px;
+}
+
+.doc-offer-sub {
+  margin-top: 3px;
+  color: var(--la-gray);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.doc-offer-price {
+  font-weight: 900;
+  font-size: 14px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--la-border);
+  background: #f9fafb;
+  color: var(--la-dark);
+  white-space: nowrap;
+}
+
+.doc-offer-note {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--la-gray);
+  font-weight: 700;
+}
+
+.doc-offer-owned {
+  background: #ecfdf5;
+  border-color: #86efac;
+}
+
+/* ------------------------------
+   ACTIONS
+-------------------------------- */
 .doc-actions {
   margin-top: 28px;
   display: flex;
@@ -197,150 +215,90 @@ button.secondary {
   flex-wrap: wrap;
 }
 
-
-.doc-btn {
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-/* Primary */
-.doc-btn.primary {
-  background: #a11217;
-  color: #fff;
-  border: none;
-}
-
-.doc-btn.primary:hover {
-  background: #8f0f14;
-}
-
-/* Secondary */
-.doc-btn.danger-outline {
-  background: transparent;
-  border: 1px solid #a11217;
-  color: #a11217;
-}
-
-.doc-btn.danger-outline:hover {
-  background: rgba(161, 18, 23, 0.05);
-}
-/* ------------------------------
-   ACTION BUTTONS (LIBRARY)
--------------------------------- */
-
-.ebook-actions {
-  display: flex;
-  gap: 0.6rem;
-  margin-top: 0.75rem;
-  flex-wrap: wrap;
-}
-
-/* Continue Reading (primary) */
-.ebook-btn {
-  background: #a31616; /* LawAfrica red */
-  color: #fff;
-  border: none;
-  padding: 0.55rem 0.9rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-  border-radius: 8px;
-  cursor: pointer;
-  line-height: 1;
-  height: 40px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.ebook-btn:hover {
-  background: #8f1313;
-}
-
-/* Remove (secondary / outline) */
-.ebook-remove-btn {
-  background: transparent;
-  color: #a31616;
-  border: 1.5px solid #a31616;
-  padding: 0.55rem 0.9rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-  border-radius: 8px;
-  cursor: pointer;
-  line-height: 1;
-  height: 40px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.ebook-remove-btn:hover {
-  background: rgba(163, 22, 22, 0.08);
-}
-
-.ebook-remove-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-/* ==============================
-   SHARED BUTTON SYSTEM
-============================== */
-
+/* Shared button system (you already use .btn ...) */
 .btn {
   height: 40px;
   padding: 0 16px;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 0.9rem;
-  font-weight: 600;
+  font-weight: 800;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 0.06s ease, background 0.2s ease, border-color 0.2s ease;
   line-height: 1;
+  user-select: none;
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* Primary */
 .btn-primary {
-  background: #a31616;
+  background: var(--la-red);
   color: #fff;
   border: none;
 }
-
 .btn-primary:hover {
-  background: #8f1313;
+  background: var(--la-red-dark);
 }
 
 /* Outline / Danger */
 .btn-outline-danger {
   background: transparent;
-  border: 1.5px solid #a31616;
-  color: #a31616;
+  border: 1.5px solid var(--la-red);
+  color: var(--la-red);
 }
-
 .btn-outline-danger:hover {
   background: rgba(163, 22, 22, 0.08);
 }
 
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+/* ------------------------------
+   TOAST (your JSX uses .toast toast-success / toast-error)
+-------------------------------- */
+.toast {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 1200;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 13px;
+  max-width: 420px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+  border: 1px solid var(--la-border);
+  background: #fff;
+  color: var(--la-dark);
 }
-/* ======================================================
-   EXPLORE-STYLE FOOTER CTA (DOCUMENT DETAILS)
-====================================================== */
 
+.toast-success {
+  border-color: #86efac;
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.toast-error {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #7f1d1d;
+}
+
+/* ------------------------------
+   FOOTER CTA
+-------------------------------- */
 .doc-footer-explore {
   margin-top: 96px;
   padding: 72px 24px;
-  background: linear-gradient(
-    180deg,
-    rgba(248, 241, 241, 0.9),
-    rgba(255, 255, 255, 1)
-  );
+  background: linear-gradient(180deg, rgba(248, 241, 241, 0.9), rgba(255, 255, 255, 1));
   border-top: 1px solid #eee;
 }
 
@@ -363,7 +321,6 @@ button.secondary {
   line-height: 1.6;
 }
 
-/* Actions */
 .doc-footer-explore-actions {
   display: flex;
   justify-content: center;
@@ -371,30 +328,29 @@ button.secondary {
   flex-wrap: wrap;
 }
 
-/* Primary (Explore red button) */
 .doc-footer-primary {
   background: #a11217;
   color: #fff;
   border: none;
   padding: 14px 28px;
   font-size: 1rem;
-  font-weight: 600;
-  border-radius: 10px;
+  font-weight: 800;
+  border-radius: 12px;
   cursor: pointer;
   min-width: 240px;
+  transition: background 0.2s ease;
 }
 
 .doc-footer-primary:hover {
   background: #8f0f14;
 }
 
-/* Secondary (link-style) */
 .doc-footer-secondary {
   background: transparent;
   border: none;
   color: #a11217;
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 800;
   cursor: pointer;
 }
 
@@ -402,19 +358,19 @@ button.secondary {
   text-decoration: underline;
 }
 
-/* Responsive spacing */
 @media (max-width: 768px) {
   .doc-footer-explore {
     margin-top: 64px;
     padding: 56px 16px;
   }
-
   .doc-footer-primary {
     width: 100%;
   }
 }
-/* ================= MODAL ================= */
 
+/* ------------------------------
+   MODAL SYSTEM (used for unavailable + pay modal + paystack/mpesa status)
+-------------------------------- */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -423,87 +379,68 @@ button.secondary {
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: 16px;
 }
 
 .modal {
   background: #fff;
-  padding: 32px;
+  padding: 28px 24px;
   border-radius: 14px;
-  max-width: 420px;
-  width: 90%;
+  max-width: 520px;
+  width: 100%;
   text-align: center;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--la-border);
 }
 
 .modal h3 {
-  margin-bottom: 12px;
+  margin: 0 0 12px;
   font-size: 1.25rem;
+  color: var(--la-dark);
 }
 
 .modal p {
   color: #555;
-  margin-bottom: 24px;
+  margin: 0 0 18px;
   line-height: 1.6;
 }
-.btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-.badge.coming-soon {
-  background: #fff3cd;
-  color: #821010;
-  margin-left: 8px;
-}
-.doc-offer-card {
-  margin-top: 10px;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  padding: 12px 14px;
-  background: #ffffff;
-  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.06);
+
+/* Inline spinner (for Paystack / MPESA confirming) */
+.la-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 3px solid #e5e7eb;
+  border-top-color: var(--la-red);
+  animation: laSpin 0.9s linear infinite;
 }
 
-.doc-offer-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+@keyframes laSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
-.doc-offer-title {
-  font-weight: 900;
-  color: #111827;
-  font-size: 14px;
-}
-
-.doc-offer-sub {
-  margin-top: 3px;
-  color: #6b7280;
-  font-size: 12px;
+/* Status blocks inside modal */
+.status-box {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--la-border);
+  text-align: left;
   font-weight: 700;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
 }
 
-.doc-offer-price {
-  font-weight: 900;
-  font-size: 14px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid #e5e7eb;
-  background: #f9fafb;
-  color: #111827;
-  white-space: nowrap;
-}
-
-.doc-offer-note {
-  margin-top: 10px;
-  font-size: 12px;
-  color: #6b7280;
-  font-weight: 700;
-}
-
-.doc-offer-owned {
+.status-box.success {
   background: #ecfdf5;
   border-color: #86efac;
+  color: #065f46;
 }
 
-
+.status-box.error {
+  background: #fff1f2;
+  border-color: #fecaca;
+  color: #7f1d1d;
+}
