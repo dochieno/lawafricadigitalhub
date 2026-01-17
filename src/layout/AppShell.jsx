@@ -156,7 +156,10 @@ export default function AppShell() {
                     <NavLink to="/dashboard/admin/documents" className="nav-link nav-child">
                       Books
                     </NavLink>
-
+                    <NavLink to="/dashboard/admin/llr-services" className="nav-link nav-child">
+                      LLR Services
+                    </NavLink>
+                    
                     <NavLink to="/dashboard/admin/institution-subscriptions" className="nav-link nav-child">
                       Subscriptions
                     </NavLink>
@@ -164,7 +167,7 @@ export default function AppShell() {
                     <NavLink to="/dashboard/admin/trials" className="nav-link nav-child">
                         Trials
                    </NavLink>
-                   
+
                     <NavLink to="/dashboard/admin/institution-bundle-subscriptions" className="nav-link nav-child">
                       Bundle
                     </NavLink>

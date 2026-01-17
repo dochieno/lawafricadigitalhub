@@ -1,17 +1,15 @@
-// src/pages/dashboard/admin/AdminDocuments.jsx
+// src/pages/dashboard/admin/AdminLLRServices.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import api, { API_BASE_URL } from "../../../api/client";
 import "../../../styles/adminCrud.css";
 
 /**
- * ✅ STANDARD DOCUMENTS ONLY PAGE
- * - Lists ONLY Standard (non-report) legal documents
- * - Create defaults to Kind=Standard
- * - Does NOT show Report-only fields (Kind, ContentProductId)
- *
- * Covers are served from /storage (NOT /api/storage)
- * API_BASE_URL is usually: https://localhost:7033/api
+ * LLR Services = Report-kind LegalDocuments only.
+ * - Filter list: Kind === "Report" (or Kind === 2)
+ * - Create defaults: Kind=Report
+ * - No ebook upload (cover only)
  */
+
 function getServerOrigin() {
   return String(API_BASE_URL || "").replace(/\/api\/?$/i, "");
 }
@@ -24,7 +22,6 @@ function buildCoverUrl(coverImagePath) {
 function getApiErrorMessage(err, fallback = "Request failed.") {
   const data = err?.response?.data;
 
-  // ASP.NET validation often looks like { errors: { Field: [msg] } }
   if (data && typeof data === "object") {
     if (typeof data.message === "string") return data.message;
     if (typeof data.error === "string") return data.error;
@@ -72,7 +69,7 @@ function toDecimalOrNull(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-// Try multiple endpoints (in case environments differ)
+// Cover upload helper
 async function postMultipartWithFallback(paths, formData) {
   let lastErr = null;
   for (const p of paths) {
@@ -81,14 +78,14 @@ async function postMultipartWithFallback(paths, formData) {
     } catch (e) {
       lastErr = e;
       const status = e?.response?.status;
-      if (status === 404 || status === 405) continue; // try next route
-      throw e; // real error (500/401/etc)
+      if (status === 404 || status === 405) continue;
+      throw e;
     }
   }
   throw lastErr || new Error("Upload failed.");
 }
 
-/** ✅ Must match backend enum values EXACTLY */
+/** Must match backend enum names (you already use strings) */
 const CATEGORY_OPTIONS = [
   "Commentaries",
   "InternationalTitles",
@@ -98,15 +95,6 @@ const CATEGORY_OPTIONS = [
   "LLRServices",
 ];
 
-/**
- * Detect report rows from API:
- * backend might return enum string ("Report") or int (2)
- */
-function isReportRow(r) {
-  const k = r?.kind ?? r?.Kind;
-  return k === "Report" || k === 2;
-}
-
 const emptyForm = {
   title: "",
   description: "",
@@ -115,11 +103,15 @@ const emptyForm = {
   edition: "",
   version: "1",
 
-  category: "Commentaries",
+  // for reports, you probably want LawReports or LLRServices
+  category: "LawReports",
   countryId: "",
 
-  // ✅ pages
   pageCount: "",
+
+  // ✅ fixed defaults for this page
+  kind: "Report",
+  contentProductId: "",
 
   isPremium: true,
   status: "Published",
@@ -130,7 +122,13 @@ const emptyForm = {
   publicCurrency: "KES",
 };
 
-export default function AdminDocuments() {
+function isReportRow(r) {
+  // backend might return enum string ("Report") or int (2)
+  const k = r?.kind ?? r?.Kind;
+  return k === "Report" || k === 2;
+}
+
+export default function AdminLLRServices() {
   const [rows, setRows] = useState([]);
   const [countries, setCountries] = useState([]);
 
@@ -146,13 +144,9 @@ export default function AdminDocuments() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ ...emptyForm });
 
-  // Upload state
-  const [ebookFile, setEbookFile] = useState(null);
+  // Cover upload only
   const [coverFile, setCoverFile] = useState(null);
-  const [uploadingEbook, setUploadingEbook] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
-
-  const ebookInputRef = useRef(null);
   const coverInputRef = useRef(null);
 
   function setField(k, v) {
@@ -170,13 +164,12 @@ export default function AdminDocuments() {
       ]);
 
       const all = Array.isArray(docsRes.data) ? docsRes.data : [];
-      // ✅ filter out reports (this page is Standard-only)
-      setRows(all.filter((r) => !isReportRow(r)));
-
+      // ✅ filter to reports only
+      setRows(all.filter(isReportRow));
       setCountries(Array.isArray(countriesRes.data) ? countriesRes.data : []);
     } catch (e) {
       setRows([]);
-      setError(getApiErrorMessage(e, "Failed to load admin documents."));
+      setError(getApiErrorMessage(e, "Failed to load LLR Services."));
     } finally {
       setLoading(false);
     }
@@ -194,23 +187,20 @@ export default function AdminDocuments() {
       const title = String(r.title ?? "").toLowerCase();
       const status = String(r.status ?? "").toLowerCase();
       const premium = r.isPremium ? "premium" : "free";
+      const pages = String(r.pageCount ?? "").toLowerCase();
 
       const allow = safeBool(r.allowPublicPurchase ?? r.AllowPublicPurchase, false);
       const currency = String((r.publicCurrency ?? r.PublicCurrency ?? "") || "").toLowerCase();
       const price = String((r.publicPrice ?? r.PublicPrice ?? "") || "").toLowerCase();
+      const pricing = `${allow ? "on" : "off"} ${currency} ${price}`;
 
-      const pages = String(r.pageCount ?? "").toLowerCase();
-      const pricing = `${allow ? "on" : "off"} ${currency} ${price} ${pages}`;
-      const meta = `${status} ${premium} ${pricing}`.toLowerCase();
-
+      const meta = `${status} ${premium} ${pages} ${pricing}`.toLowerCase();
       return title.includes(s) || meta.includes(s);
     });
   }, [rows, q]);
 
-  function resetUploadInputs() {
-    setEbookFile(null);
+  function resetCoverInput() {
     setCoverFile(null);
-    if (ebookInputRef.current) ebookInputRef.current.value = "";
     if (coverInputRef.current) coverInputRef.current.value = "";
   }
 
@@ -218,8 +208,8 @@ export default function AdminDocuments() {
     setError("");
     setInfo("");
     setEditing(null);
-    setForm({ ...emptyForm });
-    resetUploadInputs();
+    setForm({ ...emptyForm }); // ✅ always defaults to Report
+    resetCoverInput();
     setOpen(true);
   }
 
@@ -227,19 +217,12 @@ export default function AdminDocuments() {
     setError("");
     setInfo("");
     setEditing(row);
-    resetUploadInputs();
+    resetCoverInput();
     setOpen(true);
 
     try {
       const res = await api.get(`/legal-documents/${row.id}`);
       const d = res.data;
-
-      // ✅ If someone tries to open a report here, block it (safety)
-      if (isReportRow(d)) {
-        setInfo("This item is a Report. Please manage it from Admin → LLR Services.");
-        setOpen(false);
-        return;
-      }
 
       setForm({
         title: d.title ?? "",
@@ -249,10 +232,14 @@ export default function AdminDocuments() {
         edition: d.edition ?? "",
         version: d.version ?? "1",
 
-        category: d.category ?? "Commentaries",
+        category: d.category ?? "LawReports",
         countryId: d.countryId ?? "",
 
         pageCount: d.pageCount ?? "",
+
+        // ✅ keep Report fixed
+        kind: "Report",
+        contentProductId: d.contentProductId ?? "",
 
         isPremium: !!d.isPremium,
         status: d.status ?? "Published",
@@ -268,7 +255,7 @@ export default function AdminDocuments() {
   }
 
   function closeModal() {
-    if (busy || uploadingCover || uploadingEbook) return;
+    if (busy || uploadingCover) return;
     setOpen(false);
   }
 
@@ -286,11 +273,12 @@ export default function AdminDocuments() {
       category: form.category,
       countryId: Number(form.countryId),
 
-      // ✅ Standard page forces Kind=Standard (no UI field)
-      kind: "Standard",
+      // ✅ Force Report
+      kind: "Report",
+      contentProductId: toIntOrNull(form.contentProductId),
 
       filePath: "",
-      fileType: "pdf",
+      fileType: "report",
       fileSizeBytes: 0,
 
       pageCount: toIntOrNull(form.pageCount),
@@ -331,6 +319,10 @@ export default function AdminDocuments() {
       allowPublicPurchase,
       publicPrice: allowPublicPurchase ? toDecimalOrNull(form.publicPrice) : null,
       publicCurrency: allowPublicPurchase ? (form.publicCurrency?.trim() || "KES") : "KES",
+
+      // Optional if your PUT supports it:
+      kind: "Report",
+      contentProductId: toIntOrNull(form.contentProductId),
     };
   }
 
@@ -340,7 +332,6 @@ export default function AdminDocuments() {
 
     if (!form.title.trim()) return setError("Title is required.");
     if (!form.countryId) return setError("Country is required.");
-
     if (!CATEGORY_OPTIONS.includes(form.category)) {
       return setError("Invalid category selected. Please choose a valid category.");
     }
@@ -353,17 +344,15 @@ export default function AdminDocuments() {
 
     if (form.isPremium && form.allowPublicPurchase) {
       const priceNum = Number(form.publicPrice);
-      if (!form.publicCurrency?.trim())
-        return setError("Currency is required when public purchase is ON.");
-      if (!Number.isFinite(priceNum) || priceNum <= 0)
-        return setError("Price must be greater than 0.");
+      if (!form.publicCurrency?.trim()) return setError("Currency is required when public purchase is ON.");
+      if (!Number.isFinite(priceNum) || priceNum <= 0) return setError("Price must be greater than 0.");
     }
 
     setBusy(true);
     try {
       if (editing?.id) {
         await api.put(`/legal-documents/${editing.id}`, buildUpdatePayload());
-        setInfo("Document updated.");
+        setInfo("LLR Service (Report) updated.");
         await loadAll();
         closeModal();
         return;
@@ -374,10 +363,10 @@ export default function AdminDocuments() {
 
       if (newId) {
         setEditing({ id: newId, title: form.title, coverImagePath: null });
-        setInfo(`Document created (#${newId}). Now upload the ebook and cover below.`);
+        setInfo(`Report created (#${newId}). You can upload a cover below.`);
         await loadAll();
       } else {
-        setInfo("Document created. Refresh the list, then edit to upload files.");
+        setInfo("Report created. Refresh list.");
         await loadAll();
         closeModal();
       }
@@ -388,34 +377,8 @@ export default function AdminDocuments() {
     }
   }
 
-  async function uploadEbook() {
-    if (!editing?.id) return setError("Save the document first, then upload an ebook.");
-    if (!ebookFile) return setError("Select a PDF or EPUB first.");
-
-    setError("");
-    setInfo("");
-    setUploadingEbook(true);
-
-    try {
-      const fd = new FormData();
-      fd.append("file", ebookFile, ebookFile.name);
-      fd.append("File", ebookFile, ebookFile.name);
-
-      await postMultipartWithFallback([`/legal-documents/${editing.id}/upload`], fd);
-
-      setInfo("Ebook uploaded successfully.");
-      setEbookFile(null);
-      if (ebookInputRef.current) ebookInputRef.current.value = "";
-      await loadAll();
-    } catch (e) {
-      setError(getApiErrorMessage(e, "Ebook upload failed."));
-    } finally {
-      setUploadingEbook(false);
-    }
-  }
-
   async function uploadCover() {
-    if (!editing?.id) return setError("Save the document first, then upload a cover.");
+    if (!editing?.id) return setError("Save the report first, then upload a cover.");
     if (!coverFile) return setError("Select an image file first.");
 
     setError("");
@@ -430,8 +393,7 @@ export default function AdminDocuments() {
       await postMultipartWithFallback([`/legal-documents/${editing.id}/cover`], fd);
 
       setInfo("Cover uploaded successfully.");
-      setCoverFile(null);
-      if (coverInputRef.current) coverInputRef.current.value = "";
+      resetCoverInput();
       await loadAll();
     } catch (e) {
       setError(getApiErrorMessage(e, "Cover upload failed."));
@@ -451,8 +413,6 @@ export default function AdminDocuments() {
     return !!(r.allowPublicPurchase ?? r.AllowPublicPurchase ?? false);
   }
 
-  const showPricing = !!form.isPremium;
-
   return (
     <div className="admin-page admin-page-wide">
       <style>{`
@@ -462,30 +422,13 @@ export default function AdminDocuments() {
         .row-hover:hover td { background: #fbfbff; }
         .num-cell { text-align: right; font-variant-numeric: tabular-nums; }
         .price-on { font-weight: 900; }
-
-        .admin-form-section {
-          margin: 12px 0 10px;
-          padding: 12px 12px;
-          border-radius: 12px;
-          background: #f9fafb;
-          border: 1px solid #e5e7eb;
-        }
-        .admin-form-section-title { font-weight: 900; color: #111827; margin-bottom: 4px; }
-        .admin-form-section-sub { color: #6b7280; font-size: 12px; line-height: 1.35; }
-
         .admin-upload-box {
           border: 1px dashed #d1d5db;
           background: #fff;
           border-radius: 14px;
           padding: 12px;
         }
-        .admin-upload-actions {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-top: 8px;
-          flex-wrap: wrap;
-        }
+        .admin-upload-actions { display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap; }
         .filehint { color: #6b7280; font-weight: 700; font-size: 12px; }
         .minihelp { color:#6b7280; font-size:12px; margin-top:6px; line-height:1.35; }
         .minihelp.warn {
@@ -497,9 +440,9 @@ export default function AdminDocuments() {
 
       <div className="admin-header">
         <div>
-          <h1 className="admin-title">Admin · Books (Standard Documents)</h1>
+          <h1 className="admin-title">Admin · LLR Services (Reports)</h1>
           <p className="admin-subtitle">
-            This page is for Standard documents (PDF/EPUB). Reports are managed under Admin → LLR Services.
+            This page shows only Report-kind documents. New items created here are always Reports.
           </p>
         </div>
 
@@ -508,7 +451,7 @@ export default function AdminDocuments() {
             Refresh
           </button>
           <button className="admin-btn primary compact" onClick={openCreate} disabled={busy}>
-            + New
+            + New Report
           </button>
         </div>
       </div>
@@ -523,7 +466,7 @@ export default function AdminDocuments() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
-          <div className="admin-pill muted">{loading ? "Loading…" : `${filtered.length} document(s)`}</div>
+          <div className="admin-pill muted">{loading ? "Loading…" : `${filtered.length} report(s)`}</div>
         </div>
 
         <div className="admin-table-wrap">
@@ -544,7 +487,7 @@ export default function AdminDocuments() {
               {!loading && filtered.length === 0 && (
                 <tr>
                   <td colSpan={7} style={{ color: "#6b7280", padding: "14px" }}>
-                    No documents found.
+                    No reports found.
                   </td>
                 </tr>
               )}
@@ -616,25 +559,18 @@ export default function AdminDocuments() {
           <div className="admin-modal admin-modal-tight" onClick={(e) => e.stopPropagation()}>
             <div className="admin-modal-head">
               <div>
-                <h3 className="admin-modal-title">{editing ? `Edit Document #${editing.id}` : "Create Document"}</h3>
+                <h3 className="admin-modal-title">{editing ? `Edit Report #${editing.id}` : "Create Report"}</h3>
                 <div className="admin-modal-subtitle">
-                  {editing ? "Update details, pricing and upload files." : "Create first, then upload ebook & cover."}
+                  Create/update report metadata. (No ebook upload on this page.)
                 </div>
               </div>
 
-              <button className="admin-btn" onClick={closeModal} disabled={busy || uploadingCover || uploadingEbook}>
+              <button className="admin-btn" onClick={closeModal} disabled={busy || uploadingCover}>
                 Close
               </button>
             </div>
 
             <div className="admin-modal-body admin-modal-scroll">
-              <div className="admin-form-section">
-                <div className="admin-form-section-title">Document details</div>
-                <div className="admin-form-section-sub">
-                  Title, jurisdiction, category, pages and descriptive metadata.
-                </div>
-              </div>
-
               <div className="admin-grid">
                 <div className="admin-field admin-span2">
                   <label>Title *</label>
@@ -671,9 +607,6 @@ export default function AdminDocuments() {
                       </option>
                     ))}
                   </select>
-                  <div className="minihelp">
-                    These options match the backend enum (prevents 400 errors).
-                  </div>
                 </div>
 
                 <div className="admin-field">
@@ -684,9 +617,23 @@ export default function AdminDocuments() {
                     step="1"
                     value={form.pageCount}
                     onChange={(e) => setField("pageCount", e.target.value)}
-                    placeholder="e.g. 120"
+                    placeholder="e.g. 12"
                   />
-                  <div className="minihelp">Optional. Used for display and search.</div>
+                </div>
+
+                <div className="admin-field">
+                  <label>ContentProductId (optional)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={form.contentProductId}
+                    onChange={(e) => setField("contentProductId", e.target.value)}
+                    placeholder="e.g. 1 (LawAfrica Reports)"
+                  />
+                  <div className="minihelp">
+                    If set, report is mapped to that product (shows under DOCS).
+                  </div>
                 </div>
 
                 <div className="admin-field">
@@ -732,16 +679,8 @@ export default function AdminDocuments() {
               </div>
 
               <div className="admin-form-section">
-                <div className="admin-form-section-title">Pricing rules</div>
-                <div className="admin-form-section-sub">
-                  Only premium documents can be sold publicly.
-                </div>
-
-                {!showPricing && (
-                  <div className="minihelp warn">
-                    This document is FREE (Premium = No). Pricing is disabled and will not be saved.
-                  </div>
-                )}
+                <div className="admin-form-section-title">Pricing</div>
+                <div className="admin-form-section-sub">Only premium documents can be sold publicly.</div>
               </div>
 
               <div className="admin-grid">
@@ -780,38 +719,11 @@ export default function AdminDocuments() {
               </div>
 
               <div className="admin-form-section">
-                <div className="admin-form-section-title">Files</div>
-                <div className="admin-form-section-sub">
-                  Save first (to get an ID), then upload ebook and cover.
-                </div>
+                <div className="admin-form-section-title">Cover image</div>
+                <div className="admin-form-section-sub">Save first, then upload a cover (optional).</div>
               </div>
 
               <div className="admin-grid">
-                <div className="admin-field admin-span2">
-                  <label>Ebook file (PDF/EPUB)</label>
-                  <div className="admin-upload-box">
-                    <input
-                      ref={ebookInputRef}
-                      type="file"
-                      accept=".pdf,.epub"
-                      onChange={(e) => setEbookFile(e.target.files?.[0] || null)}
-                      disabled={!editing || uploadingEbook || uploadingCover || busy}
-                      title={!editing ? "Save first, then upload." : ""}
-                    />
-
-                    <div className="admin-upload-actions">
-                      <button
-                        className="admin-btn"
-                        onClick={uploadEbook}
-                        disabled={!editing || uploadingEbook || uploadingCover || busy}
-                      >
-                        {uploadingEbook ? "Uploading…" : "Upload ebook"}
-                      </button>
-                      <span className="filehint">{ebookFile ? ebookFile.name : "No file selected."}</span>
-                    </div>
-                  </div>
-                </div>
-
                 <div className="admin-field admin-span2">
                   <label>Cover image</label>
                   <div className="admin-upload-box">
@@ -820,16 +732,12 @@ export default function AdminDocuments() {
                       type="file"
                       accept="image/*"
                       onChange={(e) => setCoverFile(e.target.files?.[0] || null)}
-                      disabled={!editing || uploadingCover || uploadingEbook || busy}
+                      disabled={!editing || uploadingCover || busy}
                       title={!editing ? "Save first, then upload." : ""}
                     />
 
                     <div className="admin-upload-actions">
-                      <button
-                        className="admin-btn"
-                        onClick={uploadCover}
-                        disabled={!editing || uploadingCover || uploadingEbook || busy}
-                      >
+                      <button className="admin-btn" onClick={uploadCover} disabled={!editing || uploadingCover || busy}>
                         {uploadingCover ? "Uploading…" : "Upload cover"}
                       </button>
                       <span className="filehint">{coverFile ? coverFile.name : "No file selected."}</span>
@@ -854,17 +762,21 @@ export default function AdminDocuments() {
                         </div>
                       </div>
                     )}
+
+                    <div className="minihelp warn">
+                      Ebook uploads are disabled here. Reports are text-based and managed in the Reports module.
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
             <div className="admin-modal-foot">
-              <button className="admin-btn" onClick={closeModal} disabled={busy || uploadingCover || uploadingEbook}>
+              <button className="admin-btn" onClick={closeModal} disabled={busy || uploadingCover}>
                 Cancel
               </button>
 
-              <button className="admin-btn primary" onClick={save} disabled={busy || uploadingCover || uploadingEbook}>
+              <button className="admin-btn primary" onClick={save} disabled={busy || uploadingCover}>
                 {busy ? "Saving…" : editing ? "Save changes" : "Create"}
               </button>
             </div>

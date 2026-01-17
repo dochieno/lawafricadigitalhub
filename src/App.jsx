@@ -25,11 +25,9 @@ import AdminProductDocuments from "./pages/dashboard/admin/AdminProductDocuments
 import AdminDocuments from "./pages/dashboard/admin/AdminDocuments";
 import AdminInstitutionUsers from "./pages/dashboard/admin/AdminInstitutionUsers";
 import AdminUsers from "./pages/dashboard/admin/AdminUsers";
-
+import AdminLLRServices from "./pages/dashboard/admin/AdminLLRServices";
 import InstitutionMembersAdmin from "./pages/dashboard/institution/InstitutionMembersAdmin";
-
 import AdminSubscriptionRequests from "./pages/dashboard/approvals/AdminSubscriptionRequests";
-
 import AppShell from "./layout/AppShell";
 
 import Explore from "./pages/dashboard/Explore";
@@ -99,7 +97,7 @@ export default function App() {
               <Route path="admin/institutions" element={<AdminInstitutions />} />
               <Route path="admin/content-products" element={<AdminContentProducts />} />
               <Route path="admin/documents" element={<AdminDocuments />} />
-
+              <Route path="admin/llr-services" element={<AdminLLRServices />} />
               <Route
                 path="admin/institution-subscriptions"
                 element={<AdminInstitutionSubscriptions />}
