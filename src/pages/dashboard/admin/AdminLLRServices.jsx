@@ -3,23 +3,6 @@ import { useNavigate } from "react-router-dom";
 import api from "../../../api/client";
 import "../../../styles/adminCrud.css";
 
-/**
- * Admin · LLR Services (Law Reports)
- *
- * ✅ This page is now the REAL LawReports admin module.
- * - Create/Edit LawReport (creates its LegalDocument parent on create)
- * - Import Excel/Word preview + confirm
- * - List/Search
- * - Open Report Content editor (by LawReportId)
- *
- * NOTE:
- * - This expects a list endpoint:
- *   GET /api/law-reports/admin   (recommended)
- *   Fallback: GET /api/law-reports (if you implement list there)
- *
- * If you don't have a list endpoint yet, add one (simple projection).
- */
-
 function getApiErrorMessage(err, fallback = "Request failed.") {
   const data = err?.response?.data;
 
@@ -71,7 +54,6 @@ function toIntOrNull(v) {
 function isoOrNullFromDateInput(yyyyMmDd) {
   const s = String(yyyyMmDd || "").trim();
   if (!s) return null;
-  // date input gives YYYY-MM-DD; convert to ISO
   const d = new Date(`${s}T00:00:00.000Z`);
   return Number.isFinite(d.getTime()) ? d.toISOString() : null;
 }
@@ -83,6 +65,12 @@ function dateInputFromIso(iso) {
   } catch {
     return "";
   }
+}
+
+// ✅ must start with 3 letters then digits (CAR353)
+function isValidReportNumber(value) {
+  const s = String(value || "").trim();
+  return /^[A-Za-z]{3}\d+$/.test(s);
 }
 
 const emptyForm = {
@@ -112,7 +100,7 @@ export default function AdminLLRServices() {
 
   // Create/Edit modal
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(null); // LawReportDto
+  const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ ...emptyForm });
 
   // Import
@@ -121,7 +109,7 @@ export default function AdminLLRServices() {
   const [importError, setImportError] = useState("");
   const [importInfo, setImportInfo] = useState("");
 
-  const [preview, setPreview] = useState(null); // ReportImportPreviewDto
+  const [preview, setPreview] = useState(null);
   const [dupStrategy, setDupStrategy] = useState("Skip");
 
   const excelInputRef = useRef(null);
@@ -163,13 +151,12 @@ export default function AdminLLRServices() {
     setInfo("");
 
     try {
-      // Prefer /law-reports/admin (recommended)
+      // Prefer /admin (exists), but root /law-reports also exists now
       let res;
       try {
         res = await api.get("/law-reports/admin");
       } catch (e) {
         const st = e?.response?.status;
-        // Fallback: /law-reports (if you implement list there)
         if (st === 404 || st === 405) res = await api.get("/law-reports");
         else throw e;
       }
@@ -211,7 +198,6 @@ export default function AdminLLRServices() {
     setError("");
     setInfo("");
     resetForm();
-    // sensible defaults
     setForm((p) => ({
       ...p,
       decisionType: 1,
@@ -222,6 +208,8 @@ export default function AdminLLRServices() {
   }
 
   async function openEdit(row) {
+    if (!row?.id) return;
+
     setError("");
     setInfo("");
     setBusy(true);
@@ -229,7 +217,6 @@ export default function AdminLLRServices() {
     setEditing(row);
 
     try {
-      // Load full report to ensure we have ContentText etc
       const res = await api.get(`/law-reports/${row.id}`);
       const d = res.data;
 
@@ -263,7 +250,6 @@ export default function AdminLLRServices() {
       year: toIntOrNull(form.year) ?? new Date().getUTCFullYear(),
       caseNumber: form.caseNumber?.trim() || null,
 
-      // enums as ints (safer for System.Text.Json)
       decisionType: toInt(form.decisionType, 1),
       caseType: toInt(form.caseType, 2),
 
@@ -277,9 +263,13 @@ export default function AdminLLRServices() {
   }
 
   function validate() {
-    if (!String(form.reportNumber || "").trim()) return "Report number is required (e.g. CAR353).";
+    const rn = String(form.reportNumber || "").trim();
+    if (!rn) return "Report number is required (e.g. CAR353).";
+    if (!isValidReportNumber(rn)) return "Report number must start with 3 letters then digits (e.g. CAR353).";
+
     const year = toIntOrNull(form.year);
     if (!year || year < 1900 || year > 2100) return "Year must be between 1900 and 2100.";
+
     if (!String(form.contentText ?? "").trim()) return "Content text is required.";
     return "";
   }
@@ -366,6 +356,8 @@ export default function AdminLLRServices() {
 
     if (!file) return;
     if (!String(wordReportNumber || "").trim()) return setImportError("Report number is required for Word import.");
+    if (!isValidReportNumber(wordReportNumber)) return setImportError("Report number must be like CAR353.");
+
     const y = toIntOrNull(wordYear);
     if (!y || y < 1900 || y > 2100) return setImportError("Year must be between 1900 and 2100.");
 
@@ -398,7 +390,7 @@ export default function AdminLLRServices() {
 
     try {
       await api.post("/law-reports/import/confirm", {
-        duplicateStrategy: dupStrategy, // "Skip" | "Update"
+        duplicateStrategy: dupStrategy,
         items: preview.items,
       });
 
@@ -413,8 +405,6 @@ export default function AdminLLRServices() {
   }
 
   function openContent(row) {
-    // Route stays under /admin/llr-services/... to keep naming,
-    // but param is now LawReportId, NOT LegalDocumentId.
     navigate(`/dashboard/admin/llr-services/${row.id}/content`, {
       state: { title: row.title || "" },
     });
@@ -485,16 +475,12 @@ export default function AdminLLRServices() {
               <tr>
                 <th style={{ width: "28%" }}>Title</th>
                 <th style={{ width: "10%" }}>Report No.</th>
-                <th style={{ width: "6%" }} className="num-cell">
-                  Year
-                </th>
+                <th style={{ width: "6%" }} className="num-cell">Year</th>
                 <th style={{ width: "10%" }}>Decision</th>
                 <th style={{ width: "10%" }}>Case Type</th>
                 <th style={{ width: "18%" }}>Parties</th>
                 <th style={{ width: "10%" }}>Court</th>
-                <th style={{ width: "8%" }} className="tight">
-                  Date
-                </th>
+                <th style={{ width: "8%" }} className="tight">Date</th>
                 <th style={{ width: "10%", textAlign: "right" }}>Actions</th>
               </tr>
             </thead>
@@ -540,7 +526,7 @@ export default function AdminLLRServices() {
         </div>
       </div>
 
-      {/* ===================== IMPORT MODAL ===================== */}
+      {/* IMPORT MODAL */}
       {importOpen && (
         <div className="admin-modal-overlay" onClick={closeImport}>
           <div className="admin-modal" style={{ maxWidth: 1100 }} onClick={(e) => e.stopPropagation()}>
@@ -571,7 +557,9 @@ export default function AdminLLRServices() {
                       disabled={importBusy}
                       onChange={(e) => importExcel(e.target.files?.[0] || null)}
                     />
-                    <div className="hint">Expected columns: ReportNumber, Year, CaseNumber, Citation, Parties, Court, Judges, DecisionType, CaseType, DecisionDate, ContentText</div>
+                    <div className="hint">
+                      Expected columns: ReportNumber, Year, CaseNumber, Citation, Parties, Court, Judges, DecisionType, CaseType, DecisionDate, ContentText
+                    </div>
                   </div>
 
                   <div className="import-col" style={{ minWidth: 260 }}>
@@ -588,12 +576,22 @@ export default function AdminLLRServices() {
 
                   <div className="import-col" style={{ minWidth: 180 }}>
                     <div className="import-label">ReportNumber *</div>
-                    <input value={wordReportNumber} onChange={(e) => setWordReportNumber(e.target.value)} disabled={importBusy} placeholder="e.g. CAR353" />
+                    <input
+                      value={wordReportNumber}
+                      onChange={(e) => setWordReportNumber(e.target.value)}
+                      disabled={importBusy}
+                      placeholder="e.g. CAR353"
+                    />
                   </div>
 
                   <div className="import-col" style={{ minWidth: 140 }}>
                     <div className="import-label">Year *</div>
-                    <input value={wordYear} onChange={(e) => setWordYear(e.target.value)} disabled={importBusy} placeholder="e.g. 2020" />
+                    <input
+                      value={wordYear}
+                      onChange={(e) => setWordYear(e.target.value)}
+                      disabled={importBusy}
+                      placeholder="e.g. 2020"
+                    />
                   </div>
 
                   <div className="import-col" style={{ minWidth: 220 }}>
@@ -606,7 +604,11 @@ export default function AdminLLRServices() {
                   </div>
 
                   <div className="import-col" style={{ minWidth: 150 }}>
-                    <button className="admin-btn primary" onClick={confirmImport} disabled={importBusy || !preview?.items?.length}>
+                    <button
+                      className="admin-btn primary"
+                      onClick={confirmImport}
+                      disabled={importBusy || !preview?.items?.length}
+                    >
                       {importBusy ? "Working…" : "Confirm import"}
                     </button>
                   </div>
@@ -650,13 +652,11 @@ export default function AdminLLRServices() {
                             <td className="tight">{it.decisionType || "—"}</td>
                             <td className="tight">{it.caseType || "—"}</td>
                             <td className="tight">
-                              {it.isDuplicate ? (
-                                <span className="err">Yes</span>
-                              ) : (
-                                <span className="oktxt">No</span>
-                              )}
+                              {it.isDuplicate ? <span className="err">Yes</span> : <span className="oktxt">No</span>}
                             </td>
-                            <td className="tight">{it.isValid ? <span className="oktxt">Valid</span> : <span className="err">Invalid</span>}</td>
+                            <td className="tight">
+                              {it.isValid ? <span className="oktxt">Valid</span> : <span className="err">Invalid</span>}
+                            </td>
                             <td className="err">{(it.errors || []).join("; ")}</td>
                           </tr>
                         ))}
@@ -676,7 +676,7 @@ export default function AdminLLRServices() {
         </div>
       )}
 
-      {/* ===================== CREATE/EDIT MODAL ===================== */}
+      {/* CREATE/EDIT MODAL */}
       {open && (
         <div className="admin-modal-overlay" onClick={closeModal}>
           <div className="admin-modal" style={{ maxWidth: 1100 }} onClick={(e) => e.stopPropagation()}>
@@ -698,6 +698,11 @@ export default function AdminLLRServices() {
                 <div className="admin-field">
                   <label>Report Number *</label>
                   <input value={form.reportNumber} onChange={(e) => setField("reportNumber", e.target.value)} placeholder="e.g. CAR353" />
+                  {form.reportNumber && !isValidReportNumber(form.reportNumber) && (
+                    <div className="hint" style={{ color: "#991b1b" }}>
+                      Must start with 3 letters then digits (e.g. CAR353).
+                    </div>
+                  )}
                 </div>
 
                 <div className="admin-field">
@@ -719,9 +724,7 @@ export default function AdminLLRServices() {
                   <label>Decision Type *</label>
                   <select value={String(form.decisionType)} onChange={(e) => setField("decisionType", toInt(e.target.value, 1))}>
                     {DECISION_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
+                      <option key={o.value} value={o.value}>{o.label}</option>
                     ))}
                   </select>
                 </div>
@@ -730,9 +733,7 @@ export default function AdminLLRServices() {
                   <label>Case Type *</label>
                   <select value={String(form.caseType)} onChange={(e) => setField("caseType", toInt(e.target.value, 2))}>
                     {CASETYPE_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
+                      <option key={o.value} value={o.value}>{o.label}</option>
                     ))}
                   </select>
                 </div>
@@ -766,10 +767,7 @@ export default function AdminLLRServices() {
             </div>
 
             <div className="admin-modal-foot">
-              <button className="admin-btn" onClick={closeModal} disabled={busy}>
-                Cancel
-              </button>
-
+              <button className="admin-btn" onClick={closeModal} disabled={busy}>Cancel</button>
               <button className="admin-btn primary" onClick={save} disabled={busy}>
                 {busy ? "Saving…" : editing ? "Save changes" : "Create"}
               </button>

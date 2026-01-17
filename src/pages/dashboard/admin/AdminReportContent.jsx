@@ -44,7 +44,7 @@ function isoOrNullFromDateInput(yyyyMmDd) {
 }
 
 export default function AdminReportContent() {
-  const { id } = useParams(); // ✅ LawReportId now
+  const { id } = useParams(); // ✅ LawReportId
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -60,7 +60,6 @@ export default function AdminReportContent() {
   const [title, setTitle] = useState(initialTitle);
   const [legalDocumentId, setLegalDocumentId] = useState(null);
 
-  // We keep full DTO fields so PUT can send required metadata
   const [dto, setDto] = useState(null);
   const [contentText, setContentText] = useState("");
   const [lastSavedAt, setLastSavedAt] = useState(null);
@@ -78,7 +77,6 @@ export default function AdminReportContent() {
       setTitle(d.title || initialTitle || `Report #${reportId}`);
       setLegalDocumentId(d.legalDocumentId ?? null);
       setContentText(d.contentText ?? "");
-      setLastSavedAt(d.updatedAt ?? null);
     } catch (e) {
       setError(getApiErrorMessage(e, "Failed to load report."));
     } finally {
@@ -94,7 +92,6 @@ export default function AdminReportContent() {
     setInfo("");
 
     try {
-      // PUT expects full LawReportUpsertDto, not only content
       const payload = {
         citation: dto.citation ?? null,
         reportNumber: String(dto.reportNumber || "").trim(),
@@ -109,18 +106,13 @@ export default function AdminReportContent() {
         contentText: String(contentText ?? ""),
       };
 
-      // basic safety
-      if (!payload.reportNumber) {
-        throw new Error("ReportNumber is missing; open Edit to set it.");
-      }
-      if (!payload.contentText.trim()) {
-        throw new Error("ContentText is required.");
-      }
+      if (!payload.reportNumber) throw new Error("ReportNumber is missing; open Edit to set it.");
+      if (!payload.contentText.trim()) throw new Error("ContentText is required.");
 
       await api.put(`/law-reports/${reportId}`, payload);
 
-      const nowIso = new Date().toISOString();
-      setLastSavedAt(nowIso);
+      const now = new Date().toISOString();
+      setLastSavedAt(now);
       setInfo("Saved.");
       await load();
     } catch (e) {
