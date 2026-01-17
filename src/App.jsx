@@ -108,6 +108,7 @@ export default function App() {
                 path="admin/institution-bundle-subscriptions"
                 element={<AdminInstitutionBundleSubscriptions />}
               />
+              <Route path="admin/trials" element={<AdminTrials />} />
               <Route path="admin/institution-admins" element={<AdminInstitutionAdmins />} />
               <Route
                 path="admin/content-products/:productId/documents"
