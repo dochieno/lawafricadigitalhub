@@ -80,6 +80,10 @@ export default function AppShell() {
             <NavLink to="/dashboard/library" className="nav-link">
               Library
             </NavLink>
+
+            <NavLink to="/dashboard/law-reports" className="nav-link">
+              Law Reports
+            </NavLink>
             
             <NavLink to="/dashboard/security" className="nav-link">
               Security

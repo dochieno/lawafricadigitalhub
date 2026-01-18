@@ -41,8 +41,9 @@ import GlobalAdminHomeSwitch from "./pages/dashboard/GlobalAdminHomeSwitch";
 import DocumentDetails from "./pages/documents/DocumentDetails";
 import DocumentReader from "./pages/documents/DocumentReader";
 
-// ✅ NEW: End-user Law Reports page
+// ✅ Law Reports
 import LawReports from "./pages/dashboard/LawReports";
+import LawReportDetails from "./pages/dashboard/LawReportDetails";
 
 export default function App() {
   return (
@@ -91,19 +92,19 @@ export default function App() {
             }
           >
             {/* Base */}
-            {/* ✅ CHANGED: Global Admin sees analytics dashboard on Home */}
             <Route index element={<GlobalAdminHomeSwitch />} />
 
             <Route path="explore" element={<Explore />} />
             <Route path="library" element={<Library />} />
 
-            {/* ✅ NEW: Law Reports (end-user) */}
+            {/* ✅ Law Reports */}
             <Route path="law-reports" element={<LawReports />} />
+            <Route path="law-reports/:id" element={<LawReportDetails />} />
 
             <Route path="security" element={<SecurityDashboard />} />
 
             {/* ===================== */}
-            {/* APPROVALS (Institution Admin OR Admin OR Global Admin) */}
+            {/* APPROVALS */}
             {/* ===================== */}
             <Route element={<AdminOrInstitutionAdminRoute />}>
               <Route path="approvals" element={<InstitutionApprovalDashboard />} />
@@ -111,13 +112,11 @@ export default function App() {
                 path="approvals/subscription-requests"
                 element={<AdminSubscriptionRequests />}
               />
-
-              {/* ✅ NEW: Institution Admin members management page (Option A) */}
               <Route path="approvals/members" element={<InstitutionMembersAdmin />} />
             </Route>
 
             {/* ===================== */}
-            {/* ADMIN (Admin OR Global Admin) */}
+            {/* ADMIN */}
             {/* ===================== */}
             <Route element={<AdminRoute />}>
               <Route path="admin/institutions" element={<AdminInstitutions />} />
@@ -144,8 +143,6 @@ export default function App() {
                 path="admin/content-products/:productId/documents"
                 element={<AdminProductDocuments />}
               />
-
-              {/* ✅ FIXED: make it relative (no leading /dashboard) */}
               <Route
                 path="admin/institutions/:id/users"
                 element={<AdminInstitutionUsers />}
