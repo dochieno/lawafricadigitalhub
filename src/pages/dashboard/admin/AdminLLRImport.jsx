@@ -52,6 +52,81 @@ function csvHeaderKey(s) {
 }
 
 /* =========================
+   Date helpers (DD-MM-YYYY)
+========================= */
+function pad2(n) {
+  const x = Number(n);
+  return Number.isFinite(x) ? String(x).padStart(2, "0") : "";
+}
+
+function isoToDdMmYyyy(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "";
+  const dd = pad2(d.getUTCDate());
+  const mm = pad2(d.getUTCMonth() + 1);
+  const yyyy = d.getUTCFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+}
+
+/**
+ * Accepts:
+ * - DD-MM-YYYY (preferred)
+ * - YYYY-MM-DD
+ * - ISO strings
+ * Returns ISO string or null
+ */
+function parseDateToIsoOrNull(v) {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+
+  // ISO / Date-parseable
+  const d0 = new Date(s);
+  if (Number.isFinite(d0.getTime())) return d0.toISOString();
+
+  // DD-MM-YYYY
+  const ddmmyyyy = s.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (ddmmyyyy) {
+    const dd = Number(ddmmyyyy[1]);
+    const mm = Number(ddmmyyyy[2]);
+    const yyyy = Number(ddmmyyyy[3]);
+
+    const dt = new Date(Date.UTC(yyyy, mm - 1, dd, 0, 0, 0, 0));
+    if (!Number.isFinite(dt.getTime())) return null;
+
+    // validate round-trip
+    if (
+      dt.getUTCFullYear() !== yyyy ||
+      dt.getUTCMonth() + 1 !== mm ||
+      dt.getUTCDate() !== dd
+    ) return null;
+
+    return dt.toISOString();
+  }
+
+  // YYYY-MM-DD
+  const yyyymmdd = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (yyyymmdd) {
+    const yyyy = Number(yyyymmdd[1]);
+    const mm = Number(yyyymmdd[2]);
+    const dd = Number(yyyymmdd[3]);
+
+    const dt = new Date(Date.UTC(yyyy, mm - 1, dd, 0, 0, 0, 0));
+    if (!Number.isFinite(dt.getTime())) return null;
+
+    if (
+      dt.getUTCFullYear() !== yyyy ||
+      dt.getUTCMonth() + 1 !== mm ||
+      dt.getUTCDate() !== dd
+    ) return null;
+
+    return dt.toISOString();
+  }
+
+  return null;
+}
+
+/* =========================
    Enum Options (match backend)
 ========================= */
 const DECISION_OPTIONS = [
@@ -74,7 +149,6 @@ const CASETYPE_OPTIONS = [
   { label: "Constitutional", value: 6 },
 ];
 
-// Your ReportService enum mapping
 const SERVICE_OPTIONS = [
   { label: "LawAfrica Law Reports (LLR)", value: 1 },
   { label: "Odungas Digest", value: 2 },
@@ -91,7 +165,6 @@ const SERVICE_OPTIONS = [
   { label: "Kenya Industrial Property Institute", value: 13 },
 ];
 
-// CourtType enum mapping (1..10)
 const COURT_TYPE_OPTIONS = [
   { label: "Supreme Court", value: 1 },
   { label: "Court of Appeal", value: 2 },
@@ -118,34 +191,16 @@ function enumToInt(value, options, fallback = 0) {
   const hit = options.find((o) => o.label.toLowerCase() === s.toLowerCase());
   if (hit) return hit.value;
 
-  // Allow "AwardByConsent" like enum names by stripping non-letters
   const compact = s.toLowerCase().replace(/[^a-z]/g, "");
-  const hit2 = options.find((o) => o.label.toLowerCase().replace(/[^a-z]/g, "") === compact);
+  const hit2 = options.find(
+    (o) => o.label.toLowerCase().replace(/[^a-z]/g, "") === compact
+  );
   return hit2 ? hit2.value : fallback;
 }
 
 function labelFrom(options, value) {
   const v = enumToInt(value, options, 0);
   return options.find((o) => o.value === v)?.label || "—";
-}
-
-function parseDateToIsoOrNull(v) {
-  // Accept: YYYY-MM-DD or ISO or empty
-  const s = String(v ?? "").trim();
-  if (!s) return null;
-
-  // If already ISO-ish
-  const d = new Date(s);
-  if (Number.isFinite(d.getTime())) return d.toISOString();
-
-  // If yyyy-mm-dd, coerce
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (m) {
-    const dt = new Date(`${s}T00:00:00.000Z`);
-    return Number.isFinite(dt.getTime()) ? dt.toISOString() : null;
-  }
-
-  return null;
 }
 
 /* =========================
@@ -170,7 +225,7 @@ const TEMPLATE_HEADERS = [
 ];
 
 function buildTemplateCsv() {
-  // 1 example row (valid)
+  // 1 example row (valid) — DecisionDate in DD-MM-YYYY
   const example = {
     CountryId: 1,
     Service: 1,
@@ -182,15 +237,17 @@ function buildTemplateCsv() {
     Citation: "[2016] LLR (HCK-K) 045/2013",
     DecisionType: 1,
     CaseType: 2,
-    Court: "", // optional legacy
+    Court: "",
     Parties: "Mauga and others v Kaluworks Limited",
     Judges: "M. J. A. Emukule, MBS, J",
-    DecisionDate: "2016-04-28",
+    DecisionDate: "28-04-2016",
     ContentText: "Paste plain text here (you can format later in Report Content).",
   };
 
   const rows = [TEMPLATE_HEADERS, TEMPLATE_HEADERS.map((h) => example[h] ?? "")];
-  return rows.map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(",")).join("\n");
+  return rows
+    .map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
 }
 
 function downloadTextFile(filename, text) {
@@ -204,23 +261,177 @@ function downloadTextFile(filename, text) {
 }
 
 /* =========================
+   Inline SVG Icons (no deps)
+   (matches AdminLLRServices style)
+========================= */
+function Icon({ name }) {
+  const common = {
+    width: 18,
+    height: 18,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    xmlns: "http://www.w3.org/2000/svg",
+  };
+
+  switch (name) {
+    case "back":
+      return (
+        <svg {...common}>
+          <path
+            d="M15 18l-6-6 6-6"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case "refresh":
+      return (
+        <svg {...common}>
+          <path
+            d="M21 12a9 9 0 1 1-2.64-6.36"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <path
+            d="M21 3v6h-6"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case "download":
+      return (
+        <svg {...common}>
+          <path
+            d="M12 3v10"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <path
+            d="M7 11l5 5 5-5"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M4 21h16"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+      );
+    case "upload":
+      return (
+        <svg {...common}>
+          <path
+            d="M12 21V11"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <path
+            d="M7 15l5-5 5 5"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M20 21H4"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <path
+            d="M20 11a4 4 0 0 0-4-4h-1"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+      );
+    case "file":
+      return (
+        <svg {...common}>
+          <path
+            d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M14 2v6h6"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case "stop":
+      return (
+        <svg {...common}>
+          <rect
+            x="6"
+            y="6"
+            width="12"
+            height="12"
+            rx="2"
+            stroke="currentColor"
+            strokeWidth="2"
+          />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
+function IconButton({ title, onClick, disabled, tone = "neutral", children }) {
+  return (
+    <button
+      type="button"
+      className={`la-icon-btn ${tone}`}
+      title={title}
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={title}
+    >
+      {children}
+    </button>
+  );
+}
+
+/* =========================
    Page
 ========================= */
 export default function AdminLLRImport() {
   const navigate = useNavigate();
 
-  const [step, setStep] = useState(1); // 1=template, 2=upload/preview, 3=import
   const [fileName, setFileName] = useState("");
-  const [rawRows, setRawRows] = useState([]);
   const [preview, setPreview] = useState([]); // normalized objects with validation
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
   const [busy, setBusy] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [progress, setProgress] = useState({ done: 0, total: 0, ok: 0, dup: 0, failed: 0 });
+  const [progress, setProgress] = useState({
+    done: 0,
+    total: 0,
+    ok: 0,
+    dup: 0,
+    failed: 0,
+  });
 
   const stopRef = useRef(false);
+  const fileInputRef = useRef(null);
 
   const counts = useMemo(() => {
     const total = preview.length;
@@ -229,16 +440,18 @@ export default function AdminLLRImport() {
     return { total, valid, invalid };
   }, [preview]);
 
-  function resetAll() {
+  function resetAll({ keepInfo } = {}) {
     setFileName("");
-    setRawRows([]);
     setPreview([]);
     setError("");
-    setInfo("");
+    setInfo(keepInfo || "");
     setBusy(false);
     setImporting(false);
     setProgress({ done: 0, total: 0, ok: 0, dup: 0, failed: 0 });
     stopRef.current = false;
+
+    // reset file input element (so re-uploading same file triggers onChange)
+    if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   function goBackToList() {
@@ -249,39 +462,45 @@ export default function AdminLLRImport() {
      CSV parsing + normalization
   ========================= */
   function normalizeCsvRows(rows) {
-    // rows: array of objects from PapaParse header mode
     const out = rows.map((r, idx) => {
-      // map headers flexibly
       const map = {};
       for (const [k, v] of Object.entries(r)) {
         map[csvHeaderKey(k)] = v;
       }
 
-      // expected keys (flexible)
       const countryId = toInt(map["countryid"], 0);
-      const service = enumToInt(map["service"], SERVICE_OPTIONS, 0) || toInt(map["service"], 0);
-      const courtType = enumToInt(map["courttype"], COURT_TYPE_OPTIONS, 0) || toInt(map["courttype"], 0);
+      const service =
+        enumToInt(map["service"], SERVICE_OPTIONS, 0) || toInt(map["service"], 0);
+      const courtType =
+        enumToInt(map["courttype"], COURT_TYPE_OPTIONS, 0) ||
+        toInt(map["courttype"], 0);
+
       const reportNumber = normalizeText(map["reportnumber"]);
       const year = toInt(map["year"], 0);
 
       const caseNumber = normalizeText(map["casenumber"]) || null;
       const citation = normalizeText(map["citation"]) || null;
 
-      const decisionType = enumToInt(map["decisiontype"], DECISION_OPTIONS, 0) || toInt(map["decisiontype"], 0);
-      const caseType = enumToInt(map["casetype"], CASETYPE_OPTIONS, 0) || toInt(map["casetype"], 0);
+      const decisionType =
+        enumToInt(map["decisiontype"], DECISION_OPTIONS, 0) ||
+        toInt(map["decisiontype"], 0);
+      const caseType =
+        enumToInt(map["casetype"], CASETYPE_OPTIONS, 0) ||
+        toInt(map["casetype"], 0);
 
-      const court = normalizeText(map["court"]) || null; // optional legacy
+      const court = normalizeText(map["court"]) || null;
       const town = normalizeText(map["town"]) || null;
 
       const parties = normalizeText(map["parties"]) || null;
       const judges = normalizeText(map["judges"]) || null;
 
-      const decisionDate = parseDateToIsoOrNull(map["decisiondate"]);
+      const decisionDateRaw = map["decisiondate"];
+      const decisionDate = parseDateToIsoOrNull(decisionDateRaw);
+
       const contentText = String(map["contenttext"] ?? "").trim();
 
-      // Build payload to match your LawReportUpsertDto
       const payload = {
-        category: 6, // LLRServices
+        category: 6,
         countryId,
         service,
         courtType,
@@ -295,32 +514,29 @@ export default function AdminLLRImport() {
         court,
         parties,
         judges,
-        decisionDate,
+        decisionDate, // ISO for API
         contentText,
       };
 
       const issues = [];
 
-      // required fields
       if (!countryId) issues.push("CountryId is required.");
       if (!service) issues.push("Service is required.");
       if (!courtType) issues.push("CourtType is required.");
       if (!reportNumber) issues.push("ReportNumber is required.");
-      if (!year || year < 1900 || year > 2100) issues.push("Year must be between 1900 and 2100.");
+      if (!year || year < 1900 || year > 2100)
+        issues.push("Year must be between 1900 and 2100.");
 
-      // DecisionType/CaseType are required in your DTO
       if (!decisionType) issues.push("DecisionType is required (e.g. 1=Judgment).");
       if (!caseType) issues.push("CaseType is required (e.g. 2=Civil).");
+      if (!contentText) issues.push("ContentText is required.");
 
-      // content required in DTO
-      if (!contentText) issues.push("ContentText is required (paste plain text).");
-
-      // if decisionDate present but invalid
-      if (!isEmpty(map["decisiondate"]) && !decisionDate) issues.push("DecisionDate invalid. Use YYYY-MM-DD or ISO.");
+      if (!isEmpty(decisionDateRaw) && !decisionDate) {
+        issues.push("DecisionDate invalid. Use DD-MM-YYYY.");
+      }
 
       return {
-        rowNumber: idx + 2, // +2 because header row = 1
-        raw: r,
+        rowNumber: idx + 2,
         payload,
         issues,
         valid: issues.length === 0,
@@ -335,7 +551,6 @@ export default function AdminLLRImport() {
     setInfo("");
     setBusy(true);
     setPreview([]);
-    setRawRows([]);
     setFileName(file?.name || "");
 
     try {
@@ -354,16 +569,16 @@ export default function AdminLLRImport() {
       }
 
       const rows = Array.isArray(parsed.data) ? parsed.data : [];
-      setRawRows(rows);
-
       const normalized = normalizeCsvRows(rows);
       setPreview(normalized);
 
-      setStep(2);
-
       if (normalized.length === 0) setInfo("No rows found in the file.");
-      else if (normalized.every((x) => x.valid)) setInfo(`Loaded ${normalized.length} row(s). Ready to import.`);
-      else setInfo(`Loaded ${normalized.length} row(s). Fix invalid rows before importing.`);
+      else if (normalized.every((x) => x.valid))
+        setInfo(`Loaded ${normalized.length} row(s). Ready to import.`);
+      else
+        setInfo(
+          `Loaded ${normalized.length} row(s). Fix invalid rows (highlighted) then re-upload.`
+        );
     } catch (e) {
       setError(String(e?.message || e));
     } finally {
@@ -386,7 +601,13 @@ export default function AdminLLRImport() {
     }
 
     setImporting(true);
-    setProgress({ done: 0, total: validRows.length, ok: 0, dup: 0, failed: 0 });
+    setProgress({
+      done: 0,
+      total: validRows.length,
+      ok: 0,
+      dup: 0,
+      failed: 0,
+    });
 
     let ok = 0;
     let dup = 0;
@@ -401,32 +622,35 @@ export default function AdminLLRImport() {
         ok++;
       } catch (e) {
         const status = e?.response?.status;
-
-        // your controller returns 409 for duplicates
-        if (status === 409) {
-          dup++;
-        } else {
-          failed++;
-        }
+        if (status === 409) dup++;
+        else failed++;
       } finally {
-        setProgress((p) => ({
-          ...p,
+        setProgress({
           done: i + 1,
+          total: validRows.length,
           ok,
           dup,
           failed,
-        }));
+        });
       }
     }
 
     setImporting(false);
 
     if (stopRef.current) {
-      setInfo(`Stopped. Imported OK: ${ok}, duplicates: ${dup}, failed: ${failed}.`);
+      setInfo(`Stopped. OK: ${ok}, duplicates: ${dup}, failed: ${failed}.`);
       return;
     }
 
-    setInfo(`Import finished. Imported OK: ${ok}, duplicates: ${dup}, failed: ${failed}.`);
+    // ✅ If import is successful with no errors, reset the page.
+    if (failed === 0 && dup === 0) {
+      resetAll({
+        keepInfo: `✅ Import successful. ${ok} case(s) added. Page reset and ready for next file.`,
+      });
+      return;
+    }
+
+    setInfo(`Import finished. OK: ${ok}, duplicates: ${dup}, failed: ${failed}.`);
   }
 
   function stopImport() {
@@ -441,165 +665,240 @@ export default function AdminLLRImport() {
     <div className="admin-page admin-page-wide">
       <style>{`
         .admin-card-fill { border-radius: 18px; overflow:hidden; }
-        .section { background:#fff; border:1px solid #e5e7eb; border-radius:18px; padding:16px; }
+
+        .card {
+          background:#fff;
+          border:1px solid #e5e7eb;
+          border-radius:18px;
+          padding:16px;
+          box-shadow: 0 6px 20px rgba(0,0,0,.04);
+        }
+
+        .cardTitle { font-weight: 950; font-size: 14px; }
+        .cardSub { color:#6b7280; font-size:12px; font-weight: 800; margin-top: 4px; line-height: 1.35; }
+
         .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-        .muted { color:#6b7280; font-weight:800; }
+        .space { justify-content: space-between; }
+
         .kpi { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-        .pill { display:inline-flex; align-items:center; padding:6px 12px; border-radius:999px; border:1px solid #e5e7eb; background:#fafafa; font-weight:900; font-size:12px; }
+        .pill {
+          display:inline-flex; align-items:center;
+          padding:6px 12px;
+          border-radius:999px;
+          border:1px solid #e5e7eb;
+          background:#fafafa;
+          font-weight:900;
+          font-size:12px;
+          color:#111827;
+        }
         .pill.good { background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
         .pill.warn { background:#fff7ed; border-color:#fed7aa; color:#9a3412; }
         .pill.bad { background:#fef2f2; border-color:#fecaca; color:#991b1b; }
-        .btnRow { display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
-        .small { font-size:12px; font-weight:800; }
-        .tableWrap { max-height: 62vh; overflow:auto; border-radius: 14px; border:1px solid #e5e7eb; }
+
+        .small { font-size:12px; font-weight:800; color:#6b7280; }
+        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+        .tableWrap {
+          margin-top: 12px;
+          max-height: 60vh;
+          overflow:auto;
+          border-radius: 14px;
+          border:1px solid #e5e7eb;
+        }
         table { width:100%; border-collapse: collapse; font-size: 12.5px; }
-        thead th { position: sticky; top:0; background:#fafafa; z-index:1; text-align:left; padding:10px; border-bottom:1px solid #e5e7eb; }
+        thead th {
+          position: sticky; top:0; background:#fafafa; z-index:1;
+          text-align:left; padding:10px; border-bottom:1px solid #e5e7eb;
+          font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color:#6b7280;
+        }
         tbody td { padding:10px; border-bottom:1px solid #f1f5f9; vertical-align: top; }
         tr.badRow td { background: #fff5f5; }
-        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-        .issues { color:#991b1b; font-weight:800; }
-        .nowrap { white-space: nowrap; }
+        .issues { color:#991b1b; font-weight:900; }
+
+        .la-icon-btn {
+          display:inline-flex; align-items:center; justify-content:center;
+          width: 36px; height: 36px;
+          border-radius: 12px;
+          border: 1px solid #e5e7eb;
+          background: #fff;
+          cursor: pointer;
+          color: #111827;
+        }
+        .la-icon-btn:hover { background:#fafafa; }
+        .la-icon-btn:disabled { opacity: .55; cursor: not-allowed; }
+        .la-icon-btn.primary { border-color:#c7d2fe; }
+        .la-icon-btn.primary:hover { background:#f5f7ff; }
+        .la-icon-btn.danger { border-color:#fecaca; }
+        .la-icon-btn.danger:hover { background:#fff5f5; }
+
+        .actionsRow { display:flex; gap:10px; align-items:center; flex-wrap:nowrap; }
+        .headerTools { display:flex; gap:10px; align-items:center; }
       `}</style>
 
       <div className="admin-header">
         <div>
           <h1 className="admin-title">Admin · LLR Services · Import</h1>
           <p className="admin-subtitle">
-            Upload a CSV, preview & validate, then import using existing API: <b>POST /api/law-reports</b>.
+            Upload a CSV, preview & validate, then import using <b>POST /api/law-reports</b>.
+            <span className="small"> &nbsp;Date format: <b>DD-MM-YYYY</b>.</span>
           </p>
         </div>
 
-        <div className="btnRow">
-          <button className="admin-btn" onClick={goBackToList} disabled={busy || importing}>
-            Back to list
-          </button>
-          <button
-            className="admin-btn"
-            onClick={() => {
-              resetAll();
-              setStep(1);
-            }}
+        {/* ✅ Buttons in a single row with icons + tooltips */}
+        <div className="headerTools">
+          <IconButton title="Back to reports list" onClick={goBackToList} disabled={busy || importing}>
+            <Icon name="back" />
+          </IconButton>
+
+          <IconButton
+            title="Reset page"
+            onClick={() => resetAll({ keepInfo: "Reset done. Ready for a new file." })}
             disabled={busy || importing}
           >
-            Reset
-          </button>
-        </div>
-      </div>
+            <Icon name="refresh" />
+          </IconButton>
 
-      {(error || info) && <div className={`admin-alert ${error ? "error" : "ok"}`}>{error || info}</div>}
+          <IconButton
+            title="Download CSV template"
+            onClick={() => downloadTextFile("llr_import_template.csv", buildTemplateCsv())}
+            disabled={busy || importing}
+            tone="primary"
+          >
+            <Icon name="download" />
+          </IconButton>
 
-      {/* Step 1: Template */}
-      <div className="section" style={{ marginBottom: 14 }}>
-        <div className="row" style={{ justifyContent: "space-between" }}>
-          <div>
-            <div style={{ fontWeight: 950, fontSize: 14 }}>Step 1 — Download template</div>
-            <div className="muted small">
-              Required columns are aligned to your <span className="mono">LawReportUpsertDto</span>.
-            </div>
-          </div>
-
-          <div className="btnRow">
-            <button
-              className="admin-btn primary"
-              onClick={() => downloadTextFile("llr_import_template.csv", buildTemplateCsv())}
+          <label
+            className={`la-icon-btn primary`}
+            title="Choose CSV file"
+            style={{ cursor: busy || importing ? "not-allowed" : "pointer" }}
+          >
+            <Icon name="upload" />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              style={{ display: "none" }}
               disabled={busy || importing}
-            >
-              Download CSV template
-            </button>
-            <button className="admin-btn" onClick={() => setStep(2)} disabled={busy || importing}>
-              I already have a file →
-            </button>
-          </div>
-        </div>
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleFile(f);
+              }}
+            />
+          </label>
 
-        <div className="kpi" style={{ marginTop: 12 }}>
-          <span className="pill">DecisionType: {DECISION_OPTIONS.map((x) => `${x.value}=${x.label}`).join(", ")}</span>
-          <span className="pill">CaseType: {CASETYPE_OPTIONS.map((x) => `${x.value}=${x.label}`).join(", ")}</span>
-          <span className="pill">CourtType: {COURT_TYPE_OPTIONS.map((x) => `${x.value}=${x.label}`).join(", ")}</span>
+          {preview.length > 0 && (
+            <>
+              <IconButton
+                title={counts.valid === 0 ? "No valid rows to import" : "Import valid rows"}
+                onClick={startImport}
+                disabled={busy || importing || counts.valid === 0}
+                tone="primary"
+              >
+                <Icon name="file" />
+              </IconButton>
+
+              {importing && (
+                <IconButton title="Stop import" onClick={stopImport} disabled={busy} tone="danger">
+                  <Icon name="stop" />
+                </IconButton>
+              )}
+            </>
+          )}
         </div>
       </div>
 
-      {/* Step 2: Upload + Preview */}
-      <div className="section">
-        <div className="row" style={{ justifyContent: "space-between" }}>
-          <div>
-            <div style={{ fontWeight: 950, fontSize: 14 }}>Step 2 — Upload & preview</div>
-            <div className="muted small">
-              CSV only for now. Excel/Word parsers can come later (your backend parser is stubbed).
-            </div>
+      {(error || info) && (
+        <div className={`admin-alert ${error ? "error" : "ok"}`}>
+          {error || info}
+        </div>
+      )}
+
+      {/* ✅ Instructions in clear cards */}
+      <div className="row" style={{ marginBottom: 14 }}>
+        <div className="card" style={{ flex: 1, minWidth: 320 }}>
+          <div className="cardTitle">Step 1 — Template</div>
+          <div className="cardSub">
+            Download the template, fill it, then upload. Keep enums numeric for best results.
+            <br />
+            <b>Date:</b> use <b>DD-MM-YYYY</b> (e.g. <span className="mono">28-04-2016</span>).
           </div>
 
-          <div className="btnRow">
-            <label className="admin-btn primary" style={{ cursor: busy || importing ? "not-allowed" : "pointer" }}>
-              Choose CSV
-              <input
-                type="file"
-                accept=".csv,text/csv"
-                style={{ display: "none" }}
-                disabled={busy || importing}
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) handleFile(f);
-                }}
-              />
-            </label>
-
-            <button className="admin-btn" onClick={() => setStep(1)} disabled={busy || importing}>
-              ← Back
-            </button>
+          <div className="kpi" style={{ marginTop: 12 }}>
+            <span className="pill">
+              DecisionType: {DECISION_OPTIONS.map((x) => `${x.value}=${x.label}`).join(", ")}
+            </span>
+            <span className="pill">
+              CaseType: {CASETYPE_OPTIONS.map((x) => `${x.value}=${x.label}`).join(", ")}
+            </span>
+            <span className="pill">
+              CourtType: {COURT_TYPE_OPTIONS.map((x) => `${x.value}=${x.label}`).join(", ")}
+            </span>
           </div>
         </div>
 
-        {fileName && (
-          <div className="row" style={{ marginTop: 10, justifyContent: "space-between" }}>
-            <div className="muted">
+        <div className="card" style={{ flex: 1, minWidth: 320 }}>
+          <div className="cardTitle">Step 2 — Upload & Preview</div>
+          <div className="cardSub">
+            Upload CSV to preview rows. Invalid rows are highlighted with issues.
+            Fix them in the CSV and re-upload.
+          </div>
+
+          <div className="kpi" style={{ marginTop: 12 }}>
+            <span className="pill">{counts.total} row(s)</span>
+            <span className={`pill ${counts.valid ? "good" : ""}`}>{counts.valid} valid</span>
+            <span className={`pill ${counts.invalid ? "bad" : ""}`}>{counts.invalid} invalid</span>
+          </div>
+
+          {fileName && (
+            <div className="cardSub" style={{ marginTop: 10 }}>
               File: <b>{fileName}</b>
             </div>
-            <div className="kpi">
-              <span className="pill">{counts.total} row(s)</span>
-              <span className={`pill ${counts.valid ? "good" : ""}`}>{counts.valid} valid</span>
-              <span className={`pill ${counts.invalid ? "bad" : ""}`}>{counts.invalid} invalid</span>
+          )}
+        </div>
+      </div>
+
+      {/* Preview table */}
+      <div className="card">
+        <div className="row space">
+          <div>
+            <div className="cardTitle">Step 3 — Import</div>
+            <div className="cardSub">
+              Imports only valid rows. Duplicates return <b>409</b> and are counted as duplicates.
+              <br />
+              If import finishes with <b>no duplicates and no failures</b>, the page resets automatically.
             </div>
           </div>
-        )}
 
-        {preview.length > 0 && (
+          <div className="kpi">
+            <span className="pill">Done: {progress.done}/{progress.total}</span>
+            <span className="pill good">OK: {progress.ok}</span>
+            <span className="pill warn">Duplicates: {progress.dup}</span>
+            <span className="pill bad">Failed: {progress.failed}</span>
+          </div>
+        </div>
+
+        {preview.length === 0 ? (
+          <div className="small" style={{ marginTop: 12 }}>
+            Upload a CSV to see preview here.
+          </div>
+        ) : (
           <>
-            <div className="row" style={{ marginTop: 14, justifyContent: "space-between" }}>
-              <div className="muted small">
-                Tip: Fix invalid rows in the CSV and re-upload. Duplicates are handled by API (409).
-              </div>
-
-              <div className="btnRow">
-                <button
-                  className="admin-btn primary"
-                  onClick={() => {
-                    setStep(3);
-                    startImport();
-                  }}
-                  disabled={busy || importing || counts.valid === 0}
-                  title={counts.valid === 0 ? "No valid rows to import" : "Import valid rows"}
-                >
-                  Import valid rows
-                </button>
-              </div>
-            </div>
-
-            <div className="tableWrap" style={{ marginTop: 12 }}>
+            <div className="tableWrap">
               <table>
                 <thead>
                   <tr>
-                    <th className="nowrap">Row</th>
+                    <th className="mono">Row</th>
                     <th>Report</th>
                     <th>Year</th>
-                    <th>CountryId</th>
+                    <th className="mono">Country</th>
                     <th>Service</th>
                     <th>CourtType</th>
                     <th>Town</th>
                     <th>Decision</th>
                     <th>CaseType</th>
-                    <th>CaseNo</th>
-                    <th>Citation</th>
+                    <th className="mono">CaseNo</th>
+                    <th className="mono">Citation</th>
+                    <th>DecisionDate</th>
                     <th>Issues</th>
                   </tr>
                 </thead>
@@ -608,7 +907,7 @@ export default function AdminLLRImport() {
                     const pay = p.payload;
                     return (
                       <tr key={p.rowNumber} className={!p.valid ? "badRow" : ""}>
-                        <td className="nowrap mono">{p.rowNumber}</td>
+                        <td className="mono">{p.rowNumber}</td>
                         <td className="mono">{pay.reportNumber || "—"}</td>
                         <td className="mono">{pay.year || "—"}</td>
                         <td className="mono">{pay.countryId || "—"}</td>
@@ -619,6 +918,7 @@ export default function AdminLLRImport() {
                         <td>{labelFrom(CASETYPE_OPTIONS, pay.caseType)}</td>
                         <td className="mono">{pay.caseNumber || "—"}</td>
                         <td className="mono">{pay.citation || "—"}</td>
+                        <td className="mono">{pay.decisionDate ? isoToDdMmYyyy(pay.decisionDate) : "—"}</td>
                         <td className="issues">{p.issues.join(" ")}</td>
                       </tr>
                     );
@@ -628,54 +928,12 @@ export default function AdminLLRImport() {
             </div>
 
             {preview.length > 500 && (
-              <div className="muted small" style={{ marginTop: 8 }}>
+              <div className="small" style={{ marginTop: 8 }}>
                 Showing first 500 rows. Import uses all valid rows.
               </div>
             )}
           </>
         )}
-      </div>
-
-      {/* Step 3: Import progress */}
-      <div className="section" style={{ marginTop: 14 }}>
-        <div className="row" style={{ justifyContent: "space-between" }}>
-          <div>
-            <div style={{ fontWeight: 950, fontSize: 14 }}>Step 3 — Import</div>
-            <div className="muted small">
-              Runs <span className="mono">POST /api/law-reports</span> sequentially to avoid overloading the API.
-            </div>
-          </div>
-
-          <div className="btnRow">
-            {importing ? (
-              <button className="admin-btn danger" onClick={stopImport}>
-                Stop import
-              </button>
-            ) : (
-              <button
-                className="admin-btn"
-                onClick={() => {
-                  // after import, go back to list
-                  navigate("/dashboard/admin/llr-services");
-                }}
-                disabled={busy}
-              >
-                Go to reports list
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="kpi" style={{ marginTop: 12 }}>
-          <span className="pill">Done: {progress.done}/{progress.total}</span>
-          <span className="pill good">OK: {progress.ok}</span>
-          <span className="pill warn">Duplicates: {progress.dup}</span>
-          <span className="pill bad">Failed: {progress.failed}</span>
-        </div>
-
-        <div className="muted small" style={{ marginTop: 10 }}>
-          Duplicates are expected if the file contains cases already in DB — your API returns <b>409 Conflict</b> (“Duplicate report exists.”).
-        </div>
       </div>
 
       <AdminPageFooter
@@ -692,7 +950,11 @@ export default function AdminLLRImport() {
             </span>
           </>
         }
-        right={<span className="admin-footer-muted">Tip: Start with the template. Keep enums numeric (recommended).</span>}
+        right={
+          <span className="admin-footer-muted">
+            Tip: DecisionDate uses <b>DD-MM-YYYY</b>. Use the template to avoid column mistakes.
+          </span>
+        }
       />
     </div>
   );
