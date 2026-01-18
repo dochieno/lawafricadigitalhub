@@ -94,44 +94,6 @@ function normalizeText(v) {
   return s ? s : "";
 }
 
-/** Try multiple GET endpoints (best-effort; keeps existing functionality if towns endpoint differs) */
-async function tryGetFirst(apiClient, paths, config = {}) {
-  for (const p of paths) {
-    try {
-      const res = await apiClient.get(p, config);
-      return { ok: true, data: res.data, path: p };
-    } catch {
-      // continue
-    }
-  }
-  return { ok: false, data: null, path: "" };
-}
-
-/** Normalize Town row from API: supports many naming conventions */
-function parseTownRow(t) {
-  const postCode = normalizeText(
-    t?.postCode ??
-      t?.PostCode ??
-      t?.postcode ??
-      t?.Postcode ??
-      t?.postalCode ??
-      t?.PostalCode ??
-      t?.code ??
-      t?.Code ??
-      ""
-  );
-
-  const name = normalizeText(t?.name ?? t?.Name ?? t?.town ?? t?.Town ?? "");
-  const countryId = toInt(t?.countryId ?? t?.CountryId ?? 0, 0);
-
-  if (!postCode) return null;
-  return {
-    postCode,
-    name: name || postCode,
-    countryId: countryId || null,
-  };
-}
-
 /* =========================
    Options
 ========================= */
@@ -247,12 +209,7 @@ function Icon({ name }) {
     case "edit":
       return (
         <svg {...common}>
-          <path
-            d="M12 20h9"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
+          <path d="M12 20h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           <path
             d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"
             stroke="currentColor"
@@ -270,12 +227,7 @@ function Icon({ name }) {
             strokeWidth="2"
             strokeLinejoin="round"
           />
-          <path
-            d="M14 2v6h6"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
+          <path d="M14 2v6h6" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
         </svg>
       );
     case "trash":
@@ -288,12 +240,7 @@ function Icon({ name }) {
             strokeWidth="2"
             strokeLinejoin="round"
           />
-          <path
-            d="M6 6l1 16h10l1-16"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
+          <path d="M6 6l1 16h10l1-16" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
         </svg>
       );
     default:
@@ -335,7 +282,7 @@ const emptyForm = {
   // new
   courtType: 3,
 
-  // ✅ NEW: postcode
+  // ✅ postcode + town (town editable)
   postCode: "",
   town: "",
 
@@ -352,10 +299,11 @@ export default function AdminLLRServices() {
   const [countries, setCountries] = useState([]);
   const [countryMap, setCountryMap] = useState(new Map());
 
-  // ✅ Towns (postcode dropdown)
+  // ✅ Towns state (country-scoped)
   const [towns, setTowns] = useState([]);
   const [townByPostCode, setTownByPostCode] = useState(new Map());
-  const [townsLoaded, setTownsLoaded] = useState(false);
+  const [townsLoading, setTownsLoading] = useState(false);
+  const townsCacheRef = useRef(new Map()); // countryId -> { towns, map }
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -377,6 +325,8 @@ export default function AdminLLRServices() {
   function resetForm() {
     setEditing(null);
     setForm({ ...emptyForm });
+    setTowns([]);
+    setTownByPostCode(new Map());
   }
 
   function closeModal() {
@@ -399,49 +349,81 @@ export default function AdminLLRServices() {
     }
   }
 
-  // ✅ Towns: fetch for postcode dropdown (best-effort endpoints)
-  async function fetchTowns() {
-    setTownsLoaded(false);
-    try {
-      const res = await tryGetFirst(api, ["/towns", "/town", "/locations/towns", "/admin/towns"], {
-        params: { take: 50000 },
-      });
-
-      const list = Array.isArray(res.data) ? res.data : [];
-      const cleaned = [];
-      const m = new Map();
-
-      for (const t of list) {
-        const x = parseTownRow(t);
-        if (!x) continue;
-        cleaned.push(x);
-        if (!m.has(x.postCode)) m.set(x.postCode, x);
-      }
-
-      cleaned.sort((a, b) => a.postCode.localeCompare(b.postCode));
-
-      setTowns(cleaned);
-      setTownByPostCode(m);
-    } catch {
+  // ✅ Load towns for a specific country (controller requires countryId)
+  async function fetchTownsForCountry(countryId) {
+    const cid = toInt(countryId, 0);
+    if (!cid) {
       setTowns([]);
       setTownByPostCode(new Map());
+      return;
+    }
+
+    const cached = townsCacheRef.current.get(cid);
+    if (cached) {
+      setTowns(cached.towns);
+      setTownByPostCode(cached.map);
+      return;
+    }
+
+    setTownsLoading(true);
+    try {
+      const res = await api.get("/towns", { params: { countryId: cid, take: 500 } });
+      const list = Array.isArray(res.data) ? res.data : [];
+
+      // Normalize + sort by postcode for dropdown usability
+      const normalized = list
+        .map((x) => ({
+          id: x?.id ?? x?.Id ?? null,
+          countryId: toInt(x?.countryId ?? x?.CountryId ?? cid, cid),
+          postCode: normalizeText(x?.postCode ?? x?.PostCode ?? ""),
+          name: normalizeText(x?.name ?? x?.Name ?? ""),
+        }))
+        .filter((x) => x.postCode);
+
+      normalized.sort((a, b) => a.postCode.localeCompare(b.postCode));
+
+      const m = new Map();
+      for (const t of normalized) {
+        if (!m.has(t.postCode)) m.set(t.postCode, t);
+      }
+
+      setTowns(normalized);
+      setTownByPostCode(m);
+      townsCacheRef.current.set(cid, { towns: normalized, map: m });
+    } catch (e) {
+      // keep silent but clear dropdown
+      setTowns([]);
+      setTownByPostCode(new Map());
+      // optional: only show a gentle message when modal open
+      if (open) setError(getApiErrorMessage(e, "Failed to load towns for that country."));
     } finally {
-      setTownsLoaded(true);
+      setTownsLoading(false);
     }
   }
 
-  // ✅ When postcode selected: auto-fill town + country (town remains editable)
+  function handleCountryChange(newCountryId) {
+    setField("countryId", newCountryId);
+
+    // reset postcode, but keep town if user typed it manually (better UX)
+    setField("postCode", "");
+    fetchTownsForCountry(newCountryId);
+  }
+
   function handlePostCodeChange(postCode) {
     const pc = normalizeText(postCode);
     setField("postCode", pc);
 
     if (!pc) return;
-
     const hit = townByPostCode.get(pc);
     if (!hit) return;
 
-    if (hit.countryId) setField("countryId", String(hit.countryId));
+    // auto-fill town (still editable)
     if (hit.name) setField("town", hit.name);
+
+    // country already selected, but keep it consistent if needed
+    if (hit.countryId && String(form.countryId || "") !== String(hit.countryId)) {
+      setField("countryId", String(hit.countryId));
+    }
   }
 
   async function fetchList() {
@@ -468,7 +450,6 @@ export default function AdminLLRServices() {
   useEffect(() => {
     (async () => {
       await fetchCountries();
-      await fetchTowns();
       await fetchList();
       firstLoadRef.current = false;
     })();
@@ -538,8 +519,13 @@ export default function AdminLLRServices() {
       const caseVal = enumToInt(pick(d, ["caseType", "CaseType"], 2), CASETYPE_OPTIONS, 2);
       const ctVal = enumToInt(pick(d, ["courtType", "CourtType"], 3), COURT_TYPE_OPTIONS, 3);
 
+      const cid = pick(d, ["countryId", "CountryId"], "");
+      if (cid) await fetchTownsForCountry(cid);
+
+      const pc = pick(d, ["postCode", "PostCode", "postcode", "Postcode"], "") ?? "";
+
       setForm({
-        countryId: pick(d, ["countryId", "CountryId"], ""),
+        countryId: cid,
         service: enumToInt(pick(d, ["service", "Service"], 1), SERVICE_OPTIONS, 1),
         citation: pick(d, ["citation", "Citation"], "") ?? "",
         reportNumber: pick(d, ["reportNumber", "ReportNumber"], "") ?? "",
@@ -551,8 +537,7 @@ export default function AdminLLRServices() {
         courtType: ctVal,
         court: pick(d, ["court", "Court"], "") ?? "",
 
-        // ✅ New fields
-        postCode: pick(d, ["postCode", "PostCode", "postcode", "Postcode"], "") ?? "",
+        postCode: pc,
         town: pick(d, ["town", "Town"], "") ?? "",
 
         parties: pick(d, ["parties", "Parties"], "") ?? "",
@@ -561,9 +546,12 @@ export default function AdminLLRServices() {
         contentText: pick(d, ["contentText", "ContentText"], "") ?? "",
       });
 
-      // ✅ If report has postcode, ensure it auto-fills country/town if missing
-      const pc = normalizeText(pick(d, ["postCode", "PostCode", "postcode", "Postcode"], ""));
-      if (pc) handlePostCodeChange(pc);
+      // if postcode exists but town missing, auto-fill from towns map
+      const pc2 = normalizeText(pc);
+      if (pc2 && !normalizeText(pick(d, ["town", "Town"], ""))) {
+        const hit = townByPostCode.get(pc2);
+        if (hit?.name) setField("town", hit.name);
+      }
     } catch (e) {
       setError(getApiErrorMessage(e, "Failed to load report details."));
       closeModal();
@@ -589,10 +577,9 @@ export default function AdminLLRServices() {
       courtType: toInt(form.courtType, 3),
       court: normalizeText(form.court) || null,
 
-      // ✅ New: postcode
       postCode: normalizeText(form.postCode) || null,
-
       town: normalizeText(form.town) || null,
+
       parties: normalizeText(form.parties) || null,
       judges: normalizeText(form.judges) || null,
       decisionDate: isoOrNullFromDateInput(form.decisionDate),
@@ -602,10 +589,7 @@ export default function AdminLLRServices() {
   }
 
   function validate() {
-    const hasCountry = !!toInt(form.countryId, 0);
-    const hasPostCode = !!normalizeText(form.postCode);
-
-    if (!hasCountry && !hasPostCode) return "Select a postcode or choose a country.";
+    if (!toInt(form.countryId, 0)) return "Country is required (select a country first).";
     if (!toInt(form.service, 0)) return "Service is required.";
     if (!normalizeText(form.reportNumber)) return "Report number is required (e.g. CAR353).";
 
@@ -969,7 +953,7 @@ export default function AdminLLRServices() {
                   {countries.length > 0 ? (
                     <select
                       value={String(form.countryId || "")}
-                      onChange={(e) => setField("countryId", e.target.value)}
+                      onChange={(e) => handleCountryChange(e.target.value)}
                       disabled={busy}
                     >
                       <option value="">Select country…</option>
@@ -985,7 +969,7 @@ export default function AdminLLRServices() {
                         type="number"
                         min="1"
                         value={form.countryId}
-                        onChange={(e) => setField("countryId", e.target.value)}
+                        onChange={(e) => handleCountryChange(e.target.value)}
                         placeholder="CountryId (e.g. 1 = Kenya)"
                         disabled={busy}
                       />
@@ -1078,15 +1062,20 @@ export default function AdminLLRServices() {
                   />
                 </div>
 
-                {/* ✅ NEW: Postcode dropdown from Towns */}
+                {/* ✅ Postcode dropdown (requires country first) */}
                 <div className="admin-field">
                   <label>Postcode</label>
                   <select
                     value={String(form.postCode || "")}
                     onChange={(e) => handlePostCodeChange(e.target.value)}
-                    disabled={busy}
+                    disabled={busy || !toInt(form.countryId, 0)}
                   >
-                    <option value="">Select postcode…</option>
+                    {!toInt(form.countryId, 0) ? (
+                      <option value="">Select country first…</option>
+                    ) : (
+                      <option value="">{townsLoading ? "Loading postcodes…" : "Select postcode…"}</option>
+                    )}
+
                     {towns.map((t) => (
                       <option key={t.postCode} value={t.postCode}>
                         {t.postCode} — {t.name}
@@ -1094,8 +1083,9 @@ export default function AdminLLRServices() {
                     ))}
                   </select>
                   <div className="hint">
-                    Select a postcode to auto-fill <b>Town</b> and <b>Country</b>.
-                    {!townsLoaded ? " Loading towns…" : towns.length === 0 ? " (No towns loaded.)" : ""}
+                    {toInt(form.countryId, 0)
+                      ? "Select a postcode to auto-fill Town (Town remains editable)."
+                      : "Pick a Country first to load available postcodes."}
                   </div>
                 </div>
 
