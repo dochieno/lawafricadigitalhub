@@ -3,6 +3,7 @@ import { AuthProvider } from "./auth/AuthContext";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import AdminOrInstitutionAdminRoute from "./routes/AdminOrInstitutionAdminRoute";
 import AdminRoute from "./routes/AdminRoute";
+import AdminLLRImport from "./pages/dashboard/admin/AdminLLRImport";
 
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -98,6 +99,7 @@ export default function App() {
               <Route path="admin/content-products" element={<AdminContentProducts />} />
               <Route path="admin/documents" element={<AdminDocuments />} />
               <Route path="admin/llr-services" element={<AdminLLRServices />} />
+              <Route path="admin/llr-services/import" element={<AdminLLRImport />} />
               <Route  path="admin/llr-services/:legalDocumentId/content"  element={<AdminReportContent />}/>
               
               <Route
