@@ -94,6 +94,44 @@ function normalizeText(v) {
   return s ? s : "";
 }
 
+/** Try multiple GET endpoints (best-effort; keeps existing functionality if towns endpoint differs) */
+async function tryGetFirst(apiClient, paths, config = {}) {
+  for (const p of paths) {
+    try {
+      const res = await apiClient.get(p, config);
+      return { ok: true, data: res.data, path: p };
+    } catch {
+      // continue
+    }
+  }
+  return { ok: false, data: null, path: "" };
+}
+
+/** Normalize Town row from API: supports many naming conventions */
+function parseTownRow(t) {
+  const postCode = normalizeText(
+    t?.postCode ??
+      t?.PostCode ??
+      t?.postcode ??
+      t?.Postcode ??
+      t?.postalCode ??
+      t?.PostalCode ??
+      t?.code ??
+      t?.Code ??
+      ""
+  );
+
+  const name = normalizeText(t?.name ?? t?.Name ?? t?.town ?? t?.Town ?? "");
+  const countryId = toInt(t?.countryId ?? t?.CountryId ?? 0, 0);
+
+  if (!postCode) return null;
+  return {
+    postCode,
+    name: name || postCode,
+    countryId: countryId || null,
+  };
+}
+
 /* =========================
    Options
 ========================= */
@@ -294,13 +332,11 @@ const emptyForm = {
   // legacy optional
   court: "",
 
-  // new (enum)
+  // new
   courtType: 3,
 
-  // ✅ NEW: postcode drives town + country
+  // ✅ NEW: postcode
   postCode: "",
-
-  // town is still free text
   town: "",
 
   parties: "",
@@ -316,6 +352,11 @@ export default function AdminLLRServices() {
   const [countries, setCountries] = useState([]);
   const [countryMap, setCountryMap] = useState(new Map());
 
+  // ✅ Towns (postcode dropdown)
+  const [towns, setTowns] = useState([]);
+  const [townByPostCode, setTownByPostCode] = useState(new Map());
+  const [townsLoaded, setTownsLoaded] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -329,12 +370,6 @@ export default function AdminLLRServices() {
 
   const firstLoadRef = useRef(true);
 
-  // ✅ Towns index for postcode lookup (best-effort; page still works if this fails)
-  const [townsByPostCode, setTownsByPostCode] = useState(new Map());
-  const [postCodeOptions, setPostCodeOptions] = useState([]);
-  const [townLookupBusy, setTownLookupBusy] = useState(false);
-  const [townAutoInfo, setTownAutoInfo] = useState(""); // UI hint when postcode auto-fills town/country
-
   function setField(k, v) {
     setForm((p) => ({ ...p, [k]: v }));
   }
@@ -342,7 +377,6 @@ export default function AdminLLRServices() {
   function resetForm() {
     setEditing(null);
     setForm({ ...emptyForm });
-    setTownAutoInfo("");
   }
 
   function closeModal() {
@@ -363,6 +397,51 @@ export default function AdminLLRServices() {
       setCountries([]);
       setCountryMap(new Map());
     }
+  }
+
+  // ✅ Towns: fetch for postcode dropdown (best-effort endpoints)
+  async function fetchTowns() {
+    setTownsLoaded(false);
+    try {
+      const res = await tryGetFirst(api, ["/towns", "/town", "/locations/towns", "/admin/towns"], {
+        params: { take: 50000 },
+      });
+
+      const list = Array.isArray(res.data) ? res.data : [];
+      const cleaned = [];
+      const m = new Map();
+
+      for (const t of list) {
+        const x = parseTownRow(t);
+        if (!x) continue;
+        cleaned.push(x);
+        if (!m.has(x.postCode)) m.set(x.postCode, x);
+      }
+
+      cleaned.sort((a, b) => a.postCode.localeCompare(b.postCode));
+
+      setTowns(cleaned);
+      setTownByPostCode(m);
+    } catch {
+      setTowns([]);
+      setTownByPostCode(new Map());
+    } finally {
+      setTownsLoaded(true);
+    }
+  }
+
+  // ✅ When postcode selected: auto-fill town + country (town remains editable)
+  function handlePostCodeChange(postCode) {
+    const pc = normalizeText(postCode);
+    setField("postCode", pc);
+
+    if (!pc) return;
+
+    const hit = townByPostCode.get(pc);
+    if (!hit) return;
+
+    if (hit.countryId) setField("countryId", String(hit.countryId));
+    if (hit.name) setField("town", hit.name);
   }
 
   async function fetchList() {
@@ -386,141 +465,13 @@ export default function AdminLLRServices() {
     }
   }
 
-  // ✅ helper: try multiple endpoints without breaking UI if some don't exist
-  async function tryGetFirst(paths, config = {}) {
-    for (const p of paths) {
-      try {
-        const res = await api.get(p, config);
-        return { ok: true, data: res.data, path: p };
-      } catch {
-        // keep trying
-      }
-    }
-    return { ok: false, data: null, path: "" };
-  }
-
-  // ✅ best-effort preload: fetch towns list so postcode dropdown has options
-  async function fetchTownsIndex() {
-    // We keep this safe & optional: failures should not block anything.
-    const res = await tryGetFirst(
-      [
-        "/towns",
-        "/town", // some APIs use singular
-        "/locations/towns",
-        "/admin/towns",
-      ],
-      { params: { take: 50000 } } // if backend ignores, harmless
-    );
-
-    if (!res.ok) return;
-
-    const list = Array.isArray(res.data) ? res.data : [];
-    const m = new Map();
-
-    for (const t of list) {
-      const pc = normalizeText(
-        pick(t, ["postCode", "PostCode", "postcode", "PostalCode", "postalCode", "code", "Code"], "")
-      );
-      const name = normalizeText(pick(t, ["name", "Name", "town", "Town"], ""));
-      const countryId = toInt(pick(t, ["countryId", "CountryId"], 0), 0);
-
-      if (!pc || !name || name === "{}") continue;
-      if (!m.has(pc)) m.set(pc, { postCode: pc, name, countryId: countryId || null });
-    }
-
-    setTownsByPostCode(m);
-    setPostCodeOptions(Array.from(m.keys()).sort((a, b) => String(a).localeCompare(String(b))));
-  }
-
-  // ✅ Lookup single postcode: uses preloaded map first, then tries API endpoints
-  async function lookupTownByPostCode(postCodeRaw) {
-    const pc = normalizeText(postCodeRaw);
-    if (!pc) return null;
-
-    // 1) local index
-    const hit = townsByPostCode.get(pc);
-    if (hit) return hit;
-
-    // 2) try endpoints (best-effort)
-    // Expect response like { postCode, name, countryId } or { ... }
-    const res = await tryGetFirst([
-      `/towns/by-postcode/${encodeURIComponent(pc)}`,
-      `/town/by-postcode/${encodeURIComponent(pc)}`,
-      `/towns/lookup`,
-      `/town/lookup`,
-    ], {
-      params: { postCode: pc, postcode: pc, code: pc },
-    });
-
-    if (!res.ok) return null;
-
-    // normalize response (could be object or array)
-    const d = res.data;
-    const obj = Array.isArray(d) ? d[0] : d;
-    if (!obj || typeof obj !== "object") return null;
-
-    const name = normalizeText(pick(obj, ["name", "Name", "town", "Town"], ""));
-    const countryId = toInt(pick(obj, ["countryId", "CountryId"], 0), 0);
-
-    if (!name || name === "{}") return null;
-
-    const out = { postCode: pc, name, countryId: countryId || null };
-
-    // cache it for later
-    setTownsByPostCode((prev) => {
-      const next = new Map(prev);
-      if (!next.has(pc)) next.set(pc, out);
-      return next;
-    });
-    setPostCodeOptions((prev) => (prev.includes(pc) ? prev : [...prev, pc].sort()));
-
-    return out;
-  }
-
-  // ✅ When postcode changes: fill town + country (town stays editable)
-  async function handlePostCodeChange(nextPc) {
-    setField("postCode", nextPc);
-    setTownAutoInfo("");
-
-    const pc = normalizeText(nextPc);
-    if (!pc) return;
-
-    setTownLookupBusy(true);
-    try {
-      const hit = await lookupTownByPostCode(pc);
-      if (!hit) {
-        setTownAutoInfo("Postcode not found. You can still type Town and choose Country manually.");
-        return;
-      }
-
-      // ✅ Only auto-fill Town if user hasn't typed a different Town already OR if town is empty
-      // (We do not block manual edits)
-      setForm((p) => {
-        const currentTown = normalizeText(p.town);
-        const shouldOverwriteTown = !currentTown || currentTown.toLowerCase() === normalizeText(hit.name).toLowerCase();
-        return {
-          ...p,
-          countryId: hit.countryId ? String(hit.countryId) : p.countryId,
-          town: shouldOverwriteTown ? hit.name : p.town,
-          postCode: pc,
-        };
-      });
-
-      const countryName = hit.countryId ? (countryMap.get(Number(hit.countryId)) || `#${hit.countryId}`) : "—";
-      setTownAutoInfo(`Auto-filled from postcode → Town: ${hit.name}${hit.countryId ? `, Country: ${countryName}` : ""}. You can edit Town if needed.`);
-    } finally {
-      setTownLookupBusy(false);
-    }
-  }
-
   useEffect(() => {
     (async () => {
       await fetchCountries();
-      await fetchTownsIndex(); // best-effort; safe if fails
+      await fetchTowns();
       await fetchList();
       firstLoadRef.current = false;
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filtered = useMemo(() => {
@@ -538,11 +489,6 @@ export default function AdminLLRServices() {
       const caseNo = String(pick(r, ["caseNumber", "CaseNumber"], "")).toLowerCase();
       const judges = String(pick(r, ["judges", "Judges"], "")).toLowerCase();
 
-      // ✅ include postcode in search if API returns it
-      const postCode = String(
-        pick(r, ["postCode", "PostCode", "postcode", "Postcode", "postalCode", "PostalCode"], "")
-      ).toLowerCase();
-
       const countryId = pick(r, ["countryId", "CountryId"], null);
       const countryName = (countryMap.get(Number(countryId)) || "").toLowerCase();
 
@@ -554,7 +500,7 @@ export default function AdminLLRServices() {
           SERVICE_OPTIONS.find((x) => x.value === enumToInt(serviceVal, SERVICE_OPTIONS, 0))?.label ||
           "").toLowerCase();
 
-      const meta = `${reportNumber} ${year} ${citation} ${parties} ${court} ${courtTypeLabel} ${town} ${postCode} ${caseNo} ${judges} ${countryName} ${serviceLabel}`;
+      const meta = `${reportNumber} ${year} ${citation} ${parties} ${court} ${courtTypeLabel} ${town} ${caseNo} ${judges} ${countryName} ${serviceLabel}`;
       return title.includes(s) || meta.includes(s);
     });
   }, [rows, q, countryMap]);
@@ -580,7 +526,6 @@ export default function AdminLLRServices() {
     setBusy(true);
     setOpen(true);
     setEditing(row);
-    setTownAutoInfo("");
 
     try {
       const id = pick(row, ["id", "Id"], null);
@@ -592,8 +537,6 @@ export default function AdminLLRServices() {
       const decisionVal = enumToInt(pick(d, ["decisionType", "DecisionType"], 1), DECISION_OPTIONS, 1);
       const caseVal = enumToInt(pick(d, ["caseType", "CaseType"], 2), CASETYPE_OPTIONS, 2);
       const ctVal = enumToInt(pick(d, ["courtType", "CourtType"], 3), COURT_TYPE_OPTIONS, 3);
-
-      const pc = pick(d, ["postCode", "PostCode", "postcode", "Postcode", "postalCode", "PostalCode"], "") ?? "";
 
       setForm({
         countryId: pick(d, ["countryId", "CountryId"], ""),
@@ -608,8 +551,8 @@ export default function AdminLLRServices() {
         courtType: ctVal,
         court: pick(d, ["court", "Court"], "") ?? "",
 
-        // ✅ postcode + town
-        postCode: pc,
+        // ✅ New fields
+        postCode: pick(d, ["postCode", "PostCode", "postcode", "Postcode"], "") ?? "",
         town: pick(d, ["town", "Town"], "") ?? "",
 
         parties: pick(d, ["parties", "Parties"], "") ?? "",
@@ -618,20 +561,9 @@ export default function AdminLLRServices() {
         contentText: pick(d, ["contentText", "ContentText"], "") ?? "",
       });
 
-      // If we have a postcode, try to enrich hint (do not overwrite user's values)
-      const pcNorm = normalizeText(pc);
-      if (pcNorm) {
-        setTownLookupBusy(true);
-        try {
-          const hit = await lookupTownByPostCode(pcNorm);
-          if (hit?.countryId) {
-            const countryName = countryMap.get(Number(hit.countryId)) || `#${hit.countryId}`;
-            setTownAutoInfo(`Postcode detected → ${hit.name} (${countryName}). Town is editable.`);
-          }
-        } finally {
-          setTownLookupBusy(false);
-        }
-      }
+      // ✅ If report has postcode, ensure it auto-fills country/town if missing
+      const pc = normalizeText(pick(d, ["postCode", "PostCode", "postcode", "Postcode"], ""));
+      if (pc) handlePostCodeChange(pc);
     } catch (e) {
       setError(getApiErrorMessage(e, "Failed to load report details."));
       closeModal();
@@ -657,7 +589,7 @@ export default function AdminLLRServices() {
       courtType: toInt(form.courtType, 3),
       court: normalizeText(form.court) || null,
 
-      // ✅ send postcode if provided (backend can ignore if not implemented)
+      // ✅ New: postcode
       postCode: normalizeText(form.postCode) || null,
 
       town: normalizeText(form.town) || null,
@@ -670,7 +602,10 @@ export default function AdminLLRServices() {
   }
 
   function validate() {
-    if (!toInt(form.countryId, 0)) return "Country is required.";
+    const hasCountry = !!toInt(form.countryId, 0);
+    const hasPostCode = !!normalizeText(form.postCode);
+
+    if (!hasCountry && !hasPostCode) return "Select a postcode or choose a country.";
     if (!toInt(form.service, 0)) return "Service is required.";
     if (!normalizeText(form.reportNumber)) return "Report number is required (e.g. CAR353).";
 
@@ -813,20 +748,6 @@ export default function AdminLLRServices() {
 
         .headerActions { display:flex; align-items:center; gap:10px; }
         .headerActions .la-icon-btn { width: 34px; height: 34px; border-radius: 11px; }
-
-        /* ✅ Small inline hint card inside modal */
-        .inlineNote {
-          margin-top: 8px;
-          padding: 10px 12px;
-          border-radius: 14px;
-          border: 1px solid #e5e7eb;
-          background: #f8fafc;
-          color: #0f172a;
-          font-size: 12px;
-          font-weight: 800;
-          line-height: 1.35;
-        }
-        .inlineNote b { font-weight: 950; }
       `}</style>
 
       <div className="admin-header">
@@ -859,7 +780,7 @@ export default function AdminLLRServices() {
               </span>
               <input
                 className="admin-search admin-search-wide"
-                placeholder="Search by title, report number, year, country, parties, citation, court type, town, postcode..."
+                placeholder="Search by title, report number, year, country, parties, citation, court type, town..."
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
@@ -928,8 +849,6 @@ export default function AdminLLRServices() {
                 const parties = pick(r, ["parties", "Parties"], null);
                 const decisionDate = pick(r, ["decisionDate", "DecisionDate"], null);
 
-                const postCode = pick(r, ["postCode", "PostCode", "postcode", "Postcode", "postalCode", "PostalCode"], null);
-
                 const courtLabel = courtTownDisplay(r);
 
                 return (
@@ -948,12 +867,6 @@ export default function AdminLLRServices() {
                               Court: —
                             </span>
                           )}
-
-                          {postCode ? (
-                            <span className="chip" title="Postcode">
-                              <strong>Postcode:</strong>&nbsp;{String(postCode)}
-                            </span>
-                          ) : null}
 
                           {citation ? (
                             <span className="chip" title="Citation">
@@ -1165,46 +1078,33 @@ export default function AdminLLRServices() {
                   />
                 </div>
 
-                {/* ✅ NEW: Postcode */}
+                {/* ✅ NEW: Postcode dropdown from Towns */}
                 <div className="admin-field">
-                  <label>
-                    Postcode{" "}
-                    {townLookupBusy ? <span className="hint" style={{ marginLeft: 8 }}>Looking up…</span> : null}
-                  </label>
-
-                  <input
-                    value={form.postCode}
+                  <label>Postcode</label>
+                  <select
+                    value={String(form.postCode || "")}
                     onChange={(e) => handlePostCodeChange(e.target.value)}
-                    placeholder="e.g. 50100"
                     disabled={busy}
-                    list="la-postcode-list"
-                    inputMode="numeric"
-                  />
-
-                  {/* datalist makes it feel like a dropdown while still allowing typing */}
-                  <datalist id="la-postcode-list">
-                    {postCodeOptions.slice(0, 5000).map((pc) => (
-                      <option key={pc} value={pc} />
+                  >
+                    <option value="">Select postcode…</option>
+                    {towns.map((t) => (
+                      <option key={t.postCode} value={t.postCode}>
+                        {t.postCode} — {t.name}
+                      </option>
                     ))}
-                  </datalist>
-
+                  </select>
                   <div className="hint">
-                    Select/enter a postcode to auto-fill <b>Town</b> and <b>Country</b>.
+                    Select a postcode to auto-fill <b>Town</b> and <b>Country</b>.
+                    {!townsLoaded ? " Loading towns…" : towns.length === 0 ? " (No towns loaded.)" : ""}
                   </div>
-
-                  {townAutoInfo ? <div className="inlineNote">{townAutoInfo}</div> : null}
                 </div>
 
-                {/* ✅ Town remains editable always */}
                 <div className="admin-field">
                   <label>Town</label>
                   <input
                     value={form.town}
-                    onChange={(e) => {
-                      setTownAutoInfo((prev) => (prev ? prev : "")); // keep hint if already there
-                      setField("town", e.target.value);
-                    }}
-                    placeholder="Auto-filled from postcode (you can edit)"
+                    onChange={(e) => setField("town", e.target.value)}
+                    placeholder="Auto-filled, but you can edit (e.g. a more specific town name)"
                     disabled={busy}
                   />
                   <div className="hint">You can override the town name (e.g. add a more specific location).</div>
