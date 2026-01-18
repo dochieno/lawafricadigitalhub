@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import api from "../../api/client";
 import { getAuthClaims } from "../../auth/auth";
 import { isLawReportDocument } from "../../utils/isLawReportDocument";
+import { extractReportMeta } from "../../utils/lawReportMeta";
 import "../../styles/lawReports.css";
 
 function isInstitutionUser() {
@@ -16,59 +17,6 @@ function isPublicUser() {
   const userType = c?.payload?.userType || c?.payload?.UserType || null;
   const inst = c?.institutionId;
   return String(userType).toLowerCase() === "public" && (!inst || inst <= 0);
-}
-
-function extractReportMeta(d) {
-  const lr =
-    d?.lawReport ||
-    d?.LawReport ||
-    d?.report ||
-    d?.Report ||
-    d?.reportMeta ||
-    d?.ReportMeta ||
-    null;
-
-  const pick = (...keys) => {
-    for (const k of keys) {
-      const v = d?.[k] ?? lr?.[k];
-      if (v !== undefined && v !== null && String(v).trim() !== "") return v;
-    }
-    return "";
-  };
-
-  const reportNumber = String(pick("reportNumber", "ReportNumber", "code", "Code")).trim();
-  const parties = String(pick("parties", "Parties")).trim();
-  const citation = String(pick("citation", "Citation")).trim();
-  const courtType = String(pick("courtType", "CourtType", "court", "Court")).trim();
-  const town = String(pick("town", "Town")).trim();
-  const postCode = String(pick("postCode", "PostCode", "postalCode", "PostalCode")).trim();
-
-  const yearRaw = pick("year", "Year");
-  const year = yearRaw ? Number(yearRaw) : NaN;
-
-  const judgmentDateRaw = pick("judgmentDate", "JudgmentDate", "date", "Date");
-  const judgmentDate = judgmentDateRaw ? String(judgmentDateRaw) : "";
-
-  // Optional rich fields (if backend sends them)
-  const judges = String(pick("judges", "Judges")).trim();
-  const decisionType = String(pick("decisionType", "DecisionType")).trim();
-  const caseNotes = String(pick("caseNotes", "CaseNotes")).trim();
-  const hcRef = String(pick("hcRef", "HcRef", "HCRef")).trim();
-
-  return {
-    reportNumber,
-    parties,
-    citation,
-    year: Number.isFinite(year) ? year : null,
-    courtType,
-    town,
-    postCode,
-    judgmentDate,
-    judges,
-    decisionType,
-    caseNotes,
-    hcRef,
-  };
 }
 
 export default function LawReportDetails() {
@@ -101,7 +49,6 @@ export default function LawReportDetails() {
         const d = res.data;
 
         if (!isLawReportDocument(d)) {
-          // If someone navigates here with a non-report id, push them to standard details
           navigate(`/dashboard/documents/${docId}`, { replace: true });
           return;
         }
@@ -126,14 +73,12 @@ export default function LawReportDetails() {
     };
   }, [docId, navigate]);
 
-  // Access + availability checks (same semantics as Explore)
   useEffect(() => {
     let cancelled = false;
 
     async function check() {
       if (!doc) return;
 
-      // Availability
       try {
         setAvailabilityLoading(true);
         const r = await api.get(`/legal-documents/${docId}/availability`);
@@ -145,7 +90,6 @@ export default function LawReportDetails() {
         if (!cancelled) setAvailabilityLoading(false);
       }
 
-      // Access only for premium content and only for Inst/Public users
       if (doc.isPremium && (isInst || isPublic)) {
         try {
           setAccessLoading(true);
@@ -258,11 +202,11 @@ export default function LawReportDetails() {
             </button>
           </div>
 
-          {/* Metadata section (shows what is available) */}
           <div className="lr-list" style={{ gap: 12 }}>
             <div className="lr-card" style={{ cursor: "default", gridTemplateColumns: "1fr" }}>
               <div>
                 <h3 className="lr-card-title" style={{ marginBottom: 8 }}>Report details</h3>
+
                 <div className="lr-meta">
                   {meta?.judgmentDate ? <span className="lr-tag">Judgment date: {meta.judgmentDate}</span> : null}
                   {meta?.decisionType ? <span className="lr-tag">Decision: {meta.decisionType}</span> : null}
@@ -277,7 +221,7 @@ export default function LawReportDetails() {
                   </div>
                 ) : (
                   <div style={{ marginTop: 10, color: "#6b7280" }}>
-                    This report’s extended metadata will appear here once the API returns it (ReportNumber, Parties, Citation, etc. are already supported).
+                    This report’s extended metadata will appear here once the API returns it.
                   </div>
                 )}
               </div>

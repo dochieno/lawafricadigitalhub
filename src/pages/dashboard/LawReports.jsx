@@ -1,9 +1,11 @@
 // src/pages/dashboard/LawReports.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api/client";
 import { getAuthClaims } from "../../auth/auth";
 import { isLawReportDocument } from "../../utils/isLawReportDocument";
+import { extractReportMeta, getReportSearchHaystack, normalize } from "../../utils/lawReportMeta";
+import { useDebounce } from "../../utils/useDebounce";
 import "../../styles/lawReports.css";
 
 function isInstitutionUser() {
@@ -19,129 +21,192 @@ function isPublicUser() {
 }
 
 /**
- * Robust metadata extraction. Supports several possible shapes depending on backend.
- * We intentionally keep this tolerant so UI doesn't break.
+ * Expected server response formats supported:
+ * A) { items: [...], total: 123 }
+ * B) { data: [...], total: 123 }
+ * C) [ ... ]  (no total)
  */
-function extractReportMeta(d) {
-  const lr =
-    d?.lawReport ||
-    d?.LawReport ||
-    d?.report ||
-    d?.Report ||
-    d?.reportMeta ||
-    d?.ReportMeta ||
-    null;
+function parseSearchResponse(payload) {
+  if (Array.isArray(payload)) return { items: payload, total: payload.length };
 
-  const pick = (...keys) => {
-    for (const k of keys) {
-      const v = d?.[k] ?? lr?.[k];
-      if (v !== undefined && v !== null && String(v).trim() !== "") return v;
-    }
-    return "";
-  };
+  const items = payload?.items ?? payload?.data ?? payload?.results ?? [];
+  const total =
+    payload?.total ??
+    payload?.count ??
+    (Array.isArray(items) ? items.length : 0);
 
-  const reportNumber = String(pick("reportNumber", "ReportNumber", "code", "Code")).trim();
-  const parties = String(pick("parties", "Parties")).trim();
-  const citation = String(pick("citation", "Citation")).trim();
-  const courtType = String(pick("courtType", "CourtType", "court", "Court")).trim();
-  const town = String(pick("town", "Town")).trim();
-
-  // Some systems have Town/PostCode combined; support both.
-  const postCode = String(pick("postCode", "PostCode", "postalCode", "PostalCode")).trim();
-
-  const yearRaw = pick("year", "Year");
-  const year = yearRaw ? Number(yearRaw) : NaN;
-
-  const judgmentDateRaw = pick("judgmentDate", "JudgmentDate", "date", "Date");
-  const judgmentDate = judgmentDateRaw ? String(judgmentDateRaw) : "";
-
-  return {
-    reportNumber,
-    parties,
-    citation,
-    year: Number.isFinite(year) ? year : null,
-    courtType,
-    town,
-    postCode,
-    judgmentDate,
-  };
-}
-
-function normalize(s) {
-  return String(s || "").trim().toLowerCase();
+  return { items: Array.isArray(items) ? items : [], total: Number(total) || 0 };
 }
 
 export default function LawReports() {
   const navigate = useNavigate();
+  const isInst = isInstitutionUser();
+  const isPublic = isPublicUser();
 
+  // Mode: try server search first; fallback to client mode if 404
+  const [mode, setMode] = useState("server"); // "server" | "client"
+  const searchUnavailableRef = useRef(false);
+
+  // Data
   const [reports, setReports] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [total, setTotal] = useState(0);
 
-  // Enrichment: if list endpoint does not include report meta, we fetch details per report
-  const [detailsMap, setDetailsMap] = useState({}); // docId -> detail
+  // Client fallback enrichment
+  const [detailsMap, setDetailsMap] = useState({});
   const [detailsLoadingIds, setDetailsLoadingIds] = useState(new Set());
 
-  // Access + availability (same rule-set as Explore)
+  // Access + availability (same semantics as Explore)
   const [accessMap, setAccessMap] = useState({});
   const [accessLoadingIds, setAccessLoadingIds] = useState(new Set());
 
   const [availabilityMap, setAvailabilityMap] = useState({});
   const [availabilityLoadingIds, setAvailabilityLoadingIds] = useState(new Set());
 
+  // UX
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
   const [toast, setToast] = useState(null);
-
-  // Filters/search/sort
-  const [q, setQ] = useState("");
-  const [year, setYear] = useState(""); // string
-  const [courtType, setCourtType] = useState("");
-  const [town, setTown] = useState("");
-  const [sortBy, setSortBy] = useState("year_desc");
-
-  const isInst = isInstitutionUser();
-  const isPublic = isPublicUser();
-
   function showToast(message, type = "success") {
     setToast({ message, type });
     setTimeout(() => setToast(null), 2500);
   }
 
+  // Filters/search/sort
+  const [q, setQ] = useState("");
+  const debouncedQ = useDebounce(q, 300);
+
+  // Exact field filters (Step 3)
+  const [reportNumber, setReportNumber] = useState("");
+  const [parties, setParties] = useState("");
+  const [citation, setCitation] = useState("");
+
+  const [year, setYear] = useState(""); // string
+  const [courtType, setCourtType] = useState("");
+  const [townOrPostCode, setTownOrPostCode] = useState("");
+  const [sortBy, setSortBy] = useState("year_desc");
+
+  // Pagination (server mode)
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
+
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  function resetFilters() {
+    setQ("");
+    setReportNumber("");
+    setParties("");
+    setCitation("");
+    setYear("");
+    setCourtType("");
+    setTownOrPostCode("");
+    setSortBy("year_desc");
+    setPage(1);
+    showToast("Filters cleared");
+  }
+
   /**
-   * Load reports list.
-   * Preferred: GET /law-reports (if you have it)
-   * Fallback: GET /legal-documents then filter by isLawReportDocument
+   * SERVER SEARCH (preferred)
+   * Endpoint: GET /law-reports/search
+   */
+  async function tryServerSearch(params) {
+    if (searchUnavailableRef.current) return { ok: false, reason: "unavailable" };
+
+    try {
+      const res = await api.get("/law-reports/search", { params });
+      const { items, total: t } = parseSearchResponse(res.data);
+      return { ok: true, items, total: t };
+    } catch (e) {
+      const status = e?.response?.status;
+
+      // If endpoint doesn't exist -> fallback permanently to client mode
+      if (status === 404) {
+        searchUnavailableRef.current = true;
+        return { ok: false, reason: "404" };
+      }
+
+      // Other errors: keep mode but show error
+      throw e;
+    }
+  }
+
+  /**
+   * CLIENT FALLBACK load (Step 2 behavior)
+   */
+  async function loadAllReportsClientFallback() {
+    const res = await api.get("/legal-documents");
+    const all = res.data || [];
+    return all.filter(isLawReportDocument);
+  }
+
+  /**
+   * Main loader:
+   * - In server mode: query API every time filters change (debounced for q)
+   * - If /law-reports/search is missing -> switch to client mode and load list once
    */
   useEffect(() => {
     let cancelled = false;
 
-    async function loadReports() {
+    async function run() {
       try {
         setLoading(true);
         setError("");
 
-        let list = null;
+        if (mode === "server") {
+          const params = {
+            q: debouncedQ?.trim() || undefined,
+            reportNumber: reportNumber.trim() || undefined,
+            parties: parties.trim() || undefined,
+            citation: citation.trim() || undefined,
+            year: year ? Number(year) : undefined,
+            courtType: courtType || undefined,
+            townOrPostCode: townOrPostCode || undefined,
+            sort: sortBy || "year_desc",
+            page,
+            pageSize,
+          };
 
-        try {
-          const res = await api.get("/law-reports");
-          list = res.data || [];
-        } catch (e) {
-          // Fallback to legal-documents
-          if (e?.response?.status !== 404) {
-            // If it's not 404, still fall back, but log it.
-            console.warn("GET /law-reports failed; falling back to /legal-documents", e);
+          const out = await tryServerSearch(params);
+
+          if (!out.ok) {
+            // Switch to client mode (only for 404)
+            if (out.reason === "404") {
+              if (cancelled) return;
+
+              setMode("client");
+              setPage(1);
+
+              const list = await loadAllReportsClientFallback();
+              if (cancelled) return;
+
+              setReports(list);
+              setTotal(list.length);
+              return;
+            }
+
+            // unavailable: fallback to client list if already loaded; otherwise load it
+            const list = await loadAllReportsClientFallback();
+            if (cancelled) return;
+
+            setMode("client");
+            setReports(list);
+            setTotal(list.length);
+            return;
           }
+
+          if (cancelled) return;
+
+          setReports(out.items || []);
+          setTotal(out.total || 0);
+          return;
         }
 
-        if (!list) {
-          const res = await api.get("/legal-documents");
-          const all = res.data || [];
-          list = all.filter(isLawReportDocument);
-        }
-
+        // client mode
+        const list = await loadAllReportsClientFallback();
         if (cancelled) return;
 
-        // Normalize shape: ensure { id, title, ... } exists
         setReports(list);
+        setTotal(list.length);
       } catch (err) {
         console.error(err);
         if (!cancelled) setError("We couldn’t load Law Reports right now. Please try again.");
@@ -150,23 +215,35 @@ export default function LawReports() {
       }
     }
 
-    loadReports();
+    run();
     return () => {
       cancelled = true;
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    mode,
+    debouncedQ,
+    reportNumber,
+    parties,
+    citation,
+    year,
+    courtType,
+    townOrPostCode,
+    sortBy,
+    page,
+  ]);
 
   /**
-   * Enrich report details for items missing key metadata.
-   * Uses GET /legal-documents/{id} (same strategy as AdminLLRServices).
+   * Client-mode enrichment for missing metadata
+   * Uses GET /legal-documents/{id} for rows that look "empty"
    */
   useEffect(() => {
     let cancelled = false;
 
     async function enrichMissingDetails() {
+      if (mode !== "client") return;
       if (!reports || reports.length === 0) return;
 
-      // Identify missing meta signals
       const needs = reports
         .map((r) => r?.id)
         .filter(Boolean)
@@ -175,7 +252,13 @@ export default function LawReports() {
           const base = reports.find((x) => x.id === id);
           const meta = extractReportMeta(base);
           const missingCore =
-            !meta.reportNumber && !meta.parties && !meta.citation && !meta.courtType && !meta.town && !meta.year;
+            !meta.reportNumber &&
+            !meta.parties &&
+            !meta.citation &&
+            !meta.courtType &&
+            !meta.town &&
+            !meta.postCode &&
+            !meta.year;
           return missingCore;
         });
 
@@ -192,7 +275,9 @@ export default function LawReports() {
           return s;
         });
 
-        const results = await Promise.allSettled(batch.map((id) => api.get(`/legal-documents/${id}`)));
+        const results = await Promise.allSettled(
+          batch.map((id) => api.get(`/legal-documents/${id}`))
+        );
 
         if (cancelled) return;
 
@@ -217,65 +302,39 @@ export default function LawReports() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reports]);
+  }, [mode, reports, detailsMap]);
 
-  // Merge base + enriched
+  // Merge base + enriched (client mode only)
   const mergedReports = useMemo(() => {
+    if (mode !== "client") return reports || [];
     return (reports || []).map((r) => {
       const enriched = detailsMap[r.id];
       return enriched ? { ...r, ...enriched } : r;
     });
-  }, [reports, detailsMap]);
+  }, [mode, reports, detailsMap]);
 
-  // Build filter options
-  const filterOptions = useMemo(() => {
-    const years = new Set();
-    const courts = new Set();
-    const towns = new Set();
+  // Client-mode filtering (exact fields) — used ONLY when mode=client
+  const visibleClient = useMemo(() => {
+    if (mode !== "client") return mergedReports;
 
-    for (const r of mergedReports) {
-      const meta = extractReportMeta(r);
-      if (meta.year) years.add(meta.year);
-      if (meta.courtType) courts.add(meta.courtType);
-      if (meta.town) towns.add(meta.town);
-      // Allow Town/PostCode combined discovery
-      if (meta.postCode) towns.add(meta.postCode);
-    }
+    const query = normalize(debouncedQ);
+    const rn = normalize(reportNumber);
+    const p = normalize(parties);
+    const c = normalize(citation);
 
-    const yearsArr = Array.from(years).sort((a, b) => b - a);
-    const courtsArr = Array.from(courts).sort((a, b) => String(a).localeCompare(String(b)));
-    const townsArr = Array.from(towns).sort((a, b) => String(a).localeCompare(String(b)));
-
-    return { yearsArr, courtsArr, townsArr };
-  }, [mergedReports]);
-
-  // Apply search + filters + sort
-  const visible = useMemo(() => {
-    const query = normalize(q);
     const yearNum = year ? Number(year) : null;
     const courtNorm = normalize(courtType);
-    const townNorm = normalize(town);
+    const townNorm = normalize(townOrPostCode);
 
     let items = mergedReports.filter((r) => {
       const meta = extractReportMeta(r);
 
-      // Search across: ReportNumber, Parties, Citation, Year, CourtType, Town/PostCode (+title)
-      const haystack = [
-        r.title,
-        meta.reportNumber,
-        meta.parties,
-        meta.citation,
-        meta.year ? String(meta.year) : "",
-        meta.courtType,
-        meta.town,
-        meta.postCode,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
+      const matchesQ = !query || getReportSearchHaystack(r).includes(query);
 
-      const matchesQuery = !query || haystack.includes(query);
+      const matchesReportNumber = !rn || normalize(meta.reportNumber).includes(rn);
+      const matchesParties = !p || normalize(meta.parties).includes(p);
+      const matchesCitation = !c || normalize(meta.citation).includes(c);
+
       const matchesYear = !yearNum || meta.year === yearNum;
       const matchesCourt = !courtNorm || normalize(meta.courtType) === courtNorm;
       const matchesTown =
@@ -283,10 +342,17 @@ export default function LawReports() {
         normalize(meta.town) === townNorm ||
         normalize(meta.postCode) === townNorm;
 
-      return matchesQuery && matchesYear && matchesCourt && matchesTown;
+      return (
+        matchesQ &&
+        matchesReportNumber &&
+        matchesParties &&
+        matchesCitation &&
+        matchesYear &&
+        matchesCourt &&
+        matchesTown
+      );
     });
 
-    // Sorting
     const getYear = (r) => extractReportMeta(r).year ?? -1;
     const getReportNo = (r) => extractReportMeta(r).reportNumber || r.title || "";
     const getParties = (r) => extractReportMeta(r).parties || r.title || "";
@@ -303,16 +369,32 @@ export default function LawReports() {
     else if (sortBy === "date_desc") items.sort((a, b) => getDate(b) - getDate(a));
 
     return items;
-  }, [mergedReports, q, year, courtType, town, sortBy]);
+  }, [
+    mode,
+    mergedReports,
+    debouncedQ,
+    reportNumber,
+    parties,
+    citation,
+    year,
+    courtType,
+    townOrPostCode,
+    sortBy,
+  ]);
 
-  // Fetch access for visible premium docs (institution/public)
+  // Single "visible" list regardless of mode
+  const visible = mode === "client" ? visibleClient : reports;
+
+  /**
+   * Access checks for visible premium docs (unchanged)
+   */
   useEffect(() => {
     let cancelled = false;
 
     async function fetchAccessForVisiblePremiumReports() {
       if (!isInst && !isPublic) return;
 
-      const premiumIds = visible.filter((d) => d.isPremium).map((d) => d.id);
+      const premiumIds = (visible || []).filter((d) => d.isPremium).map((d) => d.id);
       const missing = premiumIds.filter((id) => accessMap[id] == null);
       if (missing.length === 0) return;
 
@@ -357,12 +439,14 @@ export default function LawReports() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, isInst, isPublic]);
 
-  // Fetch availability for visible docs
+  /**
+   * Availability checks for visible docs (unchanged)
+   */
   useEffect(() => {
     let cancelled = false;
 
     async function fetchAvailabilityForVisibleReports() {
-      const visibleIds = visible.map((d) => d.id);
+      const visibleIds = (visible || []).map((d) => d.id);
       const missing = visibleIds.filter((id) => availabilityMap[id] == null);
       if (missing.length === 0) return;
 
@@ -388,7 +472,7 @@ export default function LawReports() {
           results.forEach((r, idx) => {
             const docId = batch[idx];
             if (r.status === "fulfilled") next[docId] = !!r.value?.data?.hasContent;
-            else next[docId] = true; // fallback permissive
+            else next[docId] = true;
           });
           return next;
         });
@@ -408,14 +492,11 @@ export default function LawReports() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
-  function resetFilters() {
-    setQ("");
-    setYear("");
-    setCourtType("");
-    setTown("");
-    setSortBy("year_desc");
-    showToast("Filters cleared");
-  }
+  const totalPages = useMemo(() => {
+    if (mode === "server") return Math.max(1, Math.ceil((total || 0) / pageSize));
+    // client mode: total == merged list length; visible is filtered length; no paging needed
+    return 1;
+  }, [mode, total, pageSize]);
 
   return (
     <div className="lr-wrap">
@@ -425,8 +506,8 @@ export default function LawReports() {
         <div className="lr-title">
           <h1>Law Reports</h1>
           <p>
-            Find case law faster with structured filters and a dedicated Law Reports library.
-            Reports are intentionally separated from the general catalog and your library.
+            Search by report number, parties, citation, year, court type, and town/post code.
+            {mode === "server" ? " Fast search is enabled." : " Running in fallback mode."}
           </p>
         </div>
 
@@ -455,31 +536,95 @@ export default function LawReports() {
             <h3>Filter & Search</h3>
 
             <div className="lr-field">
-              <div className="lr-label">Search</div>
+              <div className="lr-label">Quick search (all fields)</div>
               <input
                 className="lr-input"
                 value={q}
-                onChange={(e) => setQ(e.target.value)}
+                onChange={(e) => {
+                  setQ(e.target.value);
+                  if (mode === "server") setPage(1);
+                }}
                 placeholder="Report number, parties, citation, year, court, town/post code…"
               />
             </div>
 
+            <div className="lr-field">
+              <button
+                className="lr-card-btn"
+                onClick={() => setShowAdvanced((v) => !v)}
+                style={{ width: "100%" }}
+              >
+                {showAdvanced ? "Hide" : "Show"} advanced fields
+              </button>
+            </div>
+
+            {showAdvanced && (
+              <>
+                <div className="lr-field">
+                  <div className="lr-label">Report Number (exact field)</div>
+                  <input
+                    className="lr-input"
+                    value={reportNumber}
+                    onChange={(e) => {
+                      setReportNumber(e.target.value);
+                      if (mode === "server") setPage(1);
+                    }}
+                    placeholder="e.g. CAR353…"
+                  />
+                </div>
+
+                <div className="lr-field">
+                  <div className="lr-label">Parties (exact field)</div>
+                  <input
+                    className="lr-input"
+                    value={parties}
+                    onChange={(e) => {
+                      setParties(e.target.value);
+                      if (mode === "server") setPage(1);
+                    }}
+                    placeholder="e.g. Republic v …"
+                  />
+                </div>
+
+                <div className="lr-field">
+                  <div className="lr-label">Citation (exact field)</div>
+                  <input
+                    className="lr-input"
+                    value={citation}
+                    onChange={(e) => {
+                      setCitation(e.target.value);
+                      if (mode === "server") setPage(1);
+                    }}
+                    placeholder="e.g. [2020] …"
+                  />
+                </div>
+              </>
+            )}
+
             <div className="lr-row">
               <div className="lr-field">
                 <div className="lr-label">Year</div>
-                <select className="lr-select" value={year} onChange={(e) => setYear(e.target.value)}>
-                  <option value="">All</option>
-                  {filterOptions.yearsArr.map((y) => (
-                    <option key={y} value={String(y)}>
-                      {y}
-                    </option>
-                  ))}
-                </select>
+                <input
+                  className="lr-input"
+                  value={year}
+                  onChange={(e) => {
+                    setYear(e.target.value.replace(/[^\d]/g, "").slice(0, 4));
+                    if (mode === "server") setPage(1);
+                  }}
+                  placeholder="e.g. 2021"
+                />
               </div>
 
               <div className="lr-field">
                 <div className="lr-label">Sort</div>
-                <select className="lr-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+                <select
+                  className="lr-select"
+                  value={sortBy}
+                  onChange={(e) => {
+                    setSortBy(e.target.value);
+                    if (mode === "server") setPage(1);
+                  }}
+                >
                   <option value="year_desc">Year (new → old)</option>
                   <option value="year_asc">Year (old → new)</option>
                   <option value="date_desc">Judgment date (new → old)</option>
@@ -491,26 +636,28 @@ export default function LawReports() {
 
             <div className="lr-field">
               <div className="lr-label">Court Type</div>
-              <select className="lr-select" value={courtType} onChange={(e) => setCourtType(e.target.value)}>
-                <option value="">All</option>
-                {filterOptions.courtsArr.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+              <input
+                className="lr-input"
+                value={courtType}
+                onChange={(e) => {
+                  setCourtType(e.target.value);
+                  if (mode === "server") setPage(1);
+                }}
+                placeholder="e.g. Court of Appeal"
+              />
             </div>
 
             <div className="lr-field">
               <div className="lr-label">Town / Post Code</div>
-              <select className="lr-select" value={town} onChange={(e) => setTown(e.target.value)}>
-                <option value="">All</option>
-                {filterOptions.townsArr.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
+              <input
+                className="lr-input"
+                value={townOrPostCode}
+                onChange={(e) => {
+                  setTownOrPostCode(e.target.value);
+                  if (mode === "server") setPage(1);
+                }}
+                placeholder="e.g. Nairobi / 00100"
+              />
             </div>
 
             <div className="lr-panel-actions">
@@ -519,7 +666,7 @@ export default function LawReports() {
               </button>
               <button
                 className="lr-btn"
-                onClick={() => showToast("Tip: use parties + year for fastest narrowing")}
+                onClick={() => showToast("Tip: use Report Number or Parties + Year")}
               >
                 Tip
               </button>
@@ -530,11 +677,38 @@ export default function LawReports() {
           <section className="lr-results">
             <div className="lr-results-top">
               <div className="lr-count">
-                Showing <strong>{visible.length}</strong> report{visible.length === 1 ? "" : "s"}
-                {detailsLoadingIds.size > 0 ? (
-                  <span style={{ marginLeft: 8 }}>• Enriching metadata…</span>
-                ) : null}
+                {mode === "server" ? (
+                  <>
+                    Showing <strong>{reports.length}</strong> of{" "}
+                    <strong>{total}</strong> report{total === 1 ? "" : "s"} • Page{" "}
+                    <strong>{page}</strong>/{totalPages}
+                  </>
+                ) : (
+                  <>
+                    Showing <strong>{visible.length}</strong> report{visible.length === 1 ? "" : "s"}
+                    {detailsLoadingIds.size > 0 ? <span style={{ marginLeft: 8 }}>• Enriching metadata…</span> : null}
+                  </>
+                )}
               </div>
+
+              {mode === "server" && (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    className="lr-card-btn"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    ← Prev
+                  </button>
+                  <button
+                    className="lr-card-btn"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    Next →
+                  </button>
+                </div>
+              )}
             </div>
 
             {visible.length === 0 ? (
@@ -554,9 +728,7 @@ export default function LawReports() {
                   const hasContent = availabilityMap[r.id] == null ? true : !!availabilityMap[r.id];
                   const availabilityLoading = availabilityLoadingIds.has(r.id);
 
-                  // Same semantics as Explore: premium can be "Included" for institution/public with full access
                   const showIncluded = r.isPremium && (isInst || isPublic) && !accessLoading && hasFullAccess;
-
                   const showComingSoon = !hasContent && !availabilityLoading;
 
                   const canReadNow = hasContent && (!r.isPremium || hasFullAccess);
@@ -625,14 +797,11 @@ export default function LawReports() {
                                 return;
                               }
 
-                              // Access rules remain the same:
-                              // If premium without access, push to DocumentDetails (existing paywall/subscription UX)
                               if (r.isPremium && !hasFullAccess) {
                                 navigate(`/dashboard/documents/${r.id}`);
                                 return;
                               }
 
-                              // Otherwise open existing reader flow
                               navigate(`/dashboard/documents/${r.id}/read`);
                             }}
                           >
@@ -643,6 +812,29 @@ export default function LawReports() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Bottom pagination */}
+            {mode === "server" && totalPages > 1 && (
+              <div style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 14 }}>
+                <button
+                  className="lr-card-btn"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  ← Prev
+                </button>
+                <div style={{ alignSelf: "center", color: "#6b7280", fontSize: 13 }}>
+                  Page <strong>{page}</strong> of <strong>{totalPages}</strong>
+                </div>
+                <button
+                  className="lr-card-btn"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  Next →
+                </button>
               </div>
             )}
           </section>
