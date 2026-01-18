@@ -1,5 +1,5 @@
 // src/pages/dashboard/admin/AdminLLRImport.jsx
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Papa from "papaparse";
 import api from "../../../api/client";
@@ -68,16 +68,12 @@ function parseDateToIsoOrNull(v) {
     const dd = Number(ddmmyy[1]);
     const mm = Number(ddmmyy[2]);
     const yy = Number(ddmmyy[3]);
-    const yyyy = 2000 + yy; // ✅ 00-99 => 2000-2099
+    const yyyy = 2000 + yy; // 00-99 => 2000-2099
 
     const dt = new Date(Date.UTC(yyyy, mm - 1, dd, 0, 0, 0, 0));
     if (!Number.isFinite(dt.getTime())) return null;
 
-    if (
-      dt.getUTCFullYear() !== yyyy ||
-      dt.getUTCMonth() + 1 !== mm ||
-      dt.getUTCDate() !== dd
-    )
+    if (dt.getUTCFullYear() !== yyyy || dt.getUTCMonth() + 1 !== mm || dt.getUTCDate() !== dd)
       return null;
 
     return dt.toISOString();
@@ -93,11 +89,7 @@ function parseDateToIsoOrNull(v) {
     const dt = new Date(Date.UTC(yyyy, mm - 1, dd, 0, 0, 0, 0));
     if (!Number.isFinite(dt.getTime())) return null;
 
-    if (
-      dt.getUTCFullYear() !== yyyy ||
-      dt.getUTCMonth() + 1 !== mm ||
-      dt.getUTCDate() !== dd
-    )
+    if (dt.getUTCFullYear() !== yyyy || dt.getUTCMonth() + 1 !== mm || dt.getUTCDate() !== dd)
       return null;
 
     return dt.toISOString();
@@ -113,11 +105,7 @@ function parseDateToIsoOrNull(v) {
     const dt = new Date(Date.UTC(yyyy, mm - 1, dd, 0, 0, 0, 0));
     if (!Number.isFinite(dt.getTime())) return null;
 
-    if (
-      dt.getUTCFullYear() !== yyyy ||
-      dt.getUTCMonth() + 1 !== mm ||
-      dt.getUTCDate() !== dd
-    )
+    if (dt.getUTCFullYear() !== yyyy || dt.getUTCMonth() + 1 !== mm || dt.getUTCDate() !== dd)
       return null;
 
     return dt.toISOString();
@@ -192,9 +180,7 @@ function enumToInt(value, options, fallback = 0) {
   if (hit) return hit.value;
 
   const compact = s.toLowerCase().replace(/[^a-z]/g, "");
-  const hit2 = options.find(
-    (o) => o.label.toLowerCase().replace(/[^a-z]/g, "") === compact
-  );
+  const hit2 = options.find((o) => o.label.toLowerCase().replace(/[^a-z]/g, "") === compact);
   return hit2 ? hit2.value : fallback;
 }
 function labelFrom(options, value) {
@@ -204,12 +190,14 @@ function labelFrom(options, value) {
 
 /* =========================
    CSV Template
+   ✅ Updated for PostCode-driven Town+Country
 ========================= */
 const TEMPLATE_HEADERS = [
-  "CountryId",
+  "PostCode", // ✅ NEW (preferred)
+  "Town", // still allowed (user can override)
+  "CountryId", // optional if PostCode exists (Town table will supply)
   "Service",
   "CourtType",
-  "Town",
   "ReportNumber",
   "Year",
   "CaseNumber",
@@ -224,12 +212,12 @@ const TEMPLATE_HEADERS = [
 ];
 
 function buildTemplateCsv() {
-  // ✅ DecisionDate now DD-MM-YY
   const example = {
+    PostCode: "50100",
+    Town: "Kakamega",
     CountryId: 1,
     Service: 1,
     CourtType: 3,
-    Town: "Kakamega",
     ReportNumber: "HOK045",
     Year: 2013,
     CaseNumber: "045/2013",
@@ -244,9 +232,7 @@ function buildTemplateCsv() {
   };
 
   const rows = [TEMPLATE_HEADERS, TEMPLATE_HEADERS.map((h) => example[h] ?? "")];
-  return rows
-    .map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","))
-    .join("\n");
+  return rows.map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(",")).join("\n");
 }
 
 function downloadTextFile(filename, text) {
@@ -275,123 +261,45 @@ function Icon({ name }) {
     case "back":
       return (
         <svg {...common}>
-          <path
-            d="M15 18l-6-6 6-6"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+          <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     case "refresh":
       return (
         <svg {...common}>
-          <path
-            d="M21 12a9 9 0 1 1-2.64-6.36"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-          <path
-            d="M21 3v6h-6"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+          <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M21 3v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     case "download":
       return (
         <svg {...common}>
-          <path
-            d="M12 3v10"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-          <path
-            d="M7 11l5 5 5-5"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M4 21h16"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
+          <path d="M12 3v10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M7 11l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M4 21h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       );
     case "upload":
       return (
         <svg {...common}>
-          <path
-            d="M12 21V11"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-          <path
-            d="M7 15l5-5 5 5"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M20 21H4"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-          <path
-            d="M20 11a4 4 0 0 0-4-4h-1"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
+          <path d="M12 21V11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M7 15l5-5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M20 21H4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M20 11a4 4 0 0 0-4-4h-1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       );
     case "import":
       return (
         <svg {...common}>
-          <path
-            d="M12 3v10"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-          <path
-            d="M7 8l5 5 5-5"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M4 21h16"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
+          <path d="M12 3v10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M7 8l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M4 21h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       );
     case "stop":
       return (
         <svg {...common}>
-          <rect
-            x="6"
-            y="6"
-            width="12"
-            height="12"
-            rx="2"
-            stroke="currentColor"
-            strokeWidth="2"
-          />
+          <rect x="6" y="6" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="2" />
         </svg>
       );
     default:
@@ -416,6 +324,40 @@ function IconButton({ title, onClick, disabled, tone = "neutral", children, badg
 }
 
 /* =========================
+   Town lookup (PostCode -> Town + CountryId)
+   - Safe: UI still works even if no endpoint exists
+========================= */
+async function tryGetFirst(paths, config = {}) {
+  for (const p of paths) {
+    try {
+      const res = await api.get(p, config);
+      return { ok: true, data: res.data, path: p };
+    } catch {
+      // keep trying
+    }
+  }
+  return { ok: false, data: null, path: "" };
+}
+
+function pickTownFields(t) {
+  const postCode = normalizeText(
+    t?.postCode ??
+      t?.PostCode ??
+      t?.postcode ??
+      t?.Postcode ??
+      t?.postalCode ??
+      t?.PostalCode ??
+      t?.code ??
+      t?.Code ??
+      ""
+  );
+  const name = normalizeText(t?.name ?? t?.Name ?? t?.town ?? t?.Town ?? "");
+  const countryId = toInt(t?.countryId ?? t?.CountryId ?? 0, 0) || null;
+  if (!postCode || !name) return null;
+  return { postCode, name, countryId };
+}
+
+/* =========================
    Page
 ========================= */
 export default function AdminLLRImport() {
@@ -433,6 +375,10 @@ export default function AdminLLRImport() {
   const stopRef = useRef(false);
   const fileInputRef = useRef(null);
 
+  // ✅ local Town index (postcode -> {name,countryId})
+  const [townsByPostCode, setTownsByPostCode] = useState(new Map());
+  const [townIndexLoaded, setTownIndexLoaded] = useState(false);
+
   const counts = useMemo(() => {
     const total = preview.length;
     const valid = preview.filter((x) => x.valid).length;
@@ -440,7 +386,6 @@ export default function AdminLLRImport() {
     return { total, valid, invalid };
   }, [preview]);
 
-  // ✅ tooltip text
   const importHint = useMemo(() => {
     if (importing) return "Importing…";
     if (counts.valid === 0) return "No valid rows to import";
@@ -463,15 +408,63 @@ export default function AdminLLRImport() {
     navigate("/dashboard/admin/llr-services");
   }
 
+  // ✅ best-effort towns preload (so we can validate and auto-fill CountryId during import preview)
+  useEffect(() => {
+    (async () => {
+      const res = await tryGetFirst(
+        ["/towns", "/town", "/locations/towns", "/admin/towns"],
+        { params: { take: 50000 } }
+      );
+
+      if (res.ok) {
+        const list = Array.isArray(res.data) ? res.data : [];
+        const m = new Map();
+        for (const t of list) {
+          const parsed = pickTownFields(t);
+          if (!parsed) continue;
+          if (!m.has(parsed.postCode)) m.set(parsed.postCode, { name: parsed.name, countryId: parsed.countryId });
+        }
+        setTownsByPostCode(m);
+      }
+      setTownIndexLoaded(true);
+    })();
+  }, []);
+
+  function resolveTownFromPostCode(pcRaw) {
+    const pc = normalizeText(pcRaw);
+    if (!pc) return null;
+    const hit = townsByPostCode.get(pc);
+    if (!hit) return null;
+    return { postCode: pc, name: hit.name, countryId: hit.countryId ?? null };
+  }
+
   function normalizeCsvRows(rows) {
     return rows.map((r, idx) => {
       const map = {};
       for (const [k, v] of Object.entries(r)) map[csvHeaderKey(k)] = v;
 
-      const countryId = toInt(map["countryid"], 0);
+      // ✅ Accept either PostCode (preferred) or legacy Town+CountryId
+      const postCode =
+        normalizeText(map["postcode"] ?? map["postCode"] ?? map["postalcode"] ?? map["code"]) || null;
+
+      const townFromCsv = normalizeText(map["town"]) || null;
+
+      // If postcode exists, try resolve Town+Country from index (best-effort)
+      const resolved = postCode ? resolveTownFromPostCode(postCode) : null;
+
+      // ✅ countryId:
+      // - prefer resolved countryId from town table if postcode exists
+      // - else use CSV CountryId
+      const countryIdFromCsv = toInt(map["countryid"], 0);
+      const countryId = toInt(resolved?.countryId ?? countryIdFromCsv, 0);
+
+      // ✅ town:
+      // - default to resolved town name if postcode exists
+      // - BUT allow CSV Town to override with a more specific name
+      const town = normalizeText(townFromCsv || resolved?.name || "") || null;
+
       const service = enumToInt(map["service"], SERVICE_OPTIONS, 0) || toInt(map["service"], 0);
-      const courtType =
-        enumToInt(map["courttype"], COURT_TYPE_OPTIONS, 0) || toInt(map["courttype"], 0);
+      const courtType = enumToInt(map["courttype"], COURT_TYPE_OPTIONS, 0) || toInt(map["courttype"], 0);
 
       const reportNumber = normalizeText(map["reportnumber"]);
       const year = toInt(map["year"], 0);
@@ -479,13 +472,10 @@ export default function AdminLLRImport() {
       const caseNumber = normalizeText(map["casenumber"]) || null;
       const citation = normalizeText(map["citation"]) || null;
 
-      const decisionType =
-        enumToInt(map["decisiontype"], DECISION_OPTIONS, 0) || toInt(map["decisiontype"], 0);
-      const caseType =
-        enumToInt(map["casetype"], CASETYPE_OPTIONS, 0) || toInt(map["casetype"], 0);
+      const decisionType = enumToInt(map["decisiontype"], DECISION_OPTIONS, 0) || toInt(map["decisiontype"], 0);
+      const caseType = enumToInt(map["casetype"], CASETYPE_OPTIONS, 0) || toInt(map["casetype"], 0);
 
       const court = normalizeText(map["court"]) || null;
-      const town = normalizeText(map["town"]) || null;
 
       const parties = normalizeText(map["parties"]) || null;
       const judges = normalizeText(map["judges"]) || null;
@@ -500,7 +490,13 @@ export default function AdminLLRImport() {
         countryId,
         service,
         courtType,
+
+        // ✅ new
+        postCode: postCode || null,
+
+        // free-text town (can be more specific)
         town,
+
         reportNumber,
         year,
         caseNumber,
@@ -515,9 +511,22 @@ export default function AdminLLRImport() {
       };
 
       const issues = [];
-      if (!countryId) issues.push("CountryId is required.");
+
+      // ✅ Validation rules:
+      // - If PostCode exists, CountryId can be derived (but only if lookup succeeds OR csv provided).
+      // - If no PostCode, CountryId is required as before.
+      if (!postCode && !countryId) issues.push("CountryId is required when PostCode is empty.");
+      if (postCode && !countryId) {
+        issues.push(
+          townIndexLoaded
+            ? "PostCode not found in Town table. Either fix PostCode or provide CountryId."
+            : "Town index still loading. If PostCode cannot resolve, provide CountryId."
+        );
+      }
+
       if (!service) issues.push("Service is required.");
       if (!courtType) issues.push("CourtType is required.");
+      if (!town) issues.push("Town is required (directly or via PostCode).");
       if (!reportNumber) issues.push("ReportNumber is required.");
       if (!year || year < 1900 || year > 2100) issues.push("Year must be between 1900 and 2100.");
       if (!decisionType) issues.push("DecisionType is required (e.g. 1=Judgment).");
@@ -528,7 +537,23 @@ export default function AdminLLRImport() {
         issues.push("DecisionDate invalid. Use DD-MM-YY (e.g. 18-01-26).");
       }
 
-      return { rowNumber: idx + 2, payload, issues, valid: issues.length === 0 };
+      // Optional hint if postcode resolves but CSV overrides town
+      const hints = [];
+      if (postCode && resolved?.name) {
+        if (townFromCsv && townFromCsv.toLowerCase() !== resolved.name.toLowerCase()) {
+          hints.push(`Town overridden: ${resolved.name} → ${townFromCsv}`);
+        } else {
+          hints.push(`Town from PostCode: ${resolved.name}`);
+        }
+      }
+
+      return {
+        rowNumber: idx + 2,
+        payload,
+        issues,
+        hints,
+        valid: issues.length === 0,
+      };
     });
   }
 
@@ -557,8 +582,7 @@ export default function AdminLLRImport() {
       setPreview(normalized);
 
       if (normalized.length === 0) setInfo("No rows found in the file.");
-      else if (normalized.every((x) => x.valid))
-        setInfo(`Loaded ${normalized.length} row(s). Ready to import.`);
+      else if (normalized.every((x) => x.valid)) setInfo(`Loaded ${normalized.length} row(s). Ready to import.`);
       else setInfo(`Loaded ${normalized.length} row(s). Fix invalid rows then re-upload.`);
     } catch (e) {
       setError(String(e?.message || e));
@@ -578,7 +602,6 @@ export default function AdminLLRImport() {
       return;
     }
 
-    // ✅ confirm
     const okConfirm = window.confirm(
       `Import ${validRows.length} valid row${validRows.length === 1 ? "" : "s"} now?`
     );
@@ -614,7 +637,6 @@ export default function AdminLLRImport() {
       return;
     }
 
-    // ✅ Reset if truly clean
     if (failed === 0 && dup === 0) {
       resetAll({
         keepInfo: `✅ Import successful. ${ok} case(s) added. Ready for the next file.`,
@@ -633,25 +655,36 @@ export default function AdminLLRImport() {
   return (
     <div className="admin-page admin-page-wide">
       <style>{`
-        /* ✅ Match signup page feel: cleaner typography & soft cards */
+        /* ✅ Modern, airy UI (clear font, spacing, soft shadows) */
         .la-page {
-          max-width: 1180px;
+          max-width: 1240px;
           margin: 0 auto;
+          padding: 6px 0 0;
+          font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+        }
+
+        .la-hero {
+          display:flex;
+          align-items:flex-start;
+          justify-content:space-between;
+          gap:16px;
+          margin-bottom: 14px;
         }
 
         .la-title {
-          font-size: 26px;
-          font-weight: 950;
-          letter-spacing: -0.02em;
+          font-size: 28px;
+          font-weight: 980;
+          letter-spacing: -0.03em;
           margin: 0;
+          color:#0f172a;
         }
 
         .la-subtitle {
           margin: 8px 0 0;
           font-size: 13px;
           color: #64748b;
-          font-weight: 700;
-          line-height: 1.5;
+          font-weight: 750;
+          line-height: 1.6;
         }
 
         .la-toolbar {
@@ -666,14 +699,15 @@ export default function AdminLLRImport() {
           display:flex;
           gap:10px;
           align-items:center;
+          flex-wrap:wrap;
         }
 
         .la-card {
           background:#fff;
-          border:1px solid #e5e7eb;
-          border-radius:18px;
-          padding:16px;
-          box-shadow: 0 10px 28px rgba(0,0,0,.06);
+          border:1px solid rgba(226,232,240,.95);
+          border-radius:20px;
+          padding:18px;
+          box-shadow: 0 10px 32px rgba(2,6,23,.06);
         }
 
         .la-cardHeader {
@@ -683,66 +717,56 @@ export default function AdminLLRImport() {
           gap:14px;
         }
 
-        .la-chipBar {
-          display:flex;
-          gap:10px;
-          flex-wrap:wrap;
-          margin-top: 10px;
-        }
-
-        .la-chip {
-          display:inline-flex;
-          align-items:center;
-          gap:8px;
-          padding:9px 12px;
-          border-radius:14px;
-          border:1px solid #e5e7eb;
-          background:#f8fafc;
-          color:#0f172a;
-          font-weight:800;
-          font-size:12px;
-          line-height: 1.15;
-        }
-
-        .la-chip strong { font-weight: 950; }
-
-        .la-chip.good { background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
-        .la-chip.warn { background:#fff7ed; border-color:#fed7aa; color:#9a3412; }
-        .la-chip.bad { background:#fef2f2; border-color:#fecaca; color:#991b1b; }
-
-        .la-row { display:flex; gap:12px; align-items:stretch; flex-wrap:wrap; }
-        .la-col { flex:1; min-width: 320px; }
-
-        .la-stepTitle {
+        .la-cardTitle {
           font-weight: 950;
           font-size: 14px;
           margin: 0;
+          color:#0f172a;
         }
 
-        .la-stepSub {
+        .la-cardSub {
           margin-top: 6px;
           color:#64748b;
           font-size: 12px;
           font-weight: 750;
-          line-height: 1.45;
+          line-height: 1.5;
         }
 
-        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+        .la-grid {
+          display:grid;
+          grid-template-columns: repeat(12, 1fr);
+          gap:12px;
+          margin-bottom: 14px;
+        }
+        .span6 { grid-column: span 6; }
+        .span12 { grid-column: span 12; }
 
-        /* ✅ More visible icon buttons */
+        @media (max-width: 980px) {
+          .span6 { grid-column: span 12; }
+        }
+
+        .mono {
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+
+        /* ✅ Icon buttons */
         .la-icon-btn {
           position: relative;
           display:inline-flex; align-items:center; justify-content:center;
           width: 46px; height: 46px;
           border-radius: 14px;
-          border: 1px solid #e5e7eb;
+          border: 1px solid rgba(226,232,240,.95);
           background: #fff;
           cursor: pointer;
-          color: #111827;
-          box-shadow: 0 10px 22px rgba(0,0,0,.08);
+          color: #0f172a;
+          box-shadow: 0 10px 22px rgba(2,6,23,.08);
           transition: transform .08s ease, box-shadow .12s ease, background .12s ease, border-color .12s ease;
         }
-        .la-icon-btn:hover { transform: translateY(-1px); box-shadow: 0 16px 28px rgba(0,0,0,.12); background:#fafafa; }
+        .la-icon-btn:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 18px 30px rgba(2,6,23,.14);
+          background:#fafafa;
+        }
         .la-icon-btn:active { transform: translateY(0px) scale(.98); }
         .la-icon-btn:disabled { opacity: .55; cursor: not-allowed; box-shadow:none; }
 
@@ -779,39 +803,84 @@ export default function AdminLLRImport() {
           padding:2px 7px;
           border-radius:999px;
           line-height: 1.4;
-          box-shadow: 0 10px 20px rgba(0,0,0,.14);
+          box-shadow: 0 10px 20px rgba(2,6,23,.18);
         }
 
         .uploadLabel { display:inline-flex; }
 
-        /* Table */
+        /* ✅ Chips */
+        .la-chipBar {
+          display:flex;
+          gap:10px;
+          flex-wrap:wrap;
+          margin-top: 10px;
+        }
+
+        .la-chip {
+          display:inline-flex;
+          align-items:center;
+          gap:8px;
+          padding:9px 12px;
+          border-radius:14px;
+          border:1px solid rgba(226,232,240,.95);
+          background:#f8fafc;
+          color:#0f172a;
+          font-weight:850;
+          font-size:12px;
+          line-height: 1.15;
+        }
+
+        .la-chip strong { font-weight: 950; }
+        .la-chip.good { background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
+        .la-chip.warn { background:#fff7ed; border-color:#fed7aa; color:#9a3412; }
+        .la-chip.bad { background:#fef2f2; border-color:#fecaca; color:#991b1b; }
+
+        /* ✅ Table */
         .tableWrap {
           margin-top: 12px;
-          max-height: 60vh;
+          max-height: 62vh;
           overflow:auto;
-          border-radius: 14px;
-          border:1px solid #e5e7eb;
+          border-radius: 16px;
+          border:1px solid rgba(226,232,240,.95);
+          background:#fff;
         }
         table { width:100%; border-collapse: collapse; font-size: 12.5px; }
         thead th {
           position: sticky; top:0; background:#f8fafc; z-index:1;
-          text-align:left; padding:10px; border-bottom:1px solid #e5e7eb;
-          font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color:#64748b;
+          text-align:left; padding:12px; border-bottom:1px solid rgba(226,232,240,.95);
+          font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color:#64748b;
         }
-        tbody td { padding:10px; border-bottom:1px solid #f1f5f9; vertical-align: top; }
+        tbody td {
+          padding:12px;
+          border-bottom:1px solid #f1f5f9;
+          vertical-align: top;
+          color:#0f172a;
+        }
         tr.badRow td { background: #fff5f5; }
         .issues { color:#991b1b; font-weight:900; }
+        .hints { color:#0f172a; font-weight:800; opacity:.7; }
+
+        .note {
+          margin-top: 10px;
+          padding: 10px 12px;
+          border-radius: 14px;
+          border: 1px solid rgba(226,232,240,.95);
+          background: #f8fafc;
+          color: #0f172a;
+          font-size: 12px;
+          font-weight: 800;
+          line-height: 1.4;
+        }
+        .note b { font-weight: 950; }
       `}</style>
 
       <div className="la-page">
-        <div className="la-toolbar">
+        <div className="la-hero">
           <div>
             <h1 className="la-title">Admin · LLR Services · Import</h1>
             <p className="la-subtitle">
               Upload a CSV, preview & validate, then import using <b>POST /api/law-reports</b>.{" "}
-              <span>
-                Date format: <b>DD-MM-YY</b> (e.g. <span className="mono">18-01-26</span>).
-              </span>
+              Date format: <b>DD-MM-YY</b> (e.g. <span className="mono">18-01-26</span>).
             </p>
           </div>
 
@@ -860,7 +929,6 @@ export default function AdminLLRImport() {
 
             {preview.length > 0 && (
               <>
-                {/* ✅ Tooltip shows imports X valid rows */}
                 <button
                   type="button"
                   className="la-icon-btn import"
@@ -885,16 +953,18 @@ export default function AdminLLRImport() {
 
         {(error || info) && <div className={`admin-alert ${error ? "error" : "ok"}`}>{error || info}</div>}
 
-        {/* ✅ Instruction layout like signup: simple cards + short lines + chips */}
-        <div className="la-row" style={{ marginBottom: 14 }}>
-          <div className="la-card la-col">
+        {/* ✅ Modern card layout */}
+        <div className="la-grid">
+          <div className="la-card span6">
             <div className="la-cardHeader">
               <div>
-                <div className="la-stepTitle">Step 1 — Template</div>
-                <div className="la-stepSub">
-                  1) Download the template. 2) Fill it. 3) Upload it.
-                  <br />
-                  Keep enum columns numeric for best results. Date: <b>DD-MM-YY</b>.
+                <div className="la-cardTitle">Step 1 — Template</div>
+                <div className="la-cardSub">
+                  Download the template, fill it, then upload it. Use <b>PostCode</b> to auto-link Town + Country.
+                  <div className="note" style={{ marginTop: 10 }}>
+                    <b>Tip:</b> If you provide <b>PostCode</b>, you may leave <b>CountryId</b> empty (as long as the
+                    postcode exists in the Town table). <b>Town</b> can still be provided to override with a more specific name.
+                  </div>
                 </div>
               </div>
             </div>
@@ -912,14 +982,12 @@ export default function AdminLLRImport() {
             </div>
           </div>
 
-          <div className="la-card la-col">
+          <div className="la-card span6">
             <div className="la-cardHeader">
               <div>
-                <div className="la-stepTitle">Step 2 — Upload & Preview</div>
-                <div className="la-stepSub">
-                  Upload a CSV to see a preview. Invalid rows are highlighted with the exact issue.
-                  <br />
-                  Fix the CSV and upload again.
+                <div className="la-cardTitle">Step 2 — Upload & Preview</div>
+                <div className="la-cardSub">
+                  Upload a CSV to preview. Invalid rows show the exact issue. Fix the CSV and upload again.
                 </div>
               </div>
             </div>
@@ -934,100 +1002,107 @@ export default function AdminLLRImport() {
               <span className={`la-chip ${counts.invalid ? "bad" : ""}`}>
                 <strong>{counts.invalid}</strong> invalid
               </span>
+              <span className={`la-chip ${townIndexLoaded ? "" : "warn"}`}>
+                <strong>{townIndexLoaded ? "Town index ready" : "Town index loading…"}</strong>
+              </span>
             </div>
 
             {fileName && (
-              <div className="la-stepSub" style={{ marginTop: 10 }}>
+              <div className="la-cardSub" style={{ marginTop: 10 }}>
                 File: <b>{fileName}</b>
               </div>
             )}
           </div>
-        </div>
 
-        <div className="la-card">
-          <div className="la-cardHeader">
-            <div>
-              <div className="la-stepTitle">Step 3 — Import</div>
-              <div className="la-stepSub">
-                Imports only valid rows. Duplicates return <b>409</b> and are counted as duplicates.
-                <br />
-                If import finishes with <b>no duplicates and no failures</b>, the page resets automatically.
-              </div>
-            </div>
-
-            <div className="la-chipBar" style={{ marginTop: 0 }}>
-              <span className="la-chip">
-                <strong>{progress.done}</strong> / {progress.total} done
-              </span>
-              <span className="la-chip good">
-                <strong>{progress.ok}</strong> OK
-              </span>
-              <span className="la-chip warn">
-                <strong>{progress.dup}</strong> Duplicates
-              </span>
-              <span className="la-chip bad">
-                <strong>{progress.failed}</strong> Failed
-              </span>
-            </div>
-          </div>
-
-          {preview.length === 0 ? (
-            <div className="la-stepSub" style={{ marginTop: 12 }}>
-              Upload a CSV to see the preview here.
-            </div>
-          ) : (
-            <>
-              <div className="tableWrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th className="mono">Row</th>
-                      <th>Report</th>
-                      <th>Year</th>
-                      <th className="mono">Country</th>
-                      <th>Service</th>
-                      <th>CourtType</th>
-                      <th>Town</th>
-                      <th>Decision</th>
-                      <th>CaseType</th>
-                      <th className="mono">CaseNo</th>
-                      <th className="mono">Citation</th>
-                      <th>DecisionDate</th>
-                      <th>Issues</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview.slice(0, 500).map((p) => {
-                      const pay = p.payload;
-                      return (
-                        <tr key={p.rowNumber} className={!p.valid ? "badRow" : ""}>
-                          <td className="mono">{p.rowNumber}</td>
-                          <td className="mono">{pay.reportNumber || "—"}</td>
-                          <td className="mono">{pay.year || "—"}</td>
-                          <td className="mono">{pay.countryId || "—"}</td>
-                          <td>{labelFrom(SERVICE_OPTIONS, pay.service)}</td>
-                          <td>{labelFrom(COURT_TYPE_OPTIONS, pay.courtType)}</td>
-                          <td>{pay.town || "—"}</td>
-                          <td>{labelFrom(DECISION_OPTIONS, pay.decisionType)}</td>
-                          <td>{labelFrom(CASETYPE_OPTIONS, pay.caseType)}</td>
-                          <td className="mono">{pay.caseNumber || "—"}</td>
-                          <td className="mono">{pay.citation || "—"}</td>
-                          <td className="mono">{pay.decisionDate ? isoToDdMmYy(pay.decisionDate) : "—"}</td>
-                          <td className="issues">{p.issues.join(" ")}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {preview.length > 500 && (
-                <div className="la-stepSub" style={{ marginTop: 8 }}>
-                  Showing first 500 rows. Import uses all valid rows.
+          <div className="la-card span12">
+            <div className="la-cardHeader">
+              <div>
+                <div className="la-cardTitle">Step 3 — Import</div>
+                <div className="la-cardSub">
+                  Imports only valid rows. Duplicates return <b>409</b>. If there are <b>no duplicates</b> and <b>no failures</b>,
+                  the page resets automatically.
                 </div>
-              )}
-            </>
-          )}
+              </div>
+
+              <div className="la-chipBar" style={{ marginTop: 0 }}>
+                <span className="la-chip">
+                  <strong>{progress.done}</strong> / {progress.total} done
+                </span>
+                <span className="la-chip good">
+                  <strong>{progress.ok}</strong> OK
+                </span>
+                <span className="la-chip warn">
+                  <strong>{progress.dup}</strong> Duplicates
+                </span>
+                <span className="la-chip bad">
+                  <strong>{progress.failed}</strong> Failed
+                </span>
+              </div>
+            </div>
+
+            {preview.length === 0 ? (
+              <div className="la-cardSub" style={{ marginTop: 12 }}>
+                Upload a CSV to see the preview here.
+              </div>
+            ) : (
+              <>
+                <div className="tableWrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th className="mono">Row</th>
+                        <th className="mono">PostCode</th>
+                        <th>Town</th>
+                        <th className="mono">Country</th>
+                        <th>Service</th>
+                        <th>CourtType</th>
+                        <th className="mono">Report</th>
+                        <th className="mono">Year</th>
+                        <th>Decision</th>
+                        <th>CaseType</th>
+                        <th className="mono">CaseNo</th>
+                        <th className="mono">Citation</th>
+                        <th>DecisionDate</th>
+                        <th>Issues</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.slice(0, 500).map((p) => {
+                        const pay = p.payload;
+                        return (
+                          <tr key={p.rowNumber} className={!p.valid ? "badRow" : ""}>
+                            <td className="mono">{p.rowNumber}</td>
+                            <td className="mono">{pay.postCode || "—"}</td>
+                            <td>{pay.town || "—"}</td>
+                            <td className="mono">{pay.countryId || "—"}</td>
+                            <td>{labelFrom(SERVICE_OPTIONS, pay.service)}</td>
+                            <td>{labelFrom(COURT_TYPE_OPTIONS, pay.courtType)}</td>
+                            <td className="mono">{pay.reportNumber || "—"}</td>
+                            <td className="mono">{pay.year || "—"}</td>
+                            <td>{labelFrom(DECISION_OPTIONS, pay.decisionType)}</td>
+                            <td>{labelFrom(CASETYPE_OPTIONS, pay.caseType)}</td>
+                            <td className="mono">{pay.caseNumber || "—"}</td>
+                            <td className="mono">{pay.citation || "—"}</td>
+                            <td className="mono">{pay.decisionDate ? isoToDdMmYy(pay.decisionDate) : "—"}</td>
+                            <td>
+                              <div className="issues">{p.issues.join(" ")}</div>
+                              {p.hints?.length ? <div className="hints" style={{ marginTop: 6 }}>{p.hints.join(" • ")}</div> : null}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {preview.length > 500 && (
+                  <div className="la-cardSub" style={{ marginTop: 8 }}>
+                    Showing first 500 rows. Import uses all valid rows.
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
 
         <AdminPageFooter
@@ -1046,7 +1121,8 @@ export default function AdminLLRImport() {
           }
           right={
             <span className="admin-footer-muted">
-              Tip: DecisionDate uses <b>DD-MM-YY</b> (e.g. <span className="mono">18-01-26</span>).
+              Tip: Use <b>PostCode</b> to auto-link Town+Country. DecisionDate uses <b>DD-MM-YY</b> (e.g.{" "}
+              <span className="mono">18-01-26</span>).
             </span>
           }
         />
