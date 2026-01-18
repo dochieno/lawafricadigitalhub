@@ -118,7 +118,6 @@ const CASETYPE_OPTIONS = [
 ];
 
 // Service options (Create/Edit + search)
-// Keep numeric values; if backend returns enum strings, enumToInt will still cope.
 const SERVICE_OPTIONS = [
   { label: "LawAfrica Law Reports (LLR)", value: 1 },
   { label: "Odungas Digest", value: 2 },
@@ -135,7 +134,7 @@ const SERVICE_OPTIONS = [
   { label: "Kenya Industrial Property Institute", value: 13 },
 ];
 
-// ✅ NEW CourtType options (enum-backed)
+// CourtType options (enum-backed)
 const COURT_TYPE_OPTIONS = [
   { label: "Supreme Court", value: 1 },
   { label: "Court of Appeal", value: 2 },
@@ -244,12 +243,7 @@ function Icon({ name }) {
     case "trash":
       return (
         <svg {...common}>
-          <path
-            d="M3 6h18"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
+          <path d="M3 6h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           <path
             d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
             stroke="currentColor"
@@ -297,11 +291,11 @@ const emptyForm = {
   decisionType: 1,
   caseType: 2,
 
-  // ✅ keep legacy court string (optional)
+  // legacy optional
   court: "",
 
-  // ✅ NEW
-  courtType: 3, // default High Court
+  // new
+  courtType: 3,
   town: "",
 
   parties: "",
@@ -406,10 +400,8 @@ export default function AdminLLRServices() {
       const countryId = pick(r, ["countryId", "CountryId"], null);
       const countryName = (countryMap.get(Number(countryId)) || "").toLowerCase();
 
-      // backend may provide courtTypeLabel
       const courtTypeLabel = String(pick(r, ["courtTypeLabel", "CourtTypeLabel"], "")).toLowerCase();
 
-      // keep service in search index (NOT shown in list UI)
       const serviceVal = pick(r, ["service", "Service"], null);
       const serviceLabel =
         (pick(r, ["serviceLabel", "ServiceLabel"], null) ||
@@ -430,7 +422,7 @@ export default function AdminLLRServices() {
       decisionType: 1,
       caseType: 2,
       service: 1,
-      courtType: 3, // High Court
+      courtType: 3,
       year: String(new Date().getUTCFullYear()),
     }));
     setOpen(true);
@@ -452,8 +444,6 @@ export default function AdminLLRServices() {
 
       const decisionVal = enumToInt(pick(d, ["decisionType", "DecisionType"], 1), DECISION_OPTIONS, 1);
       const caseVal = enumToInt(pick(d, ["caseType", "CaseType"], 2), CASETYPE_OPTIONS, 2);
-
-      // courtType could be int or string label; normalize against COURT_TYPE_OPTIONS
       const ctVal = enumToInt(pick(d, ["courtType", "CourtType"], 3), COURT_TYPE_OPTIONS, 3);
 
       setForm({
@@ -487,9 +477,6 @@ export default function AdminLLRServices() {
     return {
       category: 6,
       countryId: toInt(form.countryId, 0),
-
-      // If backend expects enum int, this is fine.
-      // If backend expects enum string, it will still bind if your API uses numeric enums.
       service: toInt(form.service, 1),
 
       citation: normalizeText(form.citation) || null,
@@ -500,10 +487,7 @@ export default function AdminLLRServices() {
       decisionType: toInt(form.decisionType, 1),
       caseType: toInt(form.caseType, 2),
 
-      // ✅ NEW
       courtType: toInt(form.courtType, 3),
-
-      // optional legacy/display
       court: normalizeText(form.court) || null,
 
       town: normalizeText(form.town) || null,
@@ -511,7 +495,6 @@ export default function AdminLLRServices() {
       judges: normalizeText(form.judges) || null,
       decisionDate: isoOrNullFromDateInput(form.decisionDate),
 
-      // required for create currently
       contentText: String(form.contentText ?? ""),
     };
   }
@@ -524,9 +507,7 @@ export default function AdminLLRServices() {
     const year = toInt(form.year, 0);
     if (!year || year < 1900 || year > 2100) return "Year must be between 1900 and 2100.";
 
-    // ✅ if backend made CourtType required, enforce it here too
     if (!toInt(form.courtType, 0)) return "Court Type is required.";
-
     if (!editing?.id && !String(form.contentText ?? "").trim()) return "Content text is required on Create.";
 
     return "";
@@ -599,7 +580,6 @@ export default function AdminLLRServices() {
   }
 
   function courtTownDisplay(row) {
-    // prefer enum label if present
     const courtTypeLabel = normalizeText(pick(row, ["courtTypeLabel", "CourtTypeLabel"], ""));
     const legacyCourt = normalizeText(pick(row, ["court", "Court"], ""));
     const town = normalizeText(pick(row, ["town", "Town"], ""));
@@ -711,16 +691,16 @@ export default function AdminLLRServices() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th style={{ width: "40%" }}>Title</th>
+                <th style={{ width: "46%" }}>Title</th>
                 <th style={{ width: "12%" }}>Country</th>
                 <th style={{ width: "12%" }}>Report No.</th>
                 <th style={{ width: "6%" }} className="num-cell">
                   Year
                 </th>
-                <th style={{ width: "14%" }}>Court</th>
+                {/* ✅ Removed Court column */}
                 <th style={{ width: "10%" }}>Decision</th>
                 <th style={{ width: "10%" }}>Case Type</th>
-                <th style={{ width: "16%" }}>Parties</th>
+                <th style={{ width: "18%" }}>Parties</th>
                 <th style={{ width: "8%" }} className="tight">
                   Date
                 </th>
@@ -731,7 +711,7 @@ export default function AdminLLRServices() {
             <tbody>
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={10} style={{ color: "#6b7280", padding: 16, fontWeight: 800 }}>
+                  <td colSpan={9} style={{ color: "#6b7280", padding: 16, fontWeight: 800 }}>
                     No reports found. Click <b>New report</b> to add one.
                   </td>
                 </tr>
@@ -743,7 +723,6 @@ export default function AdminLLRServices() {
                 const decisionRaw = pick(r, ["decisionType", "DecisionType"], null);
                 const caseRaw = pick(r, ["caseType", "CaseType"], null);
 
-                // Prefer backend labels if present (best UX, zero guessing)
                 const decisionLabel =
                   normalizeText(pick(r, ["decisionTypeLabel", "DecisionTypeLabel"], "")) ||
                   labelFrom(DECISION_OPTIONS, decisionRaw);
@@ -766,6 +745,8 @@ export default function AdminLLRServices() {
                 const parties = pick(r, ["parties", "Parties"], null);
                 const decisionDate = pick(r, ["decisionDate", "DecisionDate"], null);
 
+                const courtLabel = courtTownDisplay(r);
+
                 return (
                   <tr key={id ?? idx} className={`${idx % 2 === 1 ? "row-zebra" : ""} row-hover`}>
                     <td>
@@ -773,6 +754,17 @@ export default function AdminLLRServices() {
                         <div className="titleMain">{title || "—"}</div>
 
                         <div className="chips">
+                          {/* ✅ Keep court visible (moved from column into title area) */}
+                          {courtLabel && courtLabel !== "—" ? (
+                            <span className="chip" title="Court type & town">
+                              <strong>Court:</strong>&nbsp;{courtLabel}
+                            </span>
+                          ) : (
+                            <span className="chip muted" title="Court type & town">
+                              Court: —
+                            </span>
+                          )}
+
                           {citation ? (
                             <span className="chip" title="Citation">
                               <strong>Citation:</strong>&nbsp;{citation}
@@ -800,15 +792,11 @@ export default function AdminLLRServices() {
                     <td className="tight">{reportNumber || "—"}</td>
                     <td className="num-cell">{year ?? "—"}</td>
 
-                    <td title="Court type — town" style={{ color: "#374151", fontWeight: 800 }}>
-                      {courtTownDisplay(r)}
-                    </td>
+                    {/* ✅ Removed Court cell */}
 
                     <td>
                       <span
-                        className={`chip ${
-                          decisionVal === 1 ? "good" : decisionVal === 2 ? "warn" : "muted"
-                        }`}
+                        className={`chip ${decisionVal === 1 ? "good" : decisionVal === 2 ? "warn" : "muted"}`}
                         title="Decision type"
                       >
                         {decisionLabel}
@@ -963,7 +951,6 @@ export default function AdminLLRServices() {
                   />
                 </div>
 
-                {/* ✅ NEW Court Type dropdown */}
                 <div className="admin-field">
                   <label>Court Type *</label>
                   <select
@@ -980,7 +967,6 @@ export default function AdminLLRServices() {
                   <div className="hint">Avoids typing inconsistencies.</div>
                 </div>
 
-                {/* Legacy Court string (optional) */}
                 <div className="admin-field">
                   <label>Court (optional text)</label>
                   <input
