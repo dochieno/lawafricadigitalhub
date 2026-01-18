@@ -4,7 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import api from "../../api/client";
 import { getAuthClaims } from "../../auth/auth";
 import { isLawReportDocument } from "../../utils/isLawReportDocument";
-import { extractReportMeta } from "../../utils/lawReportMeta";
+import { extractReportMeta, makeReportExcerpt } from "../../utils/lawReportMeta";
 import "../../styles/lawReports.css";
 
 function isInstitutionUser() {
@@ -110,15 +110,16 @@ export default function LawReportDetails() {
   }, [doc, docId, isInst, isPublic]);
 
   const meta = useMemo(() => (doc ? extractReportMeta(doc) : null), [doc]);
+  const excerpt = useMemo(() => (doc ? makeReportExcerpt(doc, 520) : ""), [doc]);
 
   const hasFullAccess = !!access?.hasFullAccess;
   const canReadNow = !!doc && hasContent && (!doc.isPremium || hasFullAccess);
 
-  if (loading) return <div className="lr-wrap"><div className="lr-loading">Loading report…</div></div>;
+  if (loading) return <div className="lr-wrap lr-theme"><div className="lr-loading">Loading report…</div></div>;
 
   if (error) {
     return (
-      <div className="lr-wrap">
+      <div className="lr-wrap lr-theme">
         <div className="lr-results">
           <div className="lr-empty">
             <strong>Report unavailable</strong>
@@ -137,45 +138,43 @@ export default function LawReportDetails() {
   if (!doc) return null;
 
   return (
-    <div className="lr-wrap">
-      <div className="lr-header">
-        <div className="lr-title">
-          <h1>{meta?.parties || doc.title || "Law Report"}</h1>
-          <p>
-            {meta?.reportNumber ? <span className="lr-tag" style={{ marginRight: 8 }}>{meta.reportNumber}</span> : null}
-            {meta?.citation ? <span className="lr-tag" style={{ marginRight: 8 }}>{meta.citation}</span> : null}
-            {meta?.year ? <span className="lr-tag" style={{ marginRight: 8 }}>{meta.year}</span> : null}
+    <div className="lr-wrap lr-theme">
+      <div className="lr-hero lr-hero-mini">
+        <div className="lr-hero-inner">
+          <div className="lr-hero-left">
+            <div className="lr-chip">Report details</div>
+            <h1 className="lr-hero-title" style={{ fontSize: 26 }}>
+              {meta?.parties || doc.title || "Law Report"}
+            </h1>
+            <div className="lr-tags" style={{ marginTop: 10 }}>
+              {meta?.reportNumber ? <span className="lr-tag">{meta.reportNumber}</span> : null}
+              {meta?.citation ? <span className="lr-tag">{meta.citation}</span> : null}
+              {meta?.year ? <span className="lr-tag">{meta.year}</span> : null}
+              {meta?.caseType ? <span className="lr-tag">{meta.caseType}</span> : null}
+              {meta?.courtType ? <span className="lr-tag">{meta.courtType}</span> : null}
+              {meta?.town ? <span className="lr-tag">{meta.town}</span> : null}
+              {!meta?.town && meta?.postCode ? <span className="lr-tag">{meta.postCode}</span> : null}
+            </div>
+          </div>
 
-            {/* ✅ NEW: Case Type */}
-            {meta?.caseType ? <span className="lr-tag" style={{ marginRight: 8 }}>{meta.caseType}</span> : null}
-
-            {meta?.courtType ? <span className="lr-tag" style={{ marginRight: 8 }}>{meta.courtType}</span> : null}
-            {meta?.town ? <span className="lr-tag" style={{ marginRight: 8 }}>{meta.town}</span> : null}
-            {!meta?.town && meta?.postCode ? <span className="lr-tag" style={{ marginRight: 8 }}>{meta.postCode}</span> : null}
-          </p>
-        </div>
-
-        <div className="lr-actions">
-          <button className="lr-pill" onClick={() => navigate("/dashboard/law-reports")}>
-            ← Back
-          </button>
-          <button
-            className="lr-pill"
-            onClick={() => navigate(`/dashboard/documents/${docId}`)}
-            title="Opens the standard document page (pricing/subscription/preview)"
-          >
-            Open document page
-          </button>
+          <div className="lr-hero-right">
+            <button className="lr-pill" onClick={() => navigate("/dashboard/law-reports")}>
+              ← Back
+            </button>
+            <button className="lr-pill ghost" onClick={() => navigate(`/dashboard/documents/${docId}`)}>
+              Document page
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="lr-grid" style={{ gridTemplateColumns: "1fr" }}>
+      <div className="lr-body">
         <section className="lr-results">
           <div className="lr-results-top">
             <div className="lr-count">
               {doc.isPremium ? "Premium report" : "Free report"}
-              {accessLoading ? " • Checking access…" : doc.isPremium && (isInst || isPublic) && hasFullAccess ? " • Included" : ""}
-              {availabilityLoading ? " • Checking availability…" : !hasContent ? " • Coming soon" : ""}
+              {accessLoading ? " • checking access…" : doc.isPremium && (isInst || isPublic) && hasFullAccess ? " • Included" : ""}
+              {availabilityLoading ? " • checking availability…" : ""}
             </div>
           </div>
 
@@ -183,7 +182,7 @@ export default function LawReportDetails() {
             <button
               className="lr-btn"
               disabled={availabilityLoading || accessLoading || !canReadNow}
-              title={!hasContent ? "Coming soon" : doc.isPremium && !hasFullAccess ? "Access required" : ""}
+              title={!hasContent ? "Not available yet" : doc.isPremium && !hasFullAccess ? "Access required" : ""}
               onClick={() => {
                 if (!hasContent) return;
                 if (doc.isPremium && !hasFullAccess) {
@@ -206,33 +205,24 @@ export default function LawReportDetails() {
             </button>
           </div>
 
-          <div className="lr-list" style={{ gap: 12 }}>
-            <div className="lr-card" style={{ cursor: "default", gridTemplateColumns: "1fr" }}>
-              <div>
-                <h3 className="lr-card-title" style={{ marginBottom: 8 }}>Report details</h3>
-
-                <div className="lr-meta">
-                  {meta?.judgmentDate ? <span className="lr-tag">Judgment date: {meta.judgmentDate}</span> : null}
-                  {meta?.decisionType ? <span className="lr-tag">Decision: {meta.decisionType}</span> : null}
-                  {meta?.hcRef ? <span className="lr-tag">HC Ref: {meta.hcRef}</span> : null}
-                  {meta?.judges ? <span className="lr-tag">Judges: {meta.judges}</span> : null}
-
-                  {/* ✅ NEW: show as metadata too */}
-                  {meta?.caseType ? <span className="lr-tag">Case type: {meta.caseType}</span> : null}
+          <div className="lr-cards" style={{ gridTemplateColumns: "1fr" }}>
+            <article className="lr-card2" style={{ cursor: "default" }}>
+              <div className="lr-card2-top">
+                <div className="lr-card2-title">Quick preview</div>
+                <div className="lr-badges">
+                  {doc.isPremium ? <span className="lr-badge premium">Premium</span> : <span className="lr-badge">Free</span>}
                 </div>
-
-                {meta?.caseNotes ? (
-                  <div style={{ marginTop: 10, color: "#374151", lineHeight: 1.5 }}>
-                    <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>Case notes</div>
-                    <div>{meta.caseNotes}</div>
-                  </div>
-                ) : (
-                  <div style={{ marginTop: 10, color: "#6b7280" }}>
-                    This report’s extended metadata will appear here once the API returns it.
-                  </div>
-                )}
               </div>
-            </div>
+
+              <div className="lr-mini">
+                {meta?.judgmentDate ? `Judgment date: ${meta.judgmentDate}` : ""}
+                {meta?.judges ? (meta?.judgmentDate ? ` • Judges: ${meta.judges}` : `Judges: ${meta.judges}`) : ""}
+              </div>
+
+              <div className="lr-excerpt" style={{ marginTop: 10 }}>
+                {excerpt || "Preview will appear here once the report content is available."}
+              </div>
+            </article>
           </div>
         </section>
       </div>
