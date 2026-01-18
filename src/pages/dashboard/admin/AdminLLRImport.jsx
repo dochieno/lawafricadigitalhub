@@ -58,7 +58,7 @@ function parseDateToIsoOrNull(v) {
   const s = String(v ?? "").trim();
   if (!s) return null;
 
-  // ISO / Date-parseable (handles most)
+  // ISO / Date-parseable
   const d0 = new Date(s);
   if (Number.isFinite(d0.getTime())) return d0.toISOString();
 
@@ -68,11 +68,15 @@ function parseDateToIsoOrNull(v) {
     const dd = Number(ddmmyy[1]);
     const mm = Number(ddmmyy[2]);
     const yy = Number(ddmmyy[3]);
-    const yyyy = 2000 + yy; // 00-99 => 2000-2099
+    const yyyy = 2000 + yy;
     const dt = new Date(Date.UTC(yyyy, mm - 1, dd, 0, 0, 0, 0));
     if (!Number.isFinite(dt.getTime())) return null;
-
-    if (dt.getUTCFullYear() !== yyyy || dt.getUTCMonth() + 1 !== mm || dt.getUTCDate() !== dd) return null;
+    if (
+      dt.getUTCFullYear() !== yyyy ||
+      dt.getUTCMonth() + 1 !== mm ||
+      dt.getUTCDate() !== dd
+    )
+      return null;
     return dt.toISOString();
   }
 
@@ -82,11 +86,14 @@ function parseDateToIsoOrNull(v) {
     const dd = Number(ddmmyyyy[1]);
     const mm = Number(ddmmyyyy[2]);
     const yyyy = Number(ddmmyyyy[3]);
-
     const dt = new Date(Date.UTC(yyyy, mm - 1, dd, 0, 0, 0, 0));
     if (!Number.isFinite(dt.getTime())) return null;
-
-    if (dt.getUTCFullYear() !== yyyy || dt.getUTCMonth() + 1 !== mm || dt.getUTCDate() !== dd) return null;
+    if (
+      dt.getUTCFullYear() !== yyyy ||
+      dt.getUTCMonth() + 1 !== mm ||
+      dt.getUTCDate() !== dd
+    )
+      return null;
     return dt.toISOString();
   }
 
@@ -96,11 +103,14 @@ function parseDateToIsoOrNull(v) {
     const yyyy = Number(yyyymmdd[1]);
     const mm = Number(yyyymmdd[2]);
     const dd = Number(yyyymmdd[3]);
-
     const dt = new Date(Date.UTC(yyyy, mm - 1, dd, 0, 0, 0, 0));
     if (!Number.isFinite(dt.getTime())) return null;
-
-    if (dt.getUTCFullYear() !== yyyy || dt.getUTCMonth() + 1 !== mm || dt.getUTCDate() !== dd) return null;
+    if (
+      dt.getUTCFullYear() !== yyyy ||
+      dt.getUTCMonth() + 1 !== mm ||
+      dt.getUTCDate() !== dd
+    )
+      return null;
     return dt.toISOString();
   }
 
@@ -173,7 +183,9 @@ function enumToInt(value, options, fallback = 0) {
   if (hit) return hit.value;
 
   const compact = s.toLowerCase().replace(/[^a-z]/g, "");
-  const hit2 = options.find((o) => o.label.toLowerCase().replace(/[^a-z]/g, "") === compact);
+  const hit2 = options.find(
+    (o) => o.label.toLowerCase().replace(/[^a-z]/g, "") === compact
+  );
   return hit2 ? hit2.value : fallback;
 }
 function labelFrom(options, value) {
@@ -183,14 +195,14 @@ function labelFrom(options, value) {
 
 /* =========================
    CSV Template
-   ✅ Now includes PostCode (preferred) and Town (optional override)
+   ✅ includes PostCode (preferred) and Town (optional override)
 ========================= */
 const TEMPLATE_HEADERS = [
   "CountryId",
   "Service",
   "CourtType",
-  "PostCode", // ✅ NEW
-  "Town", // optional override
+  "PostCode",
+  "Town",
   "ReportNumber",
   "Year",
   "CaseNumber",
@@ -210,11 +222,11 @@ function buildTemplateCsv() {
     Service: 1,
     CourtType: 3,
     PostCode: "50100",
-    Town: "Kakamega", // optional override (will be auto-resolved if blank)
+    Town: "Kakamega",
     ReportNumber: "HOK045",
     Year: 2013,
     CaseNumber: "045/2013",
-    Citation: "[2016] LLR (HCK-K) 045/2013",
+    Citation: "", // ✅ can be blank: server auto-generates (if DecisionDate present)
     DecisionType: 1,
     CaseType: 2,
     Court: "",
@@ -225,7 +237,9 @@ function buildTemplateCsv() {
   };
 
   const rows = [TEMPLATE_HEADERS, TEMPLATE_HEADERS.map((h) => example[h] ?? "")];
-  return rows.map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(",")).join("\n");
+  return rows
+    .map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
 }
 
 function downloadTextFile(filename, text) {
@@ -245,23 +259,30 @@ function downloadTextFile(filename, text) {
 async function resolveTownByPostCode({ countryId, postCode, cache }) {
   const cid = toInt(countryId, 0);
   const pc = normalizeText(postCode);
-  if (!cid || !pc) return { ok: false, name: "", message: "CountryId and PostCode are required." };
+  if (!cid || !pc)
+    return { ok: false, name: "", message: "CountryId and PostCode are required." };
 
   const key = `${cid}::${pc}`;
   if (cache.has(key)) return cache.get(key);
 
   try {
-    const res = await api.get("/towns/resolve", { params: { countryId: cid, postCode: pc } });
+    const res = await api.get("/towns/resolve", {
+      params: { countryId: cid, postCode: pc },
+    });
     const d = res.data || {};
     const name = normalizeText(d.name ?? d.Name ?? "");
-    const out = name ? { ok: true, name } : { ok: false, name: "", message: "Town not returned." };
+    const out = name
+      ? { ok: true, name }
+      : { ok: false, name: "", message: "Town not returned." };
     cache.set(key, out);
     return out;
   } catch (e) {
     const status = e?.response?.status;
     const msg =
       e?.response?.data?.message ||
-      (status === 404 ? "Town not found for that PostCode." : "Failed to resolve Town for PostCode.");
+      (status === 404
+        ? "Town not found for that PostCode."
+        : "Failed to resolve Town for PostCode.");
     const out = { ok: false, name: "", message: msg };
     cache.set(key, out);
     return out;
@@ -284,54 +305,152 @@ function Icon({ name }) {
     case "back":
       return (
         <svg {...common}>
-          <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path
+            d="M15 18l-6-6 6-6"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
       );
     case "refresh":
       return (
         <svg {...common}>
-          <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          <path d="M21 3v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path
+            d="M21 12a9 9 0 1 1-2.64-6.36"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <path
+            d="M21 3v6h-6"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
       );
     case "download":
       return (
         <svg {...common}>
-          <path d="M12 3v10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          <path d="M7 11l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M4 21h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path
+            d="M12 3v10"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <path
+            d="M7 11l5 5 5-5"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M4 21h16"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
         </svg>
       );
     case "upload":
       return (
         <svg {...common}>
-          <path d="M12 21V11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          <path d="M7 15l5-5 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M20 21H4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          <path d="M20 11a4 4 0 0 0-4-4h-1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path
+            d="M12 21V11"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <path
+            d="M7 15l5-5 5 5"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M20 21H4"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <path
+            d="M20 11a4 4 0 0 0-4-4h-1"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
         </svg>
       );
     case "import":
       return (
         <svg {...common}>
-          <path d="M12 3v10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          <path d="M7 8l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M4 21h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path
+            d="M12 3v10"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <path
+            d="M7 8l5 5 5-5"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M4 21h16"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
         </svg>
       );
     case "stop":
       return (
         <svg {...common}>
-          <rect x="6" y="6" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="2" />
+          <rect
+            x="6"
+            y="6"
+            width="12"
+            height="12"
+            rx="2"
+            stroke="currentColor"
+            strokeWidth="2"
+          />
         </svg>
       );
     case "wand":
       return (
         <svg {...common}>
-          <path d="M4 20l10-10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          <path d="M14 10l6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          <path d="M15.5 3.5l5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          <path d="M7 13l4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path
+            d="M4 20l10-10"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <path
+            d="M14 10l6-6"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <path
+            d="M15.5 3.5l5 5"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <path
+            d="M7 13l4 4"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
         </svg>
       );
     default:
@@ -369,12 +488,20 @@ export default function AdminLLRImport() {
   const [busy, setBusy] = useState(false);
   const [importing, setImporting] = useState(false);
   const [resolving, setResolving] = useState(false);
-  const [progress, setProgress] = useState({ done: 0, total: 0, ok: 0, dup: 0, failed: 0 });
+
+  // ✅ NEW: bulk mode progress uses server results
+  const [progress, setProgress] = useState({
+    done: 0,
+    total: 0,
+    ok: 0,
+    dup: 0,
+    failed: 0,
+  });
 
   const stopRef = useRef(false);
   const fileInputRef = useRef(null);
 
-  // cache for postcode->town resolves (avoids repeated calls)
+  // cache for postcode->town resolves
   const resolveCacheRef = useRef(new Map());
 
   const counts = useMemo(() => {
@@ -387,7 +514,7 @@ export default function AdminLLRImport() {
   const importHint = useMemo(() => {
     if (importing) return "Importing…";
     if (counts.valid === 0) return "No valid rows to import";
-    return `Imports ${counts.valid} valid row${counts.valid === 1 ? "" : "s"}`;
+    return `Imports ${counts.valid} valid row${counts.valid === 1 ? "" : "s"} (bulk)`;
   }, [counts.valid, importing]);
 
   function resetAll({ keepInfo } = {}) {
@@ -414,21 +541,29 @@ export default function AdminLLRImport() {
       for (const [k, v] of Object.entries(r)) map[csvHeaderKey(k)] = v;
 
       const countryId = toInt(map["countryid"], 0);
-      const service = enumToInt(map["service"], SERVICE_OPTIONS, 0) || toInt(map["service"], 0);
-      const courtType = enumToInt(map["courttype"], COURT_TYPE_OPTIONS, 0) || toInt(map["courttype"], 0);
+      const service =
+        enumToInt(map["service"], SERVICE_OPTIONS, 0) || toInt(map["service"], 0);
+      const courtType =
+        enumToInt(map["courttype"], COURT_TYPE_OPTIONS, 0) ||
+        toInt(map["courttype"], 0);
 
       const reportNumber = normalizeText(map["reportnumber"]);
       const year = toInt(map["year"], 0);
 
       const caseNumber = normalizeText(map["casenumber"]) || null;
+
+      // ✅ Citation can be blank now (server auto-generates if DecisionDate present)
       const citation = normalizeText(map["citation"]) || null;
 
-      const decisionType = enumToInt(map["decisiontype"], DECISION_OPTIONS, 0) || toInt(map["decisiontype"], 0);
-      const caseType = enumToInt(map["casetype"], CASETYPE_OPTIONS, 0) || toInt(map["casetype"], 0);
+      const decisionType =
+        enumToInt(map["decisiontype"], DECISION_OPTIONS, 0) ||
+        toInt(map["decisiontype"], 0);
+      const caseType =
+        enumToInt(map["casetype"], CASETYPE_OPTIONS, 0) ||
+        toInt(map["casetype"], 0);
 
       const court = normalizeText(map["court"]) || null;
 
-      // ✅ NEW: PostCode preferred, Town optional
       const postCode = normalizeText(map["postcode"]) || null;
       const town = normalizeText(map["town"]) || null;
 
@@ -440,13 +575,16 @@ export default function AdminLLRImport() {
 
       const contentText = String(map["contenttext"] ?? "").trim();
 
+      // ✅ IMPORTANT: match backend DTO property names (TownPostCode + Town)
       const payload = {
         category: 6,
         countryId,
         service,
         courtType,
-        postCode, // ✅ send to API
-        town, // may be auto-resolved later
+
+        townPostCode: postCode, // ✅ backend expects TownPostCode
+        town: town, // ✅ backend expects Town
+
         reportNumber,
         year,
         caseNumber,
@@ -456,7 +594,7 @@ export default function AdminLLRImport() {
         court,
         parties,
         judges,
-        decisionDate, // ISO for API
+        decisionDate,
         contentText,
       };
 
@@ -465,13 +603,19 @@ export default function AdminLLRImport() {
       if (!service) issues.push("Service is required.");
       if (!courtType) issues.push("CourtType is required.");
       if (!reportNumber) issues.push("ReportNumber is required.");
-      if (!year || year < 1900 || year > 2100) issues.push("Year must be between 1900 and 2100.");
+      if (!year || year < 1900 || year > 2100)
+        issues.push("Year must be between 1900 and 2100.");
       if (!decisionType) issues.push("DecisionType is required (e.g. 1=Judgment).");
       if (!caseType) issues.push("CaseType is required (e.g. 2=Civil).");
       if (!contentText) issues.push("ContentText is required.");
 
-      // Require at least one location hint
+      // require at least one location hint
       if (!postCode && !town) issues.push("Provide PostCode (preferred) or Town.");
+
+      // ✅ If citation blank, DecisionDate must exist (server rule for year)
+      if (!citation && !decisionDate) {
+        issues.push("DecisionDate is required when Citation is blank (server auto-generates year from DecisionDate).");
+      }
 
       if (!isEmpty(decisionDateRaw) && !decisionDate) {
         issues.push("DecisionDate invalid. Use DD-MM-YY (e.g. 18-01-26).");
@@ -482,8 +626,15 @@ export default function AdminLLRImport() {
         payload,
         issues,
         valid: issues.length === 0,
-        // internal flags for UI
         resolved: false,
+
+        // ✅ per-row import result from bulk endpoint
+        importStatus: "", // created|duplicate|failed|ready
+        importMessage: "",
+        importDetail: "",
+        createdId: null,
+        createdDocId: null,
+        serverCitation: "",
       };
     });
   }
@@ -514,7 +665,7 @@ export default function AdminLLRImport() {
 
       if (normalized.length === 0) setInfo("No rows found in the file.");
       else if (normalized.every((x) => x.valid))
-        setInfo(`Loaded ${normalized.length} row(s). You can resolve Towns from PostCodes, then import.`);
+        setInfo(`Loaded ${normalized.length} row(s). Resolve Towns (optional), then import in bulk.`);
       else setInfo(`Loaded ${normalized.length} row(s). Fix invalid rows then re-upload.`);
     } catch (e) {
       setError(String(e?.message || e));
@@ -523,14 +674,16 @@ export default function AdminLLRImport() {
     }
   }
 
-  // ✅ NEW: Resolve Town for rows that have PostCode but no Town
   async function resolveTownsFromPostCodes() {
     setError("");
     setInfo("");
     stopRef.current = false;
 
     const candidates = preview.filter(
-      (x) => x.valid && normalizeText(x.payload?.postCode) && !normalizeText(x.payload?.town)
+      (x) =>
+        x.valid &&
+        normalizeText(x.payload?.townPostCode) &&
+        !normalizeText(x.payload?.town)
     );
 
     if (!candidates.length) {
@@ -538,13 +691,18 @@ export default function AdminLLRImport() {
       return;
     }
 
-    const okConfirm = window.confirm(`Resolve Town for ${candidates.length} row(s) using PostCode now?`);
+    const okConfirm = window.confirm(
+      `Resolve Town for ${candidates.length} row(s) using PostCode now?`
+    );
     if (!okConfirm) return;
 
     setResolving(true);
 
-    // work on a local copy, then set state once (faster UI)
-    const updated = preview.map((x) => ({ ...x, payload: { ...x.payload }, issues: [...x.issues] }));
+    const updated = preview.map((x) => ({
+      ...x,
+      payload: { ...x.payload },
+      issues: [...x.issues],
+    }));
 
     let resolvedOk = 0;
     let notFound = 0;
@@ -554,7 +712,7 @@ export default function AdminLLRImport() {
 
       const item = updated[i];
       const cid = item?.payload?.countryId;
-      const pc = item?.payload?.postCode;
+      const pc = item?.payload?.townPostCode;
 
       if (!item.valid) continue;
       if (!normalizeText(pc)) continue;
@@ -566,8 +724,9 @@ export default function AdminLLRImport() {
         cache: resolveCacheRef.current,
       });
 
-      // remove any previous resolve errors
-      item.issues = item.issues.filter((m) => !String(m).toLowerCase().includes("postcode resolve"));
+      item.issues = item.issues.filter(
+        (m) => !String(m).toLowerCase().includes("postcode resolve")
+      );
 
       if (result.ok) {
         item.payload.town = result.name;
@@ -577,14 +736,11 @@ export default function AdminLLRImport() {
         item.resolved = false;
         notFound++;
         item.issues.push(`PostCode resolve: ${result.message}`);
-        item.valid = false; // make it invalid until fixed
+        item.valid = false;
       }
     }
 
-    // recompute valid flags for rows that didn't change
-    for (const item of updated) {
-      item.valid = item.issues.length === 0;
-    }
+    for (const item of updated) item.valid = item.issues.length === 0;
 
     setPreview(updated);
     setResolving(false);
@@ -594,10 +750,13 @@ export default function AdminLLRImport() {
       return;
     }
 
-    setInfo(`Resolve complete. Resolved: ${resolvedOk}. Unresolved: ${notFound} (fix PostCode or provide Town).`);
+    setInfo(
+      `Resolve complete. Resolved: ${resolvedOk}. Unresolved: ${notFound} (fix PostCode or provide Town).`
+    );
   }
 
-  async function startImport() {
+  // ✅ NEW: BULK IMPORT via POST /api/law-reports/import
+  async function startImportBulk() {
     setError("");
     setInfo("");
     stopRef.current = false;
@@ -608,45 +767,88 @@ export default function AdminLLRImport() {
       return;
     }
 
-    const okConfirm = window.confirm(`Import ${validRows.length} valid row${validRows.length === 1 ? "" : "s"} now?`);
+    const okConfirm = window.confirm(
+      `Bulk import ${validRows.length} valid row${validRows.length === 1 ? "" : "s"} now?`
+    );
     if (!okConfirm) return;
 
     setImporting(true);
-    setProgress({ done: 0, total: validRows.length, ok: 0, dup: 0, failed: 0 });
+    setProgress({
+      done: 0,
+      total: validRows.length,
+      ok: 0,
+      dup: 0,
+      failed: 0,
+    });
 
-    let ok = 0;
-    let dup = 0;
-    let failed = 0;
+    try {
+      // Preserve mapping back to original preview rows
+      const rowNumbers = validRows.map((x) => x.rowNumber);
+      const items = validRows.map((x) => x.payload);
 
-    for (let i = 0; i < validRows.length; i++) {
-      if (stopRef.current) break;
+      // You can tweak batchSize; server already clamps.
+      const res = await api.post("/law-reports/import", {
+        items,
+        batchSize: 200,
+        stopOnError: false,
+        dryRun: false,
+      });
 
-      const item = validRows[i];
-      try {
-        await api.post("/law-reports", item.payload);
-        ok++;
-      } catch (e) {
-        const status = e?.response?.status;
-        if (status === 409) dup++;
-        else failed++;
-      } finally {
-        setProgress({ done: i + 1, total: validRows.length, ok, dup, failed });
+      const data = res.data || {};
+      const created = toInt(data.created, 0);
+      const duplicates = toInt(data.duplicates, 0);
+      const failed = toInt(data.failed, 0);
+
+      setProgress({
+        done: validRows.length,
+        total: validRows.length,
+        ok: created,
+        dup: duplicates,
+        failed: failed,
+      });
+
+      // Apply per-item results to preview rows
+      const results = Array.isArray(data.items) ? data.items : [];
+      const updated = preview.map((x) => ({ ...x }));
+
+      // server indexes are 0-based in submitted items array
+      for (const r of results) {
+        const idx = toInt(r.index, -1);
+        if (idx < 0 || idx >= rowNumbers.length) continue;
+
+        const rowNumber = rowNumbers[idx];
+        const hit = updated.find((u) => u.rowNumber === rowNumber);
+        if (!hit) continue;
+
+        hit.importStatus = normalizeText(r.status);
+        hit.importMessage = normalizeText(r.message);
+        hit.importDetail = normalizeText(r.detail);
+        hit.createdId = r.lawReportId ?? null;
+        hit.createdDocId = r.legalDocumentId ?? null;
+        hit.serverCitation = normalizeText(r.citation);
       }
+
+      setPreview(updated);
+
+      if (failed === 0 && duplicates === 0) {
+        resetAll({
+          keepInfo: `✅ Bulk import successful. ${created} case(s) added. Ready for the next file.`,
+        });
+        return;
+      }
+
+      setInfo(
+        `Bulk import finished. Created: ${created}, duplicates: ${duplicates}, failed: ${failed}. (See table for row results.)`
+      );
+    } catch (e) {
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.title ||
+        String(e?.message || e);
+      setError(`Bulk import failed: ${msg}`);
+    } finally {
+      setImporting(false);
     }
-
-    setImporting(false);
-
-    if (stopRef.current) {
-      setInfo(`Stopped. OK: ${ok}, duplicates: ${dup}, failed: ${failed}.`);
-      return;
-    }
-
-    if (failed === 0 && dup === 0) {
-      resetAll({ keepInfo: `✅ Import successful. ${ok} case(s) added. Ready for the next file.` });
-      return;
-    }
-
-    setInfo(`Import finished. OK: ${ok}, duplicates: ${dup}, failed: ${failed}.`);
   }
 
   function stopAll() {
@@ -659,18 +861,18 @@ export default function AdminLLRImport() {
       <style>{`
         /* Modern, clean cards + readable font + spacing */
         .la-page { max-width: 1180px; margin: 0 auto; }
-        .la-title { font-size: 26px; font-weight: 950; letter-spacing: -0.02em; margin: 0; }
-        .la-subtitle { margin: 8px 0 0; font-size: 13px; color: #64748b; font-weight: 700; line-height: 1.5; }
+        .la-title { font-size: 28px; font-weight: 950; letter-spacing: -0.03em; margin: 0; }
+        .la-subtitle { margin: 8px 0 0; font-size: 13px; color: #64748b; font-weight: 700; line-height: 1.55; }
 
-        .la-toolbar { display:flex; gap:12px; align-items:center; justify-content:space-between; margin-bottom: 14px; }
+        .la-toolbar { display:flex; gap:12px; align-items:flex-start; justify-content:space-between; margin-bottom: 14px; }
         .la-tools { display:flex; gap:10px; align-items:center; flex-wrap: wrap; justify-content:flex-end; }
 
         .la-card {
           background:#fff;
           border:1px solid #e5e7eb;
-          border-radius:18px;
+          border-radius:20px;
           padding:16px;
-          box-shadow: 0 10px 28px rgba(0,0,0,.06);
+          box-shadow: 0 10px 30px rgba(0,0,0,.06);
         }
 
         .la-cardHeader { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }
@@ -678,11 +880,11 @@ export default function AdminLLRImport() {
         .la-chip {
           display:inline-flex; align-items:center; gap:8px;
           padding:9px 12px;
-          border-radius:14px;
+          border-radius:999px;
           border:1px solid #e5e7eb;
           background:#f8fafc;
           color:#0f172a;
-          font-weight:800;
+          font-weight:850;
           font-size:12px;
           line-height: 1.15;
         }
@@ -690,6 +892,7 @@ export default function AdminLLRImport() {
         .la-chip.good { background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
         .la-chip.warn { background:#fff7ed; border-color:#fed7aa; color:#9a3412; }
         .la-chip.bad  { background:#fef2f2; border-color:#fecaca; color:#991b1b; }
+        .la-chip.neutral { background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; }
 
         .la-row { display:flex; gap:12px; align-items:stretch; flex-wrap:wrap; }
         .la-col { flex:1; min-width: 320px; }
@@ -711,7 +914,7 @@ export default function AdminLLRImport() {
           box-shadow: 0 10px 22px rgba(0,0,0,.08);
           transition: transform .08s ease, box-shadow .12s ease, background .12s ease, border-color .12s ease;
         }
-        .la-icon-btn:hover { transform: translateY(-1px); box-shadow: 0 16px 28px rgba(0,0,0,.12); background:#fafafa; }
+        .la-icon-btn:hover { transform: translateY(-1px); box-shadow: 0 16px 30px rgba(0,0,0,.12); background:#fafafa; }
         .la-icon-btn:active { transform: translateY(0px) scale(.98); }
         .la-icon-btn:disabled { opacity: .55; cursor: not-allowed; box-shadow:none; }
 
@@ -761,7 +964,25 @@ export default function AdminLLRImport() {
         tbody td { padding:10px; border-bottom:1px solid #f1f5f9; vertical-align: top; }
         tr.badRow td { background: #fff5f5; }
         tr.goodRow td { background: #f0fdf4; }
+        tr.dupRow td { background: #fff7ed; }
+        tr.failRow td { background: #fef2f2; }
         .issues { color:#991b1b; font-weight:900; }
+        .status {
+          display:inline-flex;
+          align-items:center;
+          gap:8px;
+          font-weight:900;
+          font-size:12px;
+          padding:4px 10px;
+          border-radius:999px;
+          border:1px solid #e5e7eb;
+          background:#f8fafc;
+          color:#0f172a;
+          white-space:nowrap;
+        }
+        .status.ok { background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
+        .status.dup { background:#fff7ed; border-color:#fed7aa; color:#9a3412; }
+        .status.fail { background:#fef2f2; border-color:#fecaca; color:#991b1b; }
       `}</style>
 
       <div className="la-page">
@@ -769,16 +990,17 @@ export default function AdminLLRImport() {
           <div>
             <h1 className="la-title">Admin · LLR Services · Import</h1>
             <p className="la-subtitle">
-              Upload a CSV, preview & validate, then import using <b>POST /api/law-reports</b>.{" "}
-              <span>
-                Date format: <b>DD-MM-YY</b> (e.g. <span className="mono">18-01-26</span>). Location:{" "}
-                <b>PostCode</b> (preferred) auto-resolves Town.
-              </span>
+              Upload CSV → preview/validate → optionally resolve Town via <b>PostCode</b> → bulk import using{" "}
+              <b>POST /api/law-reports/import</b>. Date format: <b>DD-MM-YY</b>.
             </p>
           </div>
 
           <div className="la-tools">
-            <IconButton title="Back to reports list" onClick={goBackToList} disabled={busy || importing || resolving}>
+            <IconButton
+              title="Back to reports list"
+              onClick={goBackToList}
+              disabled={busy || importing || resolving}
+            >
               <Icon name="back" />
             </IconButton>
 
@@ -791,7 +1013,7 @@ export default function AdminLLRImport() {
             </IconButton>
 
             <IconButton
-              title="Download CSV template (includes PostCode)"
+              title="Download CSV template"
               onClick={() => downloadTextFile("llr_import_template.csv", buildTemplateCsv())}
               disabled={busy || importing || resolving}
               tone="primary"
@@ -825,7 +1047,7 @@ export default function AdminLLRImport() {
                 <button
                   type="button"
                   className="la-icon-btn resolve"
-                  title={resolving ? "Resolving Towns…" : "Resolve Town from PostCode for rows missing Town"}
+                  title={resolving ? "Resolving Towns…" : "Resolve Town from PostCode (rows missing Town)"}
                   aria-label="Resolve Town from PostCode"
                   onClick={resolveTownsFromPostCodes}
                   disabled={busy || importing || resolving || counts.total === 0}
@@ -833,12 +1055,13 @@ export default function AdminLLRImport() {
                   <Icon name="wand" />
                 </button>
 
+                {/* ✅ Bulk import button (uses new endpoint) */}
                 <button
                   type="button"
                   className="la-icon-btn import"
                   title={importHint}
                   aria-label={importHint}
-                  onClick={startImport}
+                  onClick={startImportBulk}
                   disabled={busy || importing || resolving || counts.valid === 0}
                 >
                   <Icon name="import" />
@@ -855,7 +1078,9 @@ export default function AdminLLRImport() {
           </div>
         </div>
 
-        {(error || info) && <div className={`admin-alert ${error ? "error" : "ok"}`}>{error || info}</div>}
+        {(error || info) && (
+          <div className={`admin-alert ${error ? "error" : "ok"}`}>{error || info}</div>
+        )}
 
         <div className="la-row" style={{ marginBottom: 14 }}>
           <div className="la-card la-col">
@@ -863,22 +1088,25 @@ export default function AdminLLRImport() {
               <div>
                 <div className="la-stepTitle">Step 1 — Template</div>
                 <div className="la-stepSub">
-                  1) Download the template. 2) Fill it. 3) Upload it.
+                  Download → fill → upload. Location uses <b>PostCode</b> (preferred) and can auto-resolve Town.
                   <br />
-                  Location: use <b>PostCode</b> (preferred). Town can be blank and will be resolved.
+                  <b>Citation can be blank</b> (server auto-generates), but then <b>DecisionDate must exist</b>.
                 </div>
               </div>
             </div>
 
             <div className="la-chipBar">
               <span className="la-chip">
-                <strong>DecisionType</strong> {DECISION_OPTIONS.map((x) => `${x.value}=${x.label}`).join(", ")}
+                <strong>DecisionType</strong>{" "}
+                {DECISION_OPTIONS.map((x) => `${x.value}=${x.label}`).join(", ")}
               </span>
               <span className="la-chip">
-                <strong>CaseType</strong> {CASETYPE_OPTIONS.map((x) => `${x.value}=${x.label}`).join(", ")}
+                <strong>CaseType</strong>{" "}
+                {CASETYPE_OPTIONS.map((x) => `${x.value}=${x.label}`).join(", ")}
               </span>
               <span className="la-chip">
-                <strong>CourtType</strong> {COURT_TYPE_OPTIONS.map((x) => `${x.value}=${x.label}`).join(", ")}
+                <strong>CourtType</strong>{" "}
+                {COURT_TYPE_OPTIONS.map((x) => `${x.value}=${x.label}`).join(", ")}
               </span>
             </div>
           </div>
@@ -888,9 +1116,7 @@ export default function AdminLLRImport() {
               <div>
                 <div className="la-stepTitle">Step 2 — Upload & Preview</div>
                 <div className="la-stepSub">
-                  Upload a CSV to see preview & validation.
-                  <br />
-                  Then click the <b>wand</b> to auto-resolve Town from PostCode (only where Town is missing).
+                  Invalid rows show exact issues. Click the wand to fill Town from PostCode (optional).
                 </div>
               </div>
             </div>
@@ -905,6 +1131,9 @@ export default function AdminLLRImport() {
               <span className={`la-chip ${counts.invalid ? "bad" : ""}`}>
                 <strong>{counts.invalid}</strong> invalid
               </span>
+              <span className="la-chip neutral">
+                Bulk endpoint
+              </span>
             </div>
 
             {fileName && (
@@ -918,11 +1147,11 @@ export default function AdminLLRImport() {
         <div className="la-card">
           <div className="la-cardHeader">
             <div>
-              <div className="la-stepTitle">Step 3 — Import</div>
+              <div className="la-stepTitle">Step 3 — Bulk Import</div>
               <div className="la-stepSub">
-                Imports only valid rows. Duplicates return <b>409</b>.
+                Uses <b>POST /api/law-reports/import</b> to insert in batches (much faster).
                 <br />
-                If import finishes with <b>no duplicates and no failures</b>, the page resets automatically.
+                Per-row results are shown in the table.
               </div>
             </div>
 
@@ -931,7 +1160,7 @@ export default function AdminLLRImport() {
                 <strong>{progress.done}</strong> / {progress.total} done
               </span>
               <span className="la-chip good">
-                <strong>{progress.ok}</strong> OK
+                <strong>{progress.ok}</strong> Created
               </span>
               <span className="la-chip warn">
                 <strong>{progress.dup}</strong> Duplicates
@@ -965,29 +1194,81 @@ export default function AdminLLRImport() {
                       <th className="mono">CaseNo</th>
                       <th className="mono">Citation</th>
                       <th>DecisionDate</th>
-                      <th>Issues</th>
+                      <th>Status</th>
+                      <th>Issues / Message</th>
                     </tr>
                   </thead>
                   <tbody>
                     {preview.slice(0, 500).map((p) => {
                       const pay = p.payload;
-                      const isGood = p.valid && (p.resolved || normalizeText(pay.town));
+
+                      const status = normalizeText(p.importStatus);
+                      const rowClass =
+                        !p.valid
+                          ? "badRow"
+                          : status === "created"
+                          ? "goodRow"
+                          : status === "duplicate"
+                          ? "dupRow"
+                          : status === "failed"
+                          ? "failRow"
+                          : "";
+
+                      const statusLabel =
+                        status === "created"
+                          ? "Created"
+                          : status === "duplicate"
+                          ? "Duplicate"
+                          : status === "failed"
+                          ? "Failed"
+                          : "";
+
+                      const statusTone =
+                        status === "created"
+                          ? "ok"
+                          : status === "duplicate"
+                          ? "dup"
+                          : status === "failed"
+                          ? "fail"
+                          : "";
+
+                      const shownCitation =
+                        normalizeText(p.serverCitation) ||
+                        normalizeText(pay.citation) ||
+                        "—";
+
+                      const message = normalizeText(p.importMessage);
+                      const detail = normalizeText(p.importDetail);
+
                       return (
-                        <tr key={p.rowNumber} className={!p.valid ? "badRow" : isGood ? "goodRow" : ""}>
+                        <tr key={p.rowNumber} className={rowClass}>
                           <td className="mono">{p.rowNumber}</td>
                           <td className="mono">{pay.reportNumber || "—"}</td>
                           <td className="mono">{pay.year || "—"}</td>
                           <td className="mono">{pay.countryId || "—"}</td>
                           <td>{labelFrom(SERVICE_OPTIONS, pay.service)}</td>
                           <td>{labelFrom(COURT_TYPE_OPTIONS, pay.courtType)}</td>
-                          <td className="mono">{pay.postCode || "—"}</td>
+                          <td className="mono">{pay.townPostCode || "—"}</td>
                           <td>{pay.town || "—"}</td>
                           <td>{labelFrom(DECISION_OPTIONS, pay.decisionType)}</td>
                           <td>{labelFrom(CASETYPE_OPTIONS, pay.caseType)}</td>
                           <td className="mono">{pay.caseNumber || "—"}</td>
-                          <td className="mono">{pay.citation || "—"}</td>
-                          <td className="mono">{pay.decisionDate ? isoToDdMmYy(pay.decisionDate) : "—"}</td>
-                          <td className="issues">{p.issues.join(" ")}</td>
+                          <td className="mono">{shownCitation}</td>
+                          <td className="mono">
+                            {pay.decisionDate ? isoToDdMmYy(pay.decisionDate) : "—"}
+                          </td>
+                          <td>
+                            {statusLabel ? (
+                              <span className={`status ${statusTone}`}>{statusLabel}</span>
+                            ) : (
+                              <span className="status">—</span>
+                            )}
+                          </td>
+                          <td className="issues">
+                            {p.issues.join(" ")}
+                            {message ? ` ${message}` : ""}
+                            {detail ? ` (${detail})` : ""}
+                          </td>
                         </tr>
                       );
                     })}
@@ -1020,8 +1301,7 @@ export default function AdminLLRImport() {
           }
           right={
             <span className="admin-footer-muted">
-              Tip: Use <b>PostCode</b> and click the <b>wand</b> to auto-fill Town. Date format:{" "}
-              <b>DD-MM-YY</b> (e.g. <span className="mono">18-01-26</span>).
+              Tip: Use <b>PostCode</b> + wand to auto-fill Town. If <b>Citation</b> is blank, <b>DecisionDate</b> must be present.
             </span>
           }
         />
