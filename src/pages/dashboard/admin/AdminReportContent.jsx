@@ -1,4 +1,3 @@
-// src/pages/dashboard/admin/AdminReportContent.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import api from "../../../api/client";
@@ -6,6 +5,9 @@ import api from "../../../api/client";
 import { CKEditor } from "@ckeditor/ckeditor5-react";
 import ClassicEditor from "@ckeditor/ckeditor5-build-classic";
 
+/* =========================
+   Helpers
+========================= */
 function getApiErrorMessage(err, fallback = "Request failed.") {
   const data = err?.response?.data;
 
@@ -26,44 +28,19 @@ function getApiErrorMessage(err, fallback = "Request failed.") {
   return fallback;
 }
 
-const DECISION_OPTIONS = [
-  { label: "Judgment", value: 1 },
-  { label: "Ruling", value: 2 },
-];
-
-const CASETYPE_OPTIONS = [
-  { label: "Criminal", value: 1 },
-  { label: "Civil", value: 2 },
-  { label: "Environmental", value: 3 },
-  { label: "Family", value: 4 },
-  { label: "Commercial", value: 5 },
-  { label: "Constitutional", value: 6 },
-];
-
-const SERVICE_OPTIONS = [
-  { label: "LawAfrica Law Reports (LLR)", value: 1 },
-  { label: "Odungas Digest", value: 2 },
-  { label: "Uganda Law Reports (ULR)", value: 3 },
-  { label: "Tanzania Law Reports (TLR)", value: 4 },
-  { label: "Southern Sudan Law Reports & Journal (SSLRJ)", value: 5 },
-  { label: "East Africa Law Reports (EALR)", value: 6 },
-  { label: "East Africa Court of Appeal Reports (EACA)", value: 7 },
-  { label: "East Africa General Reports (EAGR)", value: 8 },
-  { label: "East Africa Protectorate Law Reports (EAPLR)", value: 9 },
-  { label: "Zanzibar Protectorate Law Reports (ZPLR)", value: 10 },
-  { label: "Company Registry Search", value: 11 },
-  { label: "Uganda Law Society Reports (ULSR)", value: 12 },
-  { label: "Kenya Industrial Property Institute", value: 13 },
-];
+function pick(obj, keys, fallback = undefined) {
+  for (const k of keys) {
+    const v = obj?.[k];
+    if (v !== undefined && v !== null) return v;
+  }
+  return fallback;
+}
 
 function toInt(v, fallback = 0) {
   const n = Number(v);
   return Number.isFinite(n) ? Math.floor(n) : fallback;
 }
 
-/**
- * Normalize enums arriving as number (1) or string ("Judgment") or numeric string ("1")
- */
 function enumToInt(value, options, fallback = 0) {
   if (value === null || value === undefined) return fallback;
 
@@ -100,45 +77,102 @@ function isoOrNullFromDateInput(yyyyMmDd) {
   return Number.isFinite(d.getTime()) ? d.toISOString() : null;
 }
 
-/**
- * ✅ Extract id from multiple sources:
- * 1) route params (:id, :reportId, :lawReportId, etc)
- * 2) location.state.reportId
- * 3) querystring ?id= or ?reportId=
- * 4) last resort: parse from pathname digits
- */
-function resolveReportId(params, location) {
-  const fromParams =
+function pickReportIdFromParams(params) {
+  const raw =
     params?.id ??
     params?.reportId ??
     params?.lawReportId ??
     params?.lawreportid ??
     null;
 
-  const fromState =
-    location?.state?.reportId ??
-    location?.state?.id ??
-    null;
-
-  const search = new URLSearchParams(location?.search || "");
-  const fromQuery =
-    search.get("id") ||
-    search.get("reportId") ||
-    search.get("lawReportId");
-
-  // last resort: /.../123/... => pick the last number in pathname
-  let fromPath = null;
-  try {
-    const matches = String(location?.pathname || "").match(/(\d+)(?!.*\d)/);
-    fromPath = matches?.[1] ?? null;
-  } catch {
-    fromPath = null;
-  }
-
-  const raw = fromParams ?? fromState ?? fromQuery ?? fromPath;
-
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+}
+
+/* =========================
+   Options
+========================= */
+const DECISION_OPTIONS = [
+  { label: "Judgment", value: 1 },
+  { label: "Ruling", value: 2 },
+];
+
+const CASETYPE_OPTIONS = [
+  { label: "Criminal", value: 1 },
+  { label: "Civil", value: 2 },
+  { label: "Environmental", value: 3 },
+  { label: "Family", value: 4 },
+  { label: "Commercial", value: 5 },
+  { label: "Constitutional", value: 6 },
+];
+
+const SERVICE_OPTIONS = [
+  { label: "LawAfrica Law Reports (LLR)", value: 1 },
+  { label: "Odungas Digest", value: 2 },
+  { label: "Uganda Law Reports (ULR)", value: 3 },
+  { label: "Tanzania Law Reports (TLR)", value: 4 },
+  { label: "Southern Sudan Law Reports & Journal (SSLRJ)", value: 5 },
+  { label: "East Africa Law Reports (EALR)", value: 6 },
+  { label: "East Africa Court of Appeal Reports (EACA)", value: 7 },
+  { label: "East Africa General Reports (EAGR)", value: 8 },
+  { label: "East Africa Protectorate Law Reports (EAPLR)", value: 9 },
+  { label: "Zanzibar Protectorate Law Reports (ZPLR)", value: 10 },
+  { label: "Company Registry Search", value: 11 },
+  { label: "Uganda Law Society Reports (ULSR)", value: 12 },
+  { label: "Kenya Industrial Property Institute", value: 13 },
+];
+
+/* =========================
+   Inline SVG Icons (no deps)
+========================= */
+function Icon({ name }) {
+  const common = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", xmlns: "http://www.w3.org/2000/svg" };
+
+  switch (name) {
+    case "back":
+      return (
+        <svg {...common}>
+          <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "refresh":
+      return (
+        <svg {...common}>
+          <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M21 3v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "save":
+      return (
+        <svg {...common}>
+          <path
+            d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+          <path d="M17 21v-8H7v8" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+          <path d="M7 3v5h8" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
+function IconButton({ title, onClick, disabled, tone = "neutral", children }) {
+  return (
+    <button
+      type="button"
+      className={`la-icon-btn ${tone}`}
+      title={title}
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={title}
+    >
+      {children}
+    </button>
+  );
 }
 
 export default function AdminReportContent() {
@@ -147,9 +181,7 @@ export default function AdminReportContent() {
   const location = useLocation();
 
   const initialTitle = location.state?.title || "";
-
-  // ✅ FIX: id extraction from multiple sources
-  const reportId = useMemo(() => resolveReportId(params, location), [params, location]);
+  const reportId = useMemo(() => pickReportIdFromParams(params), [params]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -165,8 +197,6 @@ export default function AdminReportContent() {
   const [lastSavedAt, setLastSavedAt] = useState(null);
 
   async function load() {
-    if (!reportId) return;
-
     setLoading(true);
     setError("");
     setInfo("");
@@ -176,11 +206,11 @@ export default function AdminReportContent() {
       const d = res.data;
 
       setDto(d);
-      setTitle(d.title || initialTitle || `Report #${reportId}`);
-      setLegalDocumentId(d.legalDocumentId ?? null);
+      setTitle(pick(d, ["title", "Title"], "") || initialTitle || `Report #${reportId}`);
+      setLegalDocumentId(pick(d, ["legalDocumentId", "LegalDocumentId"], null));
 
-      setContentHtml(d.contentText ?? "");
-      setLastSavedAt(d.updatedAt ?? null);
+      setContentHtml(pick(d, ["contentText", "ContentText"], "") ?? "");
+      setLastSavedAt(pick(d, ["updatedAt", "UpdatedAt"], null));
     } catch (e) {
       setError(getApiErrorMessage(e, "Failed to load report."));
     } finally {
@@ -189,36 +219,36 @@ export default function AdminReportContent() {
   }
 
   async function save() {
-    if (!dto || !reportId) return;
+    if (!dto) return;
 
     setSaving(true);
     setError("");
     setInfo("");
 
     try {
-      const decisionType = enumToInt(dto.decisionType, DECISION_OPTIONS, 1);
-      const caseType = enumToInt(dto.caseType, CASETYPE_OPTIONS, 2);
-      const service = enumToInt(dto.service, SERVICE_OPTIONS, 1);
+      // ✅ robust casing + enum handling
+      const decisionType = enumToInt(pick(dto, ["decisionType", "DecisionType"], 1), DECISION_OPTIONS, 1);
+      const caseType = enumToInt(pick(dto, ["caseType", "CaseType"], 2), CASETYPE_OPTIONS, 2);
+      const service = enumToInt(pick(dto, ["service", "Service"], 1), SERVICE_OPTIONS, 1);
 
       const payload = {
         category: 6,
-        countryId: dto.countryId ?? 0,
+        countryId: pick(dto, ["countryId", "CountryId"], 0) ?? 0,
         service,
 
-        citation: dto.citation ?? null,
-        reportNumber: String(dto.reportNumber || "").trim(),
-        year: dto.year ?? new Date().getUTCFullYear(),
-        caseNumber: dto.caseNumber ?? null,
+        citation: pick(dto, ["citation", "Citation"], null),
+        reportNumber: String(pick(dto, ["reportNumber", "ReportNumber"], "") || "").trim(),
+        year: pick(dto, ["year", "Year"], new Date().getUTCFullYear()),
+        caseNumber: pick(dto, ["caseNumber", "CaseNumber"], null),
 
         decisionType,
         caseType,
 
-        court: dto.court ?? null,
-        parties: dto.parties ?? null,
-        judges: dto.judges ?? null,
-        decisionDate: isoOrNullFromDateInput(dateInputFromIso(dto.decisionDate)),
+        court: pick(dto, ["court", "Court"], null),
+        parties: pick(dto, ["parties", "Parties"], null),
+        judges: pick(dto, ["judges", "Judges"], null),
+        decisionDate: isoOrNullFromDateInput(dateInputFromIso(pick(dto, ["decisionDate", "DecisionDate"], null))),
 
-        // ✅ store HTML string
         contentText: String(contentHtml ?? ""),
       };
 
@@ -234,7 +264,8 @@ export default function AdminReportContent() {
 
       await api.put(`/law-reports/${reportId}`, payload);
 
-      setLastSavedAt(new Date().toISOString());
+      const nowIso = new Date().toISOString();
+      setLastSavedAt(nowIso);
       setInfo("Saved.");
       await load();
     } catch (e) {
@@ -254,8 +285,9 @@ export default function AdminReportContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportId]);
 
-  const decisionLabel = dto ? labelFrom(DECISION_OPTIONS, dto.decisionType) : "—";
-  const caseLabel = dto ? labelFrom(CASETYPE_OPTIONS, dto.caseType) : "—";
+  // ✅ Decision/case labels from DB (robust casing)
+  const decisionLabel = dto ? labelFrom(DECISION_OPTIONS, pick(dto, ["decisionType", "DecisionType"], null)) : "—";
+  const caseLabel = dto ? labelFrom(CASETYPE_OPTIONS, pick(dto, ["caseType", "CaseType"], null)) : "—";
 
   return (
     <div className="admin-page admin-page-wide">
@@ -263,12 +295,28 @@ export default function AdminReportContent() {
         .rc-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
         .rc-title { font-size: 22px; font-weight: 900; margin: 0; }
         .rc-sub { color:#6b7280; margin-top:6px; font-size: 13px; font-weight: 700; }
-        .rc-actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+        .rc-actions { display:flex; gap:10px; align-items:center; flex-wrap:nowrap; }
         .rc-card { margin-top: 14px; border-radius: 16px; border: 1px solid #e5e7eb; background: #fff; overflow: hidden; }
         .rc-meta { display:flex; gap:10px; flex-wrap:wrap; padding: 12px 14px; background: #fafafa; border-bottom: 1px solid #e5e7eb; color:#374151; font-weight: 800; font-size: 12px; }
         .rc-pill { display:inline-flex; align-items:center; gap:8px; border: 1px solid #e5e7eb; background:#fff; padding: 6px 10px; border-radius: 999px; }
         .rc-editor-wrap { padding: 14px; }
         .ck-editor__editable_inline { min-height: 68vh; }
+
+        .la-icon-btn {
+          display:inline-flex; align-items:center; justify-content:center;
+          width: 36px; height: 36px;
+          border-radius: 12px;
+          border: 1px solid #e5e7eb;
+          background: #fff;
+          cursor: pointer;
+          color: #111827;
+        }
+        .la-icon-btn:hover { background:#fafafa; }
+        .la-icon-btn:disabled { opacity: .55; cursor: not-allowed; }
+        .la-icon-btn.primary { border-color:#c7d2fe; }
+        .la-icon-btn.primary:hover { background:#f5f7ff; }
+        .la-icon-btn.success { border-color:#bbf7d0; }
+        .la-icon-btn.success:hover { background:#f0fdf4; }
       `}</style>
 
       <div className="rc-head">
@@ -287,18 +335,19 @@ export default function AdminReportContent() {
           </div>
         </div>
 
+        {/* ✅ small icon buttons in one row */}
         <div className="rc-actions">
-          <button className="admin-btn" onClick={() => navigate(-1)} disabled={saving}>
-            Back
-          </button>
+          <IconButton title="Back" onClick={() => navigate(-1)} disabled={saving}>
+            <Icon name="back" />
+          </IconButton>
 
-          <button className="admin-btn" onClick={load} disabled={loading || saving || !reportId}>
-            Refresh
-          </button>
+          <IconButton title="Refresh" onClick={load} disabled={loading || saving} tone="primary">
+            <Icon name="refresh" />
+          </IconButton>
 
-          <button className="admin-btn primary" onClick={save} disabled={loading || saving || !reportId}>
-            {saving ? "Saving…" : "Save"}
-          </button>
+          <IconButton title="Save" onClick={save} disabled={loading || saving} tone="success">
+            <Icon name="save" />
+          </IconButton>
         </div>
       </div>
 
