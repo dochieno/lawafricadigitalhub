@@ -1,4 +1,3 @@
-// src/pages/dashboard/admin/AdminLLRServices.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../../api/client";
@@ -10,8 +9,6 @@ import {
   FiEdit2,
   FiFileText,
   FiTrash2,
-  FiX,
-  FiCheck,
   FiSearch,
 } from "react-icons/fi";
 
@@ -49,6 +46,7 @@ const CASETYPE_OPTIONS = [
   { label: "Constitutional", value: 6 },
 ];
 
+// Service options (used in Create/Edit + search + optional chip)
 const SERVICE_OPTIONS = [
   { label: "LawAfrica Law Reports (LLR)", value: 1 },
   { label: "Odungas Digest", value: 2 },
@@ -68,27 +66,6 @@ const SERVICE_OPTIONS = [
 function toInt(v, fallback = 0) {
   const n = Number(v);
   return Number.isFinite(n) ? Math.floor(n) : fallback;
-}
-
-// ✅ normalize enums that may come as number OR string ("Judgment") OR "1"
-function enumToInt(value, options, fallback = 0) {
-  if (value === null || value === undefined) return fallback;
-
-  if (typeof value === "number") return toInt(value, fallback);
-
-  const s = String(value).trim();
-  if (!s) return fallback;
-
-  const asNum = Number(s);
-  if (Number.isFinite(asNum)) return Math.floor(asNum);
-
-  const hit = options.find((o) => o.label.toLowerCase() === s.toLowerCase());
-  return hit ? hit.value : fallback;
-}
-
-function labelFrom(options, value) {
-  const v = enumToInt(value, options, 0);
-  return options.find((o) => o.value === v)?.label || "—";
 }
 
 function toIntOrNull(v) {
@@ -116,11 +93,29 @@ function dateInputFromIso(iso) {
   }
 }
 
+function badgeLabel(map, v) {
+  const hit = map.find((x) => x.value === toInt(v));
+  return hit?.label || "—";
+}
+
 function shortServiceLabel(serviceValue) {
-  const v = enumToInt(serviceValue, SERVICE_OPTIONS, 0);
-  const hit = SERVICE_OPTIONS.find((x) => x.value === v);
+  const hit = SERVICE_OPTIONS.find((x) => x.value === toInt(serviceValue));
   if (!hit) return "—";
   return hit.label.replace(/\s*\(.*?\)\s*/g, "").trim();
+}
+
+function safeTrim(v) {
+  const s = String(v ?? "").trim();
+  return s ? s : "";
+}
+
+function truncateMiddle(text, max = 28) {
+  const s = safeTrim(text);
+  if (!s) return "";
+  if (s.length <= max) return s;
+  const left = Math.ceil((max - 3) / 2);
+  const right = Math.floor((max - 3) / 2);
+  return `${s.slice(0, left)}...${s.slice(s.length - right)}`;
 }
 
 const emptyForm = {
@@ -153,6 +148,7 @@ export default function AdminLLRServices() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
+  // modal
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ ...emptyForm });
@@ -195,7 +191,8 @@ export default function AdminLLRServices() {
 
     try {
       const res = await api.get("/law-reports/admin");
-      setRows(Array.isArray(res.data) ? res.data : []);
+      const list = Array.isArray(res.data) ? res.data : [];
+      setRows(list);
     } catch (e) {
       setRows([]);
       const msg = getApiErrorMessage(e, "Failed to load law reports.");
@@ -232,7 +229,7 @@ export default function AdminLLRServices() {
       const judges = String(r.judges ?? "").toLowerCase();
 
       const countryName = (countryMap.get(Number(r.countryId)) || "").toLowerCase();
-      const serviceLabel = String(labelFrom(SERVICE_OPTIONS, r.service)).toLowerCase();
+      const serviceLabel = (SERVICE_OPTIONS.find((x) => x.value === toInt(r.service))?.label || "").toLowerCase();
 
       const meta = `${reportNumber} ${year} ${citation} ${parties} ${court} ${caseNo} ${judges} ${countryName} ${serviceLabel}`;
       return title.includes(s) || meta.includes(s);
@@ -267,13 +264,13 @@ export default function AdminLLRServices() {
       setEditing(d);
       setForm({
         countryId: d.countryId ?? "",
-        service: enumToInt(d.service, SERVICE_OPTIONS, 1),
+        service: toInt(d.service, 1),
         citation: d.citation ?? "",
         reportNumber: d.reportNumber ?? "",
         year: d.year ?? "",
         caseNumber: d.caseNumber ?? "",
-        decisionType: enumToInt(d.decisionType, DECISION_OPTIONS, 1),
-        caseType: enumToInt(d.caseType, CASETYPE_OPTIONS, 2),
+        decisionType: toInt(d.decisionType, 1),
+        caseType: toInt(d.caseType, 2),
         court: d.court ?? "",
         parties: d.parties ?? "",
         judges: d.judges ?? "",
@@ -290,17 +287,17 @@ export default function AdminLLRServices() {
 
   function buildPayload() {
     return {
-      category: 6,
+      category: 6, // fixed
       countryId: toIntOrNull(form.countryId) ?? 0,
-      service: enumToInt(form.service, SERVICE_OPTIONS, 1),
+      service: toInt(form.service, 1),
 
       citation: form.citation?.trim() || null,
       reportNumber: String(form.reportNumber || "").trim(),
       year: toIntOrNull(form.year) ?? new Date().getUTCFullYear(),
       caseNumber: form.caseNumber?.trim() || null,
 
-      decisionType: enumToInt(form.decisionType, DECISION_OPTIONS, 1),
-      caseType: enumToInt(form.caseType, CASETYPE_OPTIONS, 2),
+      decisionType: toInt(form.decisionType, 1),
+      caseType: toInt(form.caseType, 2),
 
       court: form.court?.trim() || null,
       parties: form.parties?.trim() || null,
@@ -315,7 +312,7 @@ export default function AdminLLRServices() {
     const countryId = toIntOrNull(form.countryId);
     if (!countryId || countryId <= 0) return "Country is required.";
 
-    const service = enumToInt(form.service, SERVICE_OPTIONS, 0);
+    const service = toInt(form.service, 0);
     if (!service || service <= 0) return "Service is required.";
 
     if (!String(form.reportNumber || "").trim()) return "Report number is required (e.g. CAR353).";
@@ -378,9 +375,9 @@ export default function AdminLLRServices() {
   }
 
   function openContent(row) {
-    // route: /dashboard/admin/llr-services/:id/content
-    navigate(`/dashboard/admin/llr-services/${row.id}/content`, {
-      state: { title: row.title || "" },
+    const rid = Number(row?.id);
+    navigate(`/dashboard/admin/llr-services/${rid}/content`, {
+      state: { title: row.title || "", reportId: rid },
     });
   }
 
@@ -391,22 +388,34 @@ export default function AdminLLRServices() {
         .admin-table-wrap { max-height: 72vh; overflow:auto; border-radius: 18px; }
         .admin-table { font-size: 13px; }
         .admin-table thead th { position: sticky; top: 0; z-index: 2; background: #fafafa; }
+
         .row-zebra { background: #fafafa; }
         .row-hover:hover td { background: #fbfbff; }
+
         .num-cell { text-align:right; font-variant-numeric: tabular-nums; }
         .tight { white-space: nowrap; }
-        .titleCell { display:flex; flex-direction:column; gap:8px; min-width: 260px; }
+
+        .titleCell { display:flex; flex-direction:column; gap:8px; min-width: 280px; }
         .titleMain { font-weight: 950; line-height: 1.25; }
+
         .chips { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-        .chip { display:inline-flex; align-items:center; padding: 4px 10px; border-radius: 999px; border:1px solid #e5e7eb; background:#fff; font-weight: 900; font-size: 11px; color:#374151; }
+        .chip {
+          display:inline-flex; align-items:center; gap:6px;
+          padding: 4px 10px; border-radius: 999px;
+          border:1px solid #e5e7eb; background:#fff;
+          font-weight: 900; font-size: 11px; color:#374151;
+          max-width: 320px;
+        }
         .chip.soft { background:#f9fafb; }
         .chip.good { background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
         .chip.warn { background:#fff7ed; border-color:#fed7aa; color:#9a3412; }
         .chip.muted { background:#f3f4f6; border-color:#e5e7eb; color:#6b7280; }
+
         .actionsRow { display:flex; justify-content:flex-end; gap:10px; align-items:center; flex-wrap:nowrap; }
+
         .iconBtn {
           display:inline-flex; align-items:center; justify-content:center;
-          width: 36px; height: 36px; border-radius: 10px;
+          width: 34px; height: 34px; border-radius: 10px;
           border: 1px solid #e5e7eb; background: #fff;
           cursor: pointer;
         }
@@ -416,6 +425,22 @@ export default function AdminLLRServices() {
         .iconBtn.danger:hover { background:#fff5f5; }
         .iconBtn.primary { border-color:#c7d2fe; }
         .iconBtn.primary:hover { background:#f5f7ff; }
+
+        /* ✅ Smaller top buttons (icon-only) */
+        .topIconBtn {
+          display:inline-flex; align-items:center; justify-content:center;
+          width: 38px; height: 38px; border-radius: 12px;
+          border: 1px solid #e5e7eb; background:#fff;
+          cursor:pointer;
+        }
+        .topIconBtn:hover { background:#fafafa; }
+        .topIconBtn.primary {
+          border-color: rgba(127,29,29,0.25);
+          background: rgba(127,29,29,0.08);
+        }
+        .topIconBtn.primary:hover { background: rgba(127,29,29,0.12); }
+        .topIconBtn:disabled { opacity: .55; cursor:not-allowed; }
+
         .toolbarRow { display:flex; gap:12px; align-items:center; }
         .searchWrap { position: relative; flex: 1; }
         .searchIcon { position:absolute; left: 12px; top: 50%; transform: translateY(-50%); color:#6b7280; }
@@ -430,15 +455,24 @@ export default function AdminLLRServices() {
           </p>
         </div>
 
-        <div className="admin-actions">
-          <button className="admin-btn" onClick={fetchList} disabled={busy || loading}>
-            <FiRefreshCw style={{ marginRight: 8 }} />
-            Refresh
+        {/* ✅ Small icon buttons with tooltips */}
+        <div className="admin-actions" style={{ gap: 10 }}>
+          <button
+            className="topIconBtn"
+            title="Refresh list"
+            onClick={fetchList}
+            disabled={busy || loading}
+          >
+            <FiRefreshCw />
           </button>
 
-          <button className="admin-btn primary compact" onClick={openCreate} disabled={busy}>
-            <FiPlus style={{ marginRight: 8 }} />
-            New Report
+          <button
+            className="topIconBtn primary"
+            title="Create new report"
+            onClick={openCreate}
+            disabled={busy}
+          >
+            <FiPlus />
           </button>
         </div>
       </div>
@@ -468,7 +502,7 @@ export default function AdminLLRServices() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th style={{ width: "40%" }}>Title</th>
+                <th style={{ width: "42%" }}>Title</th>
                 <th style={{ width: "12%" }}>Country</th>
                 <th style={{ width: "12%" }}>Report No.</th>
                 <th style={{ width: "6%" }} className="num-cell">Year</th>
@@ -476,7 +510,7 @@ export default function AdminLLRServices() {
                 <th style={{ width: "10%" }}>Case Type</th>
                 <th style={{ width: "16%" }}>Parties</th>
                 <th style={{ width: "8%" }} className="tight">Date</th>
-                <th style={{ width: "12%", textAlign: "right" }}>Actions</th>
+                <th style={{ width: "10%", textAlign: "right" }}>Actions</th>
               </tr>
             </thead>
 
@@ -484,32 +518,56 @@ export default function AdminLLRServices() {
               {!loading && filtered.length === 0 && (
                 <tr>
                   <td colSpan={9} style={{ color: "#6b7280", padding: 16, fontWeight: 800 }}>
-                    No reports found. Click <b>New Report</b> to add one.
+                    No reports found. Click <b>+</b> to add one.
                   </td>
                 </tr>
               )}
 
               {filtered.map((r, idx) => {
-                const decisionValue = enumToInt(r.decisionType, DECISION_OPTIONS, 0);
-                const caseValue = enumToInt(r.caseType, CASETYPE_OPTIONS, 0);
+                const decisionValue = toInt(r.decisionType, 0);
+                const caseValue = toInt(r.caseType, 0);
 
-                const decisionLabel = labelFrom(DECISION_OPTIONS, r.decisionType);
-                const caseLabel = labelFrom(CASETYPE_OPTIONS, r.caseType);
+                const decisionLabel = badgeLabel(DECISION_OPTIONS, decisionValue);
+                const caseLabel = badgeLabel(CASETYPE_OPTIONS, caseValue);
 
                 const countryName =
                   countryMap.get(Number(r.countryId)) || (r.countryId ? `#${r.countryId}` : "—");
+
+                // ✅ These are the two you asked for (from DB)
+                const citationVal = safeTrim(r.citation);
+                const caseNoVal = safeTrim(r.caseNumber);
 
                 return (
                   <tr key={r.id} className={`${idx % 2 === 1 ? "row-zebra" : ""} row-hover`}>
                     <td>
                       <div className="titleCell">
                         <div className="titleMain">{r.title || "—"}</div>
+
+                        {/* ✅ Chips under title: show values from DB */}
                         <div className="chips">
                           <span className="chip soft" title="Service">
                             {shortServiceLabel(r.service)}
                           </span>
-                          {r.citation ? <span className="chip" title="Has citation">Citation</span> : null}
-                          {r.caseNumber ? <span className="chip muted" title="Has case number">Case No.</span> : null}
+
+                          {citationVal ? (
+                            <span className="chip" title={citationVal}>
+                              Citation: {truncateMiddle(citationVal, 34)}
+                            </span>
+                          ) : (
+                            <span className="chip muted" title="No citation saved">
+                              Citation: —
+                            </span>
+                          )}
+
+                          {caseNoVal ? (
+                            <span className="chip" title={caseNoVal}>
+                              Case No.: {truncateMiddle(caseNoVal, 22)}
+                            </span>
+                          ) : (
+                            <span className="chip muted" title="No case number saved">
+                              Case No.: —
+                            </span>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -540,15 +598,30 @@ export default function AdminLLRServices() {
 
                     <td>
                       <div className="actionsRow">
-                        <button className="iconBtn" title="Edit report details" onClick={() => openEdit(r)} disabled={busy}>
+                        <button
+                          className="iconBtn"
+                          title="Edit report details"
+                          onClick={() => openEdit(r)}
+                          disabled={busy}
+                        >
                           <FiEdit2 />
                         </button>
 
-                        <button className="iconBtn primary" title="Edit formatted report content" onClick={() => openContent(r)} disabled={busy}>
+                        <button
+                          className="iconBtn primary"
+                          title="Edit formatted report content"
+                          onClick={() => openContent(r)}
+                          disabled={busy}
+                        >
                           <FiFileText />
                         </button>
 
-                        <button className="iconBtn danger" title="Delete report" onClick={() => remove(r)} disabled={busy}>
+                        <button
+                          className="iconBtn danger"
+                          title="Delete report"
+                          onClick={() => remove(r)}
+                          disabled={busy}
+                        >
                           <FiTrash2 />
                         </button>
                       </div>
@@ -561,6 +634,7 @@ export default function AdminLLRServices() {
         </div>
       </div>
 
+      {/* ===================== CREATE/EDIT MODAL ===================== */}
       {open && (
         <div className="admin-modal-overlay" onClick={closeModal}>
           <div className="admin-modal" style={{ maxWidth: 1100 }} onClick={(e) => e.stopPropagation()}>
@@ -576,7 +650,6 @@ export default function AdminLLRServices() {
               </div>
 
               <button className="admin-btn" onClick={closeModal} disabled={busy}>
-                <FiX style={{ marginRight: 8 }} />
                 Close
               </button>
             </div>
@@ -587,7 +660,11 @@ export default function AdminLLRServices() {
                   <label>Country *</label>
 
                   {countries.length > 0 ? (
-                    <select value={String(form.countryId || "")} onChange={(e) => setField("countryId", e.target.value)} disabled={busy}>
+                    <select
+                      value={String(form.countryId || "")}
+                      onChange={(e) => setField("countryId", e.target.value)}
+                      disabled={busy}
+                    >
                       <option value="">Select country…</option>
                       {countries.map((c) => (
                         <option key={c.id} value={c.id}>
@@ -596,13 +673,27 @@ export default function AdminLLRServices() {
                       ))}
                     </select>
                   ) : (
-                    <input type="number" min="1" value={form.countryId} onChange={(e) => setField("countryId", e.target.value)} placeholder="CountryId" disabled={busy} />
+                    <>
+                      <input
+                        type="number"
+                        min="1"
+                        value={form.countryId}
+                        onChange={(e) => setField("countryId", e.target.value)}
+                        placeholder="CountryId (e.g. 1 = Kenya)"
+                        disabled={busy}
+                      />
+                      <div className="hint">Tip: ensure GET /api/country is accessible.</div>
+                    </>
                   )}
                 </div>
 
                 <div className="admin-field">
                   <label>Service *</label>
-                  <select value={String(form.service)} onChange={(e) => setField("service", e.target.value)} disabled={busy}>
+                  <select
+                    value={String(form.service)}
+                    onChange={(e) => setField("service", toInt(e.target.value, 1))}
+                    disabled={busy}
+                  >
                     {SERVICE_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
@@ -613,27 +704,54 @@ export default function AdminLLRServices() {
 
                 <div className="admin-field">
                   <label>Report Number *</label>
-                  <input value={form.reportNumber} onChange={(e) => setField("reportNumber", e.target.value)} placeholder="e.g. CAR353" disabled={busy} />
+                  <input
+                    value={form.reportNumber}
+                    onChange={(e) => setField("reportNumber", e.target.value)}
+                    placeholder="e.g. CAR353"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Year *</label>
-                  <input type="number" min="1900" max="2100" value={form.year} onChange={(e) => setField("year", e.target.value)} disabled={busy} />
+                  <input
+                    type="number"
+                    min="1900"
+                    max="2100"
+                    value={form.year}
+                    onChange={(e) => setField("year", e.target.value)}
+                    placeholder="e.g. 2020"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Case Number</label>
-                  <input value={form.caseNumber} onChange={(e) => setField("caseNumber", e.target.value)} disabled={busy} />
+                  <input
+                    value={form.caseNumber}
+                    onChange={(e) => setField("caseNumber", e.target.value)}
+                    placeholder="e.g. Petition 12 of 2020"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Citation</label>
-                  <input value={form.citation} onChange={(e) => setField("citation", e.target.value)} disabled={busy} />
+                  <input
+                    value={form.citation}
+                    onChange={(e) => setField("citation", e.target.value)}
+                    placeholder="Optional (preferred if available)"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Decision Type *</label>
-                  <select value={String(form.decisionType)} onChange={(e) => setField("decisionType", e.target.value)} disabled={busy}>
+                  <select
+                    value={String(form.decisionType)}
+                    onChange={(e) => setField("decisionType", toInt(e.target.value, 1))}
+                    disabled={busy}
+                  >
                     {DECISION_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
@@ -644,7 +762,11 @@ export default function AdminLLRServices() {
 
                 <div className="admin-field">
                   <label>Case Type *</label>
-                  <select value={String(form.caseType)} onChange={(e) => setField("caseType", e.target.value)} disabled={busy}>
+                  <select
+                    value={String(form.caseType)}
+                    onChange={(e) => setField("caseType", toInt(e.target.value, 2))}
+                    disabled={busy}
+                  >
                     {CASETYPE_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
@@ -655,27 +777,61 @@ export default function AdminLLRServices() {
 
                 <div className="admin-field">
                   <label>Court</label>
-                  <input value={form.court} onChange={(e) => setField("court", e.target.value)} disabled={busy} />
+                  <input
+                    value={form.court}
+                    onChange={(e) => setField("court", e.target.value)}
+                    placeholder="e.g. Court of Appeal"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field admin-span2">
                   <label>Parties</label>
-                  <input value={form.parties} onChange={(e) => setField("parties", e.target.value)} disabled={busy} />
+                  <input
+                    value={form.parties}
+                    onChange={(e) => setField("parties", e.target.value)}
+                    placeholder="e.g. A v B"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field admin-span2">
                   <label>Judges</label>
-                  <textarea rows={2} value={form.judges} onChange={(e) => setField("judges", e.target.value)} disabled={busy} />
+                  <textarea
+                    rows={2}
+                    value={form.judges}
+                    onChange={(e) => setField("judges", e.target.value)}
+                    placeholder="Separate by newline or semicolon"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Decision Date</label>
-                  <input type="date" value={form.decisionDate} onChange={(e) => setField("decisionDate", e.target.value)} disabled={busy} />
+                  <input
+                    type="date"
+                    value={form.decisionDate}
+                    onChange={(e) => setField("decisionDate", e.target.value)}
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field admin-span2">
                   <label>Content Text {editing?.id ? "(optional here)" : "*"}</label>
-                  <textarea rows={10} value={form.contentText} onChange={(e) => setField("contentText", e.target.value)} disabled={busy} />
+                  <textarea
+                    rows={10}
+                    value={form.contentText}
+                    onChange={(e) => setField("contentText", e.target.value)}
+                    placeholder={
+                      editing?.id
+                        ? "Optional: use Report Content for formatted editing."
+                        : "Required on Create: paste report body here (you can format later in Report Content)."
+                    }
+                    disabled={busy}
+                  />
+                  <div className="hint">
+                    Tip: Use <b>Report Content</b> for formatting (bold, headings, links).
+                  </div>
                 </div>
               </div>
             </div>
@@ -686,7 +842,6 @@ export default function AdminLLRServices() {
               </button>
 
               <button className="admin-btn primary" onClick={save} disabled={busy}>
-                <FiCheck style={{ marginRight: 8 }} />
                 {busy ? "Saving…" : editing ? "Save changes" : "Create"}
               </button>
             </div>

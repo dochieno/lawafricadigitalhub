@@ -62,23 +62,19 @@ function toInt(v, fallback = 0) {
 }
 
 /**
- * ✅ Important: some APIs serialize enums as strings ("Judgment") instead of numbers (1).
- * This normalizes either to an int.
+ * Normalize enums arriving as number (1) or string ("Judgment") or numeric string ("1")
  */
 function enumToInt(value, options, fallback = 0) {
   if (value === null || value === undefined) return fallback;
 
-  // numeric already
   if (typeof value === "number") return toInt(value, fallback);
 
   const s = String(value).trim();
   if (!s) return fallback;
 
-  // numeric string "1"
   const asNum = Number(s);
   if (Number.isFinite(asNum)) return Math.floor(asNum);
 
-  // enum string "Judgment" -> find label match
   const hit = options.find((o) => o.label.toLowerCase() === s.toLowerCase());
   return hit ? hit.value : fallback;
 }
@@ -104,14 +100,42 @@ function isoOrNullFromDateInput(yyyyMmDd) {
   return Number.isFinite(d.getTime()) ? d.toISOString() : null;
 }
 
-function pickReportIdFromParams(params) {
-  // supports: :id, :reportId, :lawReportId (whichever you used)
-  const raw =
+/**
+ * ✅ Extract id from multiple sources:
+ * 1) route params (:id, :reportId, :lawReportId, etc)
+ * 2) location.state.reportId
+ * 3) querystring ?id= or ?reportId=
+ * 4) last resort: parse from pathname digits
+ */
+function resolveReportId(params, location) {
+  const fromParams =
     params?.id ??
     params?.reportId ??
     params?.lawReportId ??
     params?.lawreportid ??
     null;
+
+  const fromState =
+    location?.state?.reportId ??
+    location?.state?.id ??
+    null;
+
+  const search = new URLSearchParams(location?.search || "");
+  const fromQuery =
+    search.get("id") ||
+    search.get("reportId") ||
+    search.get("lawReportId");
+
+  // last resort: /.../123/... => pick the last number in pathname
+  let fromPath = null;
+  try {
+    const matches = String(location?.pathname || "").match(/(\d+)(?!.*\d)/);
+    fromPath = matches?.[1] ?? null;
+  } catch {
+    fromPath = null;
+  }
+
+  const raw = fromParams ?? fromState ?? fromQuery ?? fromPath;
 
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
@@ -123,7 +147,9 @@ export default function AdminReportContent() {
   const location = useLocation();
 
   const initialTitle = location.state?.title || "";
-  const reportId = useMemo(() => pickReportIdFromParams(params), [params]);
+
+  // ✅ FIX: id extraction from multiple sources
+  const reportId = useMemo(() => resolveReportId(params, location), [params, location]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -133,13 +159,14 @@ export default function AdminReportContent() {
 
   const [dto, setDto] = useState(null);
 
-  // HTML string stored in backend ContentText
   const [contentHtml, setContentHtml] = useState("");
   const [title, setTitle] = useState(initialTitle);
   const [legalDocumentId, setLegalDocumentId] = useState(null);
   const [lastSavedAt, setLastSavedAt] = useState(null);
 
   async function load() {
+    if (!reportId) return;
+
     setLoading(true);
     setError("");
     setInfo("");
@@ -152,7 +179,6 @@ export default function AdminReportContent() {
       setTitle(d.title || initialTitle || `Report #${reportId}`);
       setLegalDocumentId(d.legalDocumentId ?? null);
 
-      // content may be plain text or HTML (we keep as-is)
       setContentHtml(d.contentText ?? "");
       setLastSavedAt(d.updatedAt ?? null);
     } catch (e) {
@@ -163,14 +189,13 @@ export default function AdminReportContent() {
   }
 
   async function save() {
-    if (!dto) return;
+    if (!dto || !reportId) return;
 
     setSaving(true);
     setError("");
     setInfo("");
 
     try {
-      // normalize enum fields for backend
       const decisionType = enumToInt(dto.decisionType, DECISION_OPTIONS, 1);
       const caseType = enumToInt(dto.caseType, CASETYPE_OPTIONS, 2);
       const service = enumToInt(dto.service, SERVICE_OPTIONS, 1);
@@ -209,8 +234,7 @@ export default function AdminReportContent() {
 
       await api.put(`/law-reports/${reportId}`, payload);
 
-      const nowIso = new Date().toISOString();
-      setLastSavedAt(nowIso);
+      setLastSavedAt(new Date().toISOString());
       setInfo("Saved.");
       await load();
     } catch (e) {
@@ -244,7 +268,6 @@ export default function AdminReportContent() {
         .rc-meta { display:flex; gap:10px; flex-wrap:wrap; padding: 12px 14px; background: #fafafa; border-bottom: 1px solid #e5e7eb; color:#374151; font-weight: 800; font-size: 12px; }
         .rc-pill { display:inline-flex; align-items:center; gap:8px; border: 1px solid #e5e7eb; background:#fff; padding: 6px 10px; border-radius: 999px; }
         .rc-editor-wrap { padding: 14px; }
-        /* CKEditor sizing: make it fill the page area nicely */
         .ck-editor__editable_inline { min-height: 68vh; }
       `}</style>
 
@@ -269,11 +292,11 @@ export default function AdminReportContent() {
             Back
           </button>
 
-          <button className="admin-btn" onClick={load} disabled={loading || saving}>
+          <button className="admin-btn" onClick={load} disabled={loading || saving || !reportId}>
             Refresh
           </button>
 
-          <button className="admin-btn primary" onClick={save} disabled={loading || saving}>
+          <button className="admin-btn primary" onClick={save} disabled={loading || saving || !reportId}>
             {saving ? "Saving…" : "Save"}
           </button>
         </div>
