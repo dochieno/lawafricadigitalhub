@@ -160,6 +160,11 @@ export default function AppShell() {
                       LLR Services
                     </NavLink>
                     
+                    <NavLink to="/dashboard/admin/llr-services/import" className="nav-link nav-child">
+                      Import Cases
+                    </NavLink>
+                    
+                    
                     <NavLink to="/dashboard/admin/institution-subscriptions" className="nav-link nav-child">
                       Subscriptions
                     </NavLink>
