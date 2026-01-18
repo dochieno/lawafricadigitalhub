@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../../api/client";
 import "../../../styles/adminCrud.css";
+import AdminPageFooter from "../../../components/AdminPageFooter";
+
 
 /* =========================
    Helpers
@@ -98,7 +100,7 @@ const CASETYPE_OPTIONS = [
   { label: "Constitutional", value: 6 },
 ];
 
-// Service options (Create/Edit + search + chip)
+// Service options (Create/Edit + search)
 const SERVICE_OPTIONS = [
   { label: "LawAfrica Law Reports (LLR)", value: 1 },
   { label: "Odungas Digest", value: 2 },
@@ -115,30 +117,46 @@ const SERVICE_OPTIONS = [
   { label: "Kenya Industrial Property Institute", value: 13 },
 ];
 
-function shortServiceLabel(serviceValue) {
-  const hit = SERVICE_OPTIONS.find((x) => x.value === enumToInt(serviceValue, SERVICE_OPTIONS, 0));
-  if (!hit) return "—";
-  return hit.label.replace(/\s*\(.*?\)\s*/g, "").trim();
-}
-
 /* =========================
    Inline SVG Icons (no deps)
 ========================= */
 function Icon({ name }) {
-  const common = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", xmlns: "http://www.w3.org/2000/svg" };
+  const common = {
+    width: 18,
+    height: 18,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    xmlns: "http://www.w3.org/2000/svg",
+  };
 
   switch (name) {
     case "refresh":
       return (
         <svg {...common}>
-          <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          <path d="M21 3v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path
+            d="M21 12a9 9 0 1 1-2.64-6.36"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <path
+            d="M21 3v6h-6"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
       );
     case "plus":
       return (
         <svg {...common}>
-          <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path
+            d="M12 5v14M5 12h14"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
         </svg>
       );
     case "search":
@@ -149,7 +167,12 @@ function Icon({ name }) {
             stroke="currentColor"
             strokeWidth="2"
           />
-          <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path
+            d="M21 21l-4.35-4.35"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
         </svg>
       );
     case "edit":
@@ -178,13 +201,23 @@ function Icon({ name }) {
             strokeWidth="2"
             strokeLinejoin="round"
           />
-          <path d="M14 2v6h6" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+          <path
+            d="M14 2v6h6"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
         </svg>
       );
     case "trash":
       return (
         <svg {...common}>
-          <path d="M3 6h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path
+            d="M3 6h18"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
           <path
             d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
             stroke="currentColor"
@@ -321,7 +354,6 @@ export default function AdminLLRServices() {
     if (!s) return rows;
 
     return rows.filter((r) => {
-      // handle both camel + Pascal
       const title = String(pick(r, ["title", "Title"], "")).toLowerCase();
       const reportNumber = String(pick(r, ["reportNumber", "ReportNumber"], "")).toLowerCase();
       const year = String(pick(r, ["year", "Year"], "")).toLowerCase();
@@ -334,6 +366,7 @@ export default function AdminLLRServices() {
       const countryId = pick(r, ["countryId", "CountryId"], null);
       const countryName = (countryMap.get(Number(countryId)) || "").toLowerCase();
 
+      // ✅ keep service in search index (NOT shown in UI)
       const serviceVal = pick(r, ["service", "Service"], null);
       const serviceLabel =
         (SERVICE_OPTIONS.find((x) => x.value === enumToInt(serviceVal, SERVICE_OPTIONS, 0))?.label || "").toLowerCase();
@@ -483,10 +516,19 @@ export default function AdminLLRServices() {
     }
   }
 
+  // ✅ FIX: pass id in multiple ways so content page never loses it
   function openContent(row) {
     const id = pick(row, ["id", "Id"], null);
-    navigate(`/dashboard/admin/llr-services/${id}/content`, {
-      state: { title: pick(row, ["title", "Title"], "") || "" },
+    if (!id) return;
+
+    // Keep your existing route path (don’t break routing)
+    // Add query + state so AdminReportContent can always recover the id
+    navigate(`/dashboard/admin/llr-services/${id}/content?id=${id}`, {
+      state: {
+        title: pick(row, ["title", "Title"], "") || "",
+        reportId: id,
+        id: id,
+      },
     });
   }
 
@@ -516,7 +558,6 @@ export default function AdminLLRServices() {
           color:#374151;
           max-width: 520px;
         }
-        .chip.soft { background:#f9fafb; }
         .chip.good { background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
         .chip.warn { background:#fff7ed; border-color:#fed7aa; color:#9a3412; }
         .chip.muted { background:#f3f4f6; border-color:#e5e7eb; color:#6b7280; }
@@ -527,7 +568,6 @@ export default function AdminLLRServices() {
         .searchIcon { position:absolute; left: 12px; top: 50%; transform: translateY(-50%); color:#6b7280; }
         .admin-search-wide { padding-left: 42px; }
 
-        /* small icon buttons */
         .la-icon-btn {
           display:inline-flex; align-items:center; justify-content:center;
           width: 36px; height: 36px;
@@ -556,7 +596,6 @@ export default function AdminLLRServices() {
           </p>
         </div>
 
-        {/* ✅ smaller top buttons with icons + tooltips */}
         <div className="headerActions">
           <IconButton title="Refresh" onClick={fetchList} disabled={busy || loading}>
             <Icon name="refresh" />
@@ -621,7 +660,6 @@ export default function AdminLLRServices() {
               )}
 
               {filtered.map((r, idx) => {
-                // ✅ robust casing support
                 const id = pick(r, ["id", "Id"], null);
 
                 const decisionRaw = pick(r, ["decisionType", "DecisionType"], null);
@@ -651,12 +689,8 @@ export default function AdminLLRServices() {
                       <div className="titleCell">
                         <div className="titleMain">{title || "—"}</div>
 
-                        {/* ✅ chips remain in same place; now show DB values */}
+                        {/* ✅ REMOVE SERVICE CHIP (highlighted) */}
                         <div className="chips">
-                          <span className="chip soft" title="Service">
-                            {shortServiceLabel(pick(r, ["service", "Service"], null))}
-                          </span>
-
                           {citation ? (
                             <span className="chip" title="Citation">
                               <strong>Citation:</strong>&nbsp;{citation}
@@ -686,9 +720,7 @@ export default function AdminLLRServices() {
 
                     <td>
                       <span
-                        className={`chip ${
-                          decisionVal === 1 ? "good" : decisionVal === 2 ? "warn" : "muted"
-                        }`}
+                        className={`chip ${decisionVal === 1 ? "good" : decisionVal === 2 ? "warn" : "muted"}`}
                         title="Decision type"
                       >
                         {decisionLabel}
@@ -738,7 +770,9 @@ export default function AdminLLRServices() {
           <div className="admin-modal" style={{ maxWidth: 1100 }} onClick={(e) => e.stopPropagation()}>
             <div className="admin-modal-head">
               <div>
-                <h3 className="admin-modal-title">{editing ? `Edit Report #${pick(editing, ["id", "Id"], "")}` : "Create Law Report"}</h3>
+                <h3 className="admin-modal-title">
+                  {editing ? `Edit Report #${pick(editing, ["id", "Id"], "")}` : "Create Law Report"}
+                </h3>
                 <div className="admin-modal-subtitle">
                   Saves the <b>LawReport</b> and updates its linked <b>LegalDocument</b>. Use <b>Report Content</b> for full formatted editing.
                 </div>
@@ -755,7 +789,11 @@ export default function AdminLLRServices() {
                   <label>Country *</label>
 
                   {countries.length > 0 ? (
-                    <select value={String(form.countryId || "")} onChange={(e) => setField("countryId", e.target.value)} disabled={busy}>
+                    <select
+                      value={String(form.countryId || "")}
+                      onChange={(e) => setField("countryId", e.target.value)}
+                      disabled={busy}
+                    >
                       <option value="">Select country…</option>
                       {countries.map((c) => (
                         <option key={c.id} value={c.id}>
@@ -780,7 +818,11 @@ export default function AdminLLRServices() {
 
                 <div className="admin-field">
                   <label>Service *</label>
-                  <select value={String(form.service)} onChange={(e) => setField("service", toInt(e.target.value, 1))} disabled={busy}>
+                  <select
+                    value={String(form.service)}
+                    onChange={(e) => setField("service", toInt(e.target.value, 1))}
+                    disabled={busy}
+                  >
                     {SERVICE_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
@@ -791,27 +833,54 @@ export default function AdminLLRServices() {
 
                 <div className="admin-field">
                   <label>Report Number *</label>
-                  <input value={form.reportNumber} onChange={(e) => setField("reportNumber", e.target.value)} placeholder="e.g. CAR353" disabled={busy} />
+                  <input
+                    value={form.reportNumber}
+                    onChange={(e) => setField("reportNumber", e.target.value)}
+                    placeholder="e.g. CAR353"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Year *</label>
-                  <input type="number" min="1900" max="2100" value={form.year} onChange={(e) => setField("year", e.target.value)} placeholder="e.g. 2020" disabled={busy} />
+                  <input
+                    type="number"
+                    min="1900"
+                    max="2100"
+                    value={form.year}
+                    onChange={(e) => setField("year", e.target.value)}
+                    placeholder="e.g. 2020"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Case Number</label>
-                  <input value={form.caseNumber} onChange={(e) => setField("caseNumber", e.target.value)} placeholder="e.g. Petition 12 of 2020" disabled={busy} />
+                  <input
+                    value={form.caseNumber}
+                    onChange={(e) => setField("caseNumber", e.target.value)}
+                    placeholder="e.g. Petition 12 of 2020"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Citation</label>
-                  <input value={form.citation} onChange={(e) => setField("citation", e.target.value)} placeholder="Optional (preferred if available)" disabled={busy} />
+                  <input
+                    value={form.citation}
+                    onChange={(e) => setField("citation", e.target.value)}
+                    placeholder="Optional (preferred if available)"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Decision Type *</label>
-                  <select value={String(form.decisionType)} onChange={(e) => setField("decisionType", toInt(e.target.value, 1))} disabled={busy}>
+                  <select
+                    value={String(form.decisionType)}
+                    onChange={(e) => setField("decisionType", toInt(e.target.value, 1))}
+                    disabled={busy}
+                  >
                     {DECISION_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
@@ -822,7 +891,11 @@ export default function AdminLLRServices() {
 
                 <div className="admin-field">
                   <label>Case Type *</label>
-                  <select value={String(form.caseType)} onChange={(e) => setField("caseType", toInt(e.target.value, 2))} disabled={busy}>
+                  <select
+                    value={String(form.caseType)}
+                    onChange={(e) => setField("caseType", toInt(e.target.value, 2))}
+                    disabled={busy}
+                  >
                     {CASETYPE_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
@@ -877,6 +950,26 @@ export default function AdminLLRServices() {
           </div>
         </div>
       )}
+
+      <AdminPageFooter
+        left={
+            <>
+            <span className="admin-footer-brand">
+                Law<span>A</span>frica
+            </span>
+            <span className="admin-footer-dot">•</span>
+            <span className="admin-footer-muted">LLR Services</span>
+            <span className="admin-footer-dot">•</span>
+            <span className="admin-footer-muted">{loading ? "Loading…" : `${filtered.length} report(s)`}</span>
+            </>
+        }
+        right={
+            <span className="admin-footer-muted">
+            Tip: Use <b>Search</b> to filter. Use the <b>File</b> button to edit formatted content.
+            </span>
+        }
+        />
+
     </div>
   );
 }

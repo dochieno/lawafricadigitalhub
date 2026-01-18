@@ -4,6 +4,7 @@ import api from "../../../api/client";
 
 import { CKEditor } from "@ckeditor/ckeditor5-react";
 import ClassicEditor from "@ckeditor/ckeditor5-build-classic";
+import AdminPageFooter from "../../../components/AdminPageFooter";
 
 /* =========================
    Helpers
@@ -75,18 +76,6 @@ function isoOrNullFromDateInput(yyyyMmDd) {
   if (!s) return null;
   const d = new Date(`${s}T00:00:00.000Z`);
   return Number.isFinite(d.getTime()) ? d.toISOString() : null;
-}
-
-function pickReportIdFromParams(params) {
-  const raw =
-    params?.id ??
-    params?.reportId ??
-    params?.lawReportId ??
-    params?.lawreportid ??
-    null;
-
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
 }
 
 /* =========================
@@ -175,13 +164,54 @@ function IconButton({ title, onClick, disabled, tone = "neutral", children }) {
   );
 }
 
+/* =========================
+   Robust reportId resolver
+========================= */
+function resolveReportId({ params, location }) {
+  const candidates = [
+    params?.id,
+    params?.reportId,
+    params?.lawReportId,
+    params?.lawreportid,
+    location?.state?.reportId,
+    location?.state?.id,
+  ];
+
+  for (const raw of candidates) {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n > 0) return Math.floor(n);
+  }
+
+  // querystring: ?id=123
+  try {
+    const qs = new URLSearchParams(location?.search || "");
+    const qid = qs.get("id");
+    const n = Number(qid);
+    if (Number.isFinite(n) && n > 0) return Math.floor(n);
+  } catch {
+    // ignore
+  }
+
+  // pathname fallback: extract first number (e.g. /llr-services/123/content)
+  const path = String(location?.pathname || "");
+  const m = path.match(/\/(\d+)(?:\/|$)/);
+  if (m && m[1]) {
+    const n = Number(m[1]);
+    if (Number.isFinite(n) && n > 0) return Math.floor(n);
+  }
+
+  return null;
+}
+
 export default function AdminReportContent() {
   const params = useParams();
   const navigate = useNavigate();
   const location = useLocation();
 
   const initialTitle = location.state?.title || "";
-  const reportId = useMemo(() => pickReportIdFromParams(params), [params]);
+
+  // ✅ FIX: reportId can come from params OR state OR ?id= OR pathname
+  const reportId = useMemo(() => resolveReportId({ params, location }), [params, location]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -226,7 +256,6 @@ export default function AdminReportContent() {
     setInfo("");
 
     try {
-      // ✅ robust casing + enum handling
       const decisionType = enumToInt(pick(dto, ["decisionType", "DecisionType"], 1), DECISION_OPTIONS, 1);
       const caseType = enumToInt(pick(dto, ["caseType", "CaseType"], 2), CASETYPE_OPTIONS, 2);
       const service = enumToInt(pick(dto, ["service", "Service"], 1), SERVICE_OPTIONS, 1);
@@ -252,20 +281,13 @@ export default function AdminReportContent() {
         contentText: String(contentHtml ?? ""),
       };
 
-      if (!payload.countryId || payload.countryId <= 0) {
-        throw new Error("Country is missing. Go back and Edit the report to set Country.");
-      }
-      if (!payload.reportNumber) {
-        throw new Error("ReportNumber is missing. Go back and Edit the report to set it.");
-      }
-      if (!payload.contentText.trim()) {
-        throw new Error("Content is required.");
-      }
+      if (!payload.countryId || payload.countryId <= 0) throw new Error("Country is missing. Go back and Edit the report to set Country.");
+      if (!payload.reportNumber) throw new Error("ReportNumber is missing. Go back and Edit the report to set it.");
+      if (!payload.contentText.trim()) throw new Error("Content is required.");
 
       await api.put(`/law-reports/${reportId}`, payload);
 
-      const nowIso = new Date().toISOString();
-      setLastSavedAt(nowIso);
+      setLastSavedAt(new Date().toISOString());
       setInfo("Saved.");
       await load();
     } catch (e) {
@@ -285,7 +307,7 @@ export default function AdminReportContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportId]);
 
-  // ✅ Decision/case labels from DB (robust casing)
+  // ✅ labels from DB
   const decisionLabel = dto ? labelFrom(DECISION_OPTIONS, pick(dto, ["decisionType", "DecisionType"], null)) : "—";
   const caseLabel = dto ? labelFrom(CASETYPE_OPTIONS, pick(dto, ["caseType", "CaseType"], null)) : "—";
 
@@ -335,7 +357,6 @@ export default function AdminReportContent() {
           </div>
         </div>
 
-        {/* ✅ small icon buttons in one row */}
         <div className="rc-actions">
           <IconButton title="Back" onClick={() => navigate(-1)} disabled={saving}>
             <Icon name="back" />
@@ -373,8 +394,7 @@ export default function AdminReportContent() {
               data={contentHtml}
               disabled={saving}
               onChange={(event, editor) => {
-                const data = editor.getData();
-                setContentHtml(data);
+                setContentHtml(editor.getData());
               }}
               config={{
                 toolbar: [
@@ -397,6 +417,35 @@ export default function AdminReportContent() {
           )}
         </div>
       </div>
+      <AdminPageFooter
+            left={
+                <>
+                <span className="admin-footer-brand">
+                    Law<span>A</span>frica
+                </span>
+                <span className="admin-footer-dot">•</span>
+                <span className="admin-footer-muted">Report Content</span>
+                <span className="admin-footer-dot">•</span>
+                <span className="admin-footer-muted">LawReportId: {reportId ?? "—"}</span>
+                {legalDocumentId ? (
+                    <>
+                    <span className="admin-footer-dot">•</span>
+                    <span className="admin-footer-muted">LegalDocumentId: {legalDocumentId}</span>
+                    </>
+                ) : null}
+                </>
+            }
+            right={
+                <span className="admin-footer-muted">
+                {saving
+                    ? "Saving…"
+                    : lastSavedAt
+                    ? `Last saved: ${new Date(lastSavedAt).toLocaleString()}`
+                    : "Tip: Paste from Word, then use “Remove format” if needed."}
+                </span>
+            }
+            />
+
     </div>
   );
 }
