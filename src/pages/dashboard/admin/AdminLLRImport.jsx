@@ -7,42 +7,19 @@ import "../../../styles/adminCrud.css";
 import AdminPageFooter from "../../../components/AdminPageFooter";
 
 /* =========================
-   Helpers (kept consistent)
+   Helpers
 ========================= */
-function getApiErrorMessage(err, fallback = "Request failed.") {
-  const data = err?.response?.data;
-
-  if (data && typeof data === "object") {
-    if (typeof data.message === "string") return data.message;
-    if (typeof data.error === "string") return data.error;
-
-    if (data.errors && typeof data.errors === "object") {
-      const k = Object.keys(data.errors)[0];
-      const arr = data.errors[k];
-      if (Array.isArray(arr) && arr[0]) return `${k}: ${arr[0]}`;
-      return "Validation failed.";
-    }
-  }
-
-  if (typeof data === "string") return data;
-  if (typeof err?.message === "string") return err.message;
-  return fallback;
-}
-
 function toInt(v, fallback = 0) {
   const n = Number(v);
   return Number.isFinite(n) ? Math.floor(n) : fallback;
 }
-
 function normalizeText(v) {
   const s = String(v ?? "").trim();
   return s ? s : "";
 }
-
 function isEmpty(v) {
   return !String(v ?? "").trim();
 }
-
 function csvHeaderKey(s) {
   return String(s ?? "")
     .trim()
@@ -52,26 +29,27 @@ function csvHeaderKey(s) {
 }
 
 /* =========================
-   Date helpers (DD-MM-YYYY)
+   Date helpers (DD-MM-YY)
+   Example: 18-01-26
 ========================= */
 function pad2(n) {
   const x = Number(n);
   return Number.isFinite(x) ? String(x).padStart(2, "0") : "";
 }
-
-function isoToDdMmYyyy(iso) {
+function isoToDdMmYy(iso) {
   if (!iso) return "";
   const d = new Date(iso);
   if (!Number.isFinite(d.getTime())) return "";
   const dd = pad2(d.getUTCDate());
   const mm = pad2(d.getUTCMonth() + 1);
-  const yyyy = d.getUTCFullYear();
-  return `${dd}-${mm}-${yyyy}`;
+  const yy = String(d.getUTCFullYear()).slice(-2);
+  return `${dd}-${mm}-${yy}`;
 }
 
 /**
  * Accepts:
- * - DD-MM-YYYY (preferred)
+ * - DD-MM-YY (preferred)
+ * - DD-MM-YYYY
  * - YYYY-MM-DD
  * - ISO strings
  * Returns ISO string or null
@@ -80,11 +58,32 @@ function parseDateToIsoOrNull(v) {
   const s = String(v ?? "").trim();
   if (!s) return null;
 
-  // ISO / Date-parseable
+  // ISO / Date-parseable (handles most)
   const d0 = new Date(s);
   if (Number.isFinite(d0.getTime())) return d0.toISOString();
 
-  // DD-MM-YYYY
+  // DD-MM-YY
+  const ddmmyy = s.match(/^(\d{2})-(\d{2})-(\d{2})$/);
+  if (ddmmyy) {
+    const dd = Number(ddmmyy[1]);
+    const mm = Number(ddmmyy[2]);
+    const yy = Number(ddmmyy[3]);
+    const yyyy = 2000 + yy; // ✅ 00-99 => 2000-2099
+
+    const dt = new Date(Date.UTC(yyyy, mm - 1, dd, 0, 0, 0, 0));
+    if (!Number.isFinite(dt.getTime())) return null;
+
+    if (
+      dt.getUTCFullYear() !== yyyy ||
+      dt.getUTCMonth() + 1 !== mm ||
+      dt.getUTCDate() !== dd
+    )
+      return null;
+
+    return dt.toISOString();
+  }
+
+  // DD-MM-YYYY (allow)
   const ddmmyyyy = s.match(/^(\d{2})-(\d{2})-(\d{4})$/);
   if (ddmmyyyy) {
     const dd = Number(ddmmyyyy[1]);
@@ -104,7 +103,7 @@ function parseDateToIsoOrNull(v) {
     return dt.toISOString();
   }
 
-  // YYYY-MM-DD
+  // YYYY-MM-DD (allow)
   const yyyymmdd = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (yyyymmdd) {
     const yyyy = Number(yyyymmdd[1]);
@@ -198,7 +197,6 @@ function enumToInt(value, options, fallback = 0) {
   );
   return hit2 ? hit2.value : fallback;
 }
-
 function labelFrom(options, value) {
   const v = enumToInt(value, options, 0);
   return options.find((o) => o.value === v)?.label || "—";
@@ -226,6 +224,7 @@ const TEMPLATE_HEADERS = [
 ];
 
 function buildTemplateCsv() {
+  // ✅ DecisionDate now DD-MM-YY
   const example = {
     CountryId: 1,
     Service: 1,
@@ -240,7 +239,7 @@ function buildTemplateCsv() {
     Court: "",
     Parties: "Mauga and others v Kaluworks Limited",
     Judges: "M. J. A. Emukule, MBS, J",
-    DecisionDate: "28-04-2016",
+    DecisionDate: "28-04-16",
     ContentText: "Paste plain text here (you can format later in Report Content).",
   };
 
@@ -400,14 +399,7 @@ function Icon({ name }) {
   }
 }
 
-function IconButton({
-  title,
-  onClick,
-  disabled,
-  tone = "neutral",
-  children,
-  badge,
-}) {
+function IconButton({ title, onClick, disabled, tone = "neutral", children, badge }) {
   return (
     <button
       type="button"
@@ -436,13 +428,7 @@ export default function AdminLLRImport() {
 
   const [busy, setBusy] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [progress, setProgress] = useState({
-    done: 0,
-    total: 0,
-    ok: 0,
-    dup: 0,
-    failed: 0,
-  });
+  const [progress, setProgress] = useState({ done: 0, total: 0, ok: 0, dup: 0, failed: 0 });
 
   const stopRef = useRef(false);
   const fileInputRef = useRef(null);
@@ -454,7 +440,7 @@ export default function AdminLLRImport() {
     return { total, valid, invalid };
   }, [preview]);
 
-  // ✅ used for tooltip + click-confirm
+  // ✅ tooltip text
   const importHint = useMemo(() => {
     if (importing) return "Importing…";
     if (counts.valid === 0) return "No valid rows to import";
@@ -483,11 +469,9 @@ export default function AdminLLRImport() {
       for (const [k, v] of Object.entries(r)) map[csvHeaderKey(k)] = v;
 
       const countryId = toInt(map["countryid"], 0);
-      const service =
-        enumToInt(map["service"], SERVICE_OPTIONS, 0) || toInt(map["service"], 0);
+      const service = enumToInt(map["service"], SERVICE_OPTIONS, 0) || toInt(map["service"], 0);
       const courtType =
-        enumToInt(map["courttype"], COURT_TYPE_OPTIONS, 0) ||
-        toInt(map["courttype"], 0);
+        enumToInt(map["courttype"], COURT_TYPE_OPTIONS, 0) || toInt(map["courttype"], 0);
 
       const reportNumber = normalizeText(map["reportnumber"]);
       const year = toInt(map["year"], 0);
@@ -496,11 +480,9 @@ export default function AdminLLRImport() {
       const citation = normalizeText(map["citation"]) || null;
 
       const decisionType =
-        enumToInt(map["decisiontype"], DECISION_OPTIONS, 0) ||
-        toInt(map["decisiontype"], 0);
+        enumToInt(map["decisiontype"], DECISION_OPTIONS, 0) || toInt(map["decisiontype"], 0);
       const caseType =
-        enumToInt(map["casetype"], CASETYPE_OPTIONS, 0) ||
-        toInt(map["casetype"], 0);
+        enumToInt(map["casetype"], CASETYPE_OPTIONS, 0) || toInt(map["casetype"], 0);
 
       const court = normalizeText(map["court"]) || null;
       const town = normalizeText(map["town"]) || null;
@@ -528,7 +510,7 @@ export default function AdminLLRImport() {
         court,
         parties,
         judges,
-        decisionDate,
+        decisionDate, // ISO for API
         contentText,
       };
 
@@ -537,20 +519,16 @@ export default function AdminLLRImport() {
       if (!service) issues.push("Service is required.");
       if (!courtType) issues.push("CourtType is required.");
       if (!reportNumber) issues.push("ReportNumber is required.");
-      if (!year || year < 1900 || year > 2100)
-        issues.push("Year must be between 1900 and 2100.");
+      if (!year || year < 1900 || year > 2100) issues.push("Year must be between 1900 and 2100.");
       if (!decisionType) issues.push("DecisionType is required (e.g. 1=Judgment).");
       if (!caseType) issues.push("CaseType is required (e.g. 2=Civil).");
       if (!contentText) issues.push("ContentText is required.");
-      if (!isEmpty(decisionDateRaw) && !decisionDate)
-        issues.push("DecisionDate invalid. Use DD-MM-YYYY.");
 
-      return {
-        rowNumber: idx + 2,
-        payload,
-        issues,
-        valid: issues.length === 0,
-      };
+      if (!isEmpty(decisionDateRaw) && !decisionDate) {
+        issues.push("DecisionDate invalid. Use DD-MM-YY (e.g. 18-01-26).");
+      }
+
+      return { rowNumber: idx + 2, payload, issues, valid: issues.length === 0 };
     });
   }
 
@@ -571,7 +549,6 @@ export default function AdminLLRImport() {
 
       if (parsed.errors?.length) {
         setError(`CSV parse error: ${parsed.errors[0]?.message || "Unknown error"}`);
-        setBusy(false);
         return;
       }
 
@@ -582,10 +559,7 @@ export default function AdminLLRImport() {
       if (normalized.length === 0) setInfo("No rows found in the file.");
       else if (normalized.every((x) => x.valid))
         setInfo(`Loaded ${normalized.length} row(s). Ready to import.`);
-      else
-        setInfo(
-          `Loaded ${normalized.length} row(s). Fix invalid rows (highlighted) then re-upload.`
-        );
+      else setInfo(`Loaded ${normalized.length} row(s). Fix invalid rows then re-upload.`);
     } catch (e) {
       setError(String(e?.message || e));
     } finally {
@@ -604,20 +578,14 @@ export default function AdminLLRImport() {
       return;
     }
 
-    // ✅ click-confirm (small UX win)
+    // ✅ confirm
     const okConfirm = window.confirm(
       `Import ${validRows.length} valid row${validRows.length === 1 ? "" : "s"} now?`
     );
     if (!okConfirm) return;
 
     setImporting(true);
-    setProgress({
-      done: 0,
-      total: validRows.length,
-      ok: 0,
-      dup: 0,
-      failed: 0,
-    });
+    setProgress({ done: 0, total: validRows.length, ok: 0, dup: 0, failed: 0 });
 
     let ok = 0;
     let dup = 0;
@@ -635,13 +603,7 @@ export default function AdminLLRImport() {
         if (status === 409) dup++;
         else failed++;
       } finally {
-        setProgress({
-          done: i + 1,
-          total: validRows.length,
-          ok,
-          dup,
-          failed,
-        });
+        setProgress({ done: i + 1, total: validRows.length, ok, dup, failed });
       }
     }
 
@@ -652,9 +614,10 @@ export default function AdminLLRImport() {
       return;
     }
 
+    // ✅ Reset if truly clean
     if (failed === 0 && dup === 0) {
       resetAll({
-        keepInfo: `✅ Import successful. ${ok} case(s) added. Page reset and ready for next file.`,
+        keepInfo: `✅ Import successful. ${ok} case(s) added. Ready for the next file.`,
       });
       return;
     }
@@ -670,37 +633,158 @@ export default function AdminLLRImport() {
   return (
     <div className="admin-page admin-page-wide">
       <style>{`
-        .card {
+        /* ✅ Match signup page feel: cleaner typography & soft cards */
+        .la-page {
+          max-width: 1180px;
+          margin: 0 auto;
+        }
+
+        .la-title {
+          font-size: 26px;
+          font-weight: 950;
+          letter-spacing: -0.02em;
+          margin: 0;
+        }
+
+        .la-subtitle {
+          margin: 8px 0 0;
+          font-size: 13px;
+          color: #64748b;
+          font-weight: 700;
+          line-height: 1.5;
+        }
+
+        .la-toolbar {
+          display:flex;
+          gap:12px;
+          align-items:center;
+          justify-content:space-between;
+          margin-bottom: 14px;
+        }
+
+        .la-tools {
+          display:flex;
+          gap:10px;
+          align-items:center;
+        }
+
+        .la-card {
           background:#fff;
           border:1px solid #e5e7eb;
           border-radius:18px;
           padding:16px;
-          box-shadow: 0 8px 26px rgba(0,0,0,.06);
+          box-shadow: 0 10px 28px rgba(0,0,0,.06);
         }
 
-        .cardTitle { font-weight: 950; font-size: 14px; }
-        .cardSub { color:#6b7280; font-size:12px; font-weight: 800; margin-top: 4px; line-height: 1.35; }
-        .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-        .space { justify-content: space-between; }
+        .la-cardHeader {
+          display:flex;
+          align-items:flex-start;
+          justify-content:space-between;
+          gap:14px;
+        }
 
-        .kpi { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-        .pill {
-          display:inline-flex; align-items:center;
-          padding:6px 12px;
-          border-radius:999px;
+        .la-chipBar {
+          display:flex;
+          gap:10px;
+          flex-wrap:wrap;
+          margin-top: 10px;
+        }
+
+        .la-chip {
+          display:inline-flex;
+          align-items:center;
+          gap:8px;
+          padding:9px 12px;
+          border-radius:14px;
           border:1px solid #e5e7eb;
-          background:#fafafa;
-          font-weight:900;
+          background:#f8fafc;
+          color:#0f172a;
+          font-weight:800;
           font-size:12px;
-          color:#111827;
+          line-height: 1.15;
         }
-        .pill.good { background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
-        .pill.warn { background:#fff7ed; border-color:#fed7aa; color:#9a3412; }
-        .pill.bad { background:#fef2f2; border-color:#fecaca; color:#991b1b; }
 
-        .small { font-size:12px; font-weight:800; color:#6b7280; }
+        .la-chip strong { font-weight: 950; }
+
+        .la-chip.good { background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
+        .la-chip.warn { background:#fff7ed; border-color:#fed7aa; color:#9a3412; }
+        .la-chip.bad { background:#fef2f2; border-color:#fecaca; color:#991b1b; }
+
+        .la-row { display:flex; gap:12px; align-items:stretch; flex-wrap:wrap; }
+        .la-col { flex:1; min-width: 320px; }
+
+        .la-stepTitle {
+          font-weight: 950;
+          font-size: 14px;
+          margin: 0;
+        }
+
+        .la-stepSub {
+          margin-top: 6px;
+          color:#64748b;
+          font-size: 12px;
+          font-weight: 750;
+          line-height: 1.45;
+        }
+
         .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
 
+        /* ✅ More visible icon buttons */
+        .la-icon-btn {
+          position: relative;
+          display:inline-flex; align-items:center; justify-content:center;
+          width: 46px; height: 46px;
+          border-radius: 14px;
+          border: 1px solid #e5e7eb;
+          background: #fff;
+          cursor: pointer;
+          color: #111827;
+          box-shadow: 0 10px 22px rgba(0,0,0,.08);
+          transition: transform .08s ease, box-shadow .12s ease, background .12s ease, border-color .12s ease;
+        }
+        .la-icon-btn:hover { transform: translateY(-1px); box-shadow: 0 16px 28px rgba(0,0,0,.12); background:#fafafa; }
+        .la-icon-btn:active { transform: translateY(0px) scale(.98); }
+        .la-icon-btn:disabled { opacity: .55; cursor: not-allowed; box-shadow:none; }
+
+        .la-icon-btn.primary {
+          border-color:#c7d2fe;
+          background: #eef2ff;
+          box-shadow: 0 12px 24px rgba(99,102,241,.18);
+        }
+        .la-icon-btn.primary:hover { background:#e0e7ff; }
+
+        .la-icon-btn.import {
+          border-color:#bbf7d0;
+          background: #ecfdf5;
+          box-shadow: 0 12px 24px rgba(16,185,129,.16);
+        }
+        .la-icon-btn.import:hover { background:#d1fae5; }
+
+        .la-icon-btn.danger {
+          border-color:#fecaca;
+          background: #fef2f2;
+          box-shadow: 0 12px 24px rgba(239,68,68,.10);
+        }
+        .la-icon-btn.danger:hover { background:#fee2e2; }
+
+        .la-btn-badge {
+          position:absolute;
+          top:-8px;
+          right:-8px;
+          background:#0f172a;
+          color:#fff;
+          border:2px solid #fff;
+          font-size:11px;
+          font-weight:950;
+          padding:2px 7px;
+          border-radius:999px;
+          line-height: 1.4;
+          box-shadow: 0 10px 20px rgba(0,0,0,.14);
+        }
+
+        .uploadLabel { display:inline-flex; }
+
+        /* Table */
         .tableWrap {
           margin-top: 12px;
           max-height: 60vh;
@@ -710,321 +794,263 @@ export default function AdminLLRImport() {
         }
         table { width:100%; border-collapse: collapse; font-size: 12.5px; }
         thead th {
-          position: sticky; top:0; background:#fafafa; z-index:1;
+          position: sticky; top:0; background:#f8fafc; z-index:1;
           text-align:left; padding:10px; border-bottom:1px solid #e5e7eb;
-          font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color:#6b7280;
+          font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color:#64748b;
         }
         tbody td { padding:10px; border-bottom:1px solid #f1f5f9; vertical-align: top; }
         tr.badRow td { background: #fff5f5; }
         .issues { color:#991b1b; font-weight:900; }
-
-        /* ✅ Header tools – more visible / attractive */
-        .headerTools { display:flex; gap:12px; align-items:center; }
-
-        .la-icon-btn {
-          position: relative;
-          display:inline-flex; align-items:center; justify-content:center;
-          width: 44px; height: 44px;        /* bigger */
-          border-radius: 14px;
-          border: 1px solid #e5e7eb;
-          background: #fff;
-          cursor: pointer;
-          color: #111827;
-          box-shadow: 0 8px 18px rgba(0,0,0,.06);
-          transition: transform .08s ease, box-shadow .12s ease, background .12s ease, border-color .12s ease;
-        }
-        .la-icon-btn:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 12px 24px rgba(0,0,0,.10);
-          background:#fafafa;
-        }
-        .la-icon-btn:active { transform: translateY(0px) scale(.98); }
-        .la-icon-btn:disabled { opacity: .55; cursor: not-allowed; box-shadow:none; }
-
-        /* Primary: download/upload/import pop more */
-        .la-icon-btn.primary {
-          border-color:#c7d2fe;
-          background: #eef2ff;
-          box-shadow: 0 10px 22px rgba(99,102,241,.18);
-        }
-        .la-icon-btn.primary:hover { background:#e0e7ff; }
-
-        /* Import button: make it clearly the primary action */
-        .la-icon-btn.import {
-          border-color:#bbf7d0;
-          background: #ecfdf5;
-          box-shadow: 0 10px 22px rgba(16,185,129,.16);
-        }
-        .la-icon-btn.import:hover { background:#d1fae5; }
-
-        .la-icon-btn.danger {
-          border-color:#fecaca;
-          background: #fef2f2;
-          box-shadow: 0 10px 22px rgba(239,68,68,.10);
-        }
-        .la-icon-btn.danger:hover { background:#fee2e2; }
-
-        /* Tiny badge for "valid rows" next to import button */
-        .la-btn-badge {
-          position:absolute;
-          top:-8px;
-          right:-8px;
-          background:#111827;
-          color:#fff;
-          border:2px solid #fff;
-          font-size:11px;
-          font-weight:900;
-          padding:2px 7px;
-          border-radius:999px;
-          line-height: 1.4;
-          box-shadow: 0 10px 20px rgba(0,0,0,.14);
-        }
-
-        /* Upload label styled like button */
-        .uploadLabel { display:inline-flex; }
-
-        /* Step cards spacing */
-        .stepGrid { display:flex; gap:12px; flex-wrap:wrap; margin-bottom: 14px; }
       `}</style>
 
-      <div className="admin-header">
-        <div>
-          <h1 className="admin-title">Admin · LLR Services · Import</h1>
-          <p className="admin-subtitle">
-            Upload a CSV, preview & validate, then import using <b>POST /api/law-reports</b>.
-            <span className="small"> &nbsp;Date format: <b>DD-MM-YYYY</b>.</span>
-          </p>
+      <div className="la-page">
+        <div className="la-toolbar">
+          <div>
+            <h1 className="la-title">Admin · LLR Services · Import</h1>
+            <p className="la-subtitle">
+              Upload a CSV, preview & validate, then import using <b>POST /api/law-reports</b>.{" "}
+              <span>
+                Date format: <b>DD-MM-YY</b> (e.g. <span className="mono">18-01-26</span>).
+              </span>
+            </p>
+          </div>
+
+          <div className="la-tools">
+            <IconButton title="Back to reports list" onClick={goBackToList} disabled={busy || importing}>
+              <Icon name="back" />
+            </IconButton>
+
+            <IconButton
+              title="Reset page"
+              onClick={() => resetAll({ keepInfo: "Reset done. Ready for a new file." })}
+              disabled={busy || importing}
+            >
+              <Icon name="refresh" />
+            </IconButton>
+
+            <IconButton
+              title="Download CSV template"
+              onClick={() => downloadTextFile("llr_import_template.csv", buildTemplateCsv())}
+              disabled={busy || importing}
+              tone="primary"
+            >
+              <Icon name="download" />
+            </IconButton>
+
+            <label
+              className="uploadLabel"
+              title="Choose CSV file"
+              style={{ cursor: busy || importing ? "not-allowed" : "pointer" }}
+            >
+              <span className="la-icon-btn primary" aria-label="Choose CSV file">
+                <Icon name="upload" />
+              </span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                style={{ display: "none" }}
+                disabled={busy || importing}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleFile(f);
+                }}
+              />
+            </label>
+
+            {preview.length > 0 && (
+              <>
+                {/* ✅ Tooltip shows imports X valid rows */}
+                <button
+                  type="button"
+                  className="la-icon-btn import"
+                  title={importHint}
+                  aria-label={importHint}
+                  onClick={startImport}
+                  disabled={busy || importing || counts.valid === 0}
+                >
+                  <Icon name="import" />
+                  {counts.valid > 0 ? <span className="la-btn-badge">{counts.valid}</span> : null}
+                </button>
+
+                {importing && (
+                  <IconButton title="Stop import" onClick={stopImport} disabled={busy} tone="danger">
+                    <Icon name="stop" />
+                  </IconButton>
+                )}
+              </>
+            )}
+          </div>
         </div>
 
-        {/* ✅ Better visibility: bigger + colored buttons */}
-        <div className="headerTools">
-          <IconButton
-            title="Back to reports list"
-            onClick={goBackToList}
-            disabled={busy || importing}
-          >
-            <Icon name="back" />
-          </IconButton>
+        {(error || info) && <div className={`admin-alert ${error ? "error" : "ok"}`}>{error || info}</div>}
 
-          <IconButton
-            title="Reset page"
-            onClick={() => resetAll({ keepInfo: "Reset done. Ready for a new file." })}
-            disabled={busy || importing}
-          >
-            <Icon name="refresh" />
-          </IconButton>
+        {/* ✅ Instruction layout like signup: simple cards + short lines + chips */}
+        <div className="la-row" style={{ marginBottom: 14 }}>
+          <div className="la-card la-col">
+            <div className="la-cardHeader">
+              <div>
+                <div className="la-stepTitle">Step 1 — Template</div>
+                <div className="la-stepSub">
+                  1) Download the template. 2) Fill it. 3) Upload it.
+                  <br />
+                  Keep enum columns numeric for best results. Date: <b>DD-MM-YY</b>.
+                </div>
+              </div>
+            </div>
 
-          <IconButton
-            title="Download CSV template"
-            onClick={() => downloadTextFile("llr_import_template.csv", buildTemplateCsv())}
-            disabled={busy || importing}
-            tone="primary"
-          >
-            <Icon name="download" />
-          </IconButton>
+            <div className="la-chipBar">
+              <span className="la-chip">
+                <strong>DecisionType</strong> {DECISION_OPTIONS.map((x) => `${x.value}=${x.label}`).join(", ")}
+              </span>
+              <span className="la-chip">
+                <strong>CaseType</strong> {CASETYPE_OPTIONS.map((x) => `${x.value}=${x.label}`).join(", ")}
+              </span>
+              <span className="la-chip">
+                <strong>CourtType</strong> {COURT_TYPE_OPTIONS.map((x) => `${x.value}=${x.label}`).join(", ")}
+              </span>
+            </div>
+          </div>
 
-          <label
-            className="uploadLabel"
-            title="Choose CSV file"
-            style={{ cursor: busy || importing ? "not-allowed" : "pointer" }}
-          >
-            <span className="la-icon-btn primary" aria-label="Choose CSV file">
-              <Icon name="upload" />
-            </span>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,text/csv"
-              style={{ display: "none" }}
-              disabled={busy || importing}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleFile(f);
-              }}
-            />
-          </label>
+          <div className="la-card la-col">
+            <div className="la-cardHeader">
+              <div>
+                <div className="la-stepTitle">Step 2 — Upload & Preview</div>
+                <div className="la-stepSub">
+                  Upload a CSV to see a preview. Invalid rows are highlighted with the exact issue.
+                  <br />
+                  Fix the CSV and upload again.
+                </div>
+              </div>
+            </div>
 
-          {/* ✅ Import button: tooltip shows "Imports X valid rows" */}
-          {preview.length > 0 && (
+            <div className="la-chipBar">
+              <span className="la-chip">
+                <strong>{counts.total}</strong> row(s)
+              </span>
+              <span className={`la-chip ${counts.valid ? "good" : ""}`}>
+                <strong>{counts.valid}</strong> valid
+              </span>
+              <span className={`la-chip ${counts.invalid ? "bad" : ""}`}>
+                <strong>{counts.invalid}</strong> invalid
+              </span>
+            </div>
+
+            {fileName && (
+              <div className="la-stepSub" style={{ marginTop: 10 }}>
+                File: <b>{fileName}</b>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="la-card">
+          <div className="la-cardHeader">
+            <div>
+              <div className="la-stepTitle">Step 3 — Import</div>
+              <div className="la-stepSub">
+                Imports only valid rows. Duplicates return <b>409</b> and are counted as duplicates.
+                <br />
+                If import finishes with <b>no duplicates and no failures</b>, the page resets automatically.
+              </div>
+            </div>
+
+            <div className="la-chipBar" style={{ marginTop: 0 }}>
+              <span className="la-chip">
+                <strong>{progress.done}</strong> / {progress.total} done
+              </span>
+              <span className="la-chip good">
+                <strong>{progress.ok}</strong> OK
+              </span>
+              <span className="la-chip warn">
+                <strong>{progress.dup}</strong> Duplicates
+              </span>
+              <span className="la-chip bad">
+                <strong>{progress.failed}</strong> Failed
+              </span>
+            </div>
+          </div>
+
+          {preview.length === 0 ? (
+            <div className="la-stepSub" style={{ marginTop: 12 }}>
+              Upload a CSV to see the preview here.
+            </div>
+          ) : (
             <>
-              <button
-                type="button"
-                className={`la-icon-btn import`}
-                title={importHint}
-                aria-label={importHint}
-                onClick={startImport}
-                disabled={busy || importing || counts.valid === 0}
-              >
-                <Icon name="import" />
-                {counts.valid > 0 ? <span className="la-btn-badge">{counts.valid}</span> : null}
-              </button>
+              <div className="tableWrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th className="mono">Row</th>
+                      <th>Report</th>
+                      <th>Year</th>
+                      <th className="mono">Country</th>
+                      <th>Service</th>
+                      <th>CourtType</th>
+                      <th>Town</th>
+                      <th>Decision</th>
+                      <th>CaseType</th>
+                      <th className="mono">CaseNo</th>
+                      <th className="mono">Citation</th>
+                      <th>DecisionDate</th>
+                      <th>Issues</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.slice(0, 500).map((p) => {
+                      const pay = p.payload;
+                      return (
+                        <tr key={p.rowNumber} className={!p.valid ? "badRow" : ""}>
+                          <td className="mono">{p.rowNumber}</td>
+                          <td className="mono">{pay.reportNumber || "—"}</td>
+                          <td className="mono">{pay.year || "—"}</td>
+                          <td className="mono">{pay.countryId || "—"}</td>
+                          <td>{labelFrom(SERVICE_OPTIONS, pay.service)}</td>
+                          <td>{labelFrom(COURT_TYPE_OPTIONS, pay.courtType)}</td>
+                          <td>{pay.town || "—"}</td>
+                          <td>{labelFrom(DECISION_OPTIONS, pay.decisionType)}</td>
+                          <td>{labelFrom(CASETYPE_OPTIONS, pay.caseType)}</td>
+                          <td className="mono">{pay.caseNumber || "—"}</td>
+                          <td className="mono">{pay.citation || "—"}</td>
+                          <td className="mono">{pay.decisionDate ? isoToDdMmYy(pay.decisionDate) : "—"}</td>
+                          <td className="issues">{p.issues.join(" ")}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
 
-              {importing && (
-                <IconButton
-                  title="Stop import"
-                  onClick={stopImport}
-                  disabled={busy}
-                  tone="danger"
-                >
-                  <Icon name="stop" />
-                </IconButton>
+              {preview.length > 500 && (
+                <div className="la-stepSub" style={{ marginTop: 8 }}>
+                  Showing first 500 rows. Import uses all valid rows.
+                </div>
               )}
             </>
           )}
         </div>
-      </div>
 
-      {(error || info) && (
-        <div className={`admin-alert ${error ? "error" : "ok"}`}>
-          {error || info}
-        </div>
-      )}
-
-      {/* Instructions cards */}
-      <div className="stepGrid">
-        <div className="card" style={{ flex: 1, minWidth: 320 }}>
-          <div className="cardTitle">Step 1 — Template</div>
-          <div className="cardSub">
-            Download the template, fill it, then upload. Keep enums numeric for best results.
-            <br />
-            <b>Date:</b> use <b>DD-MM-YYYY</b> (e.g. <span className="mono">28-04-2016</span>).
-          </div>
-
-          <div className="kpi" style={{ marginTop: 12 }}>
-            <span className="pill">
-              DecisionType: {DECISION_OPTIONS.map((x) => `${x.value}=${x.label}`).join(", ")}
-            </span>
-            <span className="pill">
-              CaseType: {CASETYPE_OPTIONS.map((x) => `${x.value}=${x.label}`).join(", ")}
-            </span>
-            <span className="pill">
-              CourtType: {COURT_TYPE_OPTIONS.map((x) => `${x.value}=${x.label}`).join(", ")}
-            </span>
-          </div>
-        </div>
-
-        <div className="card" style={{ flex: 1, minWidth: 320 }}>
-          <div className="cardTitle">Step 2 — Upload & Preview</div>
-          <div className="cardSub">
-            Upload CSV to preview rows. Invalid rows are highlighted with issues.
-            Fix them in the CSV and re-upload.
-          </div>
-
-          <div className="kpi" style={{ marginTop: 12 }}>
-            <span className="pill">{counts.total} row(s)</span>
-            <span className={`pill ${counts.valid ? "good" : ""}`}>{counts.valid} valid</span>
-            <span className={`pill ${counts.invalid ? "bad" : ""}`}>{counts.invalid} invalid</span>
-          </div>
-
-          {fileName && (
-            <div className="cardSub" style={{ marginTop: 10 }}>
-              File: <b>{fileName}</b>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Preview table */}
-      <div className="card">
-        <div className="row space">
-          <div>
-            <div className="cardTitle">Step 3 — Import</div>
-            <div className="cardSub">
-              Imports only valid rows. Duplicates return <b>409</b> and are counted as duplicates.
-              <br />
-              If import finishes with <b>no duplicates and no failures</b>, the page resets automatically.
-            </div>
-          </div>
-
-          <div className="kpi">
-            <span className="pill">Done: {progress.done}/{progress.total}</span>
-            <span className="pill good">OK: {progress.ok}</span>
-            <span className="pill warn">Duplicates: {progress.dup}</span>
-            <span className="pill bad">Failed: {progress.failed}</span>
-          </div>
-        </div>
-
-        {preview.length === 0 ? (
-          <div className="small" style={{ marginTop: 12 }}>
-            Upload a CSV to see preview here.
-          </div>
-        ) : (
-          <>
-            <div className="tableWrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th className="mono">Row</th>
-                    <th>Report</th>
-                    <th>Year</th>
-                    <th className="mono">Country</th>
-                    <th>Service</th>
-                    <th>CourtType</th>
-                    <th>Town</th>
-                    <th>Decision</th>
-                    <th>CaseType</th>
-                    <th className="mono">CaseNo</th>
-                    <th className="mono">Citation</th>
-                    <th>DecisionDate</th>
-                    <th>Issues</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {preview.slice(0, 500).map((p) => {
-                    const pay = p.payload;
-                    return (
-                      <tr key={p.rowNumber} className={!p.valid ? "badRow" : ""}>
-                        <td className="mono">{p.rowNumber}</td>
-                        <td className="mono">{pay.reportNumber || "—"}</td>
-                        <td className="mono">{pay.year || "—"}</td>
-                        <td className="mono">{pay.countryId || "—"}</td>
-                        <td>{labelFrom(SERVICE_OPTIONS, pay.service)}</td>
-                        <td>{labelFrom(COURT_TYPE_OPTIONS, pay.courtType)}</td>
-                        <td>{pay.town || "—"}</td>
-                        <td>{labelFrom(DECISION_OPTIONS, pay.decisionType)}</td>
-                        <td>{labelFrom(CASETYPE_OPTIONS, pay.caseType)}</td>
-                        <td className="mono">{pay.caseNumber || "—"}</td>
-                        <td className="mono">{pay.citation || "—"}</td>
-                        <td className="mono">
-                          {pay.decisionDate ? isoToDdMmYyyy(pay.decisionDate) : "—"}
-                        </td>
-                        <td className="issues">{p.issues.join(" ")}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {preview.length > 500 && (
-              <div className="small" style={{ marginTop: 8 }}>
-                Showing first 500 rows. Import uses all valid rows.
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      <AdminPageFooter
-        left={
-          <>
-            <span className="admin-footer-brand">
-              Law<span>A</span>frica
-            </span>
-            <span className="admin-footer-dot">•</span>
-            <span className="admin-footer-muted">LLR Import</span>
-            <span className="admin-footer-dot">•</span>
+        <AdminPageFooter
+          left={
+            <>
+              <span className="admin-footer-brand">
+                Law<span>A</span>frica
+              </span>
+              <span className="admin-footer-dot">•</span>
+              <span className="admin-footer-muted">LLR Import</span>
+              <span className="admin-footer-dot">•</span>
+              <span className="admin-footer-muted">
+                {preview.length ? `${counts.valid}/${counts.total} valid` : "No file loaded"}
+              </span>
+            </>
+          }
+          right={
             <span className="admin-footer-muted">
-              {preview.length ? `${counts.valid}/${counts.total} valid` : "No file loaded"}
+              Tip: DecisionDate uses <b>DD-MM-YY</b> (e.g. <span className="mono">18-01-26</span>).
             </span>
-          </>
-        }
-        right={
-          <span className="admin-footer-muted">
-            Tip: DecisionDate uses <b>DD-MM-YYYY</b>. Use the template to avoid column mistakes.
-          </span>
-        }
-      />
+          }
+        />
+      </div>
     </div>
   );
 }
