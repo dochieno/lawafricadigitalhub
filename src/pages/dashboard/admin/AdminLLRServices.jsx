@@ -46,6 +46,7 @@ function toInt(v, fallback = 0) {
  * - number (1)
  * - numeric string ("1")
  * - enum label ("Judgment")
+ * - enum name ("LawAfricaLawReports_LLR") etc (we try match label by contains)
  */
 function enumToInt(value, options, fallback = 0) {
   if (value === null || value === undefined) return fallback;
@@ -58,8 +59,13 @@ function enumToInt(value, options, fallback = 0) {
   const asNum = Number(s);
   if (Number.isFinite(asNum)) return Math.floor(asNum);
 
+  // label match (case-insensitive)
   const hit = options.find((o) => o.label.toLowerCase() === s.toLowerCase());
-  return hit ? hit.value : fallback;
+  if (hit) return hit.value;
+
+  // softer match: if API returns enum NAME, try contains match against label words
+  const hit2 = options.find((o) => s.toLowerCase().includes(o.label.toLowerCase()));
+  return hit2 ? hit2.value : fallback;
 }
 
 function labelFrom(options, value) {
@@ -94,6 +100,12 @@ function normalizeText(v) {
 const DECISION_OPTIONS = [
   { label: "Judgment", value: 1 },
   { label: "Ruling", value: 2 },
+  { label: "Award", value: 3 },
+  { label: "Award by Consent", value: 4 },
+  { label: "Notice of Motion", value: 5 },
+  { label: "Interpretation of Award", value: 6 },
+  { label: "Order", value: 7 },
+  { label: "Interpretation of Amended Order", value: 8 },
 ];
 
 const CASETYPE_OPTIONS = [
@@ -106,6 +118,7 @@ const CASETYPE_OPTIONS = [
 ];
 
 // Service options (Create/Edit + search)
+// Keep numeric values; if backend returns enum strings, enumToInt will still cope.
 const SERVICE_OPTIONS = [
   { label: "LawAfrica Law Reports (LLR)", value: 1 },
   { label: "Odungas Digest", value: 2 },
@@ -120,6 +133,20 @@ const SERVICE_OPTIONS = [
   { label: "Company Registry Search", value: 11 },
   { label: "Uganda Law Society Reports (ULSR)", value: 12 },
   { label: "Kenya Industrial Property Institute", value: 13 },
+];
+
+// ✅ NEW CourtType options (enum-backed)
+const COURT_TYPE_OPTIONS = [
+  { label: "Supreme Court", value: 1 },
+  { label: "Court of Appeal", value: 2 },
+  { label: "High Court", value: 3 },
+  { label: "Employment & Labour Relations Court", value: 4 },
+  { label: "Environment & Land Court", value: 5 },
+  { label: "Magistrates Courts", value: 6 },
+  { label: "Kadhi's Courts", value: 7 },
+  { label: "Courts Martial", value: 8 },
+  { label: "Small Claims Court", value: 9 },
+  { label: "Tribunals", value: 10 },
 ];
 
 /* =========================
@@ -269,8 +296,14 @@ const emptyForm = {
   caseNumber: "",
   decisionType: 1,
   caseType: 2,
+
+  // ✅ keep legacy court string (optional)
   court: "",
-  town: "", // ✅ NEW
+
+  // ✅ NEW
+  courtType: 3, // default High Court
+  town: "",
+
   parties: "",
   judges: "",
   decisionDate: "",
@@ -366,19 +399,24 @@ export default function AdminLLRServices() {
       const citation = String(pick(r, ["citation", "Citation"], "")).toLowerCase();
       const parties = String(pick(r, ["parties", "Parties"], "")).toLowerCase();
       const court = String(pick(r, ["court", "Court"], "")).toLowerCase();
-      const town = String(pick(r, ["town", "Town"], "")).toLowerCase(); // ✅ NEW
+      const town = String(pick(r, ["town", "Town"], "")).toLowerCase();
       const caseNo = String(pick(r, ["caseNumber", "CaseNumber"], "")).toLowerCase();
       const judges = String(pick(r, ["judges", "Judges"], "")).toLowerCase();
 
       const countryId = pick(r, ["countryId", "CountryId"], null);
       const countryName = (countryMap.get(Number(countryId)) || "").toLowerCase();
 
-      // ✅ keep service in search index (NOT shown in list UI)
+      // backend may provide courtTypeLabel
+      const courtTypeLabel = String(pick(r, ["courtTypeLabel", "CourtTypeLabel"], "")).toLowerCase();
+
+      // keep service in search index (NOT shown in list UI)
       const serviceVal = pick(r, ["service", "Service"], null);
       const serviceLabel =
-        (SERVICE_OPTIONS.find((x) => x.value === enumToInt(serviceVal, SERVICE_OPTIONS, 0))?.label || "").toLowerCase();
+        (pick(r, ["serviceLabel", "ServiceLabel"], null) ||
+          SERVICE_OPTIONS.find((x) => x.value === enumToInt(serviceVal, SERVICE_OPTIONS, 0))?.label ||
+          "").toLowerCase();
 
-      const meta = `${reportNumber} ${year} ${citation} ${parties} ${court} ${town} ${caseNo} ${judges} ${countryName} ${serviceLabel}`;
+      const meta = `${reportNumber} ${year} ${citation} ${parties} ${court} ${courtTypeLabel} ${town} ${caseNo} ${judges} ${countryName} ${serviceLabel}`;
       return title.includes(s) || meta.includes(s);
     });
   }, [rows, q, countryMap]);
@@ -392,6 +430,7 @@ export default function AdminLLRServices() {
       decisionType: 1,
       caseType: 2,
       service: 1,
+      courtType: 3, // High Court
       year: String(new Date().getUTCFullYear()),
     }));
     setOpen(true);
@@ -410,6 +449,13 @@ export default function AdminLLRServices() {
       const d = res.data;
 
       setEditing(d);
+
+      const decisionVal = enumToInt(pick(d, ["decisionType", "DecisionType"], 1), DECISION_OPTIONS, 1);
+      const caseVal = enumToInt(pick(d, ["caseType", "CaseType"], 2), CASETYPE_OPTIONS, 2);
+
+      // courtType could be int or string label; normalize against COURT_TYPE_OPTIONS
+      const ctVal = enumToInt(pick(d, ["courtType", "CourtType"], 3), COURT_TYPE_OPTIONS, 3);
+
       setForm({
         countryId: pick(d, ["countryId", "CountryId"], ""),
         service: enumToInt(pick(d, ["service", "Service"], 1), SERVICE_OPTIONS, 1),
@@ -417,10 +463,13 @@ export default function AdminLLRServices() {
         reportNumber: pick(d, ["reportNumber", "ReportNumber"], "") ?? "",
         year: pick(d, ["year", "Year"], "") ?? "",
         caseNumber: pick(d, ["caseNumber", "CaseNumber"], "") ?? "",
-        decisionType: enumToInt(pick(d, ["decisionType", "DecisionType"], 1), DECISION_OPTIONS, 1),
-        caseType: enumToInt(pick(d, ["caseType", "CaseType"], 2), CASETYPE_OPTIONS, 2),
+        decisionType: decisionVal,
+        caseType: caseVal,
+
+        courtType: ctVal,
         court: pick(d, ["court", "Court"], "") ?? "",
-        town: pick(d, ["town", "Town"], "") ?? "", // ✅ NEW
+        town: pick(d, ["town", "Town"], "") ?? "",
+
         parties: pick(d, ["parties", "Parties"], "") ?? "",
         judges: pick(d, ["judges", "Judges"], "") ?? "",
         decisionDate: dateInputFromIso(pick(d, ["decisionDate", "DecisionDate"], "")),
@@ -438,6 +487,9 @@ export default function AdminLLRServices() {
     return {
       category: 6,
       countryId: toInt(form.countryId, 0),
+
+      // If backend expects enum int, this is fine.
+      // If backend expects enum string, it will still bind if your API uses numeric enums.
       service: toInt(form.service, 1),
 
       citation: normalizeText(form.citation) || null,
@@ -448,8 +500,13 @@ export default function AdminLLRServices() {
       decisionType: toInt(form.decisionType, 1),
       caseType: toInt(form.caseType, 2),
 
+      // ✅ NEW
+      courtType: toInt(form.courtType, 3),
+
+      // optional legacy/display
       court: normalizeText(form.court) || null,
-      town: normalizeText(form.town) || null, // ✅ NEW
+
+      town: normalizeText(form.town) || null,
       parties: normalizeText(form.parties) || null,
       judges: normalizeText(form.judges) || null,
       decisionDate: isoOrNullFromDateInput(form.decisionDate),
@@ -466,6 +523,9 @@ export default function AdminLLRServices() {
 
     const year = toInt(form.year, 0);
     if (!year || year < 1900 || year > 2100) return "Year must be between 1900 and 2100.";
+
+    // ✅ if backend made CourtType required, enforce it here too
+    if (!toInt(form.courtType, 0)) return "Court Type is required.";
 
     if (!editing?.id && !String(form.contentText ?? "").trim()) return "Content text is required on Create.";
 
@@ -525,12 +585,10 @@ export default function AdminLLRServices() {
     }
   }
 
-  // ✅ FIX: pass id in multiple ways so content page never loses it
   function openContent(row) {
     const id = pick(row, ["id", "Id"], null);
     if (!id) return;
 
-    // Keep existing route path; add query + state for robustness
     navigate(`/dashboard/admin/llr-services/${id}/content?id=${id}`, {
       state: {
         title: pick(row, ["title", "Title"], "") || "",
@@ -540,11 +598,15 @@ export default function AdminLLRServices() {
     });
   }
 
-  function courtTownDisplay(court, town) {
-    const c = normalizeText(court);
-    const t = normalizeText(town);
-    if (c && t) return `${c} · ${t}`;
-    return c || t || "—";
+  function courtTownDisplay(row) {
+    // prefer enum label if present
+    const courtTypeLabel = normalizeText(pick(row, ["courtTypeLabel", "CourtTypeLabel"], ""));
+    const legacyCourt = normalizeText(pick(row, ["court", "Court"], ""));
+    const town = normalizeText(pick(row, ["town", "Town"], ""));
+
+    const courtPart = courtTypeLabel || legacyCourt;
+    if (courtPart && town) return `${courtPart} — ${town}`;
+    return courtPart || town || "—";
   }
 
   return (
@@ -633,7 +695,7 @@ export default function AdminLLRServices() {
               </span>
               <input
                 className="admin-search admin-search-wide"
-                placeholder="Search by title, report number, year, country, parties, citation, court, town..."
+                placeholder="Search by title, report number, year, country, parties, citation, court type, town..."
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
@@ -655,7 +717,7 @@ export default function AdminLLRServices() {
                 <th style={{ width: "6%" }} className="num-cell">
                   Year
                 </th>
-                <th style={{ width: "12%" }}>Court</th>
+                <th style={{ width: "14%" }}>Court</th>
                 <th style={{ width: "10%" }}>Decision</th>
                 <th style={{ width: "10%" }}>Case Type</th>
                 <th style={{ width: "16%" }}>Parties</th>
@@ -681,11 +743,16 @@ export default function AdminLLRServices() {
                 const decisionRaw = pick(r, ["decisionType", "DecisionType"], null);
                 const caseRaw = pick(r, ["caseType", "CaseType"], null);
 
-                const decisionVal = enumToInt(decisionRaw, DECISION_OPTIONS, 0);
-                const caseVal = enumToInt(caseRaw, CASETYPE_OPTIONS, 0);
+                // Prefer backend labels if present (best UX, zero guessing)
+                const decisionLabel =
+                  normalizeText(pick(r, ["decisionTypeLabel", "DecisionTypeLabel"], "")) ||
+                  labelFrom(DECISION_OPTIONS, decisionRaw);
 
-                const decisionLabel = labelFrom(DECISION_OPTIONS, decisionVal);
-                const caseLabel = labelFrom(CASETYPE_OPTIONS, caseVal);
+                const caseLabel =
+                  normalizeText(pick(r, ["caseTypeLabel", "CaseTypeLabel"], "")) ||
+                  labelFrom(CASETYPE_OPTIONS, caseRaw);
+
+                const decisionVal = enumToInt(decisionRaw, DECISION_OPTIONS, 0);
 
                 const countryId = pick(r, ["countryId", "CountryId"], null);
                 const countryName = countryMap.get(Number(countryId)) || (countryId ? `#${countryId}` : "—");
@@ -699,16 +766,12 @@ export default function AdminLLRServices() {
                 const parties = pick(r, ["parties", "Parties"], null);
                 const decisionDate = pick(r, ["decisionDate", "DecisionDate"], null);
 
-                const court = pick(r, ["court", "Court"], null);
-                const town = pick(r, ["town", "Town"], null);
-
                 return (
                   <tr key={id ?? idx} className={`${idx % 2 === 1 ? "row-zebra" : ""} row-hover`}>
                     <td>
                       <div className="titleCell">
                         <div className="titleMain">{title || "—"}</div>
 
-                        {/* ✅ Removed Service chip (as requested) */}
                         <div className="chips">
                           {citation ? (
                             <span className="chip" title="Citation">
@@ -737,19 +800,23 @@ export default function AdminLLRServices() {
                     <td className="tight">{reportNumber || "—"}</td>
                     <td className="num-cell">{year ?? "—"}</td>
 
-                    {/* ✅ Court display uses Court · Town */}
-                    <td title="Court · Town" style={{ color: "#374151", fontWeight: 800 }}>
-                      {courtTownDisplay(court, town)}
+                    <td title="Court type — town" style={{ color: "#374151", fontWeight: 800 }}>
+                      {courtTownDisplay(r)}
                     </td>
 
                     <td>
-                      <span className={`chip ${decisionVal === 1 ? "good" : decisionVal === 2 ? "warn" : "muted"}`} title="Decision type">
+                      <span
+                        className={`chip ${
+                          decisionVal === 1 ? "good" : decisionVal === 2 ? "warn" : "muted"
+                        }`}
+                        title="Decision type"
+                      >
                         {decisionLabel}
                       </span>
                     </td>
 
                     <td>
-                      <span className={`chip ${caseVal ? "" : "muted"}`} title="Case type">
+                      <span className={`chip ${caseLabel !== "—" ? "" : "muted"}`} title="Case type">
                         {caseLabel}
                       </span>
                     </td>
@@ -763,7 +830,12 @@ export default function AdminLLRServices() {
                           <Icon name="edit" />
                         </IconButton>
 
-                        <IconButton title="Edit formatted report content" onClick={() => openContent(r)} disabled={busy} tone="primary">
+                        <IconButton
+                          title="Edit formatted report content"
+                          onClick={() => openContent(r)}
+                          disabled={busy}
+                          tone="primary"
+                        >
                           <Icon name="file" />
                         </IconButton>
 
@@ -790,7 +862,8 @@ export default function AdminLLRServices() {
                   {editing ? `Edit Report #${pick(editing, ["id", "Id"], "")}` : "Create Law Report"}
                 </h3>
                 <div className="admin-modal-subtitle">
-                  Saves the <b>LawReport</b> and updates its linked <b>LegalDocument</b>. Use <b>Report Content</b> for full formatted editing.
+                  Saves the <b>LawReport</b> and updates its linked <b>LegalDocument</b>. Use <b>Report Content</b>{" "}
+                  for full formatted editing.
                 </div>
               </div>
 
@@ -805,7 +878,11 @@ export default function AdminLLRServices() {
                   <label>Country *</label>
 
                   {countries.length > 0 ? (
-                    <select value={String(form.countryId || "")} onChange={(e) => setField("countryId", e.target.value)} disabled={busy}>
+                    <select
+                      value={String(form.countryId || "")}
+                      onChange={(e) => setField("countryId", e.target.value)}
+                      disabled={busy}
+                    >
                       <option value="">Select country…</option>
                       {countries.map((c) => (
                         <option key={c.id} value={c.id}>
@@ -828,10 +905,13 @@ export default function AdminLLRServices() {
                   )}
                 </div>
 
-                {/* Keep Service in create/edit (as per your note: service is in lawreport only) */}
                 <div className="admin-field">
                   <label>Service *</label>
-                  <select value={String(form.service)} onChange={(e) => setField("service", toInt(e.target.value, 1))} disabled={busy}>
+                  <select
+                    value={String(form.service)}
+                    onChange={(e) => setField("service", toInt(e.target.value, 1))}
+                    disabled={busy}
+                  >
                     {SERVICE_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
@@ -842,27 +922,92 @@ export default function AdminLLRServices() {
 
                 <div className="admin-field">
                   <label>Report Number *</label>
-                  <input value={form.reportNumber} onChange={(e) => setField("reportNumber", e.target.value)} placeholder="e.g. CAR353" disabled={busy} />
+                  <input
+                    value={form.reportNumber}
+                    onChange={(e) => setField("reportNumber", e.target.value)}
+                    placeholder="e.g. CAR353"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Year *</label>
-                  <input type="number" min="1900" max="2100" value={form.year} onChange={(e) => setField("year", e.target.value)} placeholder="e.g. 2020" disabled={busy} />
+                  <input
+                    type="number"
+                    min="1900"
+                    max="2100"
+                    value={form.year}
+                    onChange={(e) => setField("year", e.target.value)}
+                    placeholder="e.g. 2020"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Case Number</label>
-                  <input value={form.caseNumber} onChange={(e) => setField("caseNumber", e.target.value)} placeholder="e.g. Petition 12 of 2020" disabled={busy} />
+                  <input
+                    value={form.caseNumber}
+                    onChange={(e) => setField("caseNumber", e.target.value)}
+                    placeholder="e.g. Petition 12 of 2020"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Citation</label>
-                  <input value={form.citation} onChange={(e) => setField("citation", e.target.value)} placeholder="Optional (preferred if available)" disabled={busy} />
+                  <input
+                    value={form.citation}
+                    onChange={(e) => setField("citation", e.target.value)}
+                    placeholder="Optional (preferred if available)"
+                    disabled={busy}
+                  />
+                </div>
+
+                {/* ✅ NEW Court Type dropdown */}
+                <div className="admin-field">
+                  <label>Court Type *</label>
+                  <select
+                    value={String(form.courtType)}
+                    onChange={(e) => setField("courtType", toInt(e.target.value, 3))}
+                    disabled={busy}
+                  >
+                    {COURT_TYPE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="hint">Avoids typing inconsistencies.</div>
+                </div>
+
+                {/* Legacy Court string (optional) */}
+                <div className="admin-field">
+                  <label>Court (optional text)</label>
+                  <input
+                    value={form.court}
+                    onChange={(e) => setField("court", e.target.value)}
+                    placeholder="Optional display text (can be blank)"
+                    disabled={busy}
+                  />
+                </div>
+
+                <div className="admin-field">
+                  <label>Town</label>
+                  <input
+                    value={form.town}
+                    onChange={(e) => setField("town", e.target.value)}
+                    placeholder="e.g. Kakamega"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Decision Type *</label>
-                  <select value={String(form.decisionType)} onChange={(e) => setField("decisionType", toInt(e.target.value, 1))} disabled={busy}>
+                  <select
+                    value={String(form.decisionType)}
+                    onChange={(e) => setField("decisionType", toInt(e.target.value, 1))}
+                    disabled={busy}
+                  >
                     {DECISION_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
@@ -873,7 +1018,11 @@ export default function AdminLLRServices() {
 
                 <div className="admin-field">
                   <label>Case Type *</label>
-                  <select value={String(form.caseType)} onChange={(e) => setField("caseType", toInt(e.target.value, 2))} disabled={busy}>
+                  <select
+                    value={String(form.caseType)}
+                    onChange={(e) => setField("caseType", toInt(e.target.value, 2))}
+                    disabled={busy}
+                  >
                     {CASETYPE_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
@@ -882,31 +1031,35 @@ export default function AdminLLRServices() {
                   </select>
                 </div>
 
-                <div className="admin-field">
-                  <label>Court</label>
-                  <input value={form.court} onChange={(e) => setField("court", e.target.value)} placeholder="e.g. High Court of Kenya" disabled={busy} />
-                </div>
-
-                {/* ✅ NEW Town field */}
-                <div className="admin-field">
-                  <label>Town</label>
-                  <input value={form.town} onChange={(e) => setField("town", e.target.value)} placeholder="e.g. Kakamega" disabled={busy} />
-                  <div className="hint">Shown in list as: <b>Court · Town</b></div>
-                </div>
-
                 <div className="admin-field admin-span2">
                   <label>Parties</label>
-                  <input value={form.parties} onChange={(e) => setField("parties", e.target.value)} placeholder="e.g. A v B" disabled={busy} />
+                  <input
+                    value={form.parties}
+                    onChange={(e) => setField("parties", e.target.value)}
+                    placeholder="e.g. A v B"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field admin-span2">
                   <label>Judges</label>
-                  <textarea rows={2} value={form.judges} onChange={(e) => setField("judges", e.target.value)} placeholder="Separate by newline or semicolon" disabled={busy} />
+                  <textarea
+                    rows={2}
+                    value={form.judges}
+                    onChange={(e) => setField("judges", e.target.value)}
+                    placeholder="Separate by newline or semicolon"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Decision Date</label>
-                  <input type="date" value={form.decisionDate} onChange={(e) => setField("decisionDate", e.target.value)} disabled={busy} />
+                  <input
+                    type="date"
+                    value={form.decisionDate}
+                    onChange={(e) => setField("decisionDate", e.target.value)}
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field admin-span2">
@@ -922,7 +1075,9 @@ export default function AdminLLRServices() {
                     }
                     disabled={busy}
                   />
-                  <div className="hint">Tip: Use <b>Report Content</b> for formatting (bold, headings, links).</div>
+                  <div className="hint">
+                    Tip: Use <b>Report Content</b> for formatting (bold, headings, links).
+                  </div>
                 </div>
               </div>
             </div>
