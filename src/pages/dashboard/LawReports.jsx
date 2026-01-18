@@ -38,6 +38,9 @@ function parseSearchResponse(payload) {
   return { items: Array.isArray(items) ? items : [], total: Number(total) || 0 };
 }
 
+// ✅ Case Type enum options (UI labels). Backend is enum; we send string values.
+const CASE_TYPES = ["Civil", "Criminal"];
+
 export default function LawReports() {
   const navigate = useNavigate();
   const isInst = isInstitutionUser();
@@ -84,6 +87,10 @@ export default function LawReports() {
   const [year, setYear] = useState(""); // string
   const [courtType, setCourtType] = useState("");
   const [townOrPostCode, setTownOrPostCode] = useState("");
+
+  // ✅ NEW: Case Type filter
+  const [caseType, setCaseType] = useState(""); // "" | "Civil" | "Criminal"
+
   const [sortBy, setSortBy] = useState("year_desc");
 
   // Pagination (server mode)
@@ -100,6 +107,7 @@ export default function LawReports() {
     setYear("");
     setCourtType("");
     setTownOrPostCode("");
+    setCaseType(""); // ✅ NEW
     setSortBy("year_desc");
     setPage(1);
     showToast("Filters cleared");
@@ -125,7 +133,6 @@ export default function LawReports() {
         return { ok: false, reason: "404" };
       }
 
-      // Other errors: keep mode but show error
       throw e;
     }
   }
@@ -140,9 +147,7 @@ export default function LawReports() {
   }
 
   /**
-   * Main loader:
-   * - In server mode: query API every time filters change (debounced for q)
-   * - If /law-reports/search is missing -> switch to client mode and load list once
+   * Main loader
    */
   useEffect(() => {
     let cancelled = false;
@@ -161,6 +166,10 @@ export default function LawReports() {
             year: year ? Number(year) : undefined,
             courtType: courtType || undefined,
             townOrPostCode: townOrPostCode || undefined,
+
+            // ✅ NEW: caseType param
+            caseType: caseType || undefined,
+
             sort: sortBy || "year_desc",
             page,
             pageSize,
@@ -169,7 +178,6 @@ export default function LawReports() {
           const out = await tryServerSearch(params);
 
           if (!out.ok) {
-            // Switch to client mode (only for 404)
             if (out.reason === "404") {
               if (cancelled) return;
 
@@ -184,7 +192,6 @@ export default function LawReports() {
               return;
             }
 
-            // unavailable: fallback to client list if already loaded; otherwise load it
             const list = await loadAllReportsClientFallback();
             if (cancelled) return;
 
@@ -229,13 +236,13 @@ export default function LawReports() {
     year,
     courtType,
     townOrPostCode,
+    caseType, // ✅ NEW
     sortBy,
     page,
   ]);
 
   /**
    * Client-mode enrichment for missing metadata
-   * Uses GET /legal-documents/{id} for rows that look "empty"
    */
   useEffect(() => {
     let cancelled = false;
@@ -258,6 +265,7 @@ export default function LawReports() {
             !meta.courtType &&
             !meta.town &&
             !meta.postCode &&
+            !meta.caseType && // ✅ include CaseType in "has metadata"
             !meta.year;
           return missingCore;
         });
@@ -313,7 +321,7 @@ export default function LawReports() {
     });
   }, [mode, reports, detailsMap]);
 
-  // Client-mode filtering (exact fields) — used ONLY when mode=client
+  // Client-mode filtering (exact fields)
   const visibleClient = useMemo(() => {
     if (mode !== "client") return mergedReports;
 
@@ -326,6 +334,9 @@ export default function LawReports() {
     const courtNorm = normalize(courtType);
     const townNorm = normalize(townOrPostCode);
 
+    // ✅ NEW
+    const caseNorm = normalize(caseType);
+
     let items = mergedReports.filter((r) => {
       const meta = extractReportMeta(r);
 
@@ -337,10 +348,14 @@ export default function LawReports() {
 
       const matchesYear = !yearNum || meta.year === yearNum;
       const matchesCourt = !courtNorm || normalize(meta.courtType) === courtNorm;
+
       const matchesTown =
         !townNorm ||
         normalize(meta.town) === townNorm ||
         normalize(meta.postCode) === townNorm;
+
+      // ✅ NEW: CaseType exact match
+      const matchesCaseType = !caseNorm || normalize(meta.caseType) === caseNorm;
 
       return (
         matchesQ &&
@@ -349,7 +364,8 @@ export default function LawReports() {
         matchesCitation &&
         matchesYear &&
         matchesCourt &&
-        matchesTown
+        matchesTown &&
+        matchesCaseType
       );
     });
 
@@ -364,8 +380,10 @@ export default function LawReports() {
 
     if (sortBy === "year_asc") items.sort((a, b) => getYear(a) - getYear(b));
     else if (sortBy === "year_desc") items.sort((a, b) => getYear(b) - getYear(a));
-    else if (sortBy === "reportno_asc") items.sort((a, b) => String(getReportNo(a)).localeCompare(String(getReportNo(b))));
-    else if (sortBy === "parties_asc") items.sort((a, b) => String(getParties(a)).localeCompare(String(getParties(b))));
+    else if (sortBy === "reportno_asc")
+      items.sort((a, b) => String(getReportNo(a)).localeCompare(String(getReportNo(b))));
+    else if (sortBy === "parties_asc")
+      items.sort((a, b) => String(getParties(a)).localeCompare(String(getParties(b))));
     else if (sortBy === "date_desc") items.sort((a, b) => getDate(b) - getDate(a));
 
     return items;
@@ -379,6 +397,7 @@ export default function LawReports() {
     year,
     courtType,
     townOrPostCode,
+    caseType, // ✅ NEW
     sortBy,
   ]);
 
@@ -494,7 +513,6 @@ export default function LawReports() {
 
   const totalPages = useMemo(() => {
     if (mode === "server") return Math.max(1, Math.ceil((total || 0) / pageSize));
-    // client mode: total == merged list length; visible is filtered length; no paging needed
     return 1;
   }, [mode, total, pageSize]);
 
@@ -506,7 +524,7 @@ export default function LawReports() {
         <div className="lr-title">
           <h1>Law Reports</h1>
           <p>
-            Search by report number, parties, citation, year, court type, and town/post code.
+            Filter by report number, parties, citation, year, court type, town/post code — and case type.
             {mode === "server" ? " Fast search is enabled." : " Running in fallback mode."}
           </p>
         </div>
@@ -634,6 +652,26 @@ export default function LawReports() {
               </div>
             </div>
 
+            {/* ✅ NEW: Case Type */}
+            <div className="lr-field">
+              <div className="lr-label">Case Type</div>
+              <select
+                className="lr-select"
+                value={caseType}
+                onChange={(e) => {
+                  setCaseType(e.target.value);
+                  if (mode === "server") setPage(1);
+                }}
+              >
+                <option value="">All</option>
+                {CASE_TYPES.map((ct) => (
+                  <option key={ct} value={ct}>
+                    {ct}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="lr-field">
               <div className="lr-label">Court Type</div>
               <input
@@ -666,7 +704,7 @@ export default function LawReports() {
               </button>
               <button
                 className="lr-btn"
-                onClick={() => showToast("Tip: use Report Number or Parties + Year")}
+                onClick={() => showToast("Tip: use Case Type + Year + Parties")}
               >
                 Tip
               </button>
@@ -755,6 +793,10 @@ export default function LawReports() {
                         <div className="lr-meta">
                           {meta.reportNumber ? <span className="lr-tag">{meta.reportNumber}</span> : null}
                           {meta.year ? <span className="lr-tag">{meta.year}</span> : null}
+
+                          {/* ✅ NEW: Case Type tag */}
+                          {meta.caseType ? <span className="lr-tag">{meta.caseType}</span> : null}
+
                           {meta.courtType ? <span className="lr-tag">{meta.courtType}</span> : null}
                           {meta.town ? <span className="lr-tag">{meta.town}</span> : null}
                           {!meta.town && meta.postCode ? <span className="lr-tag">{meta.postCode}</span> : null}
@@ -815,7 +857,6 @@ export default function LawReports() {
               </div>
             )}
 
-            {/* Bottom pagination */}
             {mode === "server" && totalPages > 1 && (
               <div style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 14 }}>
                 <button

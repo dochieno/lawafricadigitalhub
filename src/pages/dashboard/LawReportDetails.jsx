@@ -9,7 +9,7 @@ import "../../styles/lawReports.css";
 
 function isInstitutionUser() {
   const c = getAuthClaims();
-  return !!(c?.institutionId && c.institutionId > 0);
+  return !!(c?.institutionId && c?.institutionId > 0);
 }
 
 function isPublicUser() {
@@ -145,6 +145,10 @@ export default function LawReportDetails() {
             {meta?.reportNumber ? <span className="lr-tag" style={{ marginRight: 8 }}>{meta.reportNumber}</span> : null}
             {meta?.citation ? <span className="lr-tag" style={{ marginRight: 8 }}>{meta.citation}</span> : null}
             {meta?.year ? <span className="lr-tag" style={{ marginRight: 8 }}>{meta.year}</span> : null}
+
+            {/* ✅ NEW: Case Type */}
+            {meta?.caseType ? <span className="lr-tag" style={{ marginRight: 8 }}>{meta.caseType}</span> : null}
+
             {meta?.courtType ? <span className="lr-tag" style={{ marginRight: 8 }}>{meta.courtType}</span> : null}
             {meta?.town ? <span className="lr-tag" style={{ marginRight: 8 }}>{meta.town}</span> : null}
             {!meta?.town && meta?.postCode ? <span className="lr-tag" style={{ marginRight: 8 }}>{meta.postCode}</span> : null}
@@ -212,6 +216,9 @@ export default function LawReportDetails() {
                   {meta?.decisionType ? <span className="lr-tag">Decision: {meta.decisionType}</span> : null}
                   {meta?.hcRef ? <span className="lr-tag">HC Ref: {meta.hcRef}</span> : null}
                   {meta?.judges ? <span className="lr-tag">Judges: {meta.judges}</span> : null}
+
+                  {/* ✅ NEW: show as metadata too */}
+                  {meta?.caseType ? <span className="lr-tag">Case type: {meta.caseType}</span> : null}
                 </div>
 
                 {meta?.caseNotes ? (

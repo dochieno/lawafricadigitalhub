@@ -29,6 +29,10 @@ export function extractReportMeta(d) {
   const town = String(pick("town", "Town")).trim();
   const postCode = String(pick("postCode", "PostCode", "postalCode", "PostalCode")).trim();
 
+  // ✅ NEW: CaseType (enum on backend, but we accept strings too)
+  const caseTypeRaw = pick("caseType", "CaseType");
+  const caseType = String(caseTypeRaw || "").trim();
+
   const yearRaw = pick("year", "Year");
   const yearNum = yearRaw ? Number(yearRaw) : NaN;
   const year = Number.isFinite(yearNum) ? yearNum : null;
@@ -50,6 +54,7 @@ export function extractReportMeta(d) {
     courtType,
     town,
     postCode,
+    caseType, // ✅ NEW
     judgmentDate,
     judges,
     decisionType,
@@ -73,6 +78,7 @@ export function getReportSearchHaystack(doc) {
     m.courtType,
     m.town,
     m.postCode,
+    m.caseType, // ✅ NEW
   ]
     .filter(Boolean)
     .join(" ")
