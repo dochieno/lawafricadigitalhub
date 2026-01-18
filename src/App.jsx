@@ -41,6 +41,9 @@ import GlobalAdminHomeSwitch from "./pages/dashboard/GlobalAdminHomeSwitch";
 import DocumentDetails from "./pages/documents/DocumentDetails";
 import DocumentReader from "./pages/documents/DocumentReader";
 
+// ✅ NEW: End-user Law Reports page
+import LawReports from "./pages/dashboard/LawReports";
+
 export default function App() {
   return (
     <AuthProvider>
@@ -57,6 +60,24 @@ export default function App() {
 
           {/* ✅ NEW: Paystack redirects here after payment */}
           <Route path="/payments/paystack/return" element={<PaystackReturn />} />
+
+          {/* ✅ OPTIONAL FRIENDLY ALIASES (protected) */}
+          <Route
+            path="/law-reports"
+            element={
+              <ProtectedRoute>
+                <Navigate to="/dashboard/law-reports" replace />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/reports"
+            element={
+              <ProtectedRoute>
+                <Navigate to="/dashboard/law-reports" replace />
+              </ProtectedRoute>
+            }
+          />
 
           {/* ===================== */}
           {/* PROTECTED APP */}
@@ -75,6 +96,10 @@ export default function App() {
 
             <Route path="explore" element={<Explore />} />
             <Route path="library" element={<Library />} />
+
+            {/* ✅ NEW: Law Reports (end-user) */}
+            <Route path="law-reports" element={<LawReports />} />
+
             <Route path="security" element={<SecurityDashboard />} />
 
             {/* ===================== */}
@@ -100,8 +125,11 @@ export default function App() {
               <Route path="admin/documents" element={<AdminDocuments />} />
               <Route path="admin/llr-services" element={<AdminLLRServices />} />
               <Route path="admin/llr-services/import" element={<AdminLLRImport />} />
-              <Route  path="admin/llr-services/:legalDocumentId/content"  element={<AdminReportContent />}/>
-              
+              <Route
+                path="admin/llr-services/:legalDocumentId/content"
+                element={<AdminReportContent />}
+              />
+
               <Route
                 path="admin/institution-subscriptions"
                 element={<AdminInstitutionSubscriptions />}

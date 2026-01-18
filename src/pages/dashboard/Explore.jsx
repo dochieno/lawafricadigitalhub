@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { API_BASE_URL } from "../../api/client";
 import { getAuthClaims } from "../../auth/auth";
+import { isLawReportDocument } from "../../utils/isLawReportDocument";
 import "../../styles/explore.css";
 
 function getServerOrigin() {
@@ -70,7 +71,10 @@ export default function Explore() {
           api.get("/my-library"),
         ]);
 
-        setDocs(docsRes.data || []);
+        // ✅ Step 1: Remove reports from Explore entirely
+        const all = docsRes.data || [];
+        const nonReports = all.filter((d) => !isLawReportDocument(d));
+        setDocs(nonReports);
 
         const ids = new Set((libraryRes.data || []).map((item) => item.id));
         setLibraryIds(ids);

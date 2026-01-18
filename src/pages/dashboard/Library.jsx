@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import "../../styles/library.css";
 import { useNavigate } from "react-router-dom";
 import api, { API_BASE_URL } from "../../api/client";
+import { isLawReportDocument } from "../../utils/isLawReportDocument";
 
 function getServerOrigin() {
   return String(API_BASE_URL || "").replace(/\/api\/?$/i, "");
@@ -42,12 +43,15 @@ export default function Library() {
           api.get("/reading-progress/recent?take=100"),
         ]);
 
+        // ✅ Step 1: Remove reports from My Library entirely
+        const libraryItems = (libraryRes.data || []).filter((x) => !isLawReportDocument(x));
+
         const progressMap = {};
         (progressRes.data || []).forEach((p) => {
           progressMap[p.documentId] = p;
         });
 
-        const mapped = (libraryRes.data || []).map((item) => {
+        const mapped = libraryItems.map((item) => {
           const progress = progressMap[item.id];
 
           return {

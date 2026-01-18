@@ -3,6 +3,7 @@ import { useAuth } from "../../auth/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import api, { API_BASE_URL } from "../../api/client";
+import { isLawReportDocument } from "../../utils/isLawReportDocument";
 import "../../styles/dashboard.css";
 
 function getServerOrigin() {
@@ -35,12 +36,15 @@ export default function Home() {
         const libraryRes = await api.get("/my-library");
         const progressRes = await api.get("/reading-progress/recent?take=5");
 
+        // ✅ Step 1: Remove reports from Home library preview
+        const libraryItems = (libraryRes.data || []).filter((x) => !isLawReportDocument(x));
+
         const progressMap = {};
         (progressRes.data || []).forEach((p) => {
           progressMap[p.documentId] = p;
         });
 
-        const mapped = (libraryRes.data || []).map((item) => {
+        const mapped = libraryItems.map((item) => {
           const progress = progressMap[item.id];
 
           return {
@@ -53,9 +57,10 @@ export default function Home() {
 
         setEbooks(mapped);
 
-        if (progressRes.data && progressRes.data.length > 0) {
-          setContinueReadingDocId(progressRes.data[0].documentId);
-        }
+        // ✅ Pick continue-reading only from non-report docs
+        const recent = (progressRes.data || []).map((x) => x.documentId);
+        const firstAvailable = recent.find((docId) => mapped.some((m) => m.id === docId)) || null;
+        setContinueReadingDocId(firstAvailable);
       } catch (err) {
         console.error("Failed to load dashboard data", err);
       } finally {
