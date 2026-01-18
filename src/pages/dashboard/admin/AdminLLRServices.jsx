@@ -3,6 +3,19 @@ import { useNavigate } from "react-router-dom";
 import api from "../../../api/client";
 import "../../../styles/adminCrud.css";
 
+import {
+  FiRefreshCw,
+  FiPlus,
+  FiEdit2,
+  FiFileText,
+  FiTrash2,
+  FiX,
+  FiCheck,
+  FiSearch,
+} from "react-icons/fi";
+
+/* ---------------- Helpers ---------------- */
+
 function getApiErrorMessage(err, fallback = "Request failed.") {
   const data = err?.response?.data;
 
@@ -16,6 +29,9 @@ function getApiErrorMessage(err, fallback = "Request failed.") {
       if (Array.isArray(arr) && arr[0]) return `${k}: ${arr[0]}`;
       return "Validation failed.";
     }
+
+    // if you return detail/type from the API
+    if (typeof data.detail === "string") return `${data.message || fallback} (${data.detail})`;
   }
 
   if (typeof data === "string") return data;
@@ -23,40 +39,9 @@ function getApiErrorMessage(err, fallback = "Request failed.") {
   return fallback;
 }
 
-const DECISION_OPTIONS = [
-  { label: "Judgment", value: 1 },
-  { label: "Ruling", value: 2 },
-];
-
-const CASETYPE_OPTIONS = [
-  { label: "Criminal", value: 1 },
-  { label: "Civil", value: 2 },
-  { label: "Environmental", value: 3 },
-  { label: "Family", value: 4 },
-  { label: "Commercial", value: 5 },
-  { label: "Constitutional", value: 6 },
-];
-
-// Service options (enum int values) — still used in Create/Edit, just not shown as a column
-const SERVICE_OPTIONS = [
-  { label: "LawAfrica Law Reports (LLR)", value: 1 },
-  { label: "Odungas Digest", value: 2 },
-  { label: "Uganda Law Reports (ULR)", value: 3 },
-  { label: "Tanzania Law Reports (TLR)", value: 4 },
-  { label: "Southern Sudan Law Reports & Journal (SSLRJ)", value: 5 },
-  { label: "East Africa Law Reports (EALR)", value: 6 },
-  { label: "East Africa Court of Appeal Reports (EACA)", value: 7 },
-  { label: "East Africa General Reports (EAGR)", value: 8 },
-  { label: "East Africa Protectorate Law Reports (EAPLR)", value: 9 },
-  { label: "Zanzibar Protectorate Law Reports (ZPLR)", value: 10 },
-  { label: "Company Registry Search", value: 11 },
-  { label: "Uganda Law Society Reports (ULSR)", value: 12 },
-  { label: "Kenya Industrial Property Institute", value: 13 },
-];
-
 function toInt(v, fallback = 0) {
   const n = Number(v);
-  return Number.isFinite(n) ? Math.floor(n) : fallback;
+  return Number.isFinite(n) ? Math.trunc(n) : fallback;
 }
 
 function toIntOrNull(v) {
@@ -65,7 +50,7 @@ function toIntOrNull(v) {
   if (!s) return null;
   const n = Number(s);
   if (!Number.isFinite(n)) return null;
-  return Math.floor(n);
+  return Math.trunc(n);
 }
 
 function isoOrNullFromDateInput(yyyyMmDd) {
@@ -84,6 +69,73 @@ function dateInputFromIso(iso) {
   }
 }
 
+/**
+ * IMPORTANT: show “Unknown” instead of “—” when value is missing/0
+ * because your DB values are valid and we want visibility.
+ */
+function labelFromOptions(options, value, unknown = "Unknown") {
+  const n = toInt(value, 0);
+  const hit = options.find((x) => x.value === n);
+  return hit ? hit.label : unknown;
+}
+
+const DECISION_OPTIONS = [
+  { label: "Judgment", value: 1 },
+  { label: "Ruling", value: 2 },
+];
+
+const CASETYPE_OPTIONS = [
+  { label: "Criminal", value: 1 },
+  { label: "Civil", value: 2 },
+  { label: "Environmental", value: 3 },
+  { label: "Family", value: 4 },
+  { label: "Commercial", value: 5 },
+  { label: "Constitutional", value: 6 },
+];
+
+// Service options (used only in Create/Edit + search + chip)
+const SERVICE_OPTIONS = [
+  { label: "LawAfrica Law Reports (LLR)", value: 1 },
+  { label: "Odungas Digest", value: 2 },
+  { label: "Uganda Law Reports (ULR)", value: 3 },
+  { label: "Tanzania Law Reports (TLR)", value: 4 },
+  { label: "Southern Sudan Law Reports & Journal (SSLRJ)", value: 5 },
+  { label: "East Africa Law Reports (EALR)", value: 6 },
+  { label: "East Africa Court of Appeal Reports (EACA)", value: 7 },
+  { label: "East Africa General Reports (EAGR)", value: 8 },
+  { label: "East Africa Protectorate Law Reports (EAPLR)", value: 9 },
+  { label: "Zanzibar Protectorate Law Reports (ZPLR)", value: 10 },
+  { label: "Company Registry Search", value: 11 },
+  { label: "Uganda Law Society Reports (ULSR)", value: 12 },
+  { label: "Kenya Industrial Property Institute", value: 13 },
+];
+
+function shortServiceLabel(serviceValue) {
+  const n = toInt(serviceValue, 0);
+  const hit = SERVICE_OPTIONS.find((x) => x.value === n);
+  if (!hit) return "Service: Unknown";
+  return hit.label.replace(/\s*\(.*?\)\s*/g, "").trim();
+}
+
+/**
+ * Normalize incoming rows from backend:
+ * - ensure numeric enums are numbers
+ * - ensure countryId/year/id are numbers
+ * This prevents “—” due to type mismatch (string vs number, undefined, etc.)
+ */
+function normalizeRow(r) {
+  return {
+    ...r,
+    id: toInt(r?.id, 0),
+    legalDocumentId: toInt(r?.legalDocumentId, 0),
+    countryId: toInt(r?.countryId, 0),
+    year: r?.year === null || r?.year === undefined ? null : toInt(r?.year, 0),
+    service: toInt(r?.service, 0),
+    decisionType: toInt(r?.decisionType, 0),
+    caseType: toInt(r?.caseType, 0),
+  };
+}
+
 const emptyForm = {
   countryId: "",
   service: 1,
@@ -100,16 +152,11 @@ const emptyForm = {
   contentText: "",
 };
 
-function badgeLabel(map, v) {
-  const hit = map.find((x) => x.value === toInt(v));
-  return hit?.label || "—";
-}
-
 export default function AdminLLRServices() {
   const navigate = useNavigate();
 
   const [rows, setRows] = useState([]);
-  const [countries, setCountries] = useState([]); // {id, name}
+  const [countries, setCountries] = useState([]);
   const [countryMap, setCountryMap] = useState(new Map());
 
   const [loading, setLoading] = useState(true);
@@ -119,6 +166,7 @@ export default function AdminLLRServices() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
+  // modal
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ ...emptyForm });
@@ -141,14 +189,14 @@ export default function AdminLLRServices() {
 
   async function fetchCountries() {
     try {
-      const res = await api.get("/country"); // CountryController [Route("api/[controller]")]
+      const res = await api.get("/country");
       const list = Array.isArray(res.data) ? res.data : [];
       setCountries(list);
+
       const m = new Map();
       for (const c of list) m.set(Number(c.id), c.name);
       setCountryMap(m);
     } catch {
-      // keep silent; we can still use numeric id
       setCountries([]);
       setCountryMap(new Map());
     }
@@ -161,12 +209,16 @@ export default function AdminLLRServices() {
 
     try {
       const res = await api.get("/law-reports/admin");
-      setRows(Array.isArray(res.data) ? res.data : []);
+      const list = Array.isArray(res.data) ? res.data : [];
+      setRows(list.map(normalizeRow));
     } catch (e) {
       setRows([]);
       const msg = getApiErrorMessage(e, "Failed to load law reports.");
-      // friendlier for 500
-      setError(msg === "Internal server error" ? "Server error while loading reports. Check API logs for /api/law-reports/admin." : msg);
+      setError(
+        msg === "Internal server error"
+          ? "Server error while loading reports. Check API logs for GET /api/law-reports/admin."
+          : msg
+      );
     } finally {
       setLoading(false);
     }
@@ -184,7 +236,9 @@ export default function AdminLLRServices() {
     const s = q.trim().toLowerCase();
     if (!s) return rows;
 
-    return rows.filter((r) => {
+    return rows.filter((r0) => {
+      const r = normalizeRow(r0);
+
       const title = String(r.title ?? "").toLowerCase();
       const reportNumber = String(r.reportNumber ?? "").toLowerCase();
       const year = String(r.year ?? "").toLowerCase();
@@ -197,7 +251,11 @@ export default function AdminLLRServices() {
       const countryName = (countryMap.get(Number(r.countryId)) || "").toLowerCase();
       const serviceLabel = (SERVICE_OPTIONS.find((x) => x.value === toInt(r.service))?.label || "").toLowerCase();
 
-      const meta = `${reportNumber} ${year} ${citation} ${parties} ${court} ${caseNo} ${judges} ${countryName} ${serviceLabel}`;
+      // also search decision/case labels
+      const decisionLabel = labelFromOptions(DECISION_OPTIONS, r.decisionType, "").toLowerCase();
+      const caseTypeLabel = labelFromOptions(CASETYPE_OPTIONS, r.caseType, "").toLowerCase();
+
+      const meta = `${reportNumber} ${year} ${citation} ${parties} ${court} ${caseNo} ${judges} ${countryName} ${serviceLabel} ${decisionLabel} ${caseTypeLabel}`;
       return title.includes(s) || meta.includes(s);
     });
   }, [rows, q, countryMap]);
@@ -212,7 +270,6 @@ export default function AdminLLRServices() {
       caseType: 2,
       service: 1,
       year: String(new Date().getUTCFullYear()),
-      // country stays empty so user must pick
     }));
     setOpen(true);
   }
@@ -226,7 +283,7 @@ export default function AdminLLRServices() {
 
     try {
       const res = await api.get(`/law-reports/${row.id}`);
-      const d = res.data;
+      const d = normalizeRow(res.data);
 
       setEditing(d);
       setForm({
@@ -242,7 +299,6 @@ export default function AdminLLRServices() {
         parties: d.parties ?? "",
         judges: d.judges ?? "",
         decisionDate: dateInputFromIso(d.decisionDate),
-        // keep content optional in modal (use Report Content page)
         contentText: d.contentText ?? "",
       });
     } catch (e) {
@@ -255,7 +311,6 @@ export default function AdminLLRServices() {
 
   function buildPayload() {
     return {
-      // backend should force Category=LLRServices; we still send it for clarity
       category: 6,
       countryId: toIntOrNull(form.countryId) ?? 0,
       service: toInt(form.service, 1),
@@ -273,8 +328,6 @@ export default function AdminLLRServices() {
       judges: form.judges?.trim() || null,
       decisionDate: isoOrNullFromDateInput(form.decisionDate),
 
-      // We keep a minimal content requirement on create if your backend requires it.
-      // If you later change backend to allow empty content on create, remove this.
       contentText: String(form.contentText ?? ""),
     };
   }
@@ -291,7 +344,6 @@ export default function AdminLLRServices() {
     const year = toIntOrNull(form.year);
     if (!year || year < 1900 || year > 2100) return "Year must be between 1900 and 2100.";
 
-    // Only enforce content if creating a new report
     if (!editing?.id && !String(form.contentText ?? "").trim()) return "Content text is required on Create.";
 
     return "";
@@ -310,11 +362,11 @@ export default function AdminLLRServices() {
 
       if (editing?.id) {
         await api.put(`/law-reports/${editing.id}`, payload);
-        setInfo("Law report updated.");
+        setInfo("Saved changes.");
       } else {
         const res = await api.post("/law-reports", payload);
         const newId = res.data?.id ?? null;
-        setInfo(newId ? `Law report created (#${newId}).` : "Law report created.");
+        setInfo(newId ? `Report created (#${newId}).` : "Report created.");
       }
 
       await fetchList();
@@ -356,40 +408,89 @@ export default function AdminLLRServices() {
     <div className="admin-page admin-page-wide">
       <style>{`
         .admin-card-fill { border-radius: 18px; overflow:hidden; }
-        .admin-table-wrap { max-height: 72vh; overflow:auto; border-radius: 18px; }
-        .admin-table { font-size: 13px; }
-        .admin-table thead th { position: sticky; top: 0; z-index: 2; background: #fafafa; }
+        .admin-table-wrap {
+          max-height: 72vh;
+          overflow: auto;
+          border-radius: 18px;
+        }
+        .admin-table { font-size: 13px; min-width: 1180px; } /* ✅ prevents columns collapsing */
+        .admin-table thead th {
+          position: sticky;
+          top: 0;
+          z-index: 2;
+          background: #fafafa;
+          border-bottom: 1px solid #eee;
+        }
         .row-zebra { background: #fafafa; }
         .row-hover:hover td { background: #fbfbff; }
         .num-cell { text-align:right; font-variant-numeric: tabular-nums; }
         .tight { white-space: nowrap; }
         .hint { color:#6b7280; font-size:12px; font-weight:700; }
-        .titleCell { display:flex; flex-direction:column; gap:6px; }
-        .titleMain { font-weight: 950; line-height: 1.2; }
-        .titleSub { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-        .chip { display:inline-flex; align-items:center; padding: 4px 10px; border-radius: 999px; border:1px solid #e5e7eb; background:#fff; font-weight: 900; font-size: 11px; color:#374151; }
+        .titleCell { display:flex; flex-direction:column; gap:8px; min-width: 260px; }
+        .titleMain { font-weight: 950; line-height: 1.25; }
+        .chips { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+        .chip {
+          display:inline-flex;
+          align-items:center;
+          padding: 4px 10px;
+          border-radius: 999px;
+          border:1px solid #e5e7eb;
+          background:#fff;
+          font-weight: 900;
+          font-size: 11px;
+          color:#374151;
+        }
         .chip.soft { background:#f9fafb; }
         .chip.good { background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
         .chip.warn { background:#fff7ed; border-color:#fed7aa; color:#9a3412; }
-        .actionsWrap { display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap; }
-        .admin-subtitle { max-width: 840px; }
+        .chip.muted { background:#f3f4f6; border-color:#e5e7eb; color:#6b7280; }
+        .actionsRow {
+          display:flex;
+          justify-content:flex-end;
+          gap:10px;
+          align-items:center;
+          flex-wrap:nowrap; /* ✅ single row */
+        }
+        .iconBtn {
+          display:inline-flex;
+          align-items:center;
+          justify-content:center;
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
+          border: 1px solid #e5e7eb;
+          background: #fff;
+          cursor: pointer;
+        }
+        .iconBtn:hover { background:#fafafa; }
+        .iconBtn:disabled { opacity: .55; cursor: not-allowed; }
+        .iconBtn.danger { border-color:#fecaca; }
+        .iconBtn.danger:hover { background:#fff5f5; }
+        .iconBtn.primary { border-color:#c7d2fe; }
+        .iconBtn.primary:hover { background:#f5f7ff; }
+        .toolbarRow { display:flex; gap:12px; align-items:center; }
+        .searchWrap { position: relative; flex: 1; }
+        .searchIcon { position:absolute; left: 12px; top: 50%; transform: translateY(-50%); color:#6b7280; }
+        .admin-search-wide { padding-left: 38px; }
       `}</style>
 
       <div className="admin-header">
         <div>
           <h1 className="admin-title">Admin · LLR Services (Reports)</h1>
           <p className="admin-subtitle">
-            Create and manage law reports. Category is fixed to <b>LLR Services</b>. Use <b>Report Content</b> to edit the full formatted body.
+            Category is fixed to <b>LLR Services</b>. Use <b>Report Content</b> to edit the full formatted body.
           </p>
         </div>
 
         <div className="admin-actions">
           <button className="admin-btn" onClick={fetchList} disabled={busy || loading}>
+            <FiRefreshCw style={{ marginRight: 8 }} />
             Refresh
           </button>
 
           <button className="admin-btn primary compact" onClick={openCreate} disabled={busy}>
-            + New Report
+            <FiPlus style={{ marginRight: 8 }} />
+            New Report
           </button>
         </div>
       </div>
@@ -398,55 +499,73 @@ export default function AdminLLRServices() {
 
       <div className="admin-card admin-card-fill">
         <div className="admin-toolbar">
-          <input
-            className="admin-search admin-search-wide"
-            placeholder="Search by title, report number, year, country, parties, citation, court..."
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-          <div className="admin-pill muted">{loading ? "Loading…" : `${filtered.length} report(s)`}</div>
+          <div className="toolbarRow" style={{ width: "100%" }}>
+            <div className="searchWrap">
+              <FiSearch className="searchIcon" />
+              <input
+                className="admin-search admin-search-wide"
+                placeholder="Search by title, report number, year, country, decision, case type, parties, citation, court..."
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+            </div>
+
+            <div className="admin-pill muted" title="Total results">
+              {loading ? "Loading…" : `${filtered.length} report(s)`}
+            </div>
+          </div>
         </div>
 
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
               <tr>
-                <th style={{ width: "34%" }}>Title</th>
-                <th style={{ width: "10%" }}>Country</th>
-                <th style={{ width: "10%" }}>Report No.</th>
-                <th style={{ width: "6%" }} className="num-cell">Year</th>
-                <th style={{ width: "10%" }}>Decision</th>
-                <th style={{ width: "10%" }}>Case Type</th>
-                <th style={{ width: "16%" }}>Parties</th>
-                <th style={{ width: "8%" }} className="tight">Date</th>
-                <th style={{ width: "16%", textAlign: "right" }}>Actions</th>
+                <th style={{ minWidth: 360 }}>Title</th>
+                <th style={{ minWidth: 120 }}>Country</th>
+                <th style={{ minWidth: 130 }}>Report No.</th>
+                <th style={{ minWidth: 80 }} className="num-cell">Year</th>
+                <th style={{ minWidth: 120 }}>Decision</th>
+                <th style={{ minWidth: 140 }}>Case Type</th>
+                <th style={{ minWidth: 260 }}>Parties</th>
+                <th style={{ minWidth: 120 }} className="tight">Date</th>
+                <th style={{ minWidth: 140, textAlign: "right" }}>Actions</th>
               </tr>
             </thead>
 
             <tbody>
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={9} style={{ color: "#6b7280", padding: 14 }}>
-                    No reports found. Click “+ New Report”.
+                  <td colSpan={9} style={{ color: "#6b7280", padding: 16, fontWeight: 800 }}>
+                    No reports found. Click <b>New Report</b> to add one.
                   </td>
                 </tr>
               )}
 
-              {filtered.map((r, idx) => {
-                const decisionLabel = badgeLabel(DECISION_OPTIONS, r.decisionType);
-                const caseLabel = badgeLabel(CASETYPE_OPTIONS, r.caseType);
-                const serviceLabel = badgeLabel(SERVICE_OPTIONS, r.service);
-                const countryName = countryMap.get(Number(r.countryId)) || (r.countryId ? `#${r.countryId}` : "—");
+              {filtered.map((r0, idx) => {
+                const r = normalizeRow(r0);
+
+                const decisionLabel = labelFromOptions(DECISION_OPTIONS, r.decisionType, "Unknown");
+                const caseLabel = labelFromOptions(CASETYPE_OPTIONS, r.caseType, "Unknown");
+
+                const countryName =
+                  countryMap.get(Number(r.countryId)) || (r.countryId ? `#${r.countryId}` : "—");
+
+                const decisionClass =
+                  r.decisionType === 1 ? "good" : r.decisionType === 2 ? "warn" : "muted";
+
+                const caseClass = r.caseType ? "" : "muted";
 
                 return (
-                  <tr key={r.id} className={`${idx % 2 === 1 ? "row-zebra" : ""} row-hover`}>
+                  <tr key={r.id || idx} className={`${idx % 2 === 1 ? "row-zebra" : ""} row-hover`}>
                     <td>
                       <div className="titleCell">
                         <div className="titleMain">{r.title || "—"}</div>
-                        <div className="titleSub">
-                          {/* Service moved from columns -> shown as a chip for quick context */}
-                          <span className="chip soft">{serviceLabel}</span>
-                          {r.citation ? <span className="chip">Citation</span> : null}
+                        <div className="chips">
+                          <span className="chip soft" title="Service">
+                            {shortServiceLabel(r.service)}
+                          </span>
+                          {r.citation ? <span className="chip" title="Has citation">Citation</span> : null}
+                          {r.caseNumber ? <span className="chip muted" title="Has case number">Case No.</span> : null}
                         </div>
                       </div>
                     </td>
@@ -456,26 +575,47 @@ export default function AdminLLRServices() {
                     <td className="num-cell">{r.year ?? "—"}</td>
 
                     <td>
-                      <span className={`chip ${toInt(r.decisionType) === 1 ? "good" : "warn"}`}>{decisionLabel}</span>
+                      <span className={`chip ${decisionClass}`} title={`DecisionType: ${r.decisionType || 0}`}>
+                        {decisionLabel}
+                      </span>
                     </td>
 
-                    <td><span className="chip">{caseLabel}</span></td>
+                    <td>
+                      <span className={`chip ${caseClass}`} title={`CaseType: ${r.caseType || 0}`}>
+                        {caseLabel}
+                      </span>
+                    </td>
 
                     <td>{r.parties || "—"}</td>
                     <td className="tight">{r.decisionDate ? String(r.decisionDate).slice(0, 10) : "—"}</td>
 
                     <td>
-                      <div className="actionsWrap">
-                        <button className="admin-action-btn neutral small" onClick={() => openEdit(r)} disabled={busy}>
-                          Edit
+                      <div className="actionsRow">
+                        <button
+                          className="iconBtn"
+                          title="Edit report details"
+                          onClick={() => openEdit(r)}
+                          disabled={busy}
+                        >
+                          <FiEdit2 />
                         </button>
 
-                        <button className="admin-action-btn small" onClick={() => openContent(r)} disabled={busy}>
-                          Report Content
+                        <button
+                          className="iconBtn primary"
+                          title="Edit formatted report content"
+                          onClick={() => openContent(r)}
+                          disabled={busy}
+                        >
+                          <FiFileText />
                         </button>
 
-                        <button className="admin-action-btn danger small" onClick={() => remove(r)} disabled={busy}>
-                          Delete
+                        <button
+                          className="iconBtn danger"
+                          title="Delete report"
+                          onClick={() => remove(r)}
+                          disabled={busy}
+                        >
+                          <FiTrash2 />
                         </button>
                       </div>
                     </td>
@@ -493,13 +633,17 @@ export default function AdminLLRServices() {
           <div className="admin-modal" style={{ maxWidth: 1100 }} onClick={(e) => e.stopPropagation()}>
             <div className="admin-modal-head">
               <div>
-                <h3 className="admin-modal-title">{editing ? `Edit Report #${editing.id}` : "Create Law Report"}</h3>
+                <h3 className="admin-modal-title">
+                  {editing ? `Edit Report #${editing.id}` : "Create Law Report"}
+                </h3>
                 <div className="admin-modal-subtitle">
-                  Save creates/updates the <b>LawReport</b> and its linked <b>LegalDocument</b>. Use <b>Report Content</b> for full formatted editing.
+                  Saves the <b>LawReport</b> and updates its linked <b>LegalDocument</b>. Use{" "}
+                  <b>Report Content</b> for full formatted editing.
                 </div>
               </div>
 
               <button className="admin-btn" onClick={closeModal} disabled={busy}>
+                <FiX style={{ marginRight: 8 }} />
                 Close
               </button>
             </div>
@@ -509,7 +653,6 @@ export default function AdminLLRServices() {
                 <div className="admin-field">
                   <label>Country *</label>
 
-                  {/* Better UX: dropdown if countries loaded, fallback to numeric input */}
                   {countries.length > 0 ? (
                     <select
                       value={String(form.countryId || "")}
@@ -533,14 +676,18 @@ export default function AdminLLRServices() {
                         placeholder="CountryId (e.g. 1 = Kenya)"
                         disabled={busy}
                       />
-                      <div className="hint">Tip: if dropdown is empty, ensure GET /api/country is accessible.</div>
+                      <div className="hint">Tip: ensure GET /api/country is accessible.</div>
                     </>
                   )}
                 </div>
 
                 <div className="admin-field">
                   <label>Service *</label>
-                  <select value={String(form.service)} onChange={(e) => setField("service", toInt(e.target.value, 1))} disabled={busy}>
+                  <select
+                    value={String(form.service)}
+                    onChange={(e) => setField("service", toInt(e.target.value, 1))}
+                    disabled={busy}
+                  >
                     {SERVICE_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
@@ -551,27 +698,54 @@ export default function AdminLLRServices() {
 
                 <div className="admin-field">
                   <label>Report Number *</label>
-                  <input value={form.reportNumber} onChange={(e) => setField("reportNumber", e.target.value)} placeholder="e.g. CAR353" disabled={busy} />
+                  <input
+                    value={form.reportNumber}
+                    onChange={(e) => setField("reportNumber", e.target.value)}
+                    placeholder="e.g. CAR353"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Year *</label>
-                  <input type="number" min="1900" max="2100" value={form.year} onChange={(e) => setField("year", e.target.value)} placeholder="e.g. 2020" disabled={busy} />
+                  <input
+                    type="number"
+                    min="1900"
+                    max="2100"
+                    value={form.year}
+                    onChange={(e) => setField("year", e.target.value)}
+                    placeholder="e.g. 2020"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Case Number</label>
-                  <input value={form.caseNumber} onChange={(e) => setField("caseNumber", e.target.value)} placeholder="e.g. Petition 12 of 2020" disabled={busy} />
+                  <input
+                    value={form.caseNumber}
+                    onChange={(e) => setField("caseNumber", e.target.value)}
+                    placeholder="e.g. Petition 12 of 2020"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Citation</label>
-                  <input value={form.citation} onChange={(e) => setField("citation", e.target.value)} placeholder="Optional (preferred if available)" disabled={busy} />
+                  <input
+                    value={form.citation}
+                    onChange={(e) => setField("citation", e.target.value)}
+                    placeholder="Optional (preferred if available)"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Decision Type *</label>
-                  <select value={String(form.decisionType)} onChange={(e) => setField("decisionType", toInt(e.target.value, 1))} disabled={busy}>
+                  <select
+                    value={String(form.decisionType)}
+                    onChange={(e) => setField("decisionType", toInt(e.target.value, 1))}
+                    disabled={busy}
+                  >
                     {DECISION_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
@@ -582,7 +756,11 @@ export default function AdminLLRServices() {
 
                 <div className="admin-field">
                   <label>Case Type *</label>
-                  <select value={String(form.caseType)} onChange={(e) => setField("caseType", toInt(e.target.value, 2))} disabled={busy}>
+                  <select
+                    value={String(form.caseType)}
+                    onChange={(e) => setField("caseType", toInt(e.target.value, 2))}
+                    disabled={busy}
+                  >
                     {CASETYPE_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
@@ -593,46 +771,72 @@ export default function AdminLLRServices() {
 
                 <div className="admin-field">
                   <label>Court</label>
-                  <input value={form.court} onChange={(e) => setField("court", e.target.value)} placeholder="e.g. Court of Appeal" disabled={busy} />
+                  <input
+                    value={form.court}
+                    onChange={(e) => setField("court", e.target.value)}
+                    placeholder="e.g. Court of Appeal"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field admin-span2">
                   <label>Parties</label>
-                  <input value={form.parties} onChange={(e) => setField("parties", e.target.value)} placeholder="e.g. A v B" disabled={busy} />
+                  <input
+                    value={form.parties}
+                    onChange={(e) => setField("parties", e.target.value)}
+                    placeholder="e.g. A v B"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field admin-span2">
                   <label>Judges</label>
-                  <textarea rows={2} value={form.judges} onChange={(e) => setField("judges", e.target.value)} placeholder="Separate by newline or semicolon" disabled={busy} />
+                  <textarea
+                    rows={2}
+                    value={form.judges}
+                    onChange={(e) => setField("judges", e.target.value)}
+                    placeholder="Separate by newline or semicolon"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Decision Date</label>
-                  <input type="date" value={form.decisionDate} onChange={(e) => setField("decisionDate", e.target.value)} disabled={busy} />
+                  <input
+                    type="date"
+                    value={form.decisionDate}
+                    onChange={(e) => setField("decisionDate", e.target.value)}
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field admin-span2">
-                  <label>Content Text {editing?.id ? "(optional here)" : "*"} </label>
+                  <label>Content Text {editing?.id ? "(optional here)" : "*"}</label>
                   <textarea
                     rows={10}
                     value={form.contentText}
                     onChange={(e) => setField("contentText", e.target.value)}
-                    placeholder={editing?.id ? "Optional: use Report Content for formatted editing." : "Required on Create: paste report body here (you can format later in Report Content)."}
+                    placeholder={
+                      editing?.id
+                        ? "Optional: use Report Content for formatted editing."
+                        : "Required on Create: paste report body here (you can format later in Report Content)."
+                    }
                     disabled={busy}
                   />
                   <div className="hint">
-                    Tip: For formatted content (bold, headings, links), click <b>Report Content</b> after saving.
+                    Tip: Use <b>Report Content</b> for formatting (bold, headings, links).
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="admin-modal-foot">
+            <div className="admin-modal-foot" style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <button className="admin-btn" onClick={closeModal} disabled={busy}>
                 Cancel
               </button>
 
               <button className="admin-btn primary" onClick={save} disabled={busy}>
+                <FiCheck style={{ marginRight: 8 }} />
                 {busy ? "Saving…" : editing ? "Save changes" : "Create"}
               </button>
             </div>
