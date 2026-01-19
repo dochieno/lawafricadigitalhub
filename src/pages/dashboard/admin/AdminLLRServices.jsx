@@ -615,7 +615,7 @@ export default function AdminLLRServices() {
 
       const id = pick(editing, ["id", "Id"], null);
       if (id) {
-        await api.put(`/law-reports/${id}`, payload);
+        api.put(/law-reports/${id}/content, { contentText, decisionType, caseType })
         setInfo("Saved changes.");
       } else {
         const res = await api.post("/law-reports", payload);
