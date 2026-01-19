@@ -1,48 +1,53 @@
 /* src/styles/lawReportReader.css
-   Brand-aligned reader (LawAfrica): deep navy + crimson accent.
-   Scoped to lrr-* only.
+   ✅ Brand-aligned Reader (LawAfrica) — LIGHT/GRAY theme to match Law Reports listing.
+   ✅ Scoped to lrr-* only.
+   ✅ Uses LawAfrica brand crimson as accent, but keeps the overall surface gray/clean.
 */
 
-/* --------------------------
-   Theme tokens
---------------------------- */
 .lrr-wrap {
-  --lrr-bg: var(--la-reader-bg);
-  --lrr-surface: var(--la-reader-surface);
-  --lrr-surface-2: var(--la-reader-surface-2);
-  --lrr-border: var(--la-reader-border);
-  --lrr-border-2: var(--la-reader-border-2);
+  /* Theme tokens (self-contained so it works even if shared tokens aren't defined) */
+  --lrr-bg: #eef1f5;
+  --lrr-surface: rgba(255, 255, 255, 0.78);
+  --lrr-surface-strong: rgba(255, 255, 255, 0.92);
+  --lrr-border: rgba(15, 23, 42, 0.10);
+  --lrr-border-2: rgba(15, 23, 42, 0.14);
 
-  --lrr-text: var(--la-reader-text);
-  --lrr-muted: var(--la-reader-muted);
+  --lrr-text: rgba(15, 23, 42, 0.92);
+  --lrr-muted: rgba(15, 23, 42, 0.70);
 
-  --lrr-brand: var(--la-crimson);
-  --lrr-brand-2: var(--la-crimson-2);
+  /* Brand accent (LawAfrica crimson family) */
+  --lrr-brand: #a11b1f;
+  --lrr-brand-2: #d13a3f;
 
-  --lrr-shadow: var(--la-reader-shadow);
-  --lrr-shadow-soft: var(--la-reader-shadow-soft);
+  --lrr-shadow: 0 14px 34px rgba(2, 6, 23, 0.12);
+  --lrr-shadow-soft: 0 10px 22px rgba(2, 6, 23, 0.10);
 
   min-height: 100vh;
+
+  /* Light gray background with subtle crimson tint */
   background:
-    radial-gradient(900px 420px at 14% -8%, rgba(161, 27, 31, 0.22), transparent 60%),
-    radial-gradient(900px 460px at 92% 0%, rgba(209, 58, 63, 0.14), transparent 60%),
-    radial-gradient(900px 520px at 40% 110%, rgba(255, 255, 255, 0.06), transparent 55%),
+    radial-gradient(1100px 520px at 14% -10%, rgba(161, 27, 31, 0.10), transparent 60%),
+    radial-gradient(900px 520px at 92% 0%, rgba(209, 58, 63, 0.08), transparent 55%),
+    radial-gradient(900px 520px at 40% 110%, rgba(2, 6, 23, 0.05), transparent 55%),
     var(--lrr-bg);
+
   color: var(--lrr-text);
 }
 
-/* Loading / Error */
+/* --------------------------
+   Loading / Error states
+--------------------------- */
 .lrr-loading {
   padding: 24px;
-  opacity: 0.9;
+  color: var(--lrr-muted);
 }
 
 .lrr-error {
-  max-width: 860px;
+  max-width: 980px;
   margin: 40px auto;
-  background: var(--lrr-surface-2);
+  background: var(--lrr-surface-strong);
   border: 1px solid var(--lrr-border);
-  border-radius: 16px;
+  border-radius: 18px;
   padding: 18px;
   box-shadow: var(--lrr-shadow-soft);
 }
@@ -50,6 +55,7 @@
 .lrr-error-title {
   font-size: 18px;
   font-weight: 900;
+  color: rgba(15, 23, 42, 0.92);
 }
 
 .lrr-error-msg {
@@ -58,7 +64,7 @@
 }
 
 /* --------------------------
-   Header (sticky)
+   Sticky Header
 --------------------------- */
 .lrr-header {
   position: sticky;
@@ -67,14 +73,13 @@
 
   backdrop-filter: blur(12px);
   background:
-    linear-gradient(180deg, rgba(11, 16, 32, 0.92), rgba(7, 10, 20, 0.88));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.74));
   border-bottom: 1px solid var(--lrr-border);
   padding: 14px 16px;
 
-  /* subtle brand glow */
   box-shadow:
-    0 8px 24px rgba(0, 0, 0, 0.35),
-    0 1px 0 rgba(161, 27, 31, 0.22) inset;
+    0 10px 22px rgba(2, 6, 23, 0.08),
+    0 1px 0 rgba(161, 27, 31, 0.08) inset;
 }
 
 .lrr-header-top {
@@ -87,31 +92,31 @@
 
 /* Pills */
 .lrr-pill {
-  border: 1px solid var(--lrr-border-2);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--lrr-text);
+  border: 1px solid var(--lrr-border);
+  background: rgba(255, 255, 255, 0.75);
+  color: rgba(15, 23, 42, 0.92);
   padding: 9px 12px;
   border-radius: 999px;
   cursor: pointer;
-  font-weight: 800;
+  font-weight: 900;
   font-size: 13px;
-  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 10px 18px rgba(2, 6, 23, 0.06);
   transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background 140ms ease;
 }
 
 .lrr-pill:hover {
   transform: translateY(-1px);
-  border-color: rgba(161, 27, 31, 0.35);
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.30);
+  border-color: rgba(161, 27, 31, 0.28);
+  background: rgba(255, 255, 255, 0.90);
+  box-shadow: 0 14px 26px rgba(2, 6, 23, 0.10);
 }
 
 .lrr-pill.ghost {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.45);
 }
 
 .lrr-pill:disabled {
-  opacity: 0.5;
+  opacity: 0.55;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
@@ -124,6 +129,7 @@
   line-height: 1.28;
   font-weight: 950;
   letter-spacing: -0.01em;
+  color: rgba(15, 23, 42, 0.95);
 }
 
 /* Meta chips */
@@ -138,10 +144,10 @@
   font-size: 12px;
   padding: 6px 10px;
   border-radius: 999px;
-  background: rgba(161, 27, 31, 0.14);
-  border: 1px solid rgba(161, 27, 31, 0.28);
-  color: rgba(255, 255, 255, 0.92);
-  font-weight: 800;
+  background: rgba(161, 27, 31, 0.10);
+  border: 1px solid rgba(161, 27, 31, 0.22);
+  color: rgba(15, 23, 42, 0.90);
+  font-weight: 900;
 }
 
 .lrr-submeta {
@@ -149,37 +155,41 @@
   display: grid;
   gap: 6px;
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.84);
+  color: rgba(15, 23, 42, 0.86);
+}
+
+.lrr-submeta strong {
+  color: rgba(15, 23, 42, 0.92);
 }
 
 .lrr-soft {
-  color: rgba(255, 255, 255, 0.70);
+  color: rgba(15, 23, 42, 0.60);
 }
 
 /* --------------------------
    Main content
 --------------------------- */
 .lrr-main {
-  max-width: 860px;
+  max-width: 980px;
   margin: 0 auto;
   padding: 18px 16px 56px;
 }
 
 .lrr-article {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(15, 23, 42, 0.10);
   border-radius: 18px;
-  padding: 20px 18px;
+  padding: 22px 20px;
   box-shadow: var(--lrr-shadow-soft);
 }
 
 /* Headings */
 .lrr-h2 {
-  margin: 20px 0 10px;
+  margin: 22px 0 12px;
   font-size: 13px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.94);
+  color: rgba(15, 23, 42, 0.92);
   border-left: 3px solid rgba(161, 27, 31, 0.85);
   padding-left: 10px;
 }
@@ -189,7 +199,7 @@
   margin: 0 0 14px;
   line-height: 1.85;
   font-size: 15.5px;
-  color: rgba(255, 255, 255, 0.90);
+  color: rgba(15, 23, 42, 0.88);
 
   /* preserve line breaks within paragraphs */
   white-space: pre-wrap;
@@ -200,31 +210,49 @@
   margin-top: 18px;
   padding: 14px;
   border-radius: 14px;
-  border: 1px dashed rgba(255, 255, 255, 0.20);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.78);
+  border: 1px dashed rgba(15, 23, 42, 0.18);
+  background: rgba(255, 255, 255, 0.70);
+  color: rgba(15, 23, 42, 0.70);
 }
 
 /* Buttons (error state / access required screen) */
 .lrr-btn {
-  border: 1px solid rgba(161, 27, 31, 0.30);
-  background: linear-gradient(135deg, rgba(161, 27, 31, 0.95), rgba(209, 58, 63, 0.90));
+  border: 1px solid rgba(161, 27, 31, 0.22);
+  background: linear-gradient(135deg, rgba(161, 27, 31, 0.92), rgba(209, 58, 63, 0.88));
   color: white;
   padding: 10px 14px;
   border-radius: 12px;
   cursor: pointer;
-  font-weight: 900;
-  box-shadow: 0 14px 30px rgba(161, 27, 31, 0.22);
+  font-weight: 950;
+  box-shadow: 0 14px 30px rgba(161, 27, 31, 0.16);
   transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
 }
 
 .lrr-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 18px 36px rgba(161, 27, 31, 0.28);
+  box-shadow: 0 18px 36px rgba(161, 27, 31, 0.20);
 }
 
 .lrr-btn.secondary {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid var(--lrr-border-2);
-  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.20);
+  background: rgba(255, 255, 255, 0.80);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  color: rgba(15, 23, 42, 0.92);
+  box-shadow: 0 10px 18px rgba(2, 6, 23, 0.06);
+}
+
+.lrr-btn.secondary:hover {
+  box-shadow: 0 14px 26px rgba(2, 6, 23, 0.10);
+}
+
+/* Slightly improve readability on small screens */
+@media (max-width: 640px) {
+  .lrr-title {
+    font-size: 18px;
+  }
+  .lrr-article {
+    padding: 18px 14px;
+  }
+  .lrr-p {
+    font-size: 15px;
+  }
 }
