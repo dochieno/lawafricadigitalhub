@@ -7,21 +7,20 @@
    Theme tokens
 --------------------------- */
 .lrr-wrap {
-  --lrr-bg: #070a14;
-  --lrr-surface: rgba(255, 255, 255, 0.04);
-  --lrr-surface-2: rgba(255, 255, 255, 0.06);
-  --lrr-border: rgba(255, 255, 255, 0.10);
-  --lrr-border-2: rgba(255, 255, 255, 0.14);
+  --lrr-bg: var(--la-reader-bg);
+  --lrr-surface: var(--la-reader-surface);
+  --lrr-surface-2: var(--la-reader-surface-2);
+  --lrr-border: var(--la-reader-border);
+  --lrr-border-2: var(--la-reader-border-2);
 
-  --lrr-text: rgba(255, 255, 255, 0.92);
-  --lrr-muted: rgba(255, 255, 255, 0.74);
+  --lrr-text: var(--la-reader-text);
+  --lrr-muted: var(--la-reader-muted);
 
-  /* Brand (approx from logo) */
-  --lrr-brand: #a11b1f;      /* LawAfrica crimson */
-  --lrr-brand-2: #d13a3f;    /* lighter crimson highlight */
+  --lrr-brand: var(--la-crimson);
+  --lrr-brand-2: var(--la-crimson-2);
 
-  --lrr-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
-  --lrr-shadow-soft: 0 10px 22px rgba(0, 0, 0, 0.40);
+  --lrr-shadow: var(--la-reader-shadow);
+  --lrr-shadow-soft: var(--la-reader-shadow-soft);
 
   min-height: 100vh;
   background:

@@ -8,35 +8,33 @@
    Theme tokens (LawAfrica brand)
 --------------------------- */
 .lr-theme {
-  /* Brand palette (from logo vibe: deep crimson + charcoal) */
-  --lr-primary: #8b1e2d;     /* LawAfrica crimson */
-  --lr-primary-2: #b12a36;   /* brighter crimson for gradients */
-  --lr-accent: #4b5563;      /* charcoal/slate accent */
+  --lr-bg: var(--la-bg);
+  --lr-surface: var(--la-surface);
+  --lr-surface-strong: var(--la-surface-strong);
+
+  --lr-border: var(--la-border);
+  --lr-border-strong: var(--la-border-strong);
+
+  --lr-text: var(--la-text);
+  --lr-muted: var(--la-muted);
+
+  --lr-primary: var(--la-crimson);
+  --lr-primary-2: var(--la-crimson-2);
+  --lr-accent: var(--la-slate);
   --lr-success: #10b981;
 
-  /* RGB helpers for rgba gradients/rings */
-  --lr-primary-rgb: 139 30 45;
-  --lr-primary2-rgb: 177 42 54;
-  --lr-accent-rgb: 75 85 99;
+  --lr-primary-rgb: var(--la-crimson-rgb);
+  --lr-primary2-rgb: var(--la-crimson2-rgb);
+  --lr-accent-rgb: var(--la-slate-rgb);
 
-  /* Neutrals tuned for reading */
-  --lr-bg: #fbfbfc;
-  --lr-surface: rgba(255, 255, 255, 0.82);
-  --lr-surface-strong: #ffffff;
+  --lr-shadow: var(--la-shadow);
+  --lr-shadow-soft: var(--la-shadow-soft);
 
-  --lr-border: rgba(17, 24, 39, 0.10);
-  --lr-border-strong: rgba(17, 24, 39, 0.14);
-
-  --lr-text: #111827;              /* charcoal */
-  --lr-muted: rgba(17, 24, 39, 0.68);
-
-  --lr-shadow: 0 12px 30px rgba(2, 6, 23, 0.10);
-  --lr-shadow-soft: 0 8px 18px rgba(2, 6, 23, 0.08);
-
-  --lr-radius: 16px;
-  --lr-radius-sm: 12px;
-  --lr-radius-lg: 22px;
+  --lr-radius: var(--la-radius);
+  --lr-radius-sm: var(--la-radius-sm);
+  --lr-radius-lg: var(--la-radius-lg);
 }
+
 
 /* --------------------------
    Page wrapper & layout

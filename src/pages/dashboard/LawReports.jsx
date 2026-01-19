@@ -564,7 +564,6 @@ export default function LawReports() {
       }
     }
 
-    // NOTE: Still runs (keeps existing behavior), but we'll use PreviewText inference in server mode.
     fetchAvailabilityForVisibleReports();
     return () => {
       cancelled = true;
@@ -631,7 +630,6 @@ export default function LawReports() {
 
   function getExcerptForRow(r) {
     if (mode === "server") {
-      // ✅ preview from /law-reports/search
       return cleanPreview(r?.previewText || "");
     }
     return makeReportExcerpt(r, 260);
@@ -646,11 +644,34 @@ export default function LawReports() {
       )}
 
       <div className="lr-hero">
-        <div className="lr-hero-inner">
-          <div className="lr-hero-left">
+        {/* ✅ HERO LAYOUT FIX:
+            - use CSS grid so left stretches and right stays one-row
+            - no changes to CSS required (safe inline styles)
+        */}
+        <div
+          className="lr-hero-inner"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) auto",
+            alignItems: "center",
+            gap: 14,
+          }}
+        >
+          <div
+            className="lr-hero-left"
+            style={{
+              minWidth: 0,
+              maxWidth: "none",
+            }}
+          >
             <div className="lr-chip">LawAfrica Reports</div>
             <h1 className="lr-hero-title">Law Reports</h1>
-            <p className="lr-hero-sub">
+            <p
+              className="lr-hero-sub"
+              style={{
+                maxWidth: "none",
+              }}
+            >
               Access authoritative judicial decisions that set legal precedent.
               Discover how courts interpret and apply the law, filter cases by
               key criteria, and preview concise excerpts to quickly identify
@@ -658,7 +679,17 @@ export default function LawReports() {
             </p>
           </div>
 
-          <div className="lr-hero-right">
+          <div
+            className="lr-hero-right"
+            style={{
+              display: "flex",
+              flexWrap: "nowrap",
+              gap: 10,
+              alignItems: "center",
+              justifyContent: "flex-end",
+              whiteSpace: "nowrap",
+            }}
+          >
             <button className="lr-pill" onClick={() => navigate("/dashboard/explore")}>
               Explore Publications
             </button>
@@ -858,7 +889,10 @@ export default function LawReports() {
                 <button className="lr-btn secondary" onClick={resetFilters}>
                   Clear
                 </button>
-                <button className="lr-btn" onClick={() => showToast("Tip: try Decision + Case Type + Year")}>
+                <button
+                  className="lr-btn"
+                  onClick={() => showToast("Tip: try Decision + Case Type + Year")}
+                >
                   Tip
                 </button>
               </div>
@@ -877,7 +911,9 @@ export default function LawReports() {
                   ) : (
                     <>
                       Showing <strong>{visible.length}</strong> report{visible.length === 1 ? "" : "s"}
-                      {detailsLoadingIds.size > 0 ? <span className="lr-soft"> • loading details…</span> : null}
+                      {detailsLoadingIds.size > 0 ? (
+                        <span className="lr-soft"> • loading details…</span>
+                      ) : null}
                     </>
                   )}
                 </div>
@@ -905,7 +941,9 @@ export default function LawReports() {
               {visible.length === 0 ? (
                 <div className="lr-empty">
                   <strong>No matching reports</strong>
-                  <div style={{ marginTop: 6 }}>Try clearing filters or changing your search terms.</div>
+                  <div style={{ marginTop: 6 }}>
+                    Try clearing filters or changing your search terms.
+                  </div>
                 </div>
               ) : (
                 <div className="lr-cards">
@@ -921,12 +959,12 @@ export default function LawReports() {
 
                     const availabilityLoading = availabilityLoadingIds.has(docId);
 
-                    // ✅ FIX: server-mode availability should be based on PreviewText (ContentText),
-                    // not on LegalDocument availability (which may be PDF/file-based).
                     const inferredHasContent =
                       mode === "server"
                         ? !!cleanPreview(r?.previewText || "").trim()
-                        : (availabilityMap[docId] == null ? true : !!availabilityMap[docId]);
+                        : availabilityMap[docId] == null
+                          ? true
+                          : !!availabilityMap[docId];
 
                     const hasContent = inferredHasContent;
 
@@ -999,7 +1037,6 @@ export default function LawReports() {
                           {excerpt || "Preview will appear here once the report content is available."}
                         </div>
 
-                        {/* ✅ Only Read More */}
                         <div className="lr-card2-actions">
                           <button
                             className="lr-card-btn primary"
@@ -1019,7 +1056,6 @@ export default function LawReports() {
                           </button>
                         </div>
 
-                        {/* Only show this if there is truly no content */}
                         {!hasContent && !availabilityLoading && (
                           <div className="lr-soft" style={{ marginTop: 8 }}>
                             This report is not available yet.

@@ -1,0 +1,61 @@
+/* src/styles/lawAfricaBrand.css
+   Shared LawAfrica brand tokens + tiny helpers.
+   Safe: does NOT style any components directly unless they opt-in.
+*/
+
+:root {
+  /* ---- Brand (from logo vibe) ---- */
+  --la-crimson: #8b1e2d;
+  --la-crimson-2: #b12a36;
+  --la-charcoal: #111827;
+  --la-slate: #4b5563;
+
+  /* rgb helpers for gradients / rings */
+  --la-crimson-rgb: 139 30 45;
+  --la-crimson2-rgb: 177 42 54;
+  --la-slate-rgb: 75 85 99;
+
+  /* ---- Light UI neutrals ---- */
+  --la-bg: #fbfbfc;
+  --la-surface: rgba(255, 255, 255, 0.82);
+  --la-surface-strong: #ffffff;
+
+  --la-border: rgba(17, 24, 39, 0.10);
+  --la-border-strong: rgba(17, 24, 39, 0.14);
+
+  --la-text: #111827;
+  --la-muted: rgba(17, 24, 39, 0.68);
+
+  --la-shadow: 0 12px 30px rgba(2, 6, 23, 0.10);
+  --la-shadow-soft: 0 8px 18px rgba(2, 6, 23, 0.08);
+
+  --la-radius: 16px;
+  --la-radius-sm: 12px;
+  --la-radius-lg: 22px;
+
+  /* ---- Reader (dark) ---- */
+  --la-reader-bg: #070a14;
+  --la-reader-surface: rgba(255, 255, 255, 0.05);
+  --la-reader-surface-2: rgba(255, 255, 255, 0.07);
+  --la-reader-border: rgba(255, 255, 255, 0.10);
+  --la-reader-border-2: rgba(255, 255, 255, 0.14);
+
+  --la-reader-text: rgba(255, 255, 255, 0.92);
+  --la-reader-muted: rgba(255, 255, 255, 0.74);
+
+  --la-reader-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+  --la-reader-shadow-soft: 0 10px 22px rgba(0, 0, 0, 0.40);
+}
+
+/* Optional: consistent selection highlight (nice for reading) */
+::selection {
+  background: rgba(var(--la-crimson-rgb), 0.22);
+}
+
+/* Optional helper classes (use if you want later) */
+.la-brand-text {
+  color: var(--la-crimson);
+}
+.la-brand-bg {
+  background: var(--la-crimson);
+}

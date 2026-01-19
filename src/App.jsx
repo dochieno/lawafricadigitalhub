@@ -34,6 +34,8 @@ import AppShell from "./layout/AppShell";
 import Explore from "./pages/dashboard/Explore";
 import Library from "./pages/dashboard/Library";
 import AdminTrials from "./pages/dashboard/admin/AdminTrials";
+import "./styles/lawAfricaBrand.css";
+
 
 // ✅ NEW: Switch Home -> Global Admin dashboard (charts) only for Global Admin
 import GlobalAdminHomeSwitch from "./pages/dashboard/GlobalAdminHomeSwitch";
