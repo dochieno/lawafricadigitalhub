@@ -36,7 +36,10 @@ function isGlobalAdminUser() {
   const roles = Array.isArray(rolesRaw)
     ? rolesRaw
     : typeof rolesRaw === "string"
-      ? rolesRaw.split(",").map((x) => x.trim()).filter(Boolean)
+      ? rolesRaw
+          .split(",")
+          .map((x) => x.trim())
+          .filter(Boolean)
       : [];
 
   const norm = roles.map((r) => String(r).toLowerCase());
@@ -99,6 +102,35 @@ function looksLikeHeading(line) {
   return HEADING_SET.has(upper) || upper.length <= 24;
 }
 
+// ---------- list + quote detection (conservative) ----------
+const BULLET_RE = /^(\s*)([-•*‣▪])\s+/;
+const NUM_RE = /^(\s*)(\d+)[.)]\s+/; // 1. / 1)
+const ALPHA_RE = /^(\s*)(\([a-z]\)|[a-z][.)])\s+/i; // (a) / a)
+const ROMAN_RE = /^(\s*)((?:ix|iv|v?i{1,3})[.)])\s+/i; // i) / iv. / ix)
+
+function stripListPrefix(line) {
+  return String(line || "")
+    .replace(BULLET_RE, "")
+    .replace(NUM_RE, "")
+    .replace(ALPHA_RE, "")
+    .replace(ROMAN_RE, "")
+    .trim();
+}
+
+function getListKind(line) {
+  const t = String(line || "");
+  if (BULLET_RE.test(t)) return { type: "ul" };
+  if (NUM_RE.test(t)) return { type: "ol" };
+  if (ALPHA_RE.test(t)) return { type: "ol" };
+  if (ROMAN_RE.test(t)) return { type: "ol" };
+  return null;
+}
+
+function isQuoteLine(line) {
+  const t = String(line || "");
+  return /^>\s+/.test(t) || /^\s{4,}\S+/.test(t);
+}
+
 function splitIntoBlocks(content) {
   const text = normalizeText(content);
   if (!text.trim()) return [];
@@ -110,15 +142,87 @@ function splitIntoBlocks(content) {
     const raw = p.replace(/\n{3,}/g, "\n\n").trim();
     if (!raw) continue;
 
-    const lines = raw.split("\n");
-    if (lines.length > 0 && looksLikeHeading(lines[0])) {
+    const lines = raw.split("\n").map((x) => x.replace(/\s+$/g, ""));
+
+    // Heading at start of paragraph
+    if (lines[0] && looksLikeHeading(lines[0])) {
       blocks.push({ type: "heading", text: lines[0].trim() });
-      const rest = lines.slice(1).join("\n").trim();
-      if (rest) blocks.push({ type: "para", text: rest });
+
+      const restLines = lines.slice(1).filter((x) => x.trim().length > 0);
+      if (restLines.length === 0) continue;
+
+      blocks.push(...splitIntoBlocks(restLines.join("\n")));
       continue;
     }
 
-    blocks.push({ type: "para", text: raw });
+    // Walk lines and group quote/list/para chunks
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      if (!line || !line.trim()) {
+        i++;
+        continue;
+      }
+
+      // Quote block
+      if (isQuoteLine(line)) {
+        const q = [];
+        while (i < lines.length && isQuoteLine(lines[i])) {
+          q.push(String(lines[i]).replace(/^>\s+/, "").trimEnd());
+          i++;
+        }
+        blocks.push({ type: "quote", text: q.join("\n") });
+        continue;
+      }
+
+      // List block (require >= 2 consecutive list items)
+      const kind = getListKind(line);
+      if (kind) {
+        const items = [];
+        const listType = kind.type;
+
+        let j = i;
+        while (j < lines.length) {
+          const k = getListKind(lines[j]);
+          if (!k) break;
+          if (k.type !== listType) break;
+          items.push(stripListPrefix(lines[j]));
+          j++;
+        }
+
+        if (items.length >= 2) {
+          blocks.push({ type: listType, items });
+          i = j;
+          continue;
+        }
+        // otherwise: fall through to paragraph logic
+      }
+
+      // Paragraph chunk until boundary (next quote/list heading/blank)
+      const chunk = [];
+      let j = i;
+      while (j < lines.length) {
+        const ln = lines[j];
+        if (!ln || !ln.trim()) break;
+        if (looksLikeHeading(ln)) break;
+        if (isQuoteLine(ln)) break;
+
+        // stop if a "real list" begins here (two consecutive list items)
+        const k = getListKind(ln);
+        if (k) {
+          const k2 = getListKind(lines[j + 1] || "");
+          if (k2 && k2.type === k.type) break;
+        }
+
+        chunk.push(ln);
+        j++;
+      }
+
+      const paraText = chunk.join("\n").trim();
+      if (paraText) blocks.push({ type: "para", text: paraText });
+
+      i = j + 1;
+    }
   }
 
   return blocks;
@@ -233,7 +337,6 @@ export default function LawReportReader() {
           if (!cancelled) setAccessLoading(false);
         }
       } else {
-        // Not applicable
         if (!cancelled) setAccess(null);
       }
     }
@@ -249,8 +352,6 @@ export default function LawReportReader() {
   const hasFullAccess = !!access?.hasFullAccess;
   const textHasContent = !!String(report?.contentText || "").trim();
 
-  // ✅ Admin can always open reader (won’t be blocked by availability/access)
-  // ✅ For non-admin: must have content (either ContentText or availability true)
   const canRead =
     !!report &&
     (isAdmin ||
@@ -340,21 +441,43 @@ export default function LawReportReader() {
           {report.reportNumber ? <span className="lrr-chip">{report.reportNumber}</span> : null}
           {report.citation ? <span className="lrr-chip">{report.citation}</span> : null}
           {report.year ? <span className="lrr-chip">{report.year}</span> : null}
-          {report.decisionTypeLabel ? <span className="lrr-chip">{report.decisionTypeLabel}</span> : null}
+          {report.decisionTypeLabel ? (
+            <span className="lrr-chip">{report.decisionTypeLabel}</span>
+          ) : null}
           {report.caseTypeLabel ? <span className="lrr-chip">{report.caseTypeLabel}</span> : null}
           {report.courtTypeLabel ? <span className="lrr-chip">{report.courtTypeLabel}</span> : null}
           {report.town ? <span className="lrr-chip">{report.town}</span> : null}
-          {!report.town && report.townPostCode ? <span className="lrr-chip">{report.townPostCode}</span> : null}
+          {!report.town && report.townPostCode ? (
+            <span className="lrr-chip">{report.townPostCode}</span>
+          ) : null}
         </div>
 
         <div className="lrr-submeta">
-          {report.decisionDate ? <div><strong>Date:</strong> {formatDate(report.decisionDate)}</div> : null}
-          {report.judges ? <div><strong>Judges:</strong> {report.judges}</div> : null}
-          {report.court ? <div><strong>Court:</strong> {report.court}</div> : null}
-          {report.caseNumber ? <div><strong>Case No:</strong> {report.caseNumber}</div> : null}
+          {report.decisionDate ? (
+            <div>
+              <strong>Date:</strong> {formatDate(report.decisionDate)}
+            </div>
+          ) : null}
+          {report.judges ? (
+            <div>
+              <strong>Judges:</strong> {report.judges}
+            </div>
+          ) : null}
+          {report.court ? (
+            <div>
+              <strong>Court:</strong> {report.court}
+            </div>
+          ) : null}
+          {report.caseNumber ? (
+            <div>
+              <strong>Case No:</strong> {report.caseNumber}
+            </div>
+          ) : null}
           {isAdmin ? <div className="lrr-soft">admin access</div> : null}
           {!isAdmin && accessLoading ? <div className="lrr-soft">checking access…</div> : null}
-          {!isAdmin && availabilityLoading ? <div className="lrr-soft">checking availability…</div> : null}
+          {!isAdmin && availabilityLoading ? (
+            <div className="lrr-soft">checking availability…</div>
+          ) : null}
         </div>
       </header>
 
@@ -370,6 +493,34 @@ export default function LawReportReader() {
                   <h2 key={idx} className="lrr-h2">
                     {b.text}
                   </h2>
+                );
+              }
+
+              if (b.type === "quote") {
+                return (
+                  <blockquote key={idx} className="lrr-quote">
+                    {b.text}
+                  </blockquote>
+                );
+              }
+
+              if (b.type === "ul") {
+                return (
+                  <ul key={idx} className="lrr-ul">
+                    {b.items.map((it, i) => (
+                      <li key={i}>{it}</li>
+                    ))}
+                  </ul>
+                );
+              }
+
+              if (b.type === "ol") {
+                return (
+                  <ol key={idx} className="lrr-ol">
+                    {b.items.map((it, i) => (
+                      <li key={i}>{it}</li>
+                    ))}
+                  </ol>
                 );
               }
 

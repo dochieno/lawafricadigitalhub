@@ -256,3 +256,25 @@
     font-size: 15px;
   }
 }
+.lrr-ul,
+.lrr-ol {
+  margin: 10px 0 16px;
+  padding-left: 22px;
+  color: rgba(15, 23, 42, 0.90);
+}
+
+.lrr-ul li,
+.lrr-ol li {
+  margin: 6px 0;
+  line-height: 1.75;
+}
+
+.lrr-quote {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border-left: 3px solid rgba(161, 27, 31, 0.55);
+  background: rgba(15, 23, 42, 0.04);
+  border-radius: 12px;
+  color: rgba(15, 23, 42, 0.86);
+  white-space: pre-wrap;
+}
