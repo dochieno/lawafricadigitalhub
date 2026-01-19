@@ -651,7 +651,10 @@ export default function LawReports() {
             <div className="lr-chip">LawAfrica Reports</div>
             <h1 className="lr-hero-title">Law Reports</h1>
             <p className="lr-hero-sub">
-              Discover judgments and rulings with powerful filters — and preview a short excerpt before you open.
+              Access authoritative judicial decisions that set legal precedent.
+              Discover how courts interpret and apply the law, filter cases by
+              key criteria, and preview concise excerpts to quickly identify 
+              relevant judgments before diving deeper.
             </p>
           </div>
 

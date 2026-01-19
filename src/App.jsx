@@ -4,7 +4,7 @@ import ProtectedRoute from "./routes/ProtectedRoute";
 import AdminOrInstitutionAdminRoute from "./routes/AdminOrInstitutionAdminRoute";
 import AdminRoute from "./routes/AdminRoute";
 import AdminLLRImport from "./pages/dashboard/admin/AdminLLRImport";
-
+import LawReportReader from "./pages/dashboard/LawReportReader";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import TwoFactor from "./pages/TwoFactor";
@@ -99,8 +99,7 @@ export default function App() {
 
             {/* ✅ Law Reports */}
             <Route path="law-reports" element={<LawReports />} />
-            <Route path="law-reports/:id" element={<LawReportDetails />} />
-
+            <Route path="law-reports/:id" element={<LawReportReader />} />
             <Route path="security" element={<SecurityDashboard />} />
 
             {/* ===================== */}

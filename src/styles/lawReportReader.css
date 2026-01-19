@@ -1,0 +1,168 @@
+/* src/styles/lawReportReader.css */
+
+.lrr-wrap {
+  min-height: 100vh;
+  background: #0b1020;
+  color: rgba(255,255,255,0.92);
+}
+
+/* Loading / Error */
+.lrr-loading {
+  padding: 24px;
+  opacity: 0.9;
+}
+
+.lrr-error {
+  max-width: 860px;
+  margin: 40px auto;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.lrr-error-title {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.lrr-error-msg {
+  margin-top: 8px;
+  opacity: 0.9;
+}
+
+/* Header */
+.lrr-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  backdrop-filter: blur(12px);
+  background: linear-gradient(
+    180deg,
+    rgba(18, 24, 55, 0.92),
+    rgba(11, 16, 32, 0.88)
+  );
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  padding: 14px 16px;
+}
+
+.lrr-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.lrr-pill {
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.92);
+  padding: 8px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.lrr-pill.ghost {
+  background: transparent;
+}
+
+.lrr-pill:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lrr-title {
+  margin-top: 10px;
+  font-size: 22px;
+  line-height: 1.25;
+  font-weight: 900;
+  letter-spacing: 0.2px;
+}
+
+.lrr-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.lrr-chip {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(124, 58, 237, 0.16);
+  border: 1px solid rgba(124, 58, 237, 0.25);
+  color: rgba(255,255,255,0.92);
+}
+
+.lrr-submeta {
+  margin-top: 10px;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  opacity: 0.95;
+}
+
+.lrr-soft {
+  opacity: 0.8;
+}
+
+/* Main content */
+.lrr-main {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 18px 16px 56px;
+}
+
+.lrr-article {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px;
+  padding: 18px 16px;
+}
+
+.lrr-h2 {
+  margin: 18px 0 10px;
+  font-size: 14px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.95);
+  border-left: 3px solid rgba(124, 58, 237, 0.7);
+  padding-left: 10px;
+}
+
+.lrr-p {
+  margin: 0 0 12px;
+  line-height: 1.75;
+  font-size: 15px;
+  opacity: 0.95;
+
+  /* ✅ First pass: preserve line breaks within paragraphs */
+  white-space: pre-wrap;
+}
+
+.lrr-empty {
+  margin-top: 18px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px dashed rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.03);
+  opacity: 0.9;
+}
+
+.lrr-btn {
+  border: 0;
+  background: rgba(124, 58, 237, 0.9);
+  color: white;
+  padding: 10px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.lrr-btn.secondary {
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.14);
+}
