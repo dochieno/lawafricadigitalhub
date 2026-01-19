@@ -43,7 +43,6 @@ import DocumentReader from "./pages/documents/DocumentReader";
 
 // ✅ Law Reports
 import LawReports from "./pages/dashboard/LawReports";
-import LawReportDetails from "./pages/dashboard/LawReportDetails";
 
 export default function App() {
   return (
