@@ -391,10 +391,8 @@ export default function AdminLLRServices() {
       setTownByPostCode(m);
       townsCacheRef.current.set(cid, { towns: normalized, map: m });
     } catch (e) {
-      // keep silent but clear dropdown
       setTowns([]);
       setTownByPostCode(new Map());
-      // optional: only show a gentle message when modal open
       if (open) setError(getApiErrorMessage(e, "Failed to load towns for that country."));
     } finally {
       setTownsLoading(false);
@@ -403,8 +401,6 @@ export default function AdminLLRServices() {
 
   function handleCountryChange(newCountryId) {
     setField("countryId", newCountryId);
-
-    // reset postcode, but keep town if user typed it manually (better UX)
     setField("postCode", "");
     fetchTownsForCountry(newCountryId);
   }
@@ -417,10 +413,7 @@ export default function AdminLLRServices() {
     const hit = townByPostCode.get(pc);
     if (!hit) return;
 
-    // auto-fill town (still editable)
     if (hit.name) setField("town", hit.name);
-
-    // country already selected, but keep it consistent if needed
     if (hit.countryId && String(form.countryId || "") !== String(hit.countryId)) {
       setField("countryId", String(hit.countryId));
     }
@@ -546,7 +539,6 @@ export default function AdminLLRServices() {
         contentText: pick(d, ["contentText", "ContentText"], "") ?? "",
       });
 
-      // if postcode exists but town missing, auto-fill from towns map
       const pc2 = normalizeText(pc);
       if (pc2 && !normalizeText(pick(d, ["town", "Town"], ""))) {
         const hit = townByPostCode.get(pc2);
@@ -615,7 +607,8 @@ export default function AdminLLRServices() {
 
       const id = pick(editing, ["id", "Id"], null);
       if (id) {
-        api.put(/law-reports/${id}/content, { contentText, decisionType, caseType })
+        // ✅ Edit modal updates full report (existing behavior)
+        await api.put(`/law-reports/${id}`, payload);
         setInfo("Saved changes.");
       } else {
         const res = await api.post("/law-reports", payload);
@@ -1062,7 +1055,6 @@ export default function AdminLLRServices() {
                   />
                 </div>
 
-                {/* ✅ Postcode dropdown (requires country first) */}
                 <div className="admin-field">
                   <label>Postcode</label>
                   <select
