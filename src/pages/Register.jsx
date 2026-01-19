@@ -19,10 +19,10 @@ const INSTITUTION_MEMBER_TYPES = [
   { value: "Staff", label: "Staff", sub: "Employee / lecturer" },
 ];
 
-// ✅ NEW: Username policy regex
+// ✅ Username policy regex
 const USERNAME_REGEX = /^[A-Za-z]+(\.[A-Za-z]+)*$/;
 
-// ✅ NEW: Password policy helpers
+// ✅ Password policy helpers
 function getPasswordRules(pwd) {
   const v = String(pwd || "");
   return {
@@ -38,7 +38,7 @@ function isEmail(v) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 }
 
-// ✅ FIX: normalize Kenyan phone formats to 2547XXXXXXXX for MPesa STK
+// ✅ normalize Kenyan phone formats to 2547XXXXXXXX for MPesa STK
 function normalizePhone(phone) {
   let p = String(phone || "").trim();
   p = p.replace(/\s+/g, "");
@@ -153,7 +153,7 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  // ✅ NEW: Touched tracking for live validation UX
+  // ✅ Touched tracking for live validation UX
   const [touched, setTouched] = useState({});
 
   // Inline field errors
@@ -177,6 +177,9 @@ export default function Register() {
   const [registrationComplete, setRegistrationComplete] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
+  // ✅ NEW: store token so success screen button works too
+  const [postRegisterSetupToken, setPostRegisterSetupToken] = useState("");
+
   // General UI
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -184,7 +187,7 @@ export default function Register() {
 
   const lockForm = waitingPayment || loading;
 
-  // ✅ NEW: live password rules
+  // ✅ live password rules
   const passwordRules = useMemo(() => getPasswordRules(password), [password]);
   const passwordRulesOk = useMemo(() => Object.values(passwordRules).every(Boolean), [passwordRules]);
 
@@ -300,7 +303,7 @@ export default function Register() {
 
   function validateField(name, value) {
     const raw = (value ?? "").toString();
-    const v = raw; // keep raw; validate on trim where appropriate
+    const v = raw;
 
     if (name === "firstName") {
       if (!v.trim()) return "First name is required.";
@@ -309,12 +312,10 @@ export default function Register() {
       if (!v.trim()) return "Last name is required.";
     }
 
-    // ✅ UPDATED: Username policy
     if (name === "username") {
       const u = v.trim();
 
       if (!u) return "Username is required.";
-      // quick checks for clearer feedback
       if (/\s/.test(u)) return "Username cannot contain spaces.";
       if (!USERNAME_REGEX.test(u)) {
         return "Username must contain letters only. Dots are allowed between letter groups (e.g. d.ochieno). No numbers, no leading/trailing dots, and no consecutive dots.";
@@ -336,7 +337,6 @@ export default function Register() {
     }
 
     if (name === "phoneNumber") {
-      // Mpesa requires phone. Paystack doesn't.
       if (isPublic && publicPayMethod === "MPESA") {
         if (!v.trim()) return "Phone number is required for Mpesa payment.";
 
@@ -355,7 +355,6 @@ export default function Register() {
       if (!isPublic && !v.trim()) return "Please select Student or Staff.";
     }
 
-    // ✅ CHANGED: Access code required ONLY if institution says so (default: required)
     if (name === "institutionAccessCode") {
       if (!isPublic) {
         const required = selectedInstitution?.accessCodeRequired !== false;
@@ -364,7 +363,6 @@ export default function Register() {
       }
     }
 
-    // ✅ UPDATED: Password policy (8+, upper, lower, number, special)
     if (name === "password") {
       if (!v) return "Password is required.";
       const rules = getPasswordRules(v);
@@ -420,7 +418,6 @@ export default function Register() {
 
     setFieldErrors(next);
 
-    // mark everything as touched so errors show
     setTouched((prev) => ({
       ...prev,
       firstName: true,
@@ -439,17 +436,13 @@ export default function Register() {
     return Object.keys(next).length === 0;
   }
 
-  // ✅ NEW: helper to live-validate on change (after blur/touch)
   function liveValidate(name, value) {
     if (!touched?.[name]) return;
     const msg = validateField(name, value);
     msg ? setFieldError(name, msg) : clearFieldError(name);
   }
 
-  // ✅ NEW: overall form readiness for submit (does not affect payment flows)
   const isFormValidForSubmit = useMemo(() => {
-    // Require that required fields pass validation.
-    // We don't require institutions when Public.
     const requiredNames = [
       "firstName",
       "lastName",
@@ -464,12 +457,10 @@ export default function Register() {
     if (!isPublic) {
       requiredNames.push("institutionId");
       requiredNames.push("institutionMemberType");
-      // access code required only if institution says so (default required)
       const requiredCode = selectedInstitution?.accessCodeRequired !== false;
       if (requiredCode) requiredNames.push("institutionAccessCode");
     }
 
-    // compute errors using validateField (not relying only on fieldErrors, so it works before touch too)
     for (const n of requiredNames) {
       const value =
         n === "firstName"
@@ -518,6 +509,28 @@ export default function Register() {
   ]);
 
   // -----------------------------
+  // ✅ NEW: Fetch setup token so TwoFactorSetup can auto-populate (same as your "resend" behavior)
+  // IMPORTANT: controller already returns setupToken in dev/swagger mode.
+  // -----------------------------
+  async function fetchSetupTokenForOnboarding(user, pass) {
+    const u = String(user || "").trim();
+    const p = pass || "";
+    if (!u || !p) return "";
+
+    try {
+      const res = await api.post("/Security/resend-2fa-setup", {
+        username: u,
+        password: p,
+      });
+      const data = res.data?.data ?? res.data;
+      return data?.setupToken || "";
+    } catch {
+      // Never block onboarding if token fetch fails; user can still use email/resend.
+      return "";
+    }
+  }
+
+  // -----------------------------
   // API helpers
   // -----------------------------
   async function createRegistrationIntentIfNeeded() {
@@ -534,7 +547,7 @@ export default function Register() {
       referenceNumber: referenceNumber.trim() || null,
 
       institutionAccessCode: !isPublic ? institutionAccessCode.trim().toUpperCase() : null,
-      userType, // "Public" | "Institution"
+      userType,
       institutionId: !isPublic && institutionId ? Number(institutionId) : null,
       institutionMemberType: !isPublic ? institutionMemberType : null,
     };
@@ -581,11 +594,10 @@ export default function Register() {
       throw new Error("Paystack initialize did not return authorizationUrl.");
     }
 
-    // ✅ store so we can resume after Paystack redirects back
     localStorage.setItem(LS_REG_INTENT, String(registrationIntentId));
     localStorage.setItem(LS_REG_EMAIL, email.trim());
 
-    // ✅ store creds so TwoFactorSetup can work after redirect (state resets)
+    // keep creds for TwoFactorSetup + token fetch after redirect
     localStorage.setItem(LS_REG_USERNAME, username.trim());
     localStorage.setItem(LS_REG_PASSWORD, password);
 
@@ -612,15 +624,18 @@ export default function Register() {
         setRegistrationComplete(true);
         setSuccessMessage("Payment confirmed and your account has been created. Proceed to set up 2FA.");
 
+        // ✅ NEW: fetch setup token and pass to twofactor page so it auto-fills
+        const token = await fetchSetupTokenForOnboarding(username.trim(), password);
+        setPostRegisterSetupToken(token);
+
+        // ✅ keep username/password in localStorage (TwoFactorSetup relies on them)
         localStorage.removeItem(LS_REG_INTENT);
         localStorage.removeItem(LS_REG_EMAIL);
-        localStorage.removeItem(LS_REG_USERNAME);
-        localStorage.removeItem(LS_REG_PASSWORD);
 
-          nav("/twofactor-setup", {
-            replace: true,
-            state: { username, password, setupToken: data.setupToken },
-          });
+        nav("/twofactor-setup", {
+          replace: true,
+          state: { username: username.trim(), password, setupToken: token },
+        });
 
         return;
       }
@@ -716,6 +731,7 @@ export default function Register() {
 
     setRegistrationComplete(false);
     setSuccessMessage("");
+    setPostRegisterSetupToken("");
 
     const ok = validateAll();
     if (!ok) {
@@ -739,6 +755,10 @@ export default function Register() {
               throw new Error("Mpesa initiate did not return a checkoutRequestId.");
             }
 
+            // ✅ keep creds for TwoFactorSetup/token fetch later
+            localStorage.setItem(LS_REG_USERNAME, username.trim());
+            localStorage.setItem(LS_REG_PASSWORD, password);
+
             setWaitingPayment(true);
             setStatusText("Waiting for payment confirmation... Check your phone and approve.");
             return;
@@ -760,9 +780,17 @@ export default function Register() {
       setRegistrationComplete(true);
       setSuccessMessage("Account created successfully. Proceed to set up 2FA.");
 
+      // ✅ NEW: auto-fetch token immediately and pass it into TwoFactorSetup
+      // store creds in case user refreshes on setup page
+      localStorage.setItem(LS_REG_USERNAME, username.trim());
+      localStorage.setItem(LS_REG_PASSWORD, password);
+
+      const token = await fetchSetupTokenForOnboarding(username.trim(), password);
+      setPostRegisterSetupToken(token);
+
       nav("/twofactor-setup", {
         replace: true,
-        state: { username: username.trim(), password },
+        state: { username: username.trim(), password, setupToken: token },
       });
     } catch (e2) {
       setError(toText(extractAxiosError(e2)));
@@ -787,6 +815,7 @@ export default function Register() {
 
     setRegistrationComplete(false);
     setSuccessMessage("");
+    setPostRegisterSetupToken("");
 
     setFieldErrors({});
     setTouched({});
@@ -802,7 +831,6 @@ export default function Register() {
   // -----------------------------
   function FieldError({ name }) {
     const msg = fieldErrors?.[name];
-    // show only after field has been touched OR after submit triggers validateAll (which sets touched)
     if (!msg || !touched?.[name]) return null;
     return <div style={{ marginTop: 6, fontSize: 12, color: "#b91c1c" }}>{msg}</div>;
   }
@@ -914,7 +942,6 @@ export default function Register() {
     );
   }
 
-  // ✅ NEW: Password checklist row
   function RuleItem({ ok, label }) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: ok ? "#065f46" : "#6b7280" }}>
@@ -955,10 +982,10 @@ export default function Register() {
               <button
                 type="button"
                 onClick={() =>
-                nav("/twofactor-setup", {
-                  replace: true,
-                  state: { username, password, setupToken: data.setupToken },
-                })
+                  nav("/twofactor-setup", {
+                    replace: true,
+                    state: { username: username.trim(), password, setupToken: postRegisterSetupToken },
+                  })
                 }
                 style={{
                   width: "auto",
@@ -1053,7 +1080,6 @@ export default function Register() {
           <Alert kind="error">{error ? toText(error) : ""}</Alert>
           <Alert kind="ok">{info ? toText(info) : ""}</Alert>
 
-          {/* Fee + method explanation */}
           {isPublic && (
             <div
               style={{
@@ -1105,7 +1131,6 @@ export default function Register() {
               />
             </div>
 
-            {/* Public payment method choice */}
             {isPublic && (
               <>
                 <label className="field-label">Payment Method</label>
@@ -1175,7 +1200,6 @@ export default function Register() {
               }}
               onBlur={(e) => {
                 markTouched("username");
-                // optional: trim on blur to reduce accidental spaces
                 const trimmed = e.target.value.trim();
                 if (trimmed !== e.target.value) setUsername(trimmed);
 
@@ -1283,7 +1307,6 @@ export default function Register() {
               </div>
             </div>
 
-            {/* Institution dropdown */}
             {!isPublic && (
               <>
                 <div className="divider" />
@@ -1302,7 +1325,7 @@ export default function Register() {
                       liveValidate("institutionId", e.target.value);
                       clearFieldError("institutionId");
                       clearFieldError("institutionAccessCode");
-                      clearFieldError("email"); // domain validation depends on institution
+                      clearFieldError("email");
                     }}
                     onBlur={(e) => {
                       markTouched("institutionId");
@@ -1339,7 +1362,6 @@ export default function Register() {
                     disabled={lockForm}
                   />
                 </div>
-                {/* mark touched when user interacts */}
                 <div style={{ display: "none" }}>{touched.institutionMemberType}</div>
                 <FieldError name="institutionMemberType" />
 
@@ -1383,7 +1405,6 @@ export default function Register() {
                     setPassword(e.target.value);
                     liveValidate("password", e.target.value);
 
-                    // also revalidate confirm password live if touched
                     if (touched.confirmPassword) {
                       const msg = validateField("confirmPassword", confirmPassword);
                       msg ? setFieldError("confirmPassword", msg) : clearFieldError("confirmPassword");
@@ -1399,7 +1420,6 @@ export default function Register() {
                   aria-invalid={!!(touched.password && fieldErrors.password)}
                 />
 
-                {/* ✅ NEW: Password checklist */}
                 <div
                   style={{
                     marginTop: 10,
@@ -1443,7 +1463,6 @@ export default function Register() {
               </div>
             </div>
 
-            {/* ✅ Prevent submit until valid (without breaking flows) */}
             <button type="submit" disabled={lockForm || !isFormValidForSubmit}>
               {loading
                 ? isPublic
@@ -1460,7 +1479,6 @@ export default function Register() {
                 : "Create Account"}
             </button>
 
-            {/* ✅ Small hint when disabled for validation reasons */}
             {!lockForm && !isFormValidForSubmit && (
               <div style={{ marginTop: 10, fontSize: 12, color: "#6b7280" }}>
                 Complete the required fields (including valid username + password) to continue.
