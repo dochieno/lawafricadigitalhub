@@ -7,6 +7,7 @@ import { isLawReportDocument } from "../../utils/isLawReportDocument";
 import {
   extractReportMeta,
   getReportSearchHaystack,
+  makeReportExcerpt,
   makeReportMiniHeader,
   normalize,
   REPORT_CASE_TYPES_ALL,
@@ -27,102 +28,34 @@ function isPublicUser() {
 }
 
 function parseSearchResponse(payload) {
-  // /api/law-reports/search returns: { items, total, page, pageSize }
   if (Array.isArray(payload)) return { items: payload, total: payload.length };
 
-  const items = payload?.items ?? payload?.Items ?? payload?.data ?? payload?.results ?? [];
+  const items = payload?.items ?? payload?.data ?? payload?.results ?? [];
   const total =
     payload?.total ??
-    payload?.Total ??
     payload?.count ??
     (Array.isArray(items) ? items.length : 0);
 
   return { items: Array.isArray(items) ? items : [], total: Number(total) || 0 };
 }
 
-/**
- * Detect server list items from /api/law-reports/search.
- * Your list DTO fields (from controller):
- * Id, LegalDocumentId, Title, IsPremium, ReportNumber, Year, CaseNumber, Citation,
- * CourtType, CourtTypeLabel, DecisionType, DecisionTypeLabel, CaseType, CaseTypeLabel,
- * Court, Town, TownId, TownPostCode, Parties, Judges, DecisionDate, PreviewText
- */
-function isLawReportListItem(x) {
-  if (!x || typeof x !== "object") return false;
-  return (
-    typeof x.LegalDocumentId === "number" ||
-    typeof x.PreviewText === "string" ||
-    typeof x.CaseTypeLabel === "string" ||
-    typeof x.ReportNumber === "string"
-  );
+function cleanPreview(text) {
+  const t = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  if (!t) return "";
+  return t.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-function getDocId(item) {
-  // Server mode: LegalDocumentId
-  if (isLawReportListItem(item)) return item.LegalDocumentId;
-  // Client fallback: LegalDocument.id
-  return item?.id;
-}
-
-function getReportId(item) {
-  // Server mode: Id is LawReportId
-  if (isLawReportListItem(item)) return item.Id;
-  return null;
-}
-
-function getTitle(item) {
-  if (isLawReportListItem(item)) {
-    return item.Parties || item.Title || "Untitled report";
-  }
-  const meta = extractReportMeta(item);
-  return meta.parties || item.title || "Untitled report";
-}
-
-function getTags(item) {
-  if (isLawReportListItem(item)) {
-    return {
-      reportNumber: item.ReportNumber || "",
-      year: item.Year || null,
-      caseType: item.CaseTypeLabel || "",
-      courtType: item.CourtTypeLabel || item.Court || "",
-      town: item.Town || "",
-      postCode: item.TownPostCode || "",
-      citation: item.Citation || "",
-      judges: item.Judges || "",
-      judgmentDate: item.DecisionDate ? String(item.DecisionDate) : "",
-    };
-  }
-
-  const meta = extractReportMeta(item);
-  return {
-    reportNumber: meta.reportNumber || "",
-    year: meta.year || null,
-    caseType: meta.caseType || "",
-    courtType: meta.courtType || "",
-    town: meta.town || "",
-    postCode: meta.postCode || "",
-    citation: meta.citation || "",
-    judges: meta.judges || "",
-    judgmentDate: meta.judgmentDate || "",
-  };
-}
-
-function makeExcerpt(item, max = 260) {
-  // ✅ Server mode: use PreviewText from list endpoint
-  if (isLawReportListItem(item)) {
-    const t = String(item.PreviewText || "").replace(/\s+/g, " ").trim();
-    if (!t) return "Preview will appear here once the report content is available.";
-    if (t.length <= max) return t;
-    return t.slice(0, max).trim() + "…";
-  }
-
-  // Client fallback: attempt to use extracted meta content
-  const meta = extractReportMeta(item);
-  const raw = String(meta.content || "").replace(/\s+/g, " ").trim();
-  if (!raw) return "Preview will appear here once the report content is available.";
-  if (raw.length <= max) return raw;
-  return raw.slice(0, max).trim() + "…";
-}
+// Fallback decision labels (used only if /law-reports/decision-types doesn't exist yet)
+const FALLBACK_DECISIONS = [
+  "Judgment",
+  "Ruling",
+  "Award",
+  "Award by Consent",
+  "Notice of Motion",
+  "Interpretation of Award",
+  "Order",
+  "Interpretation of Amended Order",
+];
 
 export default function LawReports() {
   const navigate = useNavigate();
@@ -141,16 +74,16 @@ export default function LawReports() {
   const [detailsMap, setDetailsMap] = useState({});
   const [detailsLoadingIds, setDetailsLoadingIds] = useState(new Set());
 
-  // Access + availability (maps keyed by ✅ LegalDocumentId)
+  // Access + availability
   const [accessMap, setAccessMap] = useState({});
   const [accessLoadingIds, setAccessLoadingIds] = useState(new Set());
 
   const [availabilityMap, setAvailabilityMap] = useState({});
   const [availabilityLoadingIds, setAvailabilityLoadingIds] = useState(new Set());
 
-  // ✅ Case type options from Step 4B (DB distinct endpoint)
-  // [{ Value, Label, Count }] (PascalCase as in your code)
-  const [caseTypeOptions, setCaseTypeOptions] = useState([]);
+  // ✅ Options from DB distinct endpoints
+  const [caseTypeOptions, setCaseTypeOptions] = useState([]); // [{value,label,count}]
+  const [decisionOptions, setDecisionOptions] = useState([]); // [{value,label,count}]
 
   // UX
   const [loading, setLoading] = useState(true);
@@ -174,11 +107,9 @@ export default function LawReports() {
   const [courtType, setCourtType] = useState("");
   const [townOrPostCode, setTownOrPostCode] = useState("");
 
-  /**
-   * ✅ Backend expects caseType as string (int or name).
-   * We'll store dropdown selection as string numeric: "", "1", "2" ...
-   */
-  const [caseType, setCaseType] = useState("");
+  // ✅ IMPORTANT: store selected values as INT strings (backend parses int or name)
+  const [caseType, setCaseType] = useState(""); // "" or "1".."6"
+  const [decisionType, setDecisionType] = useState(""); // "" or enum int
 
   const [sortBy, setSortBy] = useState("year_desc");
 
@@ -197,35 +128,39 @@ export default function LawReports() {
     setCourtType("");
     setTownOrPostCode("");
     setCaseType("");
+    setDecisionType("");
     setSortBy("year_desc");
     setPage(1);
     showToast("Filters cleared");
   }
 
-  // ✅ Step 4B: populate dropdown from /api/law-reports/case-types
+  // ------------------------------------------------------------
+  // ✅ Load dropdown options: case types + decision types
+  // ------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
 
-    async function loadCaseTypes() {
+    async function loadOptions() {
+      // Case types: [{ value, label, count }]
       try {
         const res = await api.get("/law-reports/case-types");
-        const arr = Array.isArray(res.data) ? res.data : res.data?.items ?? res.data?.data ?? [];
-
-        const cleaned = (arr || [])
-          .map((x) => ({
-            value: Number(x?.Value),
-            label: String(x?.Label || "").trim(),
-            count: Number(x?.Count || 0),
-          }))
-          .filter((x) => Number.isFinite(x.value) && x.value > 0 && x.label);
-
-        if (!cancelled) setCaseTypeOptions(cleaned);
+        const arr = Array.isArray(res.data) ? res.data : [];
+        if (!cancelled && arr.length > 0) setCaseTypeOptions(arr);
       } catch {
-        if (!cancelled) setCaseTypeOptions([]);
+        // ignore
+      }
+
+      // Decision types (optional endpoint)
+      try {
+        const res = await api.get("/law-reports/decision-types");
+        const arr = Array.isArray(res.data) ? res.data : [];
+        if (!cancelled && arr.length > 0) setDecisionOptions(arr);
+      } catch {
+        if (!cancelled) setDecisionOptions([]);
       }
     }
 
-    loadCaseTypes();
+    loadOptions();
     return () => {
       cancelled = true;
     };
@@ -254,7 +189,9 @@ export default function LawReports() {
     return all.filter(isLawReportDocument);
   }
 
-  // ✅ Main loader
+  // ------------------------------------------------------------
+  // Main load: server search OR client fallback
+  // ------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
 
@@ -273,8 +210,9 @@ export default function LawReports() {
             courtType: courtType || undefined,
             townOrPostCode: townOrPostCode || undefined,
 
-            // ✅ send string numeric to match TryParseCaseType
+            // ✅ send INT values (recommended)
             caseType: caseType || undefined,
+            decisionType: decisionType || undefined,
 
             sort: sortBy || "year_desc",
             page,
@@ -284,31 +222,18 @@ export default function LawReports() {
           const out = await tryServerSearch(params);
 
           if (!out.ok) {
-            // fallback to old client mode if endpoint missing
-            if (out.reason === "404") {
-              if (cancelled) return;
+            if (!cancelled) {
               setMode("client");
               setPage(1);
-
               const list = await loadAllReportsClientFallback();
               if (cancelled) return;
-
               setReports(list);
               setTotal(list.length);
-              return;
             }
-
-            const list = await loadAllReportsClientFallback();
-            if (cancelled) return;
-
-            setMode("client");
-            setReports(list);
-            setTotal(list.length);
             return;
           }
 
           if (cancelled) return;
-
           setReports(out.items || []);
           setTotal(out.total || 0);
           return;
@@ -317,7 +242,6 @@ export default function LawReports() {
         // client mode
         const list = await loadAllReportsClientFallback();
         if (cancelled) return;
-
         setReports(list);
         setTotal(list.length);
       } catch (err) {
@@ -343,11 +267,14 @@ export default function LawReports() {
     courtType,
     townOrPostCode,
     caseType,
+    decisionType,
     sortBy,
     page,
   ]);
 
-  // Client-mode enrichment for missing metadata (legacy)
+  // ------------------------------------------------------------
+  // Client-mode enrichment (only needed in client mode)
+  // ------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
 
@@ -419,7 +346,6 @@ export default function LawReports() {
     };
   }, [mode, reports, detailsMap]);
 
-  // Merge base + enriched (client mode only)
   const mergedReports = useMemo(() => {
     if (mode !== "client") return reports || [];
     return (reports || []).map((r) => {
@@ -428,7 +354,23 @@ export default function LawReports() {
     });
   }, [mode, reports, detailsMap]);
 
-  // Client-mode filtering (legacy)
+  // ------------------------------------------------------------
+  // Client filtering (still supported)
+  // NOTE: client filter expects labels, not ints.
+  // So in client mode we compare against selected option labels if possible.
+  // ------------------------------------------------------------
+  const selectedCaseLabel = useMemo(() => {
+    if (!caseType) return "";
+    const match = (caseTypeOptions || []).find((x) => String(x.value) === String(caseType));
+    return match?.label || "";
+  }, [caseType, caseTypeOptions]);
+
+  const selectedDecisionLabel = useMemo(() => {
+    if (!decisionType) return "";
+    const match = (decisionOptions || []).find((x) => String(x.value) === String(decisionType));
+    return match?.label || "";
+  }, [decisionType, decisionOptions]);
+
   const visibleClient = useMemo(() => {
     if (mode !== "client") return mergedReports;
 
@@ -440,7 +382,9 @@ export default function LawReports() {
     const yearNum = year ? Number(year) : null;
     const courtNorm = normalize(courtType);
     const townNorm = normalize(townOrPostCode);
-    const caseNorm = normalize(caseType);
+
+    const caseNorm = normalize(selectedCaseLabel || "");
+    const decisionNorm = normalize(selectedDecisionLabel || "");
 
     let items = mergedReports.filter((r) => {
       const meta = extractReportMeta(r);
@@ -460,6 +404,8 @@ export default function LawReports() {
         normalize(meta.postCode) === townNorm;
 
       const matchesCaseType = !caseNorm || normalize(meta.caseType) === caseNorm;
+      const matchesDecision =
+        !decisionNorm || normalize(meta.decisionType || meta.decision || "") === decisionNorm;
 
       return (
         matchesQ &&
@@ -469,9 +415,27 @@ export default function LawReports() {
         matchesYear &&
         matchesCourt &&
         matchesTown &&
-        matchesCaseType
+        matchesCaseType &&
+        matchesDecision
       );
     });
+
+    const getYear = (r) => extractReportMeta(r).year ?? -1;
+    const getReportNo = (r) => extractReportMeta(r).reportNumber || r.title || "";
+    const getParties = (r) => extractReportMeta(r).parties || r.title || "";
+    const getDate = (r) => {
+      const raw = extractReportMeta(r).judgmentDate;
+      const t = raw ? Date.parse(raw) : NaN;
+      return Number.isFinite(t) ? t : -1;
+    };
+
+    if (sortBy === "year_asc") items.sort((a, b) => getYear(a) - getYear(b));
+    else if (sortBy === "year_desc") items.sort((a, b) => getYear(b) - getYear(a));
+    else if (sortBy === "reportno_asc")
+      items.sort((a, b) => String(getReportNo(a)).localeCompare(String(getReportNo(b))));
+    else if (sortBy === "parties_asc")
+      items.sort((a, b) => String(getParties(a)).localeCompare(String(getParties(b))));
+    else if (sortBy === "date_desc") items.sort((a, b) => getDate(b) - getDate(a));
 
     return items;
   }, [
@@ -484,12 +448,21 @@ export default function LawReports() {
     year,
     courtType,
     townOrPostCode,
-    caseType,
+    selectedCaseLabel,
+    selectedDecisionLabel,
+    sortBy,
   ]);
 
   const visible = mode === "client" ? visibleClient : reports;
 
-  // ✅ Access checks (by LegalDocumentId)
+  // ------------------------------------------------------------
+  // ✅ IMPORTANT FIX: availability/access require LegalDocumentId
+  // ------------------------------------------------------------
+  function getDocIdForRow(r) {
+    return mode === "server" ? r?.legalDocumentId : r?.id;
+  }
+
+  // Access checks
   useEffect(() => {
     let cancelled = false;
 
@@ -497,9 +470,9 @@ export default function LawReports() {
       if (!isInst && !isPublic) return;
 
       const premiumDocIds = (visible || [])
-        .filter((d) => d?.IsPremium || d?.isPremium)
-        .map((d) => getDocId(d))
-        .filter((x) => Number.isFinite(x) && x > 0);
+        .filter((d) => !!d?.isPremium)
+        .map((d) => getDocIdForRow(d))
+        .filter(Boolean);
 
       const missing = premiumDocIds.filter((docId) => accessMap[docId] == null);
       if (missing.length === 0) return;
@@ -543,16 +516,16 @@ export default function LawReports() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, isInst, isPublic]);
+  }, [visible, isInst, isPublic, mode]);
 
-  // ✅ Availability checks (by LegalDocumentId)
+  // Availability checks
   useEffect(() => {
     let cancelled = false;
 
     async function fetchAvailabilityForVisibleReports() {
       const docIds = (visible || [])
-        .map((d) => getDocId(d))
-        .filter((x) => Number.isFinite(x) && x > 0);
+        .map((d) => getDocIdForRow(d))
+        .filter(Boolean);
 
       const missing = docIds.filter((docId) => availabilityMap[docId] == null);
       if (missing.length === 0) return;
@@ -579,7 +552,7 @@ export default function LawReports() {
           results.forEach((r, idx) => {
             const docId = batch[idx];
             if (r.status === "fulfilled") next[docId] = !!r.value?.data?.hasContent;
-            else next[docId] = true;
+            else next[docId] = true; // fail-open
           });
           return next;
         });
@@ -597,28 +570,80 @@ export default function LawReports() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
+  }, [visible, mode]);
 
   const totalPages = useMemo(() => {
     if (mode === "server") return Math.max(1, Math.ceil((total || 0) / pageSize));
     return 1;
   }, [mode, total, pageSize]);
 
-  // ✅ Dropdown options
+  // ------------------------------------------------------------
+  // Dropdown option lists (render value=INT string)
+  // ------------------------------------------------------------
   const computedCaseOptions = useMemo(() => {
-    if (caseTypeOptions && caseTypeOptions.length > 0) return caseTypeOptions;
-
-    // fallback: show all enum values (no counts)
-    return (REPORT_CASE_TYPES_ALL || []).map((label, i) => ({
-      value: i + 1,
+    if (caseTypeOptions && caseTypeOptions.length > 0) {
+      return [...caseTypeOptions].sort((a, b) =>
+        String(a.label || "").localeCompare(String(b.label || ""))
+      );
+    }
+    return REPORT_CASE_TYPES_ALL.map((label, idx) => ({
+      value: idx + 1,
       label,
       count: 0,
     }));
   }, [caseTypeOptions]);
 
+  const computedDecisionOptions = useMemo(() => {
+    if (decisionOptions && decisionOptions.length > 0) {
+      return [...decisionOptions].sort((a, b) =>
+        String(a.label || "").localeCompare(String(b.label || ""))
+      );
+    }
+    return FALLBACK_DECISIONS.map((label, idx) => ({
+      value: idx + 1,
+      label,
+      count: 0,
+    }));
+  }, [decisionOptions]);
+
+  // ------------------------------------------------------------
+  // Unified meta + excerpt per mode
+  // ------------------------------------------------------------
+  function getMetaForRow(r) {
+    if (mode === "server") {
+      return {
+        parties: r?.parties || "",
+        reportNumber: r?.reportNumber || "",
+        citation: r?.citation || "",
+        year: r?.year || null,
+        caseType: r?.caseTypeLabel || "",
+        decisionType: r?.decisionTypeLabel || "",
+        courtType: r?.courtTypeLabel || "",
+        town: r?.town || "",
+        postCode: r?.townPostCode || "",
+        judges: r?.judges || "",
+        judgmentDate: r?.decisionDate ? String(r.decisionDate).slice(0, 10) : "",
+        title: r?.title || "",
+      };
+    }
+    return extractReportMeta(r);
+  }
+
+  function getExcerptForRow(r) {
+    if (mode === "server") {
+      // ✅ preview from /law-reports/search
+      return cleanPreview(r?.previewText || "");
+    }
+    return makeReportExcerpt(r, 260);
+  }
+
   return (
     <div className="lr-wrap lr-theme">
-      {toast && <div className={`lr-toast ${toast.type === "error" ? "error" : ""}`}>{toast.message}</div>}
+      {toast && (
+        <div className={`lr-toast ${toast.type === "error" ? "error" : ""}`}>
+          {toast.message}
+        </div>
+      )}
 
       <div className="lr-hero">
         <div className="lr-hero-inner">
@@ -673,7 +698,11 @@ export default function LawReports() {
               </div>
 
               <div className="lr-field">
-                <button className="lr-card-btn" onClick={() => setShowAdvanced((v) => !v)} style={{ width: "100%" }}>
+                <button
+                  className="lr-card-btn"
+                  onClick={() => setShowAdvanced((v) => !v)}
+                  style={{ width: "100%" }}
+                >
                   {showAdvanced ? "Hide" : "Show"} advanced fields
                 </button>
               </div>
@@ -754,6 +783,28 @@ export default function LawReports() {
                 </div>
               </div>
 
+              {/* ✅ Decision */}
+              <div className="lr-field">
+                <div className="lr-label">Decision</div>
+                <select
+                  className="lr-select"
+                  value={decisionType}
+                  onChange={(e) => {
+                    setDecisionType(e.target.value);
+                    if (mode === "server") setPage(1);
+                  }}
+                >
+                  <option value="">All</option>
+                  {computedDecisionOptions.map((d) => (
+                    <option key={String(d.value)} value={String(d.value)}>
+                      {d.label}
+                      {d.count ? ` (${d.count})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* ✅ Case Type */}
               <div className="lr-field">
                 <div className="lr-label">Case Type</div>
                 <select
@@ -765,10 +816,10 @@ export default function LawReports() {
                   }}
                 >
                   <option value="">All</option>
-                  {computedCaseOptions.map((opt) => (
-                    <option key={String(opt.value)} value={String(opt.value)}>
-                      {opt.label}
-                      {opt.count ? ` (${opt.count})` : ""}
+                  {computedCaseOptions.map((ct) => (
+                    <option key={String(ct.value)} value={String(ct.value)}>
+                      {ct.label}
+                      {ct.count ? ` (${ct.count})` : ""}
                     </option>
                   ))}
                 </select>
@@ -804,7 +855,7 @@ export default function LawReports() {
                 <button className="lr-btn secondary" onClick={resetFilters}>
                   Clear
                 </button>
-                <button className="lr-btn" onClick={() => showToast("Tip: try Case Type + Year + Parties")}>
+                <button className="lr-btn" onClick={() => showToast("Tip: try Decision + Case Type + Year")}>
                   Tip
                 </button>
               </div>
@@ -816,8 +867,9 @@ export default function LawReports() {
                 <div className="lr-count">
                   {mode === "server" ? (
                     <>
-                      Showing <strong>{reports.length}</strong> of <strong>{total}</strong>{" "}
-                      report{total === 1 ? "" : "s"} • Page <strong>{page}</strong>/{totalPages}
+                      Showing <strong>{reports.length}</strong> of{" "}
+                      <strong>{total}</strong> report{total === 1 ? "" : "s"} • Page{" "}
+                      <strong>{page}</strong>/{totalPages}
                     </>
                   ) : (
                     <>
@@ -829,10 +881,18 @@ export default function LawReports() {
 
                 {mode === "server" && (
                   <div style={{ display: "flex", gap: 8 }}>
-                    <button className="lr-card-btn" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                    <button
+                      className="lr-card-btn"
+                      disabled={page <= 1}
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    >
                       ← Prev
                     </button>
-                    <button className="lr-card-btn" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                    <button
+                      className="lr-card-btn"
+                      disabled={page >= totalPages}
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    >
                       Next →
                     </button>
                   </div>
@@ -846,132 +906,114 @@ export default function LawReports() {
                 </div>
               ) : (
                 <div className="lr-cards">
-                  {visible.map((item) => {
-                    const tags = getTags(item);
-                    const excerpt = makeExcerpt(item, 260);
+                  {visible.map((r) => {
+                    const meta = getMetaForRow(r);
+                    const excerpt = getExcerptForRow(r);
 
-                    const docId = getDocId(item);
-                    const reportId = getReportId(item);
-
-                    const isPremium = !!(item?.IsPremium ?? item?.isPremium);
+                    const docId = getDocIdForRow(r);
 
                     const access = accessMap[docId];
                     const hasFullAccess = !!access?.hasFullAccess;
                     const accessLoading = accessLoadingIds.has(docId);
 
-                    const hasContent = availabilityMap[docId] == null ? true : !!availabilityMap[docId];
+                    const hasContent =
+                      availabilityMap[docId] == null ? true : !!availabilityMap[docId];
                     const availabilityLoading = availabilityLoadingIds.has(docId);
 
-                    const showIncluded = isPremium && (isInst || isPublic) && !accessLoading && hasFullAccess;
+                    const isPremiumRow = !!r.isPremium;
+                    const showIncluded =
+                      isPremiumRow && (isInst || isPublic) && !accessLoading && hasFullAccess;
 
-                    const goDetails = () => {
-                      if (mode === "server" && reportId) {
-                        navigate(`/dashboard/law-reports/${reportId}`);
-                        return;
-                      }
-                      // fallback
-                      navigate(`/dashboard/documents/${docId}`);
-                    };
+                    const canReadMore = hasContent;
 
-                    // mini header
-                    const miniHeader =
-                      mode === "client"
-                        ? makeReportMiniHeader(item)
-                        : (() => {
-                            const parts = [];
-                            if (tags.courtType) parts.push(tags.courtType);
-                            if (tags.judgmentDate) parts.push(`Date: ${tags.judgmentDate}`);
-                            if (tags.judges) parts.push(`Judges: ${tags.judges}`);
-                            return parts.join(" • ");
-                          })();
+                    // ✅ FIX: Details now expects LawReportId in BOTH modes
+                    const detailsId = mode === "server" ? r.id : r.id;
 
                     return (
                       <article
-                        key={`${mode}-${reportId || docId}`}
+                        key={`${mode}-${r.id}`}
                         className="lr-card2"
                         role="button"
                         tabIndex={0}
-                        onClick={goDetails}
+                        onClick={() => navigate(`/dashboard/law-reports/${detailsId}`)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            goDetails();
+                            navigate(`/dashboard/law-reports/${detailsId}`);
                           }
                         }}
                       >
                         <div className="lr-card2-top">
-                          <div className="lr-card2-title">{getTitle(item)}</div>
+                          <div className="lr-card2-title">
+                            {meta.parties || meta.title || "Untitled report"}
+                          </div>
 
                           <div className="lr-badges">
-                            {isPremium ? <span className="lr-badge premium">Premium</span> : <span className="lr-badge">Free</span>}
+                            {isPremiumRow ? (
+                              <span className="lr-badge premium">Premium</span>
+                            ) : (
+                              <span className="lr-badge">Free</span>
+                            )}
                             {showIncluded && <span className="lr-badge included">Included</span>}
                           </div>
                         </div>
 
                         <div className="lr-tags">
-                          {tags.reportNumber ? <span className="lr-tag">{tags.reportNumber}</span> : null}
-                          {tags.year ? <span className="lr-tag">{tags.year}</span> : null}
-                          {tags.caseType ? <span className="lr-tag">{tags.caseType}</span> : null}
-                          {tags.courtType ? <span className="lr-tag">{tags.courtType}</span> : null}
-                          {tags.town ? <span className="lr-tag">{tags.town}</span> : null}
-                          {!tags.town && tags.postCode ? <span className="lr-tag">{tags.postCode}</span> : null}
-                          {tags.citation ? <span className="lr-tag">{tags.citation}</span> : null}
+                          {meta.reportNumber ? <span className="lr-tag">{meta.reportNumber}</span> : null}
+                          {meta.year ? <span className="lr-tag">{meta.year}</span> : null}
+                          {meta.decisionType ? <span className="lr-tag">{meta.decisionType}</span> : null}
+                          {meta.caseType ? <span className="lr-tag">{meta.caseType}</span> : null}
+                          {meta.courtType ? <span className="lr-tag">{meta.courtType}</span> : null}
+                          {meta.town ? <span className="lr-tag">{meta.town}</span> : null}
+                          {!meta.town && meta.postCode ? <span className="lr-tag">{meta.postCode}</span> : null}
+                          {meta.citation ? <span className="lr-tag">{meta.citation}</span> : null}
                         </div>
 
-                        {miniHeader ? <div className="lr-mini">{miniHeader}</div> : null}
+                        {mode === "client" ? (
+                          (() => {
+                            const mh = makeReportMiniHeader(r);
+                            return mh ? <div className="lr-mini">{mh}</div> : null;
+                          })()
+                        ) : meta.judges ? (
+                          <div className="lr-mini">
+                            {meta.judgmentDate ? `Date: ${meta.judgmentDate}` : ""}
+                            {meta.judges
+                              ? meta.judgmentDate
+                                ? ` • Judges: ${meta.judges}`
+                                : `Judges: ${meta.judges}`
+                              : ""}
+                          </div>
+                        ) : null}
 
-                        <div className="lr-excerpt">{excerpt}</div>
+                        <div className="lr-excerpt">
+                          {excerpt || "Preview will appear here once the report content is available."}
+                        </div>
 
+                        {/* ✅ Only Read More */}
                         <div className="lr-card2-actions">
                           <button
-                            className="lr-card-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              goDetails();
-                            }}
-                          >
-                            Details
-                          </button>
-
-                          <button
                             className="lr-card-btn primary"
-                            disabled={!hasContent || availabilityLoading}
+                            disabled={!canReadMore || availabilityLoading}
                             title={!hasContent ? "Not available yet" : ""}
                             onClick={(e) => {
                               e.stopPropagation();
-                              goDetails();
+                              navigate(`/dashboard/law-reports/${detailsId}`);
                             }}
                             style={{
-                              opacity: hasContent ? 1 : 0.6,
-                              cursor: hasContent ? "pointer" : "not-allowed",
+                              opacity: canReadMore ? 1 : 0.6,
+                              cursor: canReadMore ? "pointer" : "not-allowed",
+                              width: "100%",
                             }}
                           >
                             {availabilityLoading ? "Checking…" : "Read More"}
                           </button>
-
-                          <button
-                            className="lr-card-btn ghost"
-                            disabled={availabilityLoading || accessLoading || !hasContent || (isPremium && !hasFullAccess)}
-                            title={
-                              !hasContent
-                                ? "Not available yet"
-                                : isPremium && !hasFullAccess
-                                  ? "Access required"
-                                  : "Open reader"
-                            }
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!hasContent) return;
-                              if (isPremium && !hasFullAccess) {
-                                navigate(`/dashboard/documents/${docId}`);
-                                return;
-                              }
-                              navigate(`/dashboard/documents/${docId}/read`);
-                            }}
-                          >
-                            Open
-                          </button>
                         </div>
+
+                        {!hasContent && !availabilityLoading && (
+                          <div className="lr-soft" style={{ marginTop: 8 }}>
+                            This report is not available yet.
+                          </div>
+                        )}
                       </article>
                     );
                   })}
@@ -980,13 +1022,21 @@ export default function LawReports() {
 
               {mode === "server" && totalPages > 1 && (
                 <div className="lr-pager">
-                  <button className="lr-card-btn" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                  <button
+                    className="lr-card-btn"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
                     ← Prev
                   </button>
                   <div className="lr-soft">
                     Page <strong>{page}</strong> of <strong>{totalPages}</strong>
                   </div>
-                  <button className="lr-card-btn" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                  <button
+                    className="lr-card-btn"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
                     Next →
                   </button>
                 </div>

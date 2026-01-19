@@ -17,37 +17,35 @@ function isPublicUser() {
   return String(userType).toLowerCase() === "public" && (!inst || inst <= 0);
 }
 
-function safeText(v) {
-  return String(v || "").trim();
+// Read both camelCase + PascalCase safely
+function pick(obj, ...keys) {
+  for (const k of keys) {
+    if (obj && obj[k] !== undefined && obj[k] !== null) return obj[k];
+  }
+  return undefined;
 }
 
-function cleanPreview(text) {
-  const t = safeText(text).replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
-  if (!t) return "";
-  // keep paragraph breaks, collapse excessive whitespace
-  const collapsed = t.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n");
-  return collapsed;
+function cleanText(t) {
+  const s = String(t || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  if (!s) return "";
+  return s.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-function makeExcerptFromContent(contentText, max = 520) {
-  const t = cleanPreview(contentText).replace(/\s+/g, " ").trim();
-  if (!t) return "";
-  if (t.length <= max) return t;
-  return t.slice(0, max).trim() + "…";
+function formatIsoDate(d) {
+  if (!d) return "";
+  const s = String(d);
+  return s.length >= 10 ? s.slice(0, 10) : s;
 }
 
 export default function LawReportDetails() {
-  const { id } = useParams(); // ✅ this is LawReportId now
-  const reportId = Number(id);
-
+  const { id } = useParams();
+  const reportId = Number(id); // ✅ this route param is LawReport.Id
   const navigate = useNavigate();
 
   const [report, setReport] = useState(null); // LawReportDto
+  const [doc, setDoc] = useState(null); // LegalDocument (for isPremium + fallback fields)
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  // derived doc id (LegalDocumentId) used for access + availability + reader routes
-  const docId = report?.legalDocumentId ?? report?.LegalDocumentId ?? null;
 
   const [access, setAccess] = useState(null);
   const [accessLoading, setAccessLoading] = useState(false);
@@ -58,9 +56,9 @@ export default function LawReportDetails() {
   const isInst = isInstitutionUser();
   const isPublic = isPublicUser();
 
-  // ---------------------------
-  // Load report by LawReportId
-  // ---------------------------
+  // ------------------------------------------------------------
+  // 1) Load LawReportDto from /api/law-reports/{id}
+  // ------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
 
@@ -69,15 +67,8 @@ export default function LawReportDetails() {
         setLoading(true);
         setError("");
 
-        // ✅ NEW SOURCE OF TRUTH: law report endpoint
         const res = await api.get(`/law-reports/${reportId}`);
         const r = res.data;
-
-        // Basic guard: must have LegalDocumentId
-        const ld = r?.legalDocumentId ?? r?.LegalDocumentId;
-        if (!ld || ld <= 0) {
-          throw new Error("Invalid report payload (missing LegalDocumentId).");
-        }
 
         if (!cancelled) setReport(r);
       } catch (err) {
@@ -99,13 +90,42 @@ export default function LawReportDetails() {
     };
   }, [reportId]);
 
-  // ---------------------------
-  // Availability + access checks (by LegalDocumentId)
-  // ---------------------------
+  // ------------------------------------------------------------
+  // 2) Load parent LegalDocument (needed for isPremium)
+  // ------------------------------------------------------------
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDoc() {
+      if (!report) return;
+
+      const docId = pick(report, "legalDocumentId", "LegalDocumentId");
+      if (!docId) return;
+
+      try {
+        const res = await api.get(`/legal-documents/${docId}`);
+        if (!cancelled) setDoc(res.data ?? null);
+      } catch {
+        if (!cancelled) setDoc(null);
+      }
+    }
+
+    loadDoc();
+    return () => {
+      cancelled = true;
+    };
+  }, [report]);
+
+  // ------------------------------------------------------------
+  // 3) Availability + access checks (by LegalDocumentId)
+  // ------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
 
     async function check() {
+      if (!report) return;
+
+      const docId = pick(report, "legalDocumentId", "LegalDocumentId");
       if (!docId) return;
 
       // Availability
@@ -115,13 +135,14 @@ export default function LawReportDetails() {
         const ok = !!r?.data?.hasContent;
         if (!cancelled) setHasContent(ok);
       } catch {
-        if (!cancelled) setHasContent(true); // fail-open to avoid blocking
+        if (!cancelled) setHasContent(true); // fail-open
       } finally {
         if (!cancelled) setAvailabilityLoading(false);
       }
 
-      // Access for premium
-      const isPremium = !!(report?.isPremium ?? report?.IsPremium);
+      // Premium detection (from LegalDocument, since LawReportDto doesn't include isPremium)
+      const isPremium = !!pick(doc, "isPremium", "IsPremium");
+
       if (isPremium && (isInst || isPublic)) {
         try {
           setAccessLoading(true);
@@ -132,6 +153,8 @@ export default function LawReportDetails() {
         } finally {
           if (!cancelled) setAccessLoading(false);
         }
+      } else {
+        if (!cancelled) setAccess(null);
       }
     }
 
@@ -139,64 +162,65 @@ export default function LawReportDetails() {
     return () => {
       cancelled = true;
     };
-  }, [docId, report, isInst, isPublic]);
+  }, [report, doc, isInst, isPublic]);
 
-  // ---------------------------
-  // Meta from LawReportDto
-  // ---------------------------
-  const meta = useMemo(() => {
-    if (!report) return null;
+  // ------------------------------------------------------------
+  // Derived fields
+  // ------------------------------------------------------------
+  const docId = useMemo(() => pick(report, "legalDocumentId", "LegalDocumentId") || null, [report]);
+  const isPremium = useMemo(() => !!pick(doc, "isPremium", "IsPremium"), [doc]);
 
-    // Normalize casing because some serializers return PascalCase
-    const r = report;
-
-    const parties = safeText(r.parties ?? r.Parties);
-    const title = safeText(r.title ?? r.Title);
-    const reportNumber = safeText(r.reportNumber ?? r.ReportNumber);
-    const citation = safeText(r.citation ?? r.Citation);
-    const year = Number(r.year ?? r.Year) || null;
-
-    const caseTypeLabel = safeText(r.caseTypeLabel ?? r.CaseTypeLabel);
-    const courtTypeLabel = safeText(r.courtTypeLabel ?? r.CourtTypeLabel);
-    const town = safeText(r.town ?? r.Town);
-    const postCode = safeText(r.townPostCode ?? r.TownPostCode);
-    const judges = safeText(r.judges ?? r.Judges);
-
-    const decisionDateRaw = r.decisionDate ?? r.DecisionDate ?? null;
-    const judgmentDate = decisionDateRaw ? String(decisionDateRaw).slice(0, 10) : "";
-
-    return {
-      parties,
-      title,
-      reportNumber,
-      citation,
-      year,
-      caseType: caseTypeLabel,
-      courtType: courtTypeLabel,
-      town,
-      postCode,
-      judges,
-      judgmentDate,
-    };
-  }, [report]);
-
-  const contentText = useMemo(() => {
-    if (!report) return "";
-    return report.contentText ?? report.ContentText ?? "";
-  }, [report]);
-
-  const excerpt = useMemo(() => makeExcerptFromContent(contentText, 520), [contentText]);
-
-  const isPremium = !!(report?.isPremium ?? report?.IsPremium);
   const hasFullAccess = !!access?.hasFullAccess;
-  const canReadNow = !!report && !!docId && hasContent && (!isPremium || hasFullAccess);
+  const canSeeFullText = !!report && hasContent && (!isPremium || hasFullAccess);
 
-  if (loading)
+  const title = useMemo(() => {
+    const parties = pick(report, "parties", "Parties");
+    const t = pick(report, "title", "Title");
+    return parties || t || "Law Report";
+  }, [report]);
+
+  const tags = useMemo(() => {
+    if (!report) return [];
+    const out = [];
+
+    const reportNumber = pick(report, "reportNumber", "ReportNumber");
+    const citation = pick(report, "citation", "Citation");
+    const year = pick(report, "year", "Year");
+
+    const caseTypeLabel = pick(report, "caseTypeLabel", "CaseTypeLabel");
+    const decisionTypeLabel = pick(report, "decisionTypeLabel", "DecisionTypeLabel");
+    const courtTypeLabel = pick(report, "courtTypeLabel", "CourtTypeLabel");
+
+    const town = pick(report, "town", "Town");
+    const townPostCode = pick(report, "townPostCode", "TownPostCode");
+
+    if (reportNumber) out.push(reportNumber);
+    if (citation) out.push(citation);
+    if (year) out.push(String(year));
+    if (caseTypeLabel) out.push(caseTypeLabel);
+    if (decisionTypeLabel) out.push(decisionTypeLabel);
+    if (courtTypeLabel) out.push(courtTypeLabel);
+    if (town) out.push(town);
+    if (!town && townPostCode) out.push(townPostCode);
+
+    return out;
+  }, [report]);
+
+  const decisionDate = useMemo(() => formatIsoDate(pick(report, "decisionDate", "DecisionDate")), [report]);
+  const judges = useMemo(() => pick(report, "judges", "Judges") || "", [report]);
+
+  const fullText = useMemo(() => {
+    const t = pick(report, "contentText", "ContentText");
+    return cleanText(t || "");
+  }, [report]);
+
+  if (loading) {
     return (
       <div className="lr-wrap lr-theme">
         <div className="lr-loading">Loading report…</div>
       </div>
     );
+  }
 
   if (error) {
     return (
@@ -223,19 +247,22 @@ export default function LawReportDetails() {
       <div className="lr-hero lr-hero-mini">
         <div className="lr-hero-inner">
           <div className="lr-hero-left">
-            <div className="lr-chip">Report details</div>
+            <div className="lr-chip">Report</div>
             <h1 className="lr-hero-title" style={{ fontSize: 26 }}>
-              {meta?.parties || meta?.title || "Law Report"}
+              {title}
             </h1>
 
             <div className="lr-tags" style={{ marginTop: 10 }}>
-              {meta?.reportNumber ? <span className="lr-tag">{meta.reportNumber}</span> : null}
-              {meta?.citation ? <span className="lr-tag">{meta.citation}</span> : null}
-              {meta?.year ? <span className="lr-tag">{meta.year}</span> : null}
-              {meta?.caseType ? <span className="lr-tag">{meta.caseType}</span> : null}
-              {meta?.courtType ? <span className="lr-tag">{meta.courtType}</span> : null}
-              {meta?.town ? <span className="lr-tag">{meta.town}</span> : null}
-              {!meta?.town && meta?.postCode ? <span className="lr-tag">{meta.postCode}</span> : null}
+              {tags.map((t) => (
+                <span key={t} className="lr-tag">
+                  {t}
+                </span>
+              ))}
+            </div>
+
+            <div className="lr-mini" style={{ marginTop: 10 }}>
+              {decisionDate ? `Date: ${decisionDate}` : ""}
+              {judges ? (decisionDate ? ` • Judges: ${judges}` : `Judges: ${judges}`) : ""}
             </div>
           </div>
 
@@ -263,48 +290,61 @@ export default function LawReportDetails() {
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-            <button
-              className="lr-btn"
-              disabled={availabilityLoading || accessLoading || !canReadNow}
-              title={!hasContent ? "Not available yet" : isPremium && !hasFullAccess ? "Access required" : ""}
-              onClick={() => {
-                if (!docId || !hasContent) return;
-                if (isPremium && !hasFullAccess) {
-                  navigate(`/dashboard/documents/${docId}`);
-                  return;
-                }
-                navigate(`/dashboard/documents/${docId}/read`);
-              }}
-              style={{ maxWidth: 220 }}
-            >
-              {availabilityLoading || accessLoading ? "Checking…" : "Read report"}
-            </button>
+          {docId ? (
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+              <button
+                className="lr-btn"
+                disabled={availabilityLoading || accessLoading || !hasContent || (isPremium && !hasFullAccess)}
+                title={!hasContent ? "Not available yet" : isPremium && !hasFullAccess ? "Access required" : ""}
+                onClick={() => {
+                  if (!hasContent) return;
+                  if (isPremium && !hasFullAccess) {
+                    navigate(`/dashboard/documents/${docId}`);
+                    return;
+                  }
+                  navigate(`/dashboard/documents/${docId}/read`);
+                }}
+                style={{ maxWidth: 220 }}
+              >
+                {availabilityLoading || accessLoading ? "Checking…" : "Read in reader"}
+              </button>
 
-            {docId ? (
               <button className="lr-btn secondary" onClick={() => navigate(`/dashboard/documents/${docId}`)} style={{ maxWidth: 220 }}>
                 View / Preview
               </button>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
 
+          {/* Full content now (formatting enhancements later) */}
           <div className="lr-cards" style={{ gridTemplateColumns: "1fr" }}>
             <article className="lr-card2" style={{ cursor: "default" }}>
               <div className="lr-card2-top">
-                <div className="lr-card2-title">Quick preview</div>
+                <div className="lr-card2-title">Full text</div>
                 <div className="lr-badges">
                   {isPremium ? <span className="lr-badge premium">Premium</span> : <span className="lr-badge">Free</span>}
                 </div>
               </div>
 
-              <div className="lr-mini">
-                {meta?.judgmentDate ? `Judgment date: ${meta.judgmentDate}` : ""}
-                {meta?.judges ? (meta?.judgmentDate ? ` • Judges: ${meta.judges}` : `Judges: ${meta.judges}`) : ""}
-              </div>
-
-              <div className="lr-excerpt" style={{ marginTop: 10, whiteSpace: "pre-wrap" }}>
-                {excerpt || "Preview will appear here once the report content is available."}
-              </div>
+              {!hasContent && !availabilityLoading ? (
+                <div className="lr-excerpt" style={{ marginTop: 10 }}>
+                  This report is not available yet.
+                </div>
+              ) : isPremium && (isInst || isPublic) && !hasFullAccess ? (
+                <div className="lr-excerpt" style={{ marginTop: 10 }}>
+                  This is a premium report. Open the document page to subscribe or confirm access.
+                </div>
+              ) : (
+                <div
+                  className="lr-excerpt"
+                  style={{
+                    marginTop: 10,
+                    whiteSpace: "pre-wrap",
+                    lineHeight: 1.65,
+                  }}
+                >
+                  {canSeeFullText ? fullText || "No text content found for this report yet." : "Access required to view this report."}
+                </div>
+              )}
             </article>
           </div>
         </section>
