@@ -17,6 +17,38 @@ function isPublicUser() {
   return String(userType).toLowerCase() === "public" && (!inst || inst <= 0);
 }
 
+/**
+ * Robust global admin detection.
+ * Adjust role names here to match your backend roles exactly.
+ */
+function isGlobalAdminUser() {
+  const c = getAuthClaims();
+
+  // roles may exist in different places depending on how you issue JWT
+  const rolesRaw =
+    c?.roles ??
+    c?.payload?.roles ??
+    c?.payload?.role ??
+    c?.payload?.Role ??
+    c?.payload?.Roles ??
+    [];
+
+  const roles = Array.isArray(rolesRaw)
+    ? rolesRaw
+    : typeof rolesRaw === "string"
+      ? rolesRaw.split(",").map((x) => x.trim()).filter(Boolean)
+      : [];
+
+  const norm = roles.map((r) => String(r).toLowerCase());
+  return (
+    norm.includes("admin") ||
+    norm.includes("globaladmin") ||
+    norm.includes("global_admin") ||
+    norm.includes("superadmin") ||
+    norm.includes("super_admin")
+  );
+}
+
 // ----------------------
 // Formatting helpers
 // ----------------------
@@ -46,28 +78,22 @@ const HEADING_SET = new Set([
 ]);
 
 function normalizeText(s) {
-  return String(s || "")
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n");
+  return String(s || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
 function looksLikeHeading(line) {
   const t = String(line || "").trim();
   if (!t) return false;
 
-  // Strip punctuation for matching
   const clean = t.replace(/[:.\-–—]+$/g, "").trim();
   const upper = clean.toUpperCase();
 
-  // Must be short-ish and not a sentence
   const words = upper.split(/\s+/).filter(Boolean);
   if (words.length === 0) return false;
   if (words.length > 6) return false;
 
-  // Must be all-caps (or very close)
   const alpha = clean.replace(/[^A-Za-z]/g, "");
   const isAllCaps = alpha.length > 0 && alpha === alpha.toUpperCase();
-
   if (!isAllCaps) return false;
 
   return HEADING_SET.has(upper) || upper.length <= 24;
@@ -77,15 +103,13 @@ function splitIntoBlocks(content) {
   const text = normalizeText(content);
   if (!text.trim()) return [];
 
-  // Split by blank lines => paragraph blocks
   const paras = text.split(/\n{2,}/g);
-
   const blocks = [];
+
   for (const p of paras) {
     const raw = p.replace(/\n{3,}/g, "\n\n").trim();
     if (!raw) continue;
 
-    // If paragraph begins with a heading line, split it out
     const lines = raw.split("\n");
     if (lines.length > 0 && looksLikeHeading(lines[0])) {
       blocks.push({ type: "heading", text: lines[0].trim() });
@@ -114,6 +138,7 @@ export default function LawReportReader() {
 
   const isInst = isInstitutionUser();
   const isPublic = isPublicUser();
+  const isAdmin = isGlobalAdminUser();
 
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -126,6 +151,7 @@ export default function LawReportReader() {
   const [access, setAccess] = useState(null);
   const [accessLoading, setAccessLoading] = useState(false);
 
+  // Load report
   useEffect(() => {
     let cancelled = false;
 
@@ -156,26 +182,46 @@ export default function LawReportReader() {
     };
   }, [reportId]);
 
-  // availability + access (based on LegalDocumentId)
+  // Availability + access checks (based on LegalDocumentId)
   useEffect(() => {
     let cancelled = false;
 
     async function check() {
       if (!report?.legalDocumentId) return;
 
-      // availability
-      try {
-        setAvailabilityLoading(true);
-        const r = await api.get(`/legal-documents/${report.legalDocumentId}/availability`);
-        const ok = !!r?.data?.hasContent;
-        if (!cancelled) setHasContent(ok);
-      } catch {
-        if (!cancelled) setHasContent(true); // fail-open
-      } finally {
-        if (!cancelled) setAvailabilityLoading(false);
+      // ✅ Global admin bypass: do not block admin with availability/access checks
+      if (isAdmin) {
+        if (!cancelled) {
+          setHasContent(true);
+          setAvailabilityLoading(false);
+          setAccess({ hasFullAccess: true });
+          setAccessLoading(false);
+        }
+        return;
       }
 
-      // access
+      // ✅ If ContentText exists, treat as available and skip /availability
+      const textHasContent = !!String(report?.contentText || "").trim();
+      if (textHasContent) {
+        if (!cancelled) {
+          setHasContent(true);
+          setAvailabilityLoading(false);
+        }
+      } else {
+        // Otherwise, check availability from LegalDocument
+        try {
+          setAvailabilityLoading(true);
+          const r = await api.get(`/legal-documents/${report.legalDocumentId}/availability`);
+          const ok = !!r?.data?.hasContent;
+          if (!cancelled) setHasContent(ok);
+        } catch {
+          if (!cancelled) setHasContent(true); // fail-open
+        } finally {
+          if (!cancelled) setAvailabilityLoading(false);
+        }
+      }
+
+      // Access: only needed for premium + public/institution flows
       if (report?.isPremium && (isInst || isPublic)) {
         try {
           setAccessLoading(true);
@@ -186,6 +232,9 @@ export default function LawReportReader() {
         } finally {
           if (!cancelled) setAccessLoading(false);
         }
+      } else {
+        // Not applicable
+        if (!cancelled) setAccess(null);
       }
     }
 
@@ -193,15 +242,20 @@ export default function LawReportReader() {
     return () => {
       cancelled = true;
     };
-  }, [report, isInst, isPublic]);
+  }, [report, isInst, isPublic, isAdmin]);
 
   const blocks = useMemo(() => splitIntoBlocks(report?.contentText || ""), [report]);
 
   const hasFullAccess = !!access?.hasFullAccess;
+  const textHasContent = !!String(report?.contentText || "").trim();
+
+  // ✅ Admin can always open reader (won’t be blocked by availability/access)
+  // ✅ For non-admin: must have content (either ContentText or availability true)
   const canRead =
     !!report &&
-    hasContent &&
-    (!report.isPremium || hasFullAccess || (!isInst && !isPublic)); // non-inst/non-public users still see doc page via your flows
+    (isAdmin ||
+      ((hasContent || textHasContent) &&
+        (!report.isPremium || hasFullAccess || (!isInst && !isPublic))));
 
   if (loading) {
     return (
@@ -227,7 +281,7 @@ export default function LawReportReader() {
     );
   }
 
-  // If premium and no access, send them to the LegalDocument page (pricing/access)
+  // If premium and no access, send them to LegalDocument page (pricing/access)
   if (!canRead) {
     return (
       <div className="lrr-wrap">
@@ -236,7 +290,7 @@ export default function LawReportReader() {
           <div className="lrr-error-msg">
             {availabilityLoading
               ? "Checking availability…"
-              : !hasContent
+              : !hasContent && !textHasContent
                 ? "This report isn’t available yet."
                 : "This is a premium report. Please subscribe or sign in with an eligible account to read it."}
           </div>
@@ -290,9 +344,7 @@ export default function LawReportReader() {
           {report.caseTypeLabel ? <span className="lrr-chip">{report.caseTypeLabel}</span> : null}
           {report.courtTypeLabel ? <span className="lrr-chip">{report.courtTypeLabel}</span> : null}
           {report.town ? <span className="lrr-chip">{report.town}</span> : null}
-          {!report.town && report.townPostCode ? (
-            <span className="lrr-chip">{report.townPostCode}</span>
-          ) : null}
+          {!report.town && report.townPostCode ? <span className="lrr-chip">{report.townPostCode}</span> : null}
         </div>
 
         <div className="lrr-submeta">
@@ -300,17 +352,16 @@ export default function LawReportReader() {
           {report.judges ? <div><strong>Judges:</strong> {report.judges}</div> : null}
           {report.court ? <div><strong>Court:</strong> {report.court}</div> : null}
           {report.caseNumber ? <div><strong>Case No:</strong> {report.caseNumber}</div> : null}
-          {accessLoading ? <div className="lrr-soft">checking access…</div> : null}
-          {availabilityLoading ? <div className="lrr-soft">checking availability…</div> : null}
+          {isAdmin ? <div className="lrr-soft">admin access</div> : null}
+          {!isAdmin && accessLoading ? <div className="lrr-soft">checking access…</div> : null}
+          {!isAdmin && availabilityLoading ? <div className="lrr-soft">checking availability…</div> : null}
         </div>
       </header>
 
       {/* Content */}
       <main className="lrr-main">
         {blocks.length === 0 ? (
-          <div className="lrr-empty">
-            This report has no content yet.
-          </div>
+          <div className="lrr-empty">This report has no content yet.</div>
         ) : (
           <article className="lrr-article">
             {blocks.map((b, idx) => {
@@ -322,7 +373,6 @@ export default function LawReportReader() {
                 );
               }
 
-              // paragraph: preserve line breaks inside paragraph
               return (
                 <p key={idx} className="lrr-p">
                   {b.text}
