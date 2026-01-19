@@ -1,6 +1,6 @@
 // src/pages/TwoFactorSetup.jsx
 import { useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api/client.js";
 import "../styles/twofactor.css";
 
@@ -11,6 +11,9 @@ const LS_REG_PASSWORD = "la_reg_password";
 // ✅ From Login.jsx
 const LS_LOGIN_USERNAME = "la_login_username";
 const LS_LOGIN_PASSWORD = "la_login_password";
+
+// ✅ NEW: store setup token so refresh still auto-populates
+const LS_2FA_SETUP_TOKEN = "la_2fa_setup_token";
 
 // ✅ Small helper: avoid [object Object]
 function getApiErrorMessage(err, fallback = "Request failed.") {
@@ -34,8 +37,22 @@ export default function TwoFactorSetup() {
   const nav = useNavigate();
   const location = useLocation();
 
+  // ✅ NEW: only auto-fetch when coming from Register flow
+  const autoFetchSetupToken = !!location.state?.autoFetchSetupToken;
+
   const initialUsername = location.state?.username || "";
   const initialPassword = location.state?.password || "";
+
+  // ✅ NEW: initial token can come from navigation state OR storage
+  const initialSetupToken =
+    (location.state?.setupToken || "").trim() ||
+    (() => {
+      try {
+        return (localStorage.getItem(LS_2FA_SETUP_TOKEN) || "").trim();
+      } catch {
+        return "";
+      }
+    })();
 
   // ✅ Fallback after Paystack redirect OR login refresh
   const storedUsername = (() => {
@@ -69,7 +86,7 @@ export default function TwoFactorSetup() {
     initialPassword || storedPassword || ""
   );
 
-  const [setupToken, setSetupToken] = useState("");
+  const [setupToken, setSetupToken] = useState(initialSetupToken);
   const [code, setCode] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -83,12 +100,13 @@ export default function TwoFactorSetup() {
     [username, password]
   );
 
+  const autoFetchRanRef = useRef(false);
+
   // ✅ Keep localStorage in sync if user edits (best-effort)
   useEffect(() => {
     try {
       const u = username?.trim();
       if (u) {
-        // store in both to be safe; does not harm
         localStorage.setItem(LS_REG_USERNAME, u);
         localStorage.setItem(LS_LOGIN_USERNAME, u);
       }
@@ -101,6 +119,16 @@ export default function TwoFactorSetup() {
     }
   }, [username, password]);
 
+  // ✅ NEW: persist setup token so refresh keeps it
+  useEffect(() => {
+    try {
+      const t = (setupToken || "").trim();
+      if (t) localStorage.setItem(LS_2FA_SETUP_TOKEN, t);
+    } catch {
+      // ignore
+    }
+  }, [setupToken]);
+
   function clearStoredCreds() {
     try {
       localStorage.removeItem(LS_REG_USERNAME);
@@ -112,20 +140,29 @@ export default function TwoFactorSetup() {
     }
   }
 
-  async function resendSetupEmail() {
-    setError("");
-    setInfo("");
+  function clearStoredSetupToken() {
+    try {
+      localStorage.removeItem(LS_2FA_SETUP_TOKEN);
+    } catch {
+      // ignore
+    }
+  }
 
-    if (!canResend) {
-      setError("Enter username and password to resend your setup email.");
-      return;
+  async function resendSetupEmail({ silent = false } = {}) {
+    if (!silent) {
+      setError("");
+      setInfo("");
     }
 
-    if (resendLoading || loading) return;
+    if (!canResend) {
+      if (!silent) setError("Enter username and password to resend your setup email.");
+      return "";
+    }
+
+    if (resendLoading || loading) return "";
 
     setResendLoading(true);
     try {
-      // ✅ Correct endpoint (controller = Security)
       const res = await api.post("/Security/resend-2fa-setup", {
         username: username.trim(),
         password,
@@ -136,18 +173,45 @@ export default function TwoFactorSetup() {
       // In dev you might get setupToken back
       if (data?.setupToken) {
         setSetupToken(data.setupToken);
-        setInfo("Setup email resent. Setup token has been filled automatically.");
+        if (!silent) setInfo("Setup token has been filled automatically.");
+        return data.setupToken;
       } else {
-        setInfo(
-          "If the account exists and credentials are correct, a new 2FA setup email has been sent."
-        );
+        if (!silent) {
+          setInfo(
+            "A new 2FA setup email has been sent. If your API doesn’t return a token in production, use the token from the email."
+          );
+        }
+        return "";
       }
     } catch (err) {
-      setError(getApiErrorMessage(err, "Failed to resend setup email."));
+      if (!silent) setError(getApiErrorMessage(err, "Failed to resend setup email."));
+      return "";
     } finally {
       setResendLoading(false);
     }
   }
+
+  // ✅ NEW: auto-fetch token ONCE when coming from Register and token is empty
+  useEffect(() => {
+    if (!autoFetchSetupToken) return;
+    if (autoFetchRanRef.current) return;
+    if (setupToken.trim()) return;
+    if (!canResend) return;
+
+    autoFetchRanRef.current = true;
+
+    (async () => {
+      setInfo("Preparing your 2FA setup…");
+      const t = await resendSetupEmail({ silent: true });
+      if (t) {
+        setInfo("Setup token has been filled automatically. Enter your 6-digit code to continue.");
+      } else {
+        // fallback message
+        setInfo("Check your email for the setup token. If it didn’t auto-fill, click “Resend setup email”.");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoFetchSetupToken, canResend, setupToken]);
 
   async function verifySetup(e) {
     e.preventDefault();
@@ -155,7 +219,7 @@ export default function TwoFactorSetup() {
     setInfo("");
 
     if (!setupToken.trim()) {
-      setError("Paste your setup token from the email (or dev response) first.");
+      setError("Setup token is missing. Click “Resend setup email” to auto-fill it.");
       return;
     }
 
@@ -166,7 +230,6 @@ export default function TwoFactorSetup() {
 
     setLoading(true);
     try {
-      // ✅ POST /api/Security/verify-2fa-setup
       await api.post("/Security/verify-2fa-setup", {
         setupToken: setupToken.trim(),
         code: code.trim(),
@@ -174,6 +237,7 @@ export default function TwoFactorSetup() {
 
       // ✅ Cleanup temporary creds once user completes 2FA setup
       clearStoredCreds();
+      clearStoredSetupToken();
 
       setInfo("2FA enabled successfully. You can now sign in.");
       setTimeout(() => nav("/login", { replace: true }), 900);
@@ -253,7 +317,6 @@ export default function TwoFactorSetup() {
               disabled={actionDisabled}
             />
 
-            {/* ✅ Secondary action as text link */}
             <span
               role="button"
               tabIndex={0}
@@ -302,13 +365,11 @@ export default function TwoFactorSetup() {
               disabled={actionDisabled}
             />
 
-            {/* ✅ Primary action stays a button */}
             <button type="submit" disabled={actionDisabled}>
               {loading ? "Verifying..." : "Enable 2FA"}
             </button>
           </form>
 
-          {/* ✅ Secondary nav as text link */}
           <div className="footer-text" style={{ marginTop: 14 }}>
             <span
               role="button"
