@@ -3,8 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../../api/client";
 import { getAuthClaims } from "../../auth/auth";
-import { isLawReportDocument } from "../../utils/isLawReportDocument";
-import { extractReportMeta, makeReportExcerpt } from "../../utils/lawReportMeta";
 import "../../styles/lawReports.css";
 
 function isInstitutionUser() {
@@ -19,14 +17,37 @@ function isPublicUser() {
   return String(userType).toLowerCase() === "public" && (!inst || inst <= 0);
 }
 
+function safeText(v) {
+  return String(v || "").trim();
+}
+
+function cleanPreview(text) {
+  const t = safeText(text).replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  if (!t) return "";
+  // keep paragraph breaks, collapse excessive whitespace
+  const collapsed = t.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n");
+  return collapsed;
+}
+
+function makeExcerptFromContent(contentText, max = 520) {
+  const t = cleanPreview(contentText).replace(/\s+/g, " ").trim();
+  if (!t) return "";
+  if (t.length <= max) return t;
+  return t.slice(0, max).trim() + "…";
+}
+
 export default function LawReportDetails() {
-  const { id } = useParams();
-  const docId = Number(id);
+  const { id } = useParams(); // ✅ this is LawReportId now
+  const reportId = Number(id);
+
   const navigate = useNavigate();
 
-  const [doc, setDoc] = useState(null);
+  const [report, setReport] = useState(null); // LawReportDto
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // derived doc id (LegalDocumentId) used for access + availability + reader routes
+  const docId = report?.legalDocumentId ?? report?.LegalDocumentId ?? null;
 
   const [access, setAccess] = useState(null);
   const [accessLoading, setAccessLoading] = useState(false);
@@ -37,6 +58,9 @@ export default function LawReportDetails() {
   const isInst = isInstitutionUser();
   const isPublic = isPublicUser();
 
+  // ---------------------------
+  // Load report by LawReportId
+  // ---------------------------
   useEffect(() => {
     let cancelled = false;
 
@@ -45,15 +69,17 @@ export default function LawReportDetails() {
         setLoading(true);
         setError("");
 
-        const res = await api.get(`/legal-documents/${docId}`);
-        const d = res.data;
+        // ✅ NEW SOURCE OF TRUTH: law report endpoint
+        const res = await api.get(`/law-reports/${reportId}`);
+        const r = res.data;
 
-        if (!isLawReportDocument(d)) {
-          navigate(`/dashboard/documents/${docId}`, { replace: true });
-          return;
+        // Basic guard: must have LegalDocumentId
+        const ld = r?.legalDocumentId ?? r?.LegalDocumentId;
+        if (!ld || ld <= 0) {
+          throw new Error("Invalid report payload (missing LegalDocumentId).");
         }
 
-        if (!cancelled) setDoc(d);
+        if (!cancelled) setReport(r);
       } catch (err) {
         console.error(err);
         if (!cancelled) setError("We couldn’t load this report. Please try again.");
@@ -62,7 +88,7 @@ export default function LawReportDetails() {
       }
     }
 
-    if (Number.isFinite(docId) && docId > 0) load();
+    if (Number.isFinite(reportId) && reportId > 0) load();
     else {
       setError("Invalid report id.");
       setLoading(false);
@@ -71,26 +97,32 @@ export default function LawReportDetails() {
     return () => {
       cancelled = true;
     };
-  }, [docId, navigate]);
+  }, [reportId]);
 
+  // ---------------------------
+  // Availability + access checks (by LegalDocumentId)
+  // ---------------------------
   useEffect(() => {
     let cancelled = false;
 
     async function check() {
-      if (!doc) return;
+      if (!docId) return;
 
+      // Availability
       try {
         setAvailabilityLoading(true);
         const r = await api.get(`/legal-documents/${docId}/availability`);
         const ok = !!r?.data?.hasContent;
         if (!cancelled) setHasContent(ok);
       } catch {
-        if (!cancelled) setHasContent(true);
+        if (!cancelled) setHasContent(true); // fail-open to avoid blocking
       } finally {
         if (!cancelled) setAvailabilityLoading(false);
       }
 
-      if (doc.isPremium && (isInst || isPublic)) {
+      // Access for premium
+      const isPremium = !!(report?.isPremium ?? report?.IsPremium);
+      if (isPremium && (isInst || isPublic)) {
         try {
           setAccessLoading(true);
           const r = await api.get(`/legal-documents/${docId}/access`);
@@ -107,15 +139,64 @@ export default function LawReportDetails() {
     return () => {
       cancelled = true;
     };
-  }, [doc, docId, isInst, isPublic]);
+  }, [docId, report, isInst, isPublic]);
 
-  const meta = useMemo(() => (doc ? extractReportMeta(doc) : null), [doc]);
-  const excerpt = useMemo(() => (doc ? makeReportExcerpt(doc, 520) : ""), [doc]);
+  // ---------------------------
+  // Meta from LawReportDto
+  // ---------------------------
+  const meta = useMemo(() => {
+    if (!report) return null;
 
+    // Normalize casing because some serializers return PascalCase
+    const r = report;
+
+    const parties = safeText(r.parties ?? r.Parties);
+    const title = safeText(r.title ?? r.Title);
+    const reportNumber = safeText(r.reportNumber ?? r.ReportNumber);
+    const citation = safeText(r.citation ?? r.Citation);
+    const year = Number(r.year ?? r.Year) || null;
+
+    const caseTypeLabel = safeText(r.caseTypeLabel ?? r.CaseTypeLabel);
+    const courtTypeLabel = safeText(r.courtTypeLabel ?? r.CourtTypeLabel);
+    const town = safeText(r.town ?? r.Town);
+    const postCode = safeText(r.townPostCode ?? r.TownPostCode);
+    const judges = safeText(r.judges ?? r.Judges);
+
+    const decisionDateRaw = r.decisionDate ?? r.DecisionDate ?? null;
+    const judgmentDate = decisionDateRaw ? String(decisionDateRaw).slice(0, 10) : "";
+
+    return {
+      parties,
+      title,
+      reportNumber,
+      citation,
+      year,
+      caseType: caseTypeLabel,
+      courtType: courtTypeLabel,
+      town,
+      postCode,
+      judges,
+      judgmentDate,
+    };
+  }, [report]);
+
+  const contentText = useMemo(() => {
+    if (!report) return "";
+    return report.contentText ?? report.ContentText ?? "";
+  }, [report]);
+
+  const excerpt = useMemo(() => makeExcerptFromContent(contentText, 520), [contentText]);
+
+  const isPremium = !!(report?.isPremium ?? report?.IsPremium);
   const hasFullAccess = !!access?.hasFullAccess;
-  const canReadNow = !!doc && hasContent && (!doc.isPremium || hasFullAccess);
+  const canReadNow = !!report && !!docId && hasContent && (!isPremium || hasFullAccess);
 
-  if (loading) return <div className="lr-wrap lr-theme"><div className="lr-loading">Loading report…</div></div>;
+  if (loading)
+    return (
+      <div className="lr-wrap lr-theme">
+        <div className="lr-loading">Loading report…</div>
+      </div>
+    );
 
   if (error) {
     return (
@@ -135,7 +216,7 @@ export default function LawReportDetails() {
     );
   }
 
-  if (!doc) return null;
+  if (!report) return null;
 
   return (
     <div className="lr-wrap lr-theme">
@@ -144,8 +225,9 @@ export default function LawReportDetails() {
           <div className="lr-hero-left">
             <div className="lr-chip">Report details</div>
             <h1 className="lr-hero-title" style={{ fontSize: 26 }}>
-              {meta?.parties || doc.title || "Law Report"}
+              {meta?.parties || meta?.title || "Law Report"}
             </h1>
+
             <div className="lr-tags" style={{ marginTop: 10 }}>
               {meta?.reportNumber ? <span className="lr-tag">{meta.reportNumber}</span> : null}
               {meta?.citation ? <span className="lr-tag">{meta.citation}</span> : null}
@@ -161,9 +243,12 @@ export default function LawReportDetails() {
             <button className="lr-pill" onClick={() => navigate("/dashboard/law-reports")}>
               ← Back
             </button>
-            <button className="lr-pill ghost" onClick={() => navigate(`/dashboard/documents/${docId}`)}>
-              Document page
-            </button>
+
+            {docId ? (
+              <button className="lr-pill ghost" onClick={() => navigate(`/dashboard/documents/${docId}`)}>
+                Document page
+              </button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -172,8 +257,8 @@ export default function LawReportDetails() {
         <section className="lr-results">
           <div className="lr-results-top">
             <div className="lr-count">
-              {doc.isPremium ? "Premium report" : "Free report"}
-              {accessLoading ? " • checking access…" : doc.isPremium && (isInst || isPublic) && hasFullAccess ? " • Included" : ""}
+              {isPremium ? "Premium report" : "Free report"}
+              {accessLoading ? " • checking access…" : isPremium && (isInst || isPublic) && hasFullAccess ? " • Included" : ""}
               {availabilityLoading ? " • checking availability…" : ""}
             </div>
           </div>
@@ -182,10 +267,10 @@ export default function LawReportDetails() {
             <button
               className="lr-btn"
               disabled={availabilityLoading || accessLoading || !canReadNow}
-              title={!hasContent ? "Not available yet" : doc.isPremium && !hasFullAccess ? "Access required" : ""}
+              title={!hasContent ? "Not available yet" : isPremium && !hasFullAccess ? "Access required" : ""}
               onClick={() => {
-                if (!hasContent) return;
-                if (doc.isPremium && !hasFullAccess) {
+                if (!docId || !hasContent) return;
+                if (isPremium && !hasFullAccess) {
                   navigate(`/dashboard/documents/${docId}`);
                   return;
                 }
@@ -196,13 +281,11 @@ export default function LawReportDetails() {
               {availabilityLoading || accessLoading ? "Checking…" : "Read report"}
             </button>
 
-            <button
-              className="lr-btn secondary"
-              onClick={() => navigate(`/dashboard/documents/${docId}`)}
-              style={{ maxWidth: 220 }}
-            >
-              View / Preview
-            </button>
+            {docId ? (
+              <button className="lr-btn secondary" onClick={() => navigate(`/dashboard/documents/${docId}`)} style={{ maxWidth: 220 }}>
+                View / Preview
+              </button>
+            ) : null}
           </div>
 
           <div className="lr-cards" style={{ gridTemplateColumns: "1fr" }}>
@@ -210,7 +293,7 @@ export default function LawReportDetails() {
               <div className="lr-card2-top">
                 <div className="lr-card2-title">Quick preview</div>
                 <div className="lr-badges">
-                  {doc.isPremium ? <span className="lr-badge premium">Premium</span> : <span className="lr-badge">Free</span>}
+                  {isPremium ? <span className="lr-badge premium">Premium</span> : <span className="lr-badge">Free</span>}
                 </div>
               </div>
 
@@ -219,7 +302,7 @@ export default function LawReportDetails() {
                 {meta?.judges ? (meta?.judgmentDate ? ` • Judges: ${meta.judges}` : `Judges: ${meta.judges}`) : ""}
               </div>
 
-              <div className="lr-excerpt" style={{ marginTop: 10 }}>
+              <div className="lr-excerpt" style={{ marginTop: 10, whiteSpace: "pre-wrap" }}>
                 {excerpt || "Preview will appear here once the report content is available."}
               </div>
             </article>

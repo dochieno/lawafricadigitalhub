@@ -7,7 +7,6 @@ import { isLawReportDocument } from "../../utils/isLawReportDocument";
 import {
   extractReportMeta,
   getReportSearchHaystack,
-  makeReportExcerpt,
   makeReportMiniHeader,
   normalize,
   REPORT_CASE_TYPES_ALL,
@@ -28,15 +27,101 @@ function isPublicUser() {
 }
 
 function parseSearchResponse(payload) {
+  // /api/law-reports/search returns: { items, total, page, pageSize }
   if (Array.isArray(payload)) return { items: payload, total: payload.length };
 
-  const items = payload?.items ?? payload?.data ?? payload?.results ?? [];
+  const items = payload?.items ?? payload?.Items ?? payload?.data ?? payload?.results ?? [];
   const total =
     payload?.total ??
+    payload?.Total ??
     payload?.count ??
     (Array.isArray(items) ? items.length : 0);
 
   return { items: Array.isArray(items) ? items : [], total: Number(total) || 0 };
+}
+
+/**
+ * Detect server list items from /api/law-reports/search.
+ * Your list DTO fields (from controller):
+ * Id, LegalDocumentId, Title, IsPremium, ReportNumber, Year, CaseNumber, Citation,
+ * CourtType, CourtTypeLabel, DecisionType, DecisionTypeLabel, CaseType, CaseTypeLabel,
+ * Court, Town, TownId, TownPostCode, Parties, Judges, DecisionDate, PreviewText
+ */
+function isLawReportListItem(x) {
+  if (!x || typeof x !== "object") return false;
+  return (
+    typeof x.LegalDocumentId === "number" ||
+    typeof x.PreviewText === "string" ||
+    typeof x.CaseTypeLabel === "string" ||
+    typeof x.ReportNumber === "string"
+  );
+}
+
+function getDocId(item) {
+  // Server mode: LegalDocumentId
+  if (isLawReportListItem(item)) return item.LegalDocumentId;
+  // Client fallback: LegalDocument.id
+  return item?.id;
+}
+
+function getReportId(item) {
+  // Server mode: Id is LawReportId
+  if (isLawReportListItem(item)) return item.Id;
+  return null;
+}
+
+function getTitle(item) {
+  if (isLawReportListItem(item)) {
+    return item.Parties || item.Title || "Untitled report";
+  }
+  const meta = extractReportMeta(item);
+  return meta.parties || item.title || "Untitled report";
+}
+
+function getTags(item) {
+  if (isLawReportListItem(item)) {
+    return {
+      reportNumber: item.ReportNumber || "",
+      year: item.Year || null,
+      caseType: item.CaseTypeLabel || "",
+      courtType: item.CourtTypeLabel || item.Court || "",
+      town: item.Town || "",
+      postCode: item.TownPostCode || "",
+      citation: item.Citation || "",
+      judges: item.Judges || "",
+      judgmentDate: item.DecisionDate ? String(item.DecisionDate) : "",
+    };
+  }
+
+  const meta = extractReportMeta(item);
+  return {
+    reportNumber: meta.reportNumber || "",
+    year: meta.year || null,
+    caseType: meta.caseType || "",
+    courtType: meta.courtType || "",
+    town: meta.town || "",
+    postCode: meta.postCode || "",
+    citation: meta.citation || "",
+    judges: meta.judges || "",
+    judgmentDate: meta.judgmentDate || "",
+  };
+}
+
+function makeExcerpt(item, max = 260) {
+  // ✅ Server mode: use PreviewText from list endpoint
+  if (isLawReportListItem(item)) {
+    const t = String(item.PreviewText || "").replace(/\s+/g, " ").trim();
+    if (!t) return "Preview will appear here once the report content is available.";
+    if (t.length <= max) return t;
+    return t.slice(0, max).trim() + "…";
+  }
+
+  // Client fallback: attempt to use extracted meta content
+  const meta = extractReportMeta(item);
+  const raw = String(meta.content || "").replace(/\s+/g, " ").trim();
+  if (!raw) return "Preview will appear here once the report content is available.";
+  if (raw.length <= max) return raw;
+  return raw.slice(0, max).trim() + "…";
 }
 
 export default function LawReports() {
@@ -56,14 +141,15 @@ export default function LawReports() {
   const [detailsMap, setDetailsMap] = useState({});
   const [detailsLoadingIds, setDetailsLoadingIds] = useState(new Set());
 
-  // Access + availability (same semantics as Explore)
+  // Access + availability (maps keyed by ✅ LegalDocumentId)
   const [accessMap, setAccessMap] = useState({});
   const [accessLoadingIds, setAccessLoadingIds] = useState(new Set());
 
   const [availabilityMap, setAvailabilityMap] = useState({});
   const [availabilityLoadingIds, setAvailabilityLoadingIds] = useState(new Set());
 
-  // ✅ NEW: case type options derived from DB data
+  // ✅ Case type options from Step 4B (DB distinct endpoint)
+  // [{ Value, Label, Count }] (PascalCase as in your code)
   const [caseTypeOptions, setCaseTypeOptions] = useState([]);
 
   // UX
@@ -88,7 +174,10 @@ export default function LawReports() {
   const [courtType, setCourtType] = useState("");
   const [townOrPostCode, setTownOrPostCode] = useState("");
 
-  // ✅ CaseType filter now uses data-driven options
+  /**
+   * ✅ Backend expects caseType as string (int or name).
+   * We'll store dropdown selection as string numeric: "", "1", "2" ...
+   */
   const [caseType, setCaseType] = useState("");
 
   const [sortBy, setSortBy] = useState("year_desc");
@@ -113,32 +202,30 @@ export default function LawReports() {
     showToast("Filters cleared");
   }
 
-  /**
-   * Optional enhancement: if you later implement this endpoint,
-   * the UI will automatically use it to populate case types.
-   * If it doesn't exist, it quietly falls back to deriving options from returned data.
-   */
+  // ✅ Step 4B: populate dropdown from /api/law-reports/case-types
   useEffect(() => {
     let cancelled = false;
 
-    async function tryLoadCaseTypes() {
+    async function loadCaseTypes() {
       try {
         const res = await api.get("/law-reports/case-types");
         const arr = Array.isArray(res.data) ? res.data : res.data?.items ?? res.data?.data ?? [];
-        const cleaned = (arr || [])
-          .map((x) => String(x || "").trim())
-          .filter(Boolean);
 
-        if (!cancelled && cleaned.length > 0) {
-          const unique = Array.from(new Set(cleaned));
-          setCaseTypeOptions(unique);
-        }
+        const cleaned = (arr || [])
+          .map((x) => ({
+            value: Number(x?.Value),
+            label: String(x?.Label || "").trim(),
+            count: Number(x?.Count || 0),
+          }))
+          .filter((x) => Number.isFinite(x.value) && x.value > 0 && x.label);
+
+        if (!cancelled) setCaseTypeOptions(cleaned);
       } catch {
-        // ignore
+        if (!cancelled) setCaseTypeOptions([]);
       }
     }
 
-    tryLoadCaseTypes();
+    loadCaseTypes();
     return () => {
       cancelled = true;
     };
@@ -167,6 +254,7 @@ export default function LawReports() {
     return all.filter(isLawReportDocument);
   }
 
+  // ✅ Main loader
   useEffect(() => {
     let cancelled = false;
 
@@ -185,7 +273,7 @@ export default function LawReports() {
             courtType: courtType || undefined,
             townOrPostCode: townOrPostCode || undefined,
 
-            // ✅ pass caseType string (e.g. "Civil") if selected
+            // ✅ send string numeric to match TryParseCaseType
             caseType: caseType || undefined,
 
             sort: sortBy || "year_desc",
@@ -196,9 +284,9 @@ export default function LawReports() {
           const out = await tryServerSearch(params);
 
           if (!out.ok) {
+            // fallback to old client mode if endpoint missing
             if (out.reason === "404") {
               if (cancelled) return;
-
               setMode("client");
               setPage(1);
 
@@ -259,7 +347,7 @@ export default function LawReports() {
     page,
   ]);
 
-  // Client-mode enrichment for missing metadata (so excerpt/header can work)
+  // Client-mode enrichment for missing metadata (legacy)
   useEffect(() => {
     let cancelled = false;
 
@@ -275,7 +363,6 @@ export default function LawReports() {
           const base = reports.find((x) => x.id === id);
           const meta = extractReportMeta(base);
 
-          // We enrich if core report metadata + content are absent
           const missingCore =
             !meta.reportNumber &&
             !meta.parties &&
@@ -341,25 +428,7 @@ export default function LawReports() {
     });
   }, [mode, reports, detailsMap]);
 
-  // ✅ derive case type options from returned data (the “database cases we have”)
-  useEffect(() => {
-    const source = mode === "client" ? mergedReports : reports;
-    if (!source || source.length === 0) return;
-
-    const types = source
-      .map((r) => extractReportMeta(r).caseType)
-      .filter(Boolean);
-
-    if (types.length === 0) return;
-
-    setCaseTypeOptions((prev) => {
-      const s = new Set(prev || []);
-      types.forEach((t) => s.add(t));
-      return Array.from(s);
-    });
-  }, [mode, mergedReports, reports]);
-
-  // Client-mode filtering (exact fields)
+  // Client-mode filtering (legacy)
   const visibleClient = useMemo(() => {
     if (mode !== "client") return mergedReports;
 
@@ -404,23 +473,6 @@ export default function LawReports() {
       );
     });
 
-    const getYear = (r) => extractReportMeta(r).year ?? -1;
-    const getReportNo = (r) => extractReportMeta(r).reportNumber || r.title || "";
-    const getParties = (r) => extractReportMeta(r).parties || r.title || "";
-    const getDate = (r) => {
-      const raw = extractReportMeta(r).judgmentDate;
-      const t = raw ? Date.parse(raw) : NaN;
-      return Number.isFinite(t) ? t : -1;
-    };
-
-    if (sortBy === "year_asc") items.sort((a, b) => getYear(a) - getYear(b));
-    else if (sortBy === "year_desc") items.sort((a, b) => getYear(b) - getYear(a));
-    else if (sortBy === "reportno_asc")
-      items.sort((a, b) => String(getReportNo(a)).localeCompare(String(getReportNo(b))));
-    else if (sortBy === "parties_asc")
-      items.sort((a, b) => String(getParties(a)).localeCompare(String(getParties(b))));
-    else if (sortBy === "date_desc") items.sort((a, b) => getDate(b) - getDate(a));
-
     return items;
   }, [
     mode,
@@ -433,20 +485,23 @@ export default function LawReports() {
     courtType,
     townOrPostCode,
     caseType,
-    sortBy,
   ]);
 
   const visible = mode === "client" ? visibleClient : reports;
 
-  // Access checks
+  // ✅ Access checks (by LegalDocumentId)
   useEffect(() => {
     let cancelled = false;
 
     async function fetchAccessForVisiblePremiumReports() {
       if (!isInst && !isPublic) return;
 
-      const premiumIds = (visible || []).filter((d) => d.isPremium).map((d) => d.id);
-      const missing = premiumIds.filter((id) => accessMap[id] == null);
+      const premiumDocIds = (visible || [])
+        .filter((d) => d?.IsPremium || d?.isPremium)
+        .map((d) => getDocId(d))
+        .filter((x) => Number.isFinite(x) && x > 0);
+
+      const missing = premiumDocIds.filter((docId) => accessMap[docId] == null);
       if (missing.length === 0) return;
 
       const batchSize = 8;
@@ -490,13 +545,16 @@ export default function LawReports() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, isInst, isPublic]);
 
-  // Availability checks (we keep for gating, but we do NOT show "coming soon")
+  // ✅ Availability checks (by LegalDocumentId)
   useEffect(() => {
     let cancelled = false;
 
     async function fetchAvailabilityForVisibleReports() {
-      const visibleIds = (visible || []).map((d) => d.id);
-      const missing = visibleIds.filter((id) => availabilityMap[id] == null);
+      const docIds = (visible || [])
+        .map((d) => getDocId(d))
+        .filter((x) => Number.isFinite(x) && x > 0);
+
+      const missing = docIds.filter((docId) => availabilityMap[docId] == null);
       if (missing.length === 0) return;
 
       const batchSize = 10;
@@ -546,10 +604,16 @@ export default function LawReports() {
     return 1;
   }, [mode, total, pageSize]);
 
+  // ✅ Dropdown options
   const computedCaseOptions = useMemo(() => {
-    const uniq = Array.from(new Set((caseTypeOptions || []).filter(Boolean)));
-    // If nothing yet, show all enum values so UI isn't empty on first load
-    return uniq.length > 0 ? uniq.sort((a, b) => a.localeCompare(b)) : REPORT_CASE_TYPES_ALL;
+    if (caseTypeOptions && caseTypeOptions.length > 0) return caseTypeOptions;
+
+    // fallback: show all enum values (no counts)
+    return (REPORT_CASE_TYPES_ALL || []).map((label, i) => ({
+      value: i + 1,
+      label,
+      count: 0,
+    }));
   }, [caseTypeOptions]);
 
   return (
@@ -609,11 +673,7 @@ export default function LawReports() {
               </div>
 
               <div className="lr-field">
-                <button
-                  className="lr-card-btn"
-                  onClick={() => setShowAdvanced((v) => !v)}
-                  style={{ width: "100%" }}
-                >
+                <button className="lr-card-btn" onClick={() => setShowAdvanced((v) => !v)} style={{ width: "100%" }}>
                   {showAdvanced ? "Hide" : "Show"} advanced fields
                 </button>
               </div>
@@ -705,9 +765,10 @@ export default function LawReports() {
                   }}
                 >
                   <option value="">All</option>
-                  {computedCaseOptions.map((ct) => (
-                    <option key={ct} value={ct}>
-                      {ct}
+                  {computedCaseOptions.map((opt) => (
+                    <option key={String(opt.value)} value={String(opt.value)}>
+                      {opt.label}
+                      {opt.count ? ` (${opt.count})` : ""}
                     </option>
                   ))}
                 </select>
@@ -722,7 +783,7 @@ export default function LawReports() {
                     setCourtType(e.target.value);
                     if (mode === "server") setPage(1);
                   }}
-                  placeholder="e.g. Employment and Labour Relations Court"
+                  placeholder="e.g. Employment & Labour Relations Court"
                 />
               </div>
 
@@ -743,10 +804,7 @@ export default function LawReports() {
                 <button className="lr-btn secondary" onClick={resetFilters}>
                   Clear
                 </button>
-                <button
-                  className="lr-btn"
-                  onClick={() => showToast("Tip: try Case Type + Year + Parties")}
-                >
+                <button className="lr-btn" onClick={() => showToast("Tip: try Case Type + Year + Parties")}>
                   Tip
                 </button>
               </div>
@@ -758,34 +816,23 @@ export default function LawReports() {
                 <div className="lr-count">
                   {mode === "server" ? (
                     <>
-                      Showing <strong>{reports.length}</strong> of{" "}
-                      <strong>{total}</strong> report{total === 1 ? "" : "s"} • Page{" "}
-                      <strong>{page}</strong>/{totalPages}
+                      Showing <strong>{reports.length}</strong> of <strong>{total}</strong>{" "}
+                      report{total === 1 ? "" : "s"} • Page <strong>{page}</strong>/{totalPages}
                     </>
                   ) : (
                     <>
                       Showing <strong>{visible.length}</strong> report{visible.length === 1 ? "" : "s"}
-                      {detailsLoadingIds.size > 0 ? (
-                        <span className="lr-soft"> • loading details…</span>
-                      ) : null}
+                      {detailsLoadingIds.size > 0 ? <span className="lr-soft"> • loading details…</span> : null}
                     </>
                   )}
                 </div>
 
                 {mode === "server" && (
                   <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      className="lr-card-btn"
-                      disabled={page <= 1}
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    >
+                    <button className="lr-card-btn" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
                       ← Prev
                     </button>
-                    <button
-                      className="lr-card-btn"
-                      disabled={page >= totalPages}
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    >
+                    <button className="lr-card-btn" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
                       Next →
                     </button>
                   </div>
@@ -795,82 +842,92 @@ export default function LawReports() {
               {visible.length === 0 ? (
                 <div className="lr-empty">
                   <strong>No matching reports</strong>
-                  <div style={{ marginTop: 6 }}>
-                    Try clearing filters or changing your search terms.
-                  </div>
+                  <div style={{ marginTop: 6 }}>Try clearing filters or changing your search terms.</div>
                 </div>
               ) : (
                 <div className="lr-cards">
-                  {visible.map((r) => {
-                    const meta = extractReportMeta(r);
-                    const excerpt = makeReportExcerpt(r, 260);
-                    const miniHeader = makeReportMiniHeader(r);
+                  {visible.map((item) => {
+                    const tags = getTags(item);
+                    const excerpt = makeExcerpt(item, 260);
 
-                    const access = accessMap[r.id];
+                    const docId = getDocId(item);
+                    const reportId = getReportId(item);
+
+                    const isPremium = !!(item?.IsPremium ?? item?.isPremium);
+
+                    const access = accessMap[docId];
                     const hasFullAccess = !!access?.hasFullAccess;
-                    const accessLoading = accessLoadingIds.has(r.id);
+                    const accessLoading = accessLoadingIds.has(docId);
 
-                    const hasContent = availabilityMap[r.id] == null ? true : !!availabilityMap[r.id];
-                    const availabilityLoading = availabilityLoadingIds.has(r.id);
+                    const hasContent = availabilityMap[docId] == null ? true : !!availabilityMap[docId];
+                    const availabilityLoading = availabilityLoadingIds.has(docId);
 
-                    const showIncluded =
-                      r.isPremium && (isInst || isPublic) && !accessLoading && hasFullAccess;
+                    const showIncluded = isPremium && (isInst || isPublic) && !accessLoading && hasFullAccess;
 
-                    // We no longer show "Coming soon". If no content, we only disable actions.
-                    const canOpen = hasContent || availabilityLoading;
-                    const canReadMore = hasContent; // for teaser -> details page
+                    const goDetails = () => {
+                      if (mode === "server" && reportId) {
+                        navigate(`/dashboard/law-reports/${reportId}`);
+                        return;
+                      }
+                      // fallback
+                      navigate(`/dashboard/documents/${docId}`);
+                    };
+
+                    // mini header
+                    const miniHeader =
+                      mode === "client"
+                        ? makeReportMiniHeader(item)
+                        : (() => {
+                            const parts = [];
+                            if (tags.courtType) parts.push(tags.courtType);
+                            if (tags.judgmentDate) parts.push(`Date: ${tags.judgmentDate}`);
+                            if (tags.judges) parts.push(`Judges: ${tags.judges}`);
+                            return parts.join(" • ");
+                          })();
 
                     return (
                       <article
-                        key={r.id}
+                        key={`${mode}-${reportId || docId}`}
                         className="lr-card2"
                         role="button"
                         tabIndex={0}
-                        onClick={() => navigate(`/dashboard/law-reports/${r.id}`)}
+                        onClick={goDetails}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            navigate(`/dashboard/law-reports/${r.id}`);
+                            goDetails();
                           }
                         }}
                       >
                         <div className="lr-card2-top">
-                          <div className="lr-card2-title">
-                            {meta.parties || r.title || "Untitled report"}
-                          </div>
+                          <div className="lr-card2-title">{getTitle(item)}</div>
 
                           <div className="lr-badges">
-                            {r.isPremium ? (
-                              <span className="lr-badge premium">Premium</span>
-                            ) : (
-                              <span className="lr-badge">Free</span>
-                            )}
+                            {isPremium ? <span className="lr-badge premium">Premium</span> : <span className="lr-badge">Free</span>}
                             {showIncluded && <span className="lr-badge included">Included</span>}
                           </div>
                         </div>
 
                         <div className="lr-tags">
-                          {meta.reportNumber ? <span className="lr-tag">{meta.reportNumber}</span> : null}
-                          {meta.year ? <span className="lr-tag">{meta.year}</span> : null}
-                          {meta.caseType ? <span className="lr-tag">{meta.caseType}</span> : null}
-                          {meta.courtType ? <span className="lr-tag">{meta.courtType}</span> : null}
-                          {meta.town ? <span className="lr-tag">{meta.town}</span> : null}
-                          {!meta.town && meta.postCode ? <span className="lr-tag">{meta.postCode}</span> : null}
-                          {meta.citation ? <span className="lr-tag">{meta.citation}</span> : null}
+                          {tags.reportNumber ? <span className="lr-tag">{tags.reportNumber}</span> : null}
+                          {tags.year ? <span className="lr-tag">{tags.year}</span> : null}
+                          {tags.caseType ? <span className="lr-tag">{tags.caseType}</span> : null}
+                          {tags.courtType ? <span className="lr-tag">{tags.courtType}</span> : null}
+                          {tags.town ? <span className="lr-tag">{tags.town}</span> : null}
+                          {!tags.town && tags.postCode ? <span className="lr-tag">{tags.postCode}</span> : null}
+                          {tags.citation ? <span className="lr-tag">{tags.citation}</span> : null}
                         </div>
 
                         {miniHeader ? <div className="lr-mini">{miniHeader}</div> : null}
 
-                        <div className="lr-excerpt">
-                          {excerpt || "Preview will appear here once the report content is available."}
-                        </div>
+                        <div className="lr-excerpt">{excerpt}</div>
 
                         <div className="lr-card2-actions">
                           <button
                             className="lr-card-btn"
                             onClick={(e) => {
                               e.stopPropagation();
-                              navigate(`/dashboard/law-reports/${r.id}`);
+                              goDetails();
                             }}
                           >
                             Details
@@ -878,56 +935,43 @@ export default function LawReports() {
 
                           <button
                             className="lr-card-btn primary"
-                            disabled={!canReadMore || availabilityLoading}
+                            disabled={!hasContent || availabilityLoading}
                             title={!hasContent ? "Not available yet" : ""}
                             onClick={(e) => {
                               e.stopPropagation();
-                              // "Read More" goes to details view (since card already has excerpt)
-                              navigate(`/dashboard/law-reports/${r.id}`);
+                              goDetails();
                             }}
                             style={{
-                              opacity: canReadMore ? 1 : 0.6,
-                              cursor: canReadMore ? "pointer" : "not-allowed",
+                              opacity: hasContent ? 1 : 0.6,
+                              cursor: hasContent ? "pointer" : "not-allowed",
                             }}
                           >
                             {availabilityLoading ? "Checking…" : "Read More"}
                           </button>
 
-                          {/* Optional: direct reader when user has access */}
                           <button
                             className="lr-card-btn ghost"
-                            disabled={
-                              availabilityLoading ||
-                              accessLoading ||
-                              !hasContent ||
-                              (r.isPremium && !hasFullAccess)
-                            }
+                            disabled={availabilityLoading || accessLoading || !hasContent || (isPremium && !hasFullAccess)}
                             title={
                               !hasContent
                                 ? "Not available yet"
-                                : r.isPremium && !hasFullAccess
+                                : isPremium && !hasFullAccess
                                   ? "Access required"
                                   : "Open reader"
                             }
                             onClick={(e) => {
                               e.stopPropagation();
                               if (!hasContent) return;
-                              if (r.isPremium && !hasFullAccess) {
-                                navigate(`/dashboard/documents/${r.id}`);
+                              if (isPremium && !hasFullAccess) {
+                                navigate(`/dashboard/documents/${docId}`);
                                 return;
                               }
-                              navigate(`/dashboard/documents/${r.id}/read`);
+                              navigate(`/dashboard/documents/${docId}/read`);
                             }}
                           >
                             Open
                           </button>
                         </div>
-
-                        {!canOpen && (
-                          <div className="lr-soft" style={{ marginTop: 8 }}>
-                            This report is not available yet.
-                          </div>
-                        )}
                       </article>
                     );
                   })}
@@ -936,21 +980,13 @@ export default function LawReports() {
 
               {mode === "server" && totalPages > 1 && (
                 <div className="lr-pager">
-                  <button
-                    className="lr-card-btn"
-                    disabled={page <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
+                  <button className="lr-card-btn" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
                     ← Prev
                   </button>
                   <div className="lr-soft">
                     Page <strong>{page}</strong> of <strong>{totalPages}</strong>
                   </div>
-                  <button
-                    className="lr-card-btn"
-                    disabled={page >= totalPages}
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  >
+                  <button className="lr-card-btn" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
                     Next →
                   </button>
                 </div>
