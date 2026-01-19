@@ -617,10 +617,10 @@ export default function Register() {
         localStorage.removeItem(LS_REG_USERNAME);
         localStorage.removeItem(LS_REG_PASSWORD);
 
-        nav("/twofactor-setup", {
-          replace: true,
-          state: { username: username.trim(), password },
-        });
+          nav("/twofactor-setup", {
+            replace: true,
+            state: { username, password, setupToken: data.setupToken },
+          });
 
         return;
       }
@@ -955,10 +955,10 @@ export default function Register() {
               <button
                 type="button"
                 onClick={() =>
-                  nav("/twofactor-setup", {
-                    replace: true,
-                    state: { username: username.trim(), password },
-                  })
+                nav("/twofactor-setup", {
+                  replace: true,
+                  state: { username, password, setupToken: data.setupToken },
+                })
                 }
                 style={{
                   width: "auto",
