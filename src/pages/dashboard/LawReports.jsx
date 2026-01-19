@@ -523,6 +523,7 @@ export default function LawReports() {
     let cancelled = false;
 
     async function fetchAvailabilityForVisibleReports() {
+      if (mode === "server") return;
       const docIds = (visible || [])
         .map((d) => getDocIdForRow(d))
         .filter(Boolean);
@@ -918,10 +919,17 @@ export default function LawReports() {
                     const access = accessMap[docId];
                     const hasFullAccess = !!access?.hasFullAccess;
                     const accessLoading = accessLoadingIds.has(docId);
-
+                    const serverHasContent = mode === "server" ? !!cleanPreview(r?.previewText || "") : null;
                     const hasContent =
-                      availabilityMap[docId] == null ? true : !!availabilityMap[docId];
-                    const availabilityLoading = availabilityLoadingIds.has(docId);
+                      mode === "server"
+                        ? serverHasContent
+                        : availabilityMap[docId] == null
+                          ? true
+                          : !!availabilityMap[docId];
+
+                    const availabilityLoading =
+                      mode === "server" ? false : availabilityLoadingIds.has(docId);
+
 
                     const isPremiumRow = !!r.isPremium;
                     const showIncluded =
