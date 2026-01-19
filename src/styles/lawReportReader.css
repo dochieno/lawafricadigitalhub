@@ -278,3 +278,80 @@
   color: rgba(15, 23, 42, 0.86);
   white-space: pre-wrap;
 }
+/* src/styles/lawReportReader.css
+   Minimal additions for TOC + list formatting (keep your existing theme as-is)
+*/
+
+/* ---------- TOC dropdown ---------- */
+.lrr-toc {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.10);
+  max-width: 860px;
+}
+
+.lrr-toc-item {
+  appearance: none;
+  border: 1px solid rgba(2, 6, 23, 0.10);
+  background: rgba(255, 255, 255, 0.85);
+  color: rgba(15, 23, 42, 0.92);
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 800;
+  text-align: left;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.lrr-toc-item:hover {
+  transform: translateY(-1px);
+  border-color: rgba(161, 27, 31, 0.25);
+  box-shadow: 0 14px 26px rgba(2, 6, 23, 0.12);
+}
+
+/* ---------- Lists (Orders/Reasons style) ---------- */
+.lrr-list {
+  margin: 10px 0 16px;
+  padding: 0 0 0 0;
+  list-style: none; /* we render markers ourselves for consistent a./b./1. */
+}
+
+.lrr-li {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.68);
+  margin-bottom: 10px;
+}
+
+.lrr-li-marker {
+  font-weight: 900;
+  color: rgba(161, 27, 31, 0.92);
+  line-height: 1.6;
+}
+
+.lrr-li-text {
+  line-height: 1.85;
+  white-space: pre-wrap; /* preserve line breaks in list item text */
+  color: rgba(15, 23, 42, 0.90);
+}
+
+/* Keep paragraphs readable (works with your existing styles too) */
+.lrr-p {
+  white-space: pre-wrap;
+}
+
+/* Optional: make heading anchor offsets nicer under sticky header */
+.lrr-h2 {
+  scroll-margin-top: 140px;
+}

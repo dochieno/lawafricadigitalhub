@@ -53,7 +53,7 @@ function isGlobalAdminUser() {
 }
 
 // ----------------------
-// Formatting helpers
+// Formatting + TOC helpers
 // ----------------------
 const HEADING_SET = new Set([
   "INTRODUCTION",
@@ -78,10 +78,22 @@ const HEADING_SET = new Set([
   "APPEAL",
   "APPLICATION",
   "SUBMISSIONS",
+  "ORDERS REASONS",
+  "ORDERS / REASONS",
 ]);
 
 function normalizeText(s) {
   return String(s || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+function slugify(s) {
+  return String(s || "")
+    .trim()
+    .toLowerCase()
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
 }
 
 function looksLikeHeading(line) {
@@ -93,136 +105,175 @@ function looksLikeHeading(line) {
 
   const words = upper.split(/\s+/).filter(Boolean);
   if (words.length === 0) return false;
-  if (words.length > 6) return false;
+  if (words.length > 7) return false;
 
+  // treat "Orders Reasons" or "Orders / Reasons" as a heading
+  const headingish = upper.replace(/\s+\/\s+/g, " / ").replace(/\s+/g, " ").trim();
+  if (HEADING_SET.has(headingish)) return true;
+
+  // All-caps headings
   const alpha = clean.replace(/[^A-Za-z]/g, "");
   const isAllCaps = alpha.length > 0 && alpha === alpha.toUpperCase();
-  if (!isAllCaps) return false;
+  if (isAllCaps) return HEADING_SET.has(upper) || upper.length <= 28;
 
-  return HEADING_SET.has(upper) || upper.length <= 24;
+  // Title-case single word headings like "Ruling"
+  if (words.length <= 3 && clean.length <= 28) {
+    // Allow common headings even if not ALL CAPS
+    return HEADING_SET.has(upper);
+  }
+
+  return false;
 }
 
-// ---------- list + quote detection (conservative) ----------
-const BULLET_RE = /^(\s*)([-•*‣▪])\s+/;
-const NUM_RE = /^(\s*)(\d+)[.)]\s+/; // 1. / 1)
-const ALPHA_RE = /^(\s*)(\([a-z]\)|[a-z][.)])\s+/i; // (a) / a)
-const ROMAN_RE = /^(\s*)((?:ix|iv|v?i{1,3})[.)])\s+/i; // i) / iv. / ix)
+// list item detection
+function parseListItem(line) {
+  const raw = String(line || "");
+  const s = raw.trim();
+  if (!s) return null;
 
-function stripListPrefix(line) {
-  return String(line || "")
-    .replace(BULLET_RE, "")
-    .replace(NUM_RE, "")
-    .replace(ALPHA_RE, "")
-    .replace(ROMAN_RE, "")
-    .trim();
-}
+  // (a) text
+  let m = s.match(/^\(([a-z])\)\s+(.*)$/i);
+  if (m) return { kind: "alpha", marker: m[1].toLowerCase(), text: m[2] };
 
-function getListKind(line) {
-  const t = String(line || "");
-  if (BULLET_RE.test(t)) return { type: "ul" };
-  if (NUM_RE.test(t)) return { type: "ol" };
-  if (ALPHA_RE.test(t)) return { type: "ol" };
-  if (ROMAN_RE.test(t)) return { type: "ol" };
+  // a. text
+  m = s.match(/^([a-z])\.\s+(.*)$/i);
+  if (m) return { kind: "alpha", marker: m[1].toLowerCase(), text: m[2] };
+
+  // 1. text
+  m = s.match(/^(\d+)\.\s+(.*)$/);
+  if (m) return { kind: "num", marker: m[1], text: m[2] };
+
+  // (i) text
+  m = s.match(/^\(([ivxlcdm]+)\)\s+(.*)$/i);
+  if (m) return { kind: "roman", marker: m[1].toLowerCase(), text: m[2] };
+
+  // i) text
+  m = s.match(/^([ivxlcdm]+)\)\s+(.*)$/i);
+  if (m) return { kind: "roman", marker: m[1].toLowerCase(), text: m[2] };
+
   return null;
 }
 
-function isQuoteLine(line) {
-  const t = String(line || "");
-  return /^>\s+/.test(t) || /^\s{4,}\S+/.test(t);
-}
-
-function splitIntoBlocks(content) {
+function splitIntoBlocksWithListsAndHeadings(content) {
   const text = normalizeText(content);
   if (!text.trim()) return [];
 
+  // split by blank lines first
   const paras = text.split(/\n{2,}/g);
   const blocks = [];
+  let sectionIndex = 0;
+
+  const pushHeading = (headingText) => {
+    sectionIndex += 1;
+    const base = slugify(headingText) || `section-${sectionIndex}`;
+    // ensure unique id if duplicates
+    let id = base;
+    let n = 2;
+    while (blocks.some((b) => b.type === "heading" && b.id === id)) {
+      id = `${base}-${n++}`;
+    }
+    blocks.push({ type: "heading", text: headingText.trim(), id });
+  };
+
+  const pushPara = (paraText) => {
+    const p = String(paraText || "").trim();
+    if (!p) return;
+    blocks.push({ type: "para", text: p });
+  };
+
+  const pushList = (items, listKind) => {
+    if (!items || items.length === 0) return;
+    blocks.push({ type: "list", kind: listKind, items });
+  };
 
   for (const p of paras) {
-    const raw = p.replace(/\n{3,}/g, "\n\n").trim();
+    const raw = String(p || "").replace(/\n{3,}/g, "\n\n").trim();
     if (!raw) continue;
 
-    const lines = raw.split("\n").map((x) => x.replace(/\s+$/g, ""));
+    const lines = raw.split("\n").map((x) => x.trimEnd());
+    const first = lines[0]?.trim() || "";
 
-    // Heading at start of paragraph
-    if (lines[0] && looksLikeHeading(lines[0])) {
-      blocks.push({ type: "heading", text: lines[0].trim() });
-
-      const restLines = lines.slice(1).filter((x) => x.trim().length > 0);
-      if (restLines.length === 0) continue;
-
-      blocks.push(...splitIntoBlocks(restLines.join("\n")));
+    // heading in first line
+    if (first && looksLikeHeading(first)) {
+      pushHeading(first);
+      const rest = lines.slice(1).join("\n").trim();
+      if (rest) {
+        // rest may contain list items; parse it below
+        // fallthrough: treat rest as its own paragraph/list parsing
+        // by reusing this function logic on the "rest" chunk
+        const restBlocks = splitIntoBlocksWithListsAndHeadings(rest);
+        // restBlocks may contain headings; we don't want nested headings from a "rest" of heading paragraph,
+        // so only keep para/list blocks
+        restBlocks.forEach((b) => {
+          if (b.type === "para" || b.type === "list") blocks.push(b);
+          else if (b.type === "heading") {
+            // still allow if it appears explicitly
+            blocks.push(b);
+          }
+        });
+      }
       continue;
     }
 
-    // Walk lines and group quote/list/para chunks
-    let i = 0;
-    while (i < lines.length) {
-      const line = lines[i];
-      if (!line || !line.trim()) {
-        i++;
+    // parse as paragraph with potential lists inside
+    // We will scan line-by-line; if we see list items, group them.
+    let buffer = [];
+    let listItems = [];
+    let listKind = null;
+
+    const flushBufferAsPara = () => {
+      if (buffer.length) {
+        pushPara(buffer.join("\n").trim());
+        buffer = [];
+      }
+    };
+    const flushList = () => {
+      if (listItems.length) {
+        pushList(listItems, listKind || "alpha");
+        listItems = [];
+        listKind = null;
+      }
+    };
+
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i]?.trim() || "";
+      if (!line) {
+        // blank line inside paragraph chunk: treat as paragraph break
+        flushBufferAsPara();
+        flushList();
         continue;
       }
 
-      // Quote block
-      if (isQuoteLine(line)) {
-        const q = [];
-        while (i < lines.length && isQuoteLine(lines[i])) {
-          q.push(String(lines[i]).replace(/^>\s+/, "").trimEnd());
-          i++;
-        }
-        blocks.push({ type: "quote", text: q.join("\n") });
+      // detect sub-heading lines even if no blank separation
+      if (looksLikeHeading(line)) {
+        flushBufferAsPara();
+        flushList();
+        pushHeading(line);
         continue;
       }
 
-      // List block (require >= 2 consecutive list items)
-      const kind = getListKind(line);
-      if (kind) {
-        const items = [];
-        const listType = kind.type;
-
-        let j = i;
-        while (j < lines.length) {
-          const k = getListKind(lines[j]);
-          if (!k) break;
-          if (k.type !== listType) break;
-          items.push(stripListPrefix(lines[j]));
-          j++;
-        }
-
-        if (items.length >= 2) {
-          blocks.push({ type: listType, items });
-          i = j;
-          continue;
-        }
-        // otherwise: fall through to paragraph logic
+      const li = parseListItem(line);
+      if (li) {
+        // list begins: flush any buffered paragraph text
+        flushBufferAsPara();
+        if (!listKind) listKind = li.kind;
+        listItems.push(li);
+        continue;
       }
 
-      // Paragraph chunk until boundary (next quote/list heading/blank)
-      const chunk = [];
-      let j = i;
-      while (j < lines.length) {
-        const ln = lines[j];
-        if (!ln || !ln.trim()) break;
-        if (looksLikeHeading(ln)) break;
-        if (isQuoteLine(ln)) break;
-
-        // stop if a "real list" begins here (two consecutive list items)
-        const k = getListKind(ln);
-        if (k) {
-          const k2 = getListKind(lines[j + 1] || "");
-          if (k2 && k2.type === k.type) break;
-        }
-
-        chunk.push(ln);
-        j++;
+      // continuation lines for last list item?
+      if (listItems.length > 0) {
+        // If we are in a list, treat non-marker lines as continuation of previous item
+        const last = listItems[listItems.length - 1];
+        last.text = `${last.text}\n${line}`.trim();
+        continue;
       }
 
-      const paraText = chunk.join("\n").trim();
-      if (paraText) blocks.push({ type: "para", text: paraText });
-
-      i = j + 1;
+      buffer.push(line);
     }
+
+    flushBufferAsPara();
+    flushList();
   }
 
   return blocks;
@@ -233,6 +284,18 @@ function formatDate(d) {
   const dt = new Date(d);
   if (Number.isNaN(dt.getTime())) return String(d);
   return dt.toISOString().slice(0, 10);
+}
+
+function buildToc(blocks) {
+  const headings = blocks.filter((b) => b.type === "heading");
+  // avoid TOC noise if there are very few headings
+  return headings.map((h) => ({ id: h.id, text: h.text }));
+}
+
+function scrollToId(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 export default function LawReportReader() {
@@ -255,7 +318,10 @@ export default function LawReportReader() {
   const [access, setAccess] = useState(null);
   const [accessLoading, setAccessLoading] = useState(false);
 
-  // Load report
+  // TOC UI
+  const [tocOpen, setTocOpen] = useState(false);
+
+  // Load report (unchanged)
   useEffect(() => {
     let cancelled = false;
 
@@ -269,7 +335,8 @@ export default function LawReportReader() {
         setReport(res.data ?? null);
       } catch (e) {
         console.error(e);
-        if (!cancelled) setError("We couldn’t load this report right now. Please try again.");
+        if (!cancelled)
+          setError("We couldn’t load this report right now. Please try again.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -286,7 +353,7 @@ export default function LawReportReader() {
     };
   }, [reportId]);
 
-  // Availability + access checks (based on LegalDocumentId)
+  // Availability + access checks (unchanged)
   useEffect(() => {
     let cancelled = false;
 
@@ -315,7 +382,9 @@ export default function LawReportReader() {
         // Otherwise, check availability from LegalDocument
         try {
           setAvailabilityLoading(true);
-          const r = await api.get(`/legal-documents/${report.legalDocumentId}/availability`);
+          const r = await api.get(
+            `/legal-documents/${report.legalDocumentId}/availability`
+          );
           const ok = !!r?.data?.hasContent;
           if (!cancelled) setHasContent(ok);
         } catch {
@@ -329,7 +398,9 @@ export default function LawReportReader() {
       if (report?.isPremium && (isInst || isPublic)) {
         try {
           setAccessLoading(true);
-          const r = await api.get(`/legal-documents/${report.legalDocumentId}/access`);
+          const r = await api.get(
+            `/legal-documents/${report.legalDocumentId}/access`
+          );
           if (!cancelled) setAccess(r?.data ?? null);
         } catch {
           if (!cancelled) setAccess(null);
@@ -337,6 +408,7 @@ export default function LawReportReader() {
           if (!cancelled) setAccessLoading(false);
         }
       } else {
+        // Not applicable
         if (!cancelled) setAccess(null);
       }
     }
@@ -347,11 +419,20 @@ export default function LawReportReader() {
     };
   }, [report, isInst, isPublic, isAdmin]);
 
-  const blocks = useMemo(() => splitIntoBlocks(report?.contentText || ""), [report]);
+  // ✅ Enhanced blocks with lists + headings
+  const blocks = useMemo(
+    () => splitIntoBlocksWithListsAndHeadings(report?.contentText || ""),
+    [report]
+  );
+
+  // ✅ TOC built from headings
+  const toc = useMemo(() => buildToc(blocks), [blocks]);
 
   const hasFullAccess = !!access?.hasFullAccess;
   const textHasContent = !!String(report?.contentText || "").trim();
 
+  // ✅ Admin can always open reader (won’t be blocked by availability/access)
+  // ✅ For non-admin: must have content (either ContentText or availability true)
   const canRead =
     !!report &&
     (isAdmin ||
@@ -373,7 +454,10 @@ export default function LawReportReader() {
           <div className="lrr-error-title">Report unavailable</div>
           <div className="lrr-error-msg">{error || "Not found."}</div>
           <div style={{ marginTop: 12 }}>
-            <button className="lrr-btn" onClick={() => navigate("/dashboard/law-reports")}>
+            <button
+              className="lrr-btn"
+              onClick={() => navigate("/dashboard/law-reports")}
+            >
               ← Back to Law Reports
             </button>
           </div>
@@ -396,13 +480,25 @@ export default function LawReportReader() {
                 : "This is a premium report. Please subscribe or sign in with an eligible account to read it."}
           </div>
 
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
-            <button className="lrr-btn" onClick={() => navigate("/dashboard/law-reports")}>
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              flexWrap: "wrap",
+              marginTop: 14,
+            }}
+          >
+            <button
+              className="lrr-btn"
+              onClick={() => navigate("/dashboard/law-reports")}
+            >
               ← Back
             </button>
             <button
               className="lrr-btn secondary"
-              onClick={() => navigate(`/dashboard/documents/${report.legalDocumentId}`)}
+              onClick={() =>
+                navigate(`/dashboard/documents/${report.legalDocumentId}`)
+              }
               disabled={!report.legalDocumentId}
             >
               Go to Document Page
@@ -420,14 +516,30 @@ export default function LawReportReader() {
       {/* Sticky meta header */}
       <header className="lrr-header">
         <div className="lrr-header-top">
-          <button className="lrr-pill" onClick={() => navigate("/dashboard/law-reports")}>
+          <button
+            className="lrr-pill"
+            onClick={() => navigate("/dashboard/law-reports")}
+          >
             ← Back
           </button>
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {/* TOC toggle */}
+            {toc.length > 0 && (
+              <button
+                className="lrr-pill ghost"
+                onClick={() => setTocOpen((v) => !v)}
+                aria-expanded={tocOpen}
+              >
+                Contents ▾
+              </button>
+            )}
+
             <button
               className="lrr-pill ghost"
-              onClick={() => navigate(`/dashboard/documents/${report.legalDocumentId}`)}
+              onClick={() =>
+                navigate(`/dashboard/documents/${report.legalDocumentId}`)
+              }
               disabled={!report.legalDocumentId}
             >
               Document page
@@ -435,17 +547,41 @@ export default function LawReportReader() {
           </div>
         </div>
 
+        {/* TOC dropdown */}
+        {tocOpen && toc.length > 0 && (
+          <div className="lrr-toc">
+            {toc.map((t) => (
+              <button
+                key={t.id}
+                className="lrr-toc-item"
+                onClick={() => {
+                  setTocOpen(false);
+                  scrollToId(t.id);
+                }}
+              >
+                {t.text}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="lrr-title">{title}</div>
 
         <div className="lrr-meta">
-          {report.reportNumber ? <span className="lrr-chip">{report.reportNumber}</span> : null}
+          {report.reportNumber ? (
+            <span className="lrr-chip">{report.reportNumber}</span>
+          ) : null}
           {report.citation ? <span className="lrr-chip">{report.citation}</span> : null}
           {report.year ? <span className="lrr-chip">{report.year}</span> : null}
           {report.decisionTypeLabel ? (
             <span className="lrr-chip">{report.decisionTypeLabel}</span>
           ) : null}
-          {report.caseTypeLabel ? <span className="lrr-chip">{report.caseTypeLabel}</span> : null}
-          {report.courtTypeLabel ? <span className="lrr-chip">{report.courtTypeLabel}</span> : null}
+          {report.caseTypeLabel ? (
+            <span className="lrr-chip">{report.caseTypeLabel}</span>
+          ) : null}
+          {report.courtTypeLabel ? (
+            <span className="lrr-chip">{report.courtTypeLabel}</span>
+          ) : null}
           {report.town ? <span className="lrr-chip">{report.town}</span> : null}
           {!report.town && report.townPostCode ? (
             <span className="lrr-chip">{report.townPostCode}</span>
@@ -474,7 +610,9 @@ export default function LawReportReader() {
             </div>
           ) : null}
           {isAdmin ? <div className="lrr-soft">admin access</div> : null}
-          {!isAdmin && accessLoading ? <div className="lrr-soft">checking access…</div> : null}
+          {!isAdmin && accessLoading ? (
+            <div className="lrr-soft">checking access…</div>
+          ) : null}
           {!isAdmin && availabilityLoading ? (
             <div className="lrr-soft">checking availability…</div>
           ) : null}
@@ -490,42 +628,33 @@ export default function LawReportReader() {
             {blocks.map((b, idx) => {
               if (b.type === "heading") {
                 return (
-                  <h2 key={idx} className="lrr-h2">
+                  <h2 key={`${b.id}-${idx}`} id={b.id} className="lrr-h2">
                     {b.text}
                   </h2>
                 );
               }
 
-              if (b.type === "quote") {
+              if (b.type === "list") {
+                // Render lists with proper semantics and styling
+                const ListTag = b.kind === "num" ? "ol" : "ol"; // keep ol for alpha/roman too (CSS will style markers)
                 return (
-                  <blockquote key={idx} className="lrr-quote">
-                    {b.text}
-                  </blockquote>
-                );
-              }
-
-              if (b.type === "ul") {
-                return (
-                  <ul key={idx} className="lrr-ul">
-                    {b.items.map((it, i) => (
-                      <li key={i}>{it}</li>
+                  <ListTag
+                    key={`list-${idx}`}
+                    className={`lrr-list lrr-list-${b.kind || "alpha"}`}
+                  >
+                    {b.items.map((it, j) => (
+                      <li key={`${idx}-${j}`} className="lrr-li">
+                        <span className="lrr-li-marker">{it.marker}.</span>
+                        <span className="lrr-li-text">{it.text}</span>
+                      </li>
                     ))}
-                  </ul>
+                  </ListTag>
                 );
               }
 
-              if (b.type === "ol") {
-                return (
-                  <ol key={idx} className="lrr-ol">
-                    {b.items.map((it, i) => (
-                      <li key={i}>{it}</li>
-                    ))}
-                  </ol>
-                );
-              }
-
+              // paragraph
               return (
-                <p key={idx} className="lrr-p">
+                <p key={`p-${idx}`} className="lrr-p">
                   {b.text}
                 </p>
               );
