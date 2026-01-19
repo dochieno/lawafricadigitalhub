@@ -118,161 +118,8 @@ function slugify(s) {
     .slice(0, 60);
 }
 
-function looksLikeHtml(s) {
-  const t = String(s || "").trim();
-  if (!t) return false;
-  // quick heuristic: tags + common HTML entities
-  return /<\/?[a-z][\s\S]*>/i.test(t) || /&nbsp;|&amp;|&lt;|&gt;/.test(t);
-}
-
-function stripHtmlToText(html) {
-  try {
-    const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
-    return normalizeText(doc.body?.textContent || "");
-  } catch {
-    return normalizeText(String(html || "").replace(/<[^>]+>/g, ""));
-  }
-}
-
 /**
- * Basic HTML sanitizer (no external deps).
- * - removes script/style/iframe/object/embed/link/meta
- * - strips inline event handlers (on*)
- * - blocks javascript: URLs
- * - keeps common formatting tags from Word/CKEditor
- *
- * NOTE: For max security, sanitize on backend too.
- */
-function sanitizeHtmlBasic(html) {
-  const input = String(html || "");
-  let doc;
-
-  try {
-    doc = new DOMParser().parseFromString(input, "text/html");
-  } catch {
-    return "";
-  }
-
-  const blockedTags = new Set([
-    "SCRIPT",
-    "STYLE",
-    "IFRAME",
-    "OBJECT",
-    "EMBED",
-    "LINK",
-    "META",
-    "BASE",
-  ]);
-
-  const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT, null);
-
-  const toRemove = [];
-  while (walker.nextNode()) {
-    const el = walker.currentNode;
-
-    if (blockedTags.has(el.tagName)) {
-      toRemove.push(el);
-      continue;
-    }
-
-    // remove on* handlers + unsafe urls
-    const attrs = Array.from(el.attributes || []);
-    for (const a of attrs) {
-      const name = a.name.toLowerCase();
-      const value = String(a.value || "");
-
-      if (name.startsWith("on")) {
-        el.removeAttribute(a.name);
-        continue;
-      }
-
-      if (name === "href" || name === "src") {
-        const v = value.trim().toLowerCase();
-        if (v.startsWith("javascript:") || v.startsWith("data:text/html")) {
-          el.removeAttribute(a.name);
-        }
-      }
-
-      // keep class for styling, drop style (optional: allow style if you want)
-      if (name === "style") {
-        el.removeAttribute(a.name);
-      }
-    }
-  }
-
-  toRemove.forEach((n) => n.parentNode && n.parentNode.removeChild(n));
-
-  return doc.body?.innerHTML || "";
-}
-
-/**
- * Enhances HTML for the reader:
- * - If there are no <h1>/<h2>/<h3>, promotes “ALL CAPS” paragraph lines into <h2>
- * - Ensures headings have ids for TOC
- * - Builds TOC from headings
- */
-function enhanceHtmlAndBuildToc(rawHtml) {
-  const safe = sanitizeHtmlBasic(rawHtml);
-  if (!safe.trim()) return { html: "", toc: [] };
-
-  let doc;
-  try {
-    doc = new DOMParser().parseFromString(safe, "text/html");
-  } catch {
-    return { html: safe, toc: [] };
-  }
-
-  const body = doc.body;
-  if (!body) return { html: safe, toc: [] };
-
-  const existingHeadings = body.querySelectorAll("h1, h2, h3");
-  const hasAnyHeadings = existingHeadings && existingHeadings.length > 0;
-
-  // If no real headings exist, try promote heading-like paragraphs/divs
-  if (!hasAnyHeadings) {
-    const candidates = body.querySelectorAll("p, div");
-    candidates.forEach((el) => {
-      const text = String(el.textContent || "").trim();
-      if (!text) return;
-
-      // If it's short and heading-like, promote to h2
-      if (looksLikeHeading(text)) {
-        const h = doc.createElement("h2");
-        h.textContent = text;
-
-        // Keep a small visual gap: remove if you prefer
-        el.parentNode && el.parentNode.replaceChild(h, el);
-      }
-    });
-  }
-
-  // Ensure heading ids + build toc
-  const seen = new Map();
-  const toc = [];
-  const headings = body.querySelectorAll("h1, h2, h3");
-
-  headings.forEach((h) => {
-    const text = String(h.textContent || "").trim();
-    if (!text) return;
-
-    let base = slugify(text) || "section";
-    const n = (seen.get(base) || 0) + 1;
-    seen.set(base, n);
-
-    const id = n === 1 ? base : `${base}-${n}`;
-    h.setAttribute("id", id);
-
-    // Only include h2/h3 in TOC (you can include h1 too if you want)
-    if (h.tagName === "H2" || h.tagName === "H3") {
-      toc.push({ id, text });
-    }
-  });
-
-  return { html: body.innerHTML || "", toc };
-}
-
-/**
- * First-pass "reflow" to improve readability without changing meaning.
+ * Plain-text reflow to improve readability without changing meaning.
  */
 function reflowForReader(raw) {
   let t = normalizeText(raw);
@@ -334,8 +181,8 @@ function splitIntoBlocksWithListsAndHeadings(content) {
     if (!raw) continue;
 
     const lines = raw.split("\n").map((x) => x.trimEnd());
-
     const firstLine = (lines.find((x) => x.trim()) || "").trim();
+
     if (firstLine && looksLikeHeading(firstLine)) {
       flushList();
       blocks.push({ type: "heading", text: firstLine.trim() });
@@ -365,7 +212,12 @@ function splitIntoBlocksWithListsAndHeadings(content) {
         const isOrdered = parsed.kind === "ol";
         const olType = parsed.olType || "1";
 
-        if (!pendingList || pendingList.type !== "list" || pendingList.ordered !== isOrdered || (isOrdered && pendingList.olType !== olType)) {
+        if (
+          !pendingList ||
+          pendingList.type !== "list" ||
+          pendingList.ordered !== isOrdered ||
+          (isOrdered && pendingList.olType !== olType)
+        ) {
           flushList();
           pendingList = { type: "list", ordered: isOrdered, olType, items: [] };
         }
@@ -388,11 +240,9 @@ function assignHeadingIds(blocks) {
   const seen = new Map();
   return blocks.map((b) => {
     if (b.type !== "heading") return b;
-
     const base = slugify(b.text) || "section";
     const n = (seen.get(base) || 0) + 1;
     seen.set(base, n);
-
     const id = n === 1 ? base : `${base}-${n}`;
     return { ...b, id };
   });
@@ -402,6 +252,168 @@ function buildToc(blocksWithIds) {
   return (blocksWithIds || [])
     .filter((b) => b.type === "heading" && b.id)
     .map((b) => ({ id: b.id, text: b.text }));
+}
+
+// ----------------------
+// HTML-aware rendering (CKEditor output)
+// ----------------------
+function looksLikeHtml(s) {
+  const t = String(s || "").trim();
+  if (!t) return false;
+  // If it contains a tag-like pattern, treat as HTML
+  return /<\/?[a-z][\s\S]*>/i.test(t);
+}
+
+/**
+ * Very small sanitizer:
+ * - removes script/style/iframe/object/embed
+ * - strips event handlers (on*)
+ * - keeps safe tags + safe attributes for links
+ */
+function sanitizeHtmlBasic(inputHtml) {
+  const html = String(inputHtml || "");
+  if (!html.trim()) return "";
+
+  if (typeof window === "undefined" || typeof DOMParser === "undefined") {
+    // If somehow rendered in non-browser context, fall back to plain text
+    return html.replace(/<[^>]+>/g, "");
+  }
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+
+  // Remove dangerous tags
+  const removeSelectors = ["script", "style", "iframe", "object", "embed"];
+  removeSelectors.forEach((sel) => doc.querySelectorAll(sel).forEach((n) => n.remove()));
+
+  const allowedTags = new Set([
+    "P",
+    "BR",
+    "STRONG",
+    "B",
+    "EM",
+    "I",
+    "U",
+    "S",
+    "A",
+    "UL",
+    "OL",
+    "LI",
+    "H1",
+    "H2",
+    "H3",
+    "H4",
+    "H5",
+    "H6",
+    "BLOCKQUOTE",
+    "HR",
+    "TABLE",
+    "THEAD",
+    "TBODY",
+    "TR",
+    "TH",
+    "TD",
+    "CODE",
+    "PRE",
+    "SPAN",
+    "DIV",
+  ]);
+
+  const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+
+  while (walker.nextNode()) {
+    const el = walker.currentNode;
+    if (!allowedTags.has(el.tagName)) {
+      toRemove.push(el);
+      continue;
+    }
+
+    // strip on* handlers + risky attrs
+    [...el.attributes].forEach((attr) => {
+      const name = attr.name.toLowerCase();
+      const value = String(attr.value || "");
+
+      if (name.startsWith("on")) {
+        el.removeAttribute(attr.name);
+        return;
+      }
+
+      // Only allow href/target/rel on links; otherwise remove unknown attrs
+      if (el.tagName === "A") {
+        if (name === "href") {
+          // block javascript: urls
+          if (/^\s*javascript:/i.test(value)) el.removeAttribute("href");
+          return;
+        }
+        if (name === "target") return;
+        if (name === "rel") return;
+
+        // remove everything else
+        el.removeAttribute(attr.name);
+        return;
+      }
+
+      // keep nothing else (keeps output consistent + clean)
+      el.removeAttribute(attr.name);
+    });
+
+    // normalize links to safe behavior
+    if (el.tagName === "A") {
+      const href = el.getAttribute("href");
+      if (href) {
+        el.setAttribute("target", "_blank");
+        el.setAttribute("rel", "noreferrer noopener");
+      }
+    }
+  }
+
+  // remove disallowed tags but keep their text content
+  for (const el of toRemove) {
+    const parent = el.parentNode;
+    if (!parent) continue;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    el.remove();
+  }
+
+  return doc.body.innerHTML || "";
+}
+
+/**
+ * Build TOC from actual HTML headings (h1-h6). Inject ids if missing.
+ */
+function buildHtmlTocAndInjectIds(html) {
+  const safe = sanitizeHtmlBasic(html);
+  if (!safe.trim()) return { html: "", toc: [] };
+
+  if (typeof window === "undefined" || typeof DOMParser === "undefined") {
+    return { html: safe, toc: [] };
+  }
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(safe, "text/html");
+
+  const headings = [...doc.body.querySelectorAll("h1,h2,h3,h4,h5,h6")];
+  const toc = [];
+  const seen = new Map();
+
+  for (const h of headings) {
+    const text = (h.textContent || "").trim();
+    if (!text) continue;
+
+    let id = h.getAttribute("id");
+    if (!id) {
+      const base = slugify(text) || "section";
+      const n = (seen.get(base) || 0) + 1;
+      seen.set(base, n);
+      id = n === 1 ? base : `${base}-${n}`;
+      h.setAttribute("id", id);
+    }
+
+    toc.push({ id, text });
+  }
+
+  return { html: doc.body.innerHTML || safe, toc };
 }
 
 export default function LawReportReader() {
@@ -465,6 +477,7 @@ export default function LawReportReader() {
     async function check() {
       if (!report?.legalDocumentId) return;
 
+      // ✅ Global admin bypass: do not block admin with availability/access checks
       if (isAdmin) {
         if (!cancelled) {
           setHasContent(true);
@@ -475,6 +488,7 @@ export default function LawReportReader() {
         return;
       }
 
+      // ✅ If ContentText exists, treat as available and skip /availability
       const textHasContent = !!String(report?.contentText || "").trim();
       if (textHasContent) {
         if (!cancelled) {
@@ -488,12 +502,13 @@ export default function LawReportReader() {
           const ok = !!r?.data?.hasContent;
           if (!cancelled) setHasContent(ok);
         } catch {
-          if (!cancelled) setHasContent(true);
+          if (!cancelled) setHasContent(true); // fail-open
         } finally {
           if (!cancelled) setAvailabilityLoading(false);
         }
       }
 
+      // Access: only needed for premium + public/institution flows
       if (report?.isPremium && (isInst || isPublic)) {
         try {
           setAccessLoading(true);
@@ -515,33 +530,35 @@ export default function LawReportReader() {
     };
   }, [report, isInst, isPublic, isAdmin]);
 
-  const rawContent = String(report?.contentText || "");
-  const contentMode = useMemo(() => (looksLikeHtml(rawContent) ? "html" : "text"), [rawContent]);
+  // ----------------------
+  // Formatting pipeline (ALWAYS RUN HOOKS HERE — avoids React #310)
+  // ----------------------
+  const rawContent = useMemo(() => String(report?.contentText || ""), [report?.contentText]);
+  const contentIsHtml = useMemo(() => looksLikeHtml(rawContent), [rawContent]);
 
-  // ✅ HTML pipeline: sanitize + promote headings + ids + TOC
+  // HTML mode: sanitize + build TOC from real headings (if any)
   const htmlPack = useMemo(() => {
-    if (contentMode !== "html") return { html: "", toc: [] };
-    return enhanceHtmlAndBuildToc(rawContent);
-  }, [contentMode, rawContent]);
+    if (!contentIsHtml) return { html: "", toc: [] };
+    return buildHtmlTocAndInjectIds(rawContent);
+  }, [contentIsHtml, rawContent]);
 
-  const safeHtml = htmlPack.html;
-  const htmlToc = htmlPack.toc;
-
-  // ✅ Text pipeline (existing)
+  // Plain-text mode: reflow + blocks + TOC
   const formattedText = useMemo(() => {
-    if (contentMode !== "text") return "";
+    if (contentIsHtml) return "";
     return reflowForReader(rawContent);
-  }, [contentMode, rawContent]);
+  }, [contentIsHtml, rawContent]);
 
   const blocks = useMemo(() => {
-    if (contentMode !== "text") return [];
+    if (contentIsHtml) return [];
     const rawBlocks = splitIntoBlocksWithListsAndHeadings(formattedText);
     return assignHeadingIds(rawBlocks);
-  }, [contentMode, formattedText]);
+  }, [contentIsHtml, formattedText]);
 
-  const textToc = useMemo(() => (contentMode === "text" ? buildToc(blocks) : []), [contentMode, blocks]);
-
-  const toc = contentMode === "html" ? htmlToc : textToc;
+  const toc = useMemo(() => {
+    // Prefer HTML TOC if present; else fallback to plaintext blocks
+    if (contentIsHtml) return htmlPack.toc || [];
+    return buildToc(blocks);
+  }, [contentIsHtml, htmlPack.toc, blocks]);
 
   const hasFullAccess = !!access?.hasFullAccess;
   const textHasContent = !!rawContent.trim();
@@ -549,9 +566,11 @@ export default function LawReportReader() {
   const canRead =
     !!report &&
     (isAdmin ||
-      ((hasContent || textHasContent) &&
-        (!report.isPremium || hasFullAccess || (!isInst && !isPublic))));
+      ((hasContent || textHasContent) && (!report.isPremium || hasFullAccess || (!isInst && !isPublic))));
 
+  // ----------------------
+  // Returns (AFTER hooks)
+  // ----------------------
   if (loading) {
     return (
       <div className="lrr-wrap">
@@ -608,15 +627,9 @@ export default function LawReportReader() {
 
   const title = report.parties || report.title || "Law Report";
 
-  // If HTML is empty after sanitizing, fall back to plain-text extraction (fail-safe)
-  const htmlFallbackText = useMemo(() => {
-    if (contentMode !== "html") return "";
-    if (safeHtml.trim()) return "";
-    return stripHtmlToText(rawContent);
-  }, [contentMode, rawContent, safeHtml]);
-
   return (
     <div className="lrr-wrap">
+      {/* Sticky meta header */}
       <header className="lrr-header">
         <div className="lrr-header-top">
           <button className="lrr-pill" onClick={() => navigate("/dashboard/law-reports")}>
@@ -679,7 +692,9 @@ export default function LawReportReader() {
         </div>
       </header>
 
+      {/* Content */}
       <main className="lrr-main">
+        {/* TOC */}
         {toc.length > 0 && (
           <section className="lrr-toc">
             <button className="lrr-toc-toggle" onClick={() => setTocOpen((v) => !v)}>
@@ -699,22 +714,15 @@ export default function LawReportReader() {
           </section>
         )}
 
-        {/* ✅ HTML mode: render actual HTML (so <p>, <strong> etc display properly) */}
-        {contentMode === "html" ? (
-          safeHtml.trim() ? (
-            <article className="lrr-article lrr-html">
-              <div className="lrr-html-body" dangerouslySetInnerHTML={{ __html: safeHtml }} />
-            </article>
-          ) : htmlFallbackText.trim() ? (
-            <article className="lrr-article">
-              <p className="lrr-p">{htmlFallbackText}</p>
-            </article>
-          ) : (
-            <div className="lrr-empty">This report has no content yet.</div>
-          )
+        {!textHasContent ? (
+          <div className="lrr-empty">This report has no content yet.</div>
+        ) : contentIsHtml ? (
+          // ✅ HTML mode: render CKEditor output properly (sanitized)
+          <article className="lrr-article lrr-html" dangerouslySetInnerHTML={{ __html: htmlPack.html }} />
         ) : blocks.length === 0 ? (
           <div className="lrr-empty">This report has no content yet.</div>
         ) : (
+          // ✅ Plain text mode: your existing heading/list rendering
           <article className="lrr-article">
             {blocks.map((b, idx) => {
               if (b.type === "heading") {
