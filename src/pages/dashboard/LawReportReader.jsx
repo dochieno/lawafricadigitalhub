@@ -24,7 +24,6 @@ function isPublicUser() {
 function isGlobalAdminUser() {
   const c = getAuthClaims();
 
-  // roles may exist in different places depending on how you issue JWT
   const rolesRaw =
     c?.roles ??
     c?.payload?.roles ??
@@ -85,7 +84,6 @@ function normalizeText(s) {
 }
 
 function formatDate(d) {
-  // ✅ FIX: ensure this exists (your runtime error was: formatDate is not defined)
   if (!d) return "";
   const dt = new Date(d);
   if (Number.isNaN(dt.getTime())) return String(d);
@@ -120,33 +118,174 @@ function slugify(s) {
     .slice(0, 60);
 }
 
+function looksLikeHtml(s) {
+  const t = String(s || "").trim();
+  if (!t) return false;
+  // quick heuristic: tags + common HTML entities
+  return /<\/?[a-z][\s\S]*>/i.test(t) || /&nbsp;|&amp;|&lt;|&gt;/.test(t);
+}
+
+function stripHtmlToText(html) {
+  try {
+    const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
+    return normalizeText(doc.body?.textContent || "");
+  } catch {
+    return normalizeText(String(html || "").replace(/<[^>]+>/g, ""));
+  }
+}
+
+/**
+ * Basic HTML sanitizer (no external deps).
+ * - removes script/style/iframe/object/embed/link/meta
+ * - strips inline event handlers (on*)
+ * - blocks javascript: URLs
+ * - keeps common formatting tags from Word/CKEditor
+ *
+ * NOTE: For max security, sanitize on backend too.
+ */
+function sanitizeHtmlBasic(html) {
+  const input = String(html || "");
+  let doc;
+
+  try {
+    doc = new DOMParser().parseFromString(input, "text/html");
+  } catch {
+    return "";
+  }
+
+  const blockedTags = new Set([
+    "SCRIPT",
+    "STYLE",
+    "IFRAME",
+    "OBJECT",
+    "EMBED",
+    "LINK",
+    "META",
+    "BASE",
+  ]);
+
+  const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT, null);
+
+  const toRemove = [];
+  while (walker.nextNode()) {
+    const el = walker.currentNode;
+
+    if (blockedTags.has(el.tagName)) {
+      toRemove.push(el);
+      continue;
+    }
+
+    // remove on* handlers + unsafe urls
+    const attrs = Array.from(el.attributes || []);
+    for (const a of attrs) {
+      const name = a.name.toLowerCase();
+      const value = String(a.value || "");
+
+      if (name.startsWith("on")) {
+        el.removeAttribute(a.name);
+        continue;
+      }
+
+      if (name === "href" || name === "src") {
+        const v = value.trim().toLowerCase();
+        if (v.startsWith("javascript:") || v.startsWith("data:text/html")) {
+          el.removeAttribute(a.name);
+        }
+      }
+
+      // keep class for styling, drop style (optional: allow style if you want)
+      if (name === "style") {
+        el.removeAttribute(a.name);
+      }
+    }
+  }
+
+  toRemove.forEach((n) => n.parentNode && n.parentNode.removeChild(n));
+
+  return doc.body?.innerHTML || "";
+}
+
+/**
+ * Enhances HTML for the reader:
+ * - If there are no <h1>/<h2>/<h3>, promotes “ALL CAPS” paragraph lines into <h2>
+ * - Ensures headings have ids for TOC
+ * - Builds TOC from headings
+ */
+function enhanceHtmlAndBuildToc(rawHtml) {
+  const safe = sanitizeHtmlBasic(rawHtml);
+  if (!safe.trim()) return { html: "", toc: [] };
+
+  let doc;
+  try {
+    doc = new DOMParser().parseFromString(safe, "text/html");
+  } catch {
+    return { html: safe, toc: [] };
+  }
+
+  const body = doc.body;
+  if (!body) return { html: safe, toc: [] };
+
+  const existingHeadings = body.querySelectorAll("h1, h2, h3");
+  const hasAnyHeadings = existingHeadings && existingHeadings.length > 0;
+
+  // If no real headings exist, try promote heading-like paragraphs/divs
+  if (!hasAnyHeadings) {
+    const candidates = body.querySelectorAll("p, div");
+    candidates.forEach((el) => {
+      const text = String(el.textContent || "").trim();
+      if (!text) return;
+
+      // If it's short and heading-like, promote to h2
+      if (looksLikeHeading(text)) {
+        const h = doc.createElement("h2");
+        h.textContent = text;
+
+        // Keep a small visual gap: remove if you prefer
+        el.parentNode && el.parentNode.replaceChild(h, el);
+      }
+    });
+  }
+
+  // Ensure heading ids + build toc
+  const seen = new Map();
+  const toc = [];
+  const headings = body.querySelectorAll("h1, h2, h3");
+
+  headings.forEach((h) => {
+    const text = String(h.textContent || "").trim();
+    if (!text) return;
+
+    let base = slugify(text) || "section";
+    const n = (seen.get(base) || 0) + 1;
+    seen.set(base, n);
+
+    const id = n === 1 ? base : `${base}-${n}`;
+    h.setAttribute("id", id);
+
+    // Only include h2/h3 in TOC (you can include h1 too if you want)
+    if (h.tagName === "H2" || h.tagName === "H3") {
+      toc.push({ id, text });
+    }
+  });
+
+  return { html: body.innerHTML || "", toc };
+}
+
 /**
  * First-pass "reflow" to improve readability without changing meaning.
- * - Normalize newlines
- * - Ensure headings are separated by blank lines
- * - Expand some common inline "Orders Reasons" patterns onto new lines
  */
 function reflowForReader(raw) {
   let t = normalizeText(raw);
 
-  // Normalize excessive spaces
   t = t.replace(/[ \t]+/g, " ");
 
-  // Make sure common headings get their own paragraph
-  // e.g. "... RULING Upon ..." -> "RULING\n\nUpon ..."
-  // (only when they appear as a standalone word boundary)
   for (const h of HEADING_SET) {
     const re = new RegExp(`(^|\\n)\\s*(${h})\\s+`, "g");
     t = t.replace(re, `$1$2\n\n`);
   }
 
-  // Split "Orders Reasons" when it appears inline
   t = t.replace(/\bOrders\s+Reasons\b/g, "Orders\nReasons");
-
-  // Create spacing around list headers like "Orders" / "Reasons" / "Held"
   t = t.replace(/(^|\n)(Orders|Reasons|Held|HELD|ORDERS|REASONS)\b/g, "$1$2\n");
-
-  // Collapse too many blank lines
   t = t.replace(/\n{3,}/g, "\n\n").trim();
 
   return t;
@@ -155,11 +294,9 @@ function reflowForReader(raw) {
 function parseListLine(line) {
   const s = String(line || "");
 
-  // 1) numeric list: "1. text" / "(1) text" / "1) text"
   let m = s.match(/^\s*(\(?\d+\)?[.)\]])\s+(.*)$/);
   if (m) return { kind: "ol", marker: m[1], text: (m[2] || "").trim(), olType: "1" };
 
-  // 2) alpha list: "a. text" / "b) text"
   m = s.match(/^\s*([a-zA-Z][.)\]])\s+(.*)$/);
   if (m) {
     const letter = String(m[1] || "").replace(/[^a-zA-Z]/g, "");
@@ -172,19 +309,12 @@ function parseListLine(line) {
     };
   }
 
-  // 3) bullets: "- text" / "• text"
   m = s.match(/^\s*([-•])\s+(.*)$/);
   if (m) return { kind: "ul", marker: m[1], text: (m[2] || "").trim() };
 
   return null;
 }
 
-/**
- * Split content into:
- * - heading blocks
- * - paragraphs
- * - list blocks (ul/ol)
- */
 function splitIntoBlocksWithListsAndHeadings(content) {
   const text = normalizeText(content);
   if (!text.trim()) return [];
@@ -192,12 +322,10 @@ function splitIntoBlocksWithListsAndHeadings(content) {
   const paras = text.split(/\n{2,}/g);
   const blocks = [];
 
-  let pendingList = null; // { type:'list', ordered, olType, items:[] }
+  let pendingList = null;
 
   function flushList() {
-    if (pendingList && pendingList.items.length > 0) {
-      blocks.push(pendingList);
-    }
+    if (pendingList && pendingList.items.length > 0) blocks.push(pendingList);
     pendingList = null;
   }
 
@@ -207,7 +335,6 @@ function splitIntoBlocksWithListsAndHeadings(content) {
 
     const lines = raw.split("\n").map((x) => x.trimEnd());
 
-    // Heading detection on first non-empty line
     const firstLine = (lines.find((x) => x.trim()) || "").trim();
     if (firstLine && looksLikeHeading(firstLine)) {
       flushList();
@@ -218,18 +345,16 @@ function splitIntoBlocksWithListsAndHeadings(content) {
       continue;
     }
 
-    // Detect lists inside this paragraph
     const listCandidates = lines
       .map((ln) => ({ ln, parsed: parseListLine(ln) }))
       .filter((x) => !!x.parsed);
 
-    // If most lines in this paragraph are list-ish, treat as list block
-    const isMostlyList = listCandidates.length > 0 && listCandidates.length >= Math.max(2, Math.ceil(lines.length * 0.5));
+    const isMostlyList =
+      listCandidates.length > 0 && listCandidates.length >= Math.max(2, Math.ceil(lines.length * 0.5));
 
     if (isMostlyList) {
       for (const { ln, parsed } of lines.map((ln) => ({ ln, parsed: parseListLine(ln) }))) {
         if (!parsed) {
-          // non-list line -> treat as continuation of previous list item
           if (pendingList && pendingList.items.length > 0 && ln.trim()) {
             const last = pendingList.items[pendingList.items.length - 1];
             last.text = `${last.text}\n${ln.trim()}`;
@@ -240,13 +365,7 @@ function splitIntoBlocksWithListsAndHeadings(content) {
         const isOrdered = parsed.kind === "ol";
         const olType = parsed.olType || "1";
 
-        // Start or switch list kind
-        if (
-          !pendingList ||
-          pendingList.type !== "list" ||
-          pendingList.ordered !== isOrdered ||
-          (isOrdered && pendingList.olType !== olType)
-        ) {
+        if (!pendingList || pendingList.type !== "list" || pendingList.ordered !== isOrdered || (isOrdered && pendingList.olType !== olType)) {
           flushList();
           pendingList = { type: "list", ordered: isOrdered, olType, items: [] };
         }
@@ -257,7 +376,6 @@ function splitIntoBlocksWithListsAndHeadings(content) {
       continue;
     }
 
-    // Normal paragraph
     flushList();
     blocks.push({ type: "para", text: raw });
   }
@@ -347,7 +465,6 @@ export default function LawReportReader() {
     async function check() {
       if (!report?.legalDocumentId) return;
 
-      // ✅ Global admin bypass: do not block admin with availability/access checks
       if (isAdmin) {
         if (!cancelled) {
           setHasContent(true);
@@ -358,7 +475,6 @@ export default function LawReportReader() {
         return;
       }
 
-      // ✅ If ContentText exists, treat as available and skip /availability
       const textHasContent = !!String(report?.contentText || "").trim();
       if (textHasContent) {
         if (!cancelled) {
@@ -366,20 +482,18 @@ export default function LawReportReader() {
           setAvailabilityLoading(false);
         }
       } else {
-        // Otherwise, check availability from LegalDocument
         try {
           setAvailabilityLoading(true);
           const r = await api.get(`/legal-documents/${report.legalDocumentId}/availability`);
           const ok = !!r?.data?.hasContent;
           if (!cancelled) setHasContent(ok);
         } catch {
-          if (!cancelled) setHasContent(true); // fail-open
+          if (!cancelled) setHasContent(true);
         } finally {
           if (!cancelled) setAvailabilityLoading(false);
         }
       }
 
-      // Access: only needed for premium + public/institution flows
       if (report?.isPremium && (isInst || isPublic)) {
         try {
           setAccessLoading(true);
@@ -391,7 +505,6 @@ export default function LawReportReader() {
           if (!cancelled) setAccessLoading(false);
         }
       } else {
-        // Not applicable
         if (!cancelled) setAccess(null);
       }
     }
@@ -402,24 +515,37 @@ export default function LawReportReader() {
     };
   }, [report, isInst, isPublic, isAdmin]);
 
-  // ✅ Formatting pipeline (this is where you add the new memos)
-  const formattedText = useMemo(
-    () => reflowForReader(report?.contentText || ""),
-    [report]
-  );
+  const rawContent = String(report?.contentText || "");
+  const contentMode = useMemo(() => (looksLikeHtml(rawContent) ? "html" : "text"), [rawContent]);
+
+  // ✅ HTML pipeline: sanitize + promote headings + ids + TOC
+  const htmlPack = useMemo(() => {
+    if (contentMode !== "html") return { html: "", toc: [] };
+    return enhanceHtmlAndBuildToc(rawContent);
+  }, [contentMode, rawContent]);
+
+  const safeHtml = htmlPack.html;
+  const htmlToc = htmlPack.toc;
+
+  // ✅ Text pipeline (existing)
+  const formattedText = useMemo(() => {
+    if (contentMode !== "text") return "";
+    return reflowForReader(rawContent);
+  }, [contentMode, rawContent]);
 
   const blocks = useMemo(() => {
+    if (contentMode !== "text") return [];
     const rawBlocks = splitIntoBlocksWithListsAndHeadings(formattedText);
     return assignHeadingIds(rawBlocks);
-  }, [formattedText]);
+  }, [contentMode, formattedText]);
 
-  const toc = useMemo(() => buildToc(blocks), [blocks]);
+  const textToc = useMemo(() => (contentMode === "text" ? buildToc(blocks) : []), [contentMode, blocks]);
+
+  const toc = contentMode === "html" ? htmlToc : textToc;
 
   const hasFullAccess = !!access?.hasFullAccess;
-  const textHasContent = !!String(report?.contentText || "").trim();
+  const textHasContent = !!rawContent.trim();
 
-  // ✅ Admin can always open reader (won’t be blocked by availability/access)
-  // ✅ For non-admin: must have content (either ContentText or availability true)
   const canRead =
     !!report &&
     (isAdmin ||
@@ -450,7 +576,6 @@ export default function LawReportReader() {
     );
   }
 
-  // If premium and no access, send them to LegalDocument page (pricing/access)
   if (!canRead) {
     return (
       <div className="lrr-wrap">
@@ -483,9 +608,15 @@ export default function LawReportReader() {
 
   const title = report.parties || report.title || "Law Report";
 
+  // If HTML is empty after sanitizing, fall back to plain-text extraction (fail-safe)
+  const htmlFallbackText = useMemo(() => {
+    if (contentMode !== "html") return "";
+    if (safeHtml.trim()) return "";
+    return stripHtmlToText(rawContent);
+  }, [contentMode, rawContent, safeHtml]);
+
   return (
     <div className="lrr-wrap">
-      {/* Sticky meta header */}
       <header className="lrr-header">
         <div className="lrr-header-top">
           <button className="lrr-pill" onClick={() => navigate("/dashboard/law-reports")}>
@@ -501,13 +632,7 @@ export default function LawReportReader() {
               Document page
             </button>
 
-            {/* Download placeholder (wire later) */}
-            <button
-              className="lrr-pill ghost"
-              disabled
-              title="Coming soon"
-              onClick={() => {}}
-            >
+            <button className="lrr-pill ghost" disabled title="Coming soon" onClick={() => {}}>
               Download (soon)
             </button>
           </div>
@@ -554,9 +679,7 @@ export default function LawReportReader() {
         </div>
       </header>
 
-      {/* Content */}
       <main className="lrr-main">
-        {/* TOC */}
         {toc.length > 0 && (
           <section className="lrr-toc">
             <button className="lrr-toc-toggle" onClick={() => setTocOpen((v) => !v)}>
@@ -576,7 +699,20 @@ export default function LawReportReader() {
           </section>
         )}
 
-        {blocks.length === 0 ? (
+        {/* ✅ HTML mode: render actual HTML (so <p>, <strong> etc display properly) */}
+        {contentMode === "html" ? (
+          safeHtml.trim() ? (
+            <article className="lrr-article lrr-html">
+              <div className="lrr-html-body" dangerouslySetInnerHTML={{ __html: safeHtml }} />
+            </article>
+          ) : htmlFallbackText.trim() ? (
+            <article className="lrr-article">
+              <p className="lrr-p">{htmlFallbackText}</p>
+            </article>
+          ) : (
+            <div className="lrr-empty">This report has no content yet.</div>
+          )
+        ) : blocks.length === 0 ? (
           <div className="lrr-empty">This report has no content yet.</div>
         ) : (
           <article className="lrr-article">
@@ -613,7 +749,6 @@ export default function LawReportReader() {
                 );
               }
 
-              // paragraph
               return (
                 <p key={idx} className="lrr-p">
                   {b.text}

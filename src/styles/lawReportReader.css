@@ -355,3 +355,24 @@
 .lrr-h2 {
   scroll-margin-top: 140px;
 }
+/* HTML mode */
+.lrr-html-body {
+  font-family: ui-serif, Georgia, "Times New Roman", Times, serif;
+  line-height: 1.75;
+  font-size: 16px;
+  color: #111827;
+}
+
+.lrr-html-body p { margin: 0 0 12px; }
+.lrr-html-body h1, .lrr-html-body h2, .lrr-html-body h3 {
+  margin: 18px 0 10px;
+  font-weight: 900;
+}
+.lrr-html-body ul, .lrr-html-body ol { margin: 0 0 12px 22px; }
+.lrr-html-body li { margin: 6px 0; }
+.lrr-html-body blockquote {
+  margin: 12px 0;
+  padding-left: 14px;
+  border-left: 3px solid #e5e7eb;
+  color: #374151;
+}
