@@ -357,7 +357,6 @@ export default function LawReports() {
   // ------------------------------------------------------------
   // Client filtering (still supported)
   // NOTE: client filter expects labels, not ints.
-  // So in client mode we compare against selected option labels if possible.
   // ------------------------------------------------------------
   const selectedCaseLabel = useMemo(() => {
     if (!caseType) return "";
@@ -523,7 +522,6 @@ export default function LawReports() {
     let cancelled = false;
 
     async function fetchAvailabilityForVisibleReports() {
-      if (mode === "server") return;
       const docIds = (visible || [])
         .map((d) => getDocIdForRow(d))
         .filter(Boolean);
@@ -566,6 +564,7 @@ export default function LawReports() {
       }
     }
 
+    // NOTE: Still runs (keeps existing behavior), but we'll use PreviewText inference in server mode.
     fetchAvailabilityForVisibleReports();
     return () => {
       cancelled = true;
@@ -654,7 +653,7 @@ export default function LawReports() {
             <p className="lr-hero-sub">
               Access authoritative judicial decisions that set legal precedent.
               Discover how courts interpret and apply the law, filter cases by
-              key criteria, and preview concise excerpts to quickly identify 
+              key criteria, and preview concise excerpts to quickly identify
               relevant judgments before diving deeper.
             </p>
           </div>
@@ -919,17 +918,17 @@ export default function LawReports() {
                     const access = accessMap[docId];
                     const hasFullAccess = !!access?.hasFullAccess;
                     const accessLoading = accessLoadingIds.has(docId);
-                    const serverHasContent = mode === "server" ? !!cleanPreview(r?.previewText || "") : null;
-                    const hasContent =
+
+                    const availabilityLoading = availabilityLoadingIds.has(docId);
+
+                    // ✅ FIX: server-mode availability should be based on PreviewText (ContentText),
+                    // not on LegalDocument availability (which may be PDF/file-based).
+                    const inferredHasContent =
                       mode === "server"
-                        ? serverHasContent
-                        : availabilityMap[docId] == null
-                          ? true
-                          : !!availabilityMap[docId];
+                        ? !!cleanPreview(r?.previewText || "").trim()
+                        : (availabilityMap[docId] == null ? true : !!availabilityMap[docId]);
 
-                    const availabilityLoading =
-                      mode === "server" ? false : availabilityLoadingIds.has(docId);
-
+                    const hasContent = inferredHasContent;
 
                     const isPremiumRow = !!r.isPremium;
                     const showIncluded =
@@ -937,8 +936,8 @@ export default function LawReports() {
 
                     const canReadMore = hasContent;
 
-                    // ✅ FIX: Details now expects LawReportId in BOTH modes
-                    const detailsId = mode === "server" ? r.id : r.id;
+                    // ✅ Reader expects LawReportId in both modes
+                    const detailsId = r.id;
 
                     return (
                       <article
@@ -1020,6 +1019,7 @@ export default function LawReports() {
                           </button>
                         </div>
 
+                        {/* Only show this if there is truly no content */}
                         {!hasContent && !availabilityLoading && (
                           <div className="lr-soft" style={{ marginTop: 8 }}>
                             This report is not available yet.
