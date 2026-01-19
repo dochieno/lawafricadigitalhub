@@ -62,22 +62,6 @@ function labelFrom(options, value) {
   return options.find((o) => o.value === v)?.label || "—";
 }
 
-function dateInputFromIso(iso) {
-  if (!iso) return "";
-  try {
-    return String(iso).slice(0, 10);
-  } catch {
-    return "";
-  }
-}
-
-function isoOrNullFromDateInput(yyyyMmDd) {
-  const s = String(yyyyMmDd || "").trim();
-  if (!s) return null;
-  const d = new Date(`${s}T00:00:00.000Z`);
-  return Number.isFinite(d.getTime()) ? d.toISOString() : null;
-}
-
 /* =========================
    Options
 ========================= */
@@ -95,40 +79,47 @@ const CASETYPE_OPTIONS = [
   { label: "Constitutional", value: 6 },
 ];
 
-const SERVICE_OPTIONS = [
-  { label: "LawAfrica Law Reports (LLR)", value: 1 },
-  { label: "Odungas Digest", value: 2 },
-  { label: "Uganda Law Reports (ULR)", value: 3 },
-  { label: "Tanzania Law Reports (TLR)", value: 4 },
-  { label: "Southern Sudan Law Reports & Journal (SSLRJ)", value: 5 },
-  { label: "East Africa Law Reports (EALR)", value: 6 },
-  { label: "East Africa Court of Appeal Reports (EACA)", value: 7 },
-  { label: "East Africa General Reports (EAGR)", value: 8 },
-  { label: "East Africa Protectorate Law Reports (EAPLR)", value: 9 },
-  { label: "Zanzibar Protectorate Law Reports (ZPLR)", value: 10 },
-  { label: "Company Registry Search", value: 11 },
-  { label: "Uganda Law Society Reports (ULSR)", value: 12 },
-  { label: "Kenya Industrial Property Institute", value: 13 },
-];
-
 /* =========================
    Inline SVG Icons (no deps)
 ========================= */
 function Icon({ name }) {
-  const common = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", xmlns: "http://www.w3.org/2000/svg" };
+  const common = {
+    width: 18,
+    height: 18,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    xmlns: "http://www.w3.org/2000/svg",
+  };
 
   switch (name) {
     case "back":
       return (
         <svg {...common}>
-          <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path
+            d="M15 18l-6-6 6-6"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
       );
     case "refresh":
       return (
         <svg {...common}>
-          <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          <path d="M21 3v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path
+            d="M21 12a9 9 0 1 1-2.64-6.36"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <path
+            d="M21 3v6h-6"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
       );
     case "save":
@@ -140,8 +131,18 @@ function Icon({ name }) {
             strokeWidth="2"
             strokeLinejoin="round"
           />
-          <path d="M17 21v-8H7v8" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-          <path d="M7 3v5h8" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+          <path
+            d="M17 21v-8H7v8"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M7 3v5h8"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
         </svg>
       );
     default:
@@ -210,7 +211,6 @@ export default function AdminReportContent() {
 
   const initialTitle = location.state?.title || "";
 
-  // ✅ FIX: reportId can come from params OR state OR ?id= OR pathname
   const reportId = useMemo(() => resolveReportId({ params, location }), [params, location]);
 
   const [loading, setLoading] = useState(true);
@@ -256,39 +256,26 @@ export default function AdminReportContent() {
     setInfo("");
 
     try {
+      // Pull enum values from dto (or fall back to defaults)
       const decisionType = enumToInt(pick(dto, ["decisionType", "DecisionType"], 1), DECISION_OPTIONS, 1);
       const caseType = enumToInt(pick(dto, ["caseType", "CaseType"], 2), CASETYPE_OPTIONS, 2);
-      const service = enumToInt(pick(dto, ["service", "Service"], 1), SERVICE_OPTIONS, 1);
 
       const payload = {
-        category: 6,
-        countryId: pick(dto, ["countryId", "CountryId"], 0) ?? 0,
-        service,
-
-        citation: pick(dto, ["citation", "Citation"], null),
-        reportNumber: String(pick(dto, ["reportNumber", "ReportNumber"], "") || "").trim(),
-        year: pick(dto, ["year", "Year"], new Date().getUTCFullYear()),
-        caseNumber: pick(dto, ["caseNumber", "CaseNumber"], null),
-
+        contentText: String(contentHtml ?? ""),
         decisionType,
         caseType,
-
-        court: pick(dto, ["court", "Court"], null),
-        parties: pick(dto, ["parties", "Parties"], null),
-        judges: pick(dto, ["judges", "Judges"], null),
-        decisionDate: isoOrNullFromDateInput(dateInputFromIso(pick(dto, ["decisionDate", "DecisionDate"], null))),
-
-        contentText: String(contentHtml ?? ""),
       };
 
-      if (!payload.countryId || payload.countryId <= 0) throw new Error("Country is missing. Go back and Edit the report to set Country.");
-      if (!payload.reportNumber) throw new Error("ReportNumber is missing. Go back and Edit the report to set it.");
       if (!payload.contentText.trim()) throw new Error("Content is required.");
 
-      await api.put(`/law-reports/${reportId}`, payload);
+      // ✅ IMPORTANT: use content-only endpoint to avoid CourtType validation
+      await api.put(`/law-reports/${reportId}/content`, payload);
 
-      setLastSavedAt(new Date().toISOString());
+      const nowIso = new Date().toISOString();
+      setLastSavedAt(nowIso);
       setInfo("Saved.");
+
+      // Refresh to keep dto in sync (optional but nice)
       await load();
     } catch (e) {
       setError(getApiErrorMessage(e, "Failed to save report content."));
@@ -307,7 +294,6 @@ export default function AdminReportContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportId]);
 
-  // ✅ labels from DB
   const decisionLabel = dto ? labelFrom(DECISION_OPTIONS, pick(dto, ["decisionType", "DecisionType"], null)) : "—";
   const caseLabel = dto ? labelFrom(CASETYPE_OPTIONS, pick(dto, ["caseType", "CaseType"], null)) : "—";
 
@@ -376,9 +362,15 @@ export default function AdminReportContent() {
 
       <div className="rc-card">
         <div className="rc-meta">
-          <span className="rc-pill">Format: <b>Rich text (HTML)</b></span>
-          <span className="rc-pill">Decision: <b>{decisionLabel}</b></span>
-          <span className="rc-pill">Case type: <b>{caseLabel}</b></span>
+          <span className="rc-pill">
+            Format: <b>Rich text (HTML)</b>
+          </span>
+          <span className="rc-pill">
+            Decision: <b>{decisionLabel}</b>
+          </span>
+          <span className="rc-pill">
+            Case type: <b>{caseLabel}</b>
+          </span>
           <span className="rc-pill">
             Last saved: <b>{lastSavedAt ? new Date(lastSavedAt).toLocaleString() : "—"}</b>
           </span>
@@ -417,35 +409,35 @@ export default function AdminReportContent() {
           )}
         </div>
       </div>
-      <AdminPageFooter
-            left={
-                <>
-                <span className="admin-footer-brand">
-                    Law<span>A</span>frica
-                </span>
-                <span className="admin-footer-dot">•</span>
-                <span className="admin-footer-muted">Report Content</span>
-                <span className="admin-footer-dot">•</span>
-                <span className="admin-footer-muted">LawReportId: {reportId ?? "—"}</span>
-                {legalDocumentId ? (
-                    <>
-                    <span className="admin-footer-dot">•</span>
-                    <span className="admin-footer-muted">LegalDocumentId: {legalDocumentId}</span>
-                    </>
-                ) : null}
-                </>
-            }
-            right={
-                <span className="admin-footer-muted">
-                {saving
-                    ? "Saving…"
-                    : lastSavedAt
-                    ? `Last saved: ${new Date(lastSavedAt).toLocaleString()}`
-                    : "Tip: Paste from Word, then use “Remove format” if needed."}
-                </span>
-            }
-            />
 
+      <AdminPageFooter
+        left={
+          <>
+            <span className="admin-footer-brand">
+              Law<span>A</span>frica
+            </span>
+            <span className="admin-footer-dot">•</span>
+            <span className="admin-footer-muted">Report Content</span>
+            <span className="admin-footer-dot">•</span>
+            <span className="admin-footer-muted">LawReportId: {reportId ?? "—"}</span>
+            {legalDocumentId ? (
+              <>
+                <span className="admin-footer-dot">•</span>
+                <span className="admin-footer-muted">LegalDocumentId: {legalDocumentId}</span>
+              </>
+            ) : null}
+          </>
+        }
+        right={
+          <span className="admin-footer-muted">
+            {saving
+              ? "Saving…"
+              : lastSavedAt
+              ? `Last saved: ${new Date(lastSavedAt).toLocaleString()}`
+              : "Tip: Paste from Word, then use “Remove format” if needed."}
+          </span>
+        }
+      />
     </div>
   );
 }
