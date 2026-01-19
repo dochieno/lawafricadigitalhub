@@ -55,6 +55,9 @@ function isGlobalAdminUser() {
 // ----------------------
 // Formatting + TOC helpers
 // ----------------------
+// ----------------------
+// Formatting + TOC helpers
+// ----------------------
 const HEADING_SET = new Set([
   "INTRODUCTION",
   "BACKGROUND",
@@ -107,28 +110,23 @@ function looksLikeHeading(line) {
   if (words.length === 0) return false;
   if (words.length > 7) return false;
 
-  // treat "Orders Reasons" or "Orders / Reasons" as a heading
   const headingish = upper.replace(/\s+\/\s+/g, " / ").replace(/\s+/g, " ").trim();
   if (HEADING_SET.has(headingish)) return true;
 
-  // All-caps headings
+  // ALL CAPS headings
   const alpha = clean.replace(/[^A-Za-z]/g, "");
   const isAllCaps = alpha.length > 0 && alpha === alpha.toUpperCase();
   if (isAllCaps) return HEADING_SET.has(upper) || upper.length <= 28;
 
-  // Title-case single word headings like "Ruling"
-  if (words.length <= 3 && clean.length <= 28) {
-    // Allow common headings even if not ALL CAPS
-    return HEADING_SET.has(upper);
-  }
+  // Title-case short headings like "Ruling"
+  if (words.length <= 3 && clean.length <= 28) return HEADING_SET.has(upper);
 
   return false;
 }
 
-// list item detection
+// list item detection (expects marker at start of line)
 function parseListItem(line) {
-  const raw = String(line || "");
-  const s = raw.trim();
+  const s = String(line || "").trim();
   if (!s) return null;
 
   // (a) text
@@ -154,11 +152,58 @@ function parseListItem(line) {
   return null;
 }
 
+/**
+ * ✅ NEW: Reflow “block text” into readable structure.
+ * Goal: introduce paragraph breaks + heading breaks + list breaks
+ * so our parser can actually detect them.
+ */
+function reflowForReader(content) {
+  let t = normalizeText(content);
+
+  // normalize spaces but keep newlines
+  t = t.replace(/[ \t]+/g, " ");
+
+  // 1) Make "Orders Reasons" a clear heading block
+  t = t.replace(/\bOrders\s*\/?\s*Reasons\b/gi, "\n\nORDERS REASONS\n");
+
+  // 2) Break BEFORE common heading keywords if they appear mid-text
+  // (helps for pasted content like "... and; Orders Reasons a. ...")
+  t = t.replace(
+    /([.?!])\s+(Introduction|Background|Facts|Held|Holding|Issues|Issue|Analysis|Reasons|Judgment|Ruling|Decision|Order|Orders|Conclusion|Summary|Dissent|Concurring|Appeal|Application|Submissions)\b/g,
+    "$1\n\n$2"
+  );
+
+  // 3) Turn "Orders a." / "Reasons a." into proper list lines
+  t = t.replace(/\b(Orders|Reasons)\s+([a-z])\.\s+/gi, "$1\n\n$2. ");
+  t = t.replace(/\b(Orders|Reasons)\s+\(([a-z])\)\s+/gi, "$1\n\n$2. ");
+
+  // 4) Break list markers that occur inline: "... issue. a. First ... b. Second ..."
+  // Only do this when marker has a space before it (reduces false hits)
+  t = t.replace(/(\s)([a-z])\.\s+/gi, "\n$2. ");
+  t = t.replace(/(\s)(\d+)\.\s+/g, "\n$2. ");
+
+  // 5) Introduce paragraph breaks at legal-style connectors
+  // e.g. "; and" or "and;" often indicates a new thought/paragraph in case texts
+  t = t.replace(/;\s+and\s+/gi, ";\n\n");
+  t = t.replace(/;\s+/g, ";\n\n");
+
+  // 6) Sentence-based paragraphing for long blocks:
+  // break after a sentence when the next starts with common legal openers
+  t = t.replace(
+    /\.(\s+)(?=(Upon|The|And|In|On|After|Further|However|Therefore|Consequently|Where|Accordingly)\b)/g,
+    ".\n\n"
+  );
+
+  // 7) Clean up too many newlines
+  t = t.replace(/\n{3,}/g, "\n\n").trim();
+
+  return t;
+}
+
 function splitIntoBlocksWithListsAndHeadings(content) {
   const text = normalizeText(content);
   if (!text.trim()) return [];
 
-  // split by blank lines first
   const paras = text.split(/\n{2,}/g);
   const blocks = [];
   let sectionIndex = 0;
@@ -166,12 +211,9 @@ function splitIntoBlocksWithListsAndHeadings(content) {
   const pushHeading = (headingText) => {
     sectionIndex += 1;
     const base = slugify(headingText) || `section-${sectionIndex}`;
-    // ensure unique id if duplicates
     let id = base;
     let n = 2;
-    while (blocks.some((b) => b.type === "heading" && b.id === id)) {
-      id = `${base}-${n++}`;
-    }
+    while (blocks.some((b) => b.type === "heading" && b.id === id)) id = `${base}-${n++}`;
     blocks.push({ type: "heading", text: headingText.trim(), id });
   };
 
@@ -187,36 +229,19 @@ function splitIntoBlocksWithListsAndHeadings(content) {
   };
 
   for (const p of paras) {
-    const raw = String(p || "").replace(/\n{3,}/g, "\n\n").trim();
+    const raw = String(p || "").trim();
     if (!raw) continue;
 
     const lines = raw.split("\n").map((x) => x.trimEnd());
     const first = lines[0]?.trim() || "";
 
-    // heading in first line
     if (first && looksLikeHeading(first)) {
       pushHeading(first);
       const rest = lines.slice(1).join("\n").trim();
-      if (rest) {
-        // rest may contain list items; parse it below
-        // fallthrough: treat rest as its own paragraph/list parsing
-        // by reusing this function logic on the "rest" chunk
-        const restBlocks = splitIntoBlocksWithListsAndHeadings(rest);
-        // restBlocks may contain headings; we don't want nested headings from a "rest" of heading paragraph,
-        // so only keep para/list blocks
-        restBlocks.forEach((b) => {
-          if (b.type === "para" || b.type === "list") blocks.push(b);
-          else if (b.type === "heading") {
-            // still allow if it appears explicitly
-            blocks.push(b);
-          }
-        });
-      }
+      if (rest) pushPara(rest);
       continue;
     }
 
-    // parse as paragraph with potential lists inside
-    // We will scan line-by-line; if we see list items, group them.
     let buffer = [];
     let listItems = [];
     let listKind = null;
@@ -238,13 +263,11 @@ function splitIntoBlocksWithListsAndHeadings(content) {
     for (let i = 0; i < lines.length; i += 1) {
       const line = lines[i]?.trim() || "";
       if (!line) {
-        // blank line inside paragraph chunk: treat as paragraph break
         flushBufferAsPara();
         flushList();
         continue;
       }
 
-      // detect sub-heading lines even if no blank separation
       if (looksLikeHeading(line)) {
         flushBufferAsPara();
         flushList();
@@ -254,16 +277,13 @@ function splitIntoBlocksWithListsAndHeadings(content) {
 
       const li = parseListItem(line);
       if (li) {
-        // list begins: flush any buffered paragraph text
         flushBufferAsPara();
         if (!listKind) listKind = li.kind;
         listItems.push(li);
         continue;
       }
 
-      // continuation lines for last list item?
       if (listItems.length > 0) {
-        // If we are in a list, treat non-marker lines as continuation of previous item
         const last = listItems[listItems.length - 1];
         last.text = `${last.text}\n${line}`.trim();
         continue;
@@ -279,17 +299,8 @@ function splitIntoBlocksWithListsAndHeadings(content) {
   return blocks;
 }
 
-function formatDate(d) {
-  if (!d) return "";
-  const dt = new Date(d);
-  if (Number.isNaN(dt.getTime())) return String(d);
-  return dt.toISOString().slice(0, 10);
-}
-
 function buildToc(blocks) {
-  const headings = blocks.filter((b) => b.type === "heading");
-  // avoid TOC noise if there are very few headings
-  return headings.map((h) => ({ id: h.id, text: h.text }));
+  return blocks.filter((b) => b.type === "heading").map((h) => ({ id: h.id, text: h.text }));
 }
 
 function scrollToId(id) {
@@ -420,10 +431,15 @@ export default function LawReportReader() {
   }, [report, isInst, isPublic, isAdmin]);
 
   // ✅ Enhanced blocks with lists + headings
-  const blocks = useMemo(
-    () => splitIntoBlocksWithListsAndHeadings(report?.contentText || ""),
-    [report]
-  );
+    const formattedText = useMemo(
+        () => reflowForReader(report?.contentText || ""),
+        [report]
+    );
+
+    const blocks = useMemo(
+        () => splitIntoBlocksWithListsAndHeadings(formattedText),
+        [formattedText]
+    );
 
   // ✅ TOC built from headings
   const toc = useMemo(() => buildToc(blocks), [blocks]);
