@@ -17,8 +17,8 @@ function buildCoverUrl(coverImagePath) {
   // Keep original case (Linux is case-sensitive)
   const clean = String(coverImagePath)
     .replace(/^Storage[\\/]/i, "") // remove "Storage/" or "Storage\"
-    .replace(/^\/+/, "")           // trim leading slashes
-    .replace(/\\/g, "/");          // normalize backslashes to /
+    .replace(/^\/+/, "") // trim leading slashes
+    .replace(/\\/g, "/"); // normalize backslashes to /
 
   return `${getServerOrigin()}/storage/${clean}`;
 }
@@ -266,15 +266,42 @@ export default function Explore() {
       {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
 
       <header className="explore-header">
-        <h1 className="explore-title">Explore LawAfrica Legal Knowledge Hub</h1>
+        <div className="explore-header-top">
+          <div className="explore-title-wrap">
+            <h1 className="explore-title">Explore LawAfrica Legal Knowledge Hub</h1>
+            <p className="explore-subtitle">
+              Search, preview, and save trusted legal resources to your library.
+            </p>
+          </div>
+
+          <div className="explore-stats" aria-label="Results count">
+            <span className="explore-count">
+              {filtered.length} {filtered.length === 1 ? "result" : "results"}
+            </span>
+          </div>
+        </div>
 
         <div className="explore-controls">
-          <input
-            className="explore-search"
-            placeholder="Search by title, category, country…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
+          <div className="explore-searchWrap">
+            <span className="explore-searchIcon" aria-hidden="true">⌕</span>
+            <input
+              className="explore-search"
+              placeholder="Search by title, category, country…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+            {q ? (
+              <button
+                type="button"
+                className="explore-clearBtn"
+                onClick={() => setQ("")}
+                aria-label="Clear search"
+                title="Clear"
+              >
+                ✕
+              </button>
+            ) : null}
+          </div>
 
           <label className="explore-checkbox">
             <input
@@ -282,7 +309,7 @@ export default function Explore() {
               checked={showPremium}
               onChange={(e) => setShowPremium(e.target.checked)}
             />
-            Show premium content
+            <span>Show premium content</span>
           </label>
         </div>
       </header>
@@ -356,18 +383,21 @@ export default function Explore() {
                     )}
 
                     {d.isPremium && isInst && !accessLoading && hasFullAccess && (
-                      <span className="badge free" style={{ marginLeft: 8 }}>
+                      <span className="badge included" style={{ marginLeft: 8 }}>
                         Included
                       </span>
                     )}
                   </div>
 
-                  <h3 className="explore-doc-title">{d.title}</h3>
+                  <h3 className="explore-doc-title" title={d.title}>
+                    {d.title}
+                  </h3>
 
-                  <p className="explore-meta">
+                  <p className="explore-meta" title={`${d.countryName} • ${d.category}`}>
                     {d.countryName} • {d.category}
                   </p>
 
+                  {/* Actions (logic unchanged) */}
                   {!d.isPremium && (
                     <button
                       className="explore-btn"
@@ -379,11 +409,15 @@ export default function Explore() {
                         inLibrary ? removeFromLibrary(d.id) : addToLibrary(d.id);
                       }}
                       style={{
-                        opacity: canAddLibraryHere ? 1 : 0.5,
+                        opacity: canAddLibraryHere ? 1 : 0.55,
                         cursor: canAddLibraryHere ? "pointer" : "not-allowed",
                       }}
                     >
-                      {availabilityLoading ? "Checking…" : inLibrary ? "🗑️ Remove from Library" : "➕ Add to Library"}
+                      {availabilityLoading
+                        ? "Checking…"
+                        : inLibrary
+                        ? "Remove from Library"
+                        : "Add to Library"}
                     </button>
                   )}
 
@@ -403,11 +437,15 @@ export default function Explore() {
                         inLibrary ? removeFromLibrary(d.id) : addToLibrary(d.id);
                       }}
                       style={{
-                        opacity: canAddLibraryHere ? 1 : 0.5,
+                        opacity: canAddLibraryHere ? 1 : 0.55,
                         cursor: canAddLibraryHere ? "pointer" : "not-allowed",
                       }}
                     >
-                      {accessLoading || availabilityLoading ? "Checking…" : inLibrary ? "🗑️ Remove from Library" : "➕ Add to Library"}
+                      {accessLoading || availabilityLoading
+                        ? "Checking…"
+                        : inLibrary
+                        ? "Remove from Library"
+                        : "Add to Library"}
                     </button>
                   )}
 
@@ -422,11 +460,11 @@ export default function Explore() {
                         navigate(`/dashboard/documents/${d.id}/read`);
                       }}
                       style={{
-                        opacity: hasContent ? 1 : 0.5,
+                        opacity: hasContent ? 1 : 0.55,
                         cursor: hasContent ? "pointer" : "not-allowed",
                       }}
                     >
-                      📖 Read Now
+                      Read Now
                     </button>
                   )}
 
@@ -438,7 +476,7 @@ export default function Explore() {
                         navigate(`/dashboard/documents/${d.id}`);
                       }}
                     >
-                      📖 View / Preview
+                      View / Preview
                     </button>
                   )}
                 </div>
@@ -449,15 +487,19 @@ export default function Explore() {
       )}
 
       <section className="explore-cta">
-        <h2>Build Your Personal Legal Library</h2>
-        <p>
-          Save free publications to your library and keep all your trusted legal
-          resources organized in one place for quick access anytime.
-        </p>
+        <div className="explore-cta-inner">
+          <div>
+            <h2>Build Your Personal Legal Library</h2>
+            <p>
+              Save free publications to your library and keep all your trusted legal resources
+              organized in one place for quick access anytime.
+            </p>
+          </div>
 
-        <button className="explore-cta-btn" onClick={() => navigate("/dashboard/library")}>
-          📚 Go to My Library
-        </button>
+          <button className="explore-cta-btn" onClick={() => navigate("/dashboard/library")}>
+            Go to My Library
+          </button>
+        </div>
       </section>
     </div>
   );
