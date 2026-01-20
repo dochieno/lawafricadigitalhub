@@ -107,6 +107,7 @@ function extractAxiosError(e) {
 // localStorage keys for returning from Paystack
 const LS_REG_INTENT = "la_reg_intent_id";
 const LS_REG_EMAIL = "la_reg_email";
+const LS_REG_IDENTITY = "la_reg_identity_no";
 
 // ✅ store creds across Paystack redirect so TwoFactorSetup works
 const LS_REG_USERNAME = "la_reg_username";
@@ -129,6 +130,15 @@ export default function Register() {
   const [email, setEmail] = useState("");
 
   const [phoneNumber, setPhoneNumber] = useState("");
+
+  // ✅ Identity number required for Public users (backend validates this)
+  const [identityNumber, setIdentityNumber] = useState(() => {
+    try {
+      return localStorage.getItem(LS_REG_IDENTITY) || "";
+    } catch {
+      return "";
+    }
+  });
 
   // Countries
   const [countries, setCountries] = useState([]);
@@ -280,6 +290,17 @@ export default function Register() {
     }
   }, [isPublic]);
 
+  // ✅ persist identityNumber (best effort)
+  useEffect(() => {
+    try {
+      const v = (identityNumber || "").trim();
+      if (v) localStorage.setItem(LS_REG_IDENTITY, v);
+      else localStorage.removeItem(LS_REG_IDENTITY);
+    } catch {
+      // ignore
+    }
+  }, [identityNumber]);
+
   // -----------------------------
   // Validation helpers
   // -----------------------------
@@ -308,6 +329,15 @@ export default function Register() {
     }
     if (name === "lastName") {
       if (!v.trim()) return "Last name is required.";
+    }
+
+    if (name === "identityNumber") {
+      if (isPublic) {
+        const t = v.trim();
+        if (!t) return "Identity number is required for public users.";
+        if (!/^[A-Za-z0-9\/\-]+$/.test(t)) return "Identity number can contain letters, numbers, / or - only.";
+        if (t.length < 4) return "Identity number looks too short.";
+      }
     }
 
     if (name === "username") {
@@ -377,6 +407,11 @@ export default function Register() {
       }
     }
 
+    if (name === "countryId") {
+      // optional; no strict validation
+      return null;
+    }
+
     return null;
   }
 
@@ -388,6 +423,7 @@ export default function Register() {
       ["lastName", lastName],
       ["username", username],
       ["email", email],
+      ["identityNumber", identityNumber],
       ["phoneNumber", phoneNumber],
       ["password", password],
       ["confirmPassword", confirmPassword],
@@ -417,9 +453,11 @@ export default function Register() {
       lastName: true,
       username: true,
       email: true,
+      identityNumber: true,
       phoneNumber: true,
       password: true,
       confirmPassword: true,
+      countryId: true,
       institutionId: true,
       institutionMemberType: true,
       institutionAccessCode: true,
@@ -437,7 +475,9 @@ export default function Register() {
   const isFormValidForSubmit = useMemo(() => {
     const requiredNames = ["firstName", "lastName", "username", "email", "password", "confirmPassword"];
 
+    if (isPublic) requiredNames.push("identityNumber");
     if (isPublic && publicPayMethod === "MPESA") requiredNames.push("phoneNumber");
+
     if (!isPublic) {
       requiredNames.push("institutionId");
       requiredNames.push("institutionMemberType");
@@ -455,12 +495,14 @@ export default function Register() {
           ? username
           : n === "email"
           ? email
+          : n === "identityNumber"
+          ? identityNumber
+          : n === "phoneNumber"
+          ? phoneNumber
           : n === "password"
           ? password
           : n === "confirmPassword"
           ? confirmPassword
-          : n === "phoneNumber"
-          ? phoneNumber
           : n === "institutionId"
           ? institutionId
           : n === "institutionMemberType"
@@ -478,9 +520,10 @@ export default function Register() {
     lastName,
     username,
     email,
+    identityNumber,
+    phoneNumber,
     password,
     confirmPassword,
-    phoneNumber,
     institutionId,
     institutionMemberType,
     institutionAccessCode,
@@ -515,6 +558,8 @@ export default function Register() {
   async function createRegistrationIntentIfNeeded() {
     if (intentId && nextAction) return { intentId, nextAction };
 
+    const idNo = (identityNumber || "").trim();
+
     const payload = {
       email: email.trim(),
       username: username.trim(),
@@ -523,6 +568,10 @@ export default function Register() {
       lastName: lastName.trim(),
       phoneNumber: phoneNumber.trim() || null,
       countryId: countryId ? Number(countryId) : null,
+
+      // ✅ required for Public on your backend (compat: send both)
+      identityNumber: isPublic ? idNo : null,
+      referenceNumber: isPublic ? idNo : null,
 
       institutionAccessCode: !isPublic ? institutionAccessCode.trim().toUpperCase() : null,
       userType,
@@ -574,6 +623,7 @@ export default function Register() {
 
     localStorage.setItem(LS_REG_INTENT, String(registrationIntentId));
     localStorage.setItem(LS_REG_EMAIL, email.trim());
+    localStorage.setItem(LS_REG_IDENTITY, (identityNumber || "").trim());
 
     localStorage.setItem(LS_REG_USERNAME, username.trim());
     localStorage.setItem(LS_REG_PASSWORD, password);
@@ -606,6 +656,7 @@ export default function Register() {
 
         localStorage.removeItem(LS_REG_INTENT);
         localStorage.removeItem(LS_REG_EMAIL);
+        localStorage.removeItem(LS_REG_IDENTITY);
 
         nav("/twofactor-setup", {
           replace: true,
@@ -617,7 +668,7 @@ export default function Register() {
 
       if (data?.status === "PAID") {
         setWaitingPayment(true);
-        setStatusText("Payment received. Finalizing account creation (sending emails)...");
+        setStatusText("Payment received. Finalizing account creation...");
         return;
       }
 
@@ -664,6 +715,9 @@ export default function Register() {
 
     const storedEmail = localStorage.getItem(LS_REG_EMAIL) || "";
     if (!email && storedEmail) setEmail(storedEmail);
+
+    const storedIdNo = localStorage.getItem(LS_REG_IDENTITY) || "";
+    if (!identityNumber && storedIdNo) setIdentityNumber(storedIdNo);
 
     const storedUsername = localStorage.getItem(LS_REG_USERNAME) || "";
     const storedPassword = localStorage.getItem(LS_REG_PASSWORD) || "";
@@ -732,6 +786,7 @@ export default function Register() {
 
             localStorage.setItem(LS_REG_USERNAME, username.trim());
             localStorage.setItem(LS_REG_PASSWORD, password);
+            localStorage.setItem(LS_REG_IDENTITY, (identityNumber || "").trim());
 
             setWaitingPayment(true);
             setStatusText("Waiting for payment confirmation... Check your phone and approve.");
@@ -756,6 +811,7 @@ export default function Register() {
 
       localStorage.setItem(LS_REG_USERNAME, username.trim());
       localStorage.setItem(LS_REG_PASSWORD, password);
+      localStorage.setItem(LS_REG_IDENTITY, (identityNumber || "").trim());
 
       const token = await fetchSetupTokenForOnboarding(username.trim(), password);
       setPostRegisterSetupToken(token);
@@ -794,6 +850,7 @@ export default function Register() {
 
     localStorage.removeItem(LS_REG_INTENT);
     localStorage.removeItem(LS_REG_EMAIL);
+    localStorage.removeItem(LS_REG_IDENTITY);
     localStorage.removeItem(LS_REG_USERNAME);
     localStorage.removeItem(LS_REG_PASSWORD);
   }
@@ -932,13 +989,12 @@ export default function Register() {
         <div className="register-info-panel" style={{ flex: "0 0 40%" }}>
           <img src="/logo.png" alt="LawAfrica" className="register-brand-logo" />
           <h1>Account created ✅</h1>
-          <p className="register-tagline">Next step: verify email and complete 2FA setup.</p>
+          <p className="register-tagline">Next step: set up 2FA.</p>
 
           <ul className="register-benefits">
-            <li>✔ Verify your email (activation link sent)</li>
-            <li>✔ Check your email for the 2FA setup QR/setup instructions</li>
+            <li>✔ Check your email for 2FA setup instructions</li>
             <li>✔ Add LawAfrica to your Authenticator app</li>
-            <li>✔ Verify using setup token + 6-digit code</li>
+            <li>✔ Enter the 6-digit code to finish setup</li>
           </ul>
         </div>
 
@@ -1035,7 +1091,7 @@ export default function Register() {
 
         <ul className="register-benefits">
           <li>✔ Secure signup via registration intent</li>
-          <li>✔ Email verification + 2FA setup after account creation</li>
+          <li>✔ 2FA setup after account creation</li>
           <li>✔ Institution memberships can be managed by your admin</li>
         </ul>
       </div>
@@ -1213,32 +1269,42 @@ export default function Register() {
               </div>
             )}
 
-            <label className="field-label">
-              Phone {isPublic ? (publicPayMethod === "MPESA" ? "(required for Mpesa)" : "(optional)") : "(optional)"}
-            </label>
-            <input
-              value={phoneNumber}
-              onChange={(e) => {
-                setPhoneNumber(e.target.value);
-                liveValidate("phoneNumber", e.target.value);
-              }}
-              onBlur={(e) => {
-                markTouched("phoneNumber");
-                const msg = validateField("phoneNumber", e.target.value);
-                msg ? setFieldError("phoneNumber", msg) : clearFieldError("phoneNumber");
-              }}
-              disabled={lockForm}
-              style={inputStyle("phoneNumber")}
-              placeholder={isPublic && publicPayMethod === "MPESA" ? "e.g. 2547XXXXXXXX or 07XXXXXXXX" : "Optional"}
-              aria-invalid={!!(touched.phoneNumber && fieldErrors.phoneNumber)}
-            />
-            <FieldError name="phoneNumber" />
+            {isPublic && (
+              <>
+                <label className="field-label">Identity Number (required)</label>
+                <input
+                  value={identityNumber}
+                  onChange={(e) => {
+                    setIdentityNumber(e.target.value);
+                    liveValidate("identityNumber", e.target.value);
+                  }}
+                  onBlur={(e) => {
+                    markTouched("identityNumber");
+                    const msg = validateField("identityNumber", e.target.value);
+                    msg ? setFieldError("identityNumber", msg) : clearFieldError("identityNumber");
+                  }}
+                  disabled={lockForm}
+                  style={inputStyle("identityNumber")}
+                  placeholder="National ID / Passport"
+                  aria-invalid={!!(touched.identityNumber && fieldErrors.identityNumber)}
+                />
+                <FieldError name="identityNumber" />
+              </>
+            )}
 
+            {/* ✅ Country + Phone on same row */}
             <div className="grid-2">
               <div>
                 <label className="field-label">Country</label>
                 {countries.length > 0 ? (
-                  <select value={countryId} onChange={(e) => setCountryId(e.target.value)} disabled={lockForm}>
+                  <select
+                    value={countryId}
+                    onChange={(e) => {
+                      setCountryId(e.target.value);
+                      // optional field; no strict validation
+                    }}
+                    disabled={lockForm}
+                  >
                     <option value="">Select country</option>
                     {countries.map((c) => (
                       <option key={c.id} value={c.id}>
@@ -1256,8 +1322,28 @@ export default function Register() {
                   />
                 )}
               </div>
-              <div style={{ display: "flex", alignItems: "end", color: "#6b7280", fontSize: 12 }}>
-                {/* Reference number removed */}
+
+              <div>
+                <label className="field-label">
+                  Phone {isPublic ? (publicPayMethod === "MPESA" ? "(required for Mpesa)" : "(optional)") : "(optional)"}
+                </label>
+                <input
+                  value={phoneNumber}
+                  onChange={(e) => {
+                    setPhoneNumber(e.target.value);
+                    liveValidate("phoneNumber", e.target.value);
+                  }}
+                  onBlur={(e) => {
+                    markTouched("phoneNumber");
+                    const msg = validateField("phoneNumber", e.target.value);
+                    msg ? setFieldError("phoneNumber", msg) : clearFieldError("phoneNumber");
+                  }}
+                  disabled={lockForm}
+                  style={inputStyle("phoneNumber")}
+                  placeholder={isPublic && publicPayMethod === "MPESA" ? "e.g. 2547XXXXXXXX or 07XXXXXXXX" : "Optional"}
+                  aria-invalid={!!(touched.phoneNumber && fieldErrors.phoneNumber)}
+                />
+                <FieldError name="phoneNumber" />
               </div>
             </div>
 
@@ -1435,7 +1521,7 @@ export default function Register() {
 
             {!lockForm && !isFormValidForSubmit && (
               <div style={{ marginTop: 10, fontSize: 12, color: "#6b7280" }}>
-                Complete the required fields (including valid username + password) to continue.
+                Complete the required fields (including identity number for Public users) to continue.
               </div>
             )}
 
