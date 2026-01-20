@@ -23,9 +23,23 @@ function getApiErrorMessage(err, fallback = "Request failed.") {
   return fallback;
 }
 
+// ✅ small helper for masking tokens in UI
+function maskToken(t) {
+  const s = String(t || "").trim();
+  if (!s) return "";
+  if (s.length <= 10) return s;
+  return `${s.slice(0, 6)}…${s.slice(-4)}`;
+}
+
 export default function TwoFactorSetup() {
   const nav = useNavigate();
   const location = useLocation();
+
+  // ✅ from 2FA email link (?token=xxxx)
+  const urlToken = useMemo(() => {
+    const sp = new URLSearchParams(location.search || "");
+    return (sp.get("token") || "").trim();
+  }, [location.search]);
 
   // ✅ only auto-fetch when coming from Register flow
   const autoFetchSetupToken = !!location.state?.autoFetchSetupToken;
@@ -35,6 +49,7 @@ export default function TwoFactorSetup() {
 
   const initialSetupToken =
     (location.state?.setupToken || "").trim() ||
+    urlToken ||
     (() => {
       try {
         return (localStorage.getItem(LS_2FA_SETUP_TOKEN) || "").trim();
@@ -74,6 +89,7 @@ export default function TwoFactorSetup() {
 
   // ✅ Only visible input
   const [code, setCode] = useState("");
+  const codeInputRef = useRef(null);
 
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
@@ -81,7 +97,6 @@ export default function TwoFactorSetup() {
   const [info, setInfo] = useState("");
 
   const canResend = useMemo(() => username.trim() && password, [username, password]);
-
   const autoFetchRanRef = useRef(false);
 
   // ✅ keep creds stored (best effort) — still hidden
@@ -111,6 +126,18 @@ export default function TwoFactorSetup() {
     }
   }, [setupToken]);
 
+  // ✅ if token comes from URL and state/localstorage was empty, focus code input
+  useEffect(() => {
+    if (urlToken && !setupToken) setSetupToken(urlToken);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlToken]);
+
+  useEffect(() => {
+    // focus once page loads and input is enabled
+    const t = setTimeout(() => codeInputRef.current?.focus?.(), 200);
+    return () => clearTimeout(t);
+  }, []);
+
   function clearStoredCreds() {
     try {
       localStorage.removeItem(LS_REG_USERNAME);
@@ -137,7 +164,7 @@ export default function TwoFactorSetup() {
     }
 
     if (!canResend) {
-      if (!silent) setError("We couldn’t recover your session details. Please sign in again.");
+      if (!silent) setError("Your session details are missing. Please sign in again to resend setup.");
       return "";
     }
 
@@ -153,13 +180,13 @@ export default function TwoFactorSetup() {
       const data = res.data?.data ?? res.data;
 
       if (data?.setupToken) {
-        setSetupToken(data.setupToken);
-        if (!silent) setInfo("Setup prepared. Enter your 6-digit code to continue.");
+        setSetupToken(String(data.setupToken).trim());
+        if (!silent) setInfo("Setup refreshed. Enter the 6-digit code from your authenticator app.");
         return data.setupToken;
       }
 
       if (!silent) {
-        setInfo("A new setup email has been sent. If token isn’t returned by the API, use the email token.");
+        setInfo("A new setup email has been sent. Use the token in the email if one isn’t shown here.");
       }
       return "";
     } catch (err) {
@@ -184,8 +211,9 @@ export default function TwoFactorSetup() {
       const t = await resendSetupEmail({ silent: true });
       if (t) {
         setInfo("Ready. Enter the 6-digit code from your authenticator app.");
+        setTimeout(() => codeInputRef.current?.focus?.(), 150);
       } else {
-        setInfo("Check your email for setup instructions. If needed, click “Resend setup email”.");
+        setInfo("Check your email for setup instructions. If needed, use “Resend setup”.");
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -197,12 +225,12 @@ export default function TwoFactorSetup() {
     setInfo("");
 
     if (!setupToken.trim()) {
-      setError("Setup is not ready yet. Click “Resend setup email” to prepare it.");
+      setError("Missing setup token. Open the 2FA email link again, or use “Resend setup”.");
       return;
     }
 
     if (!/^\d{6}$/.test(code)) {
-      setError("Enter a valid 6-digit code from your Authenticator app.");
+      setError("Enter a valid 6-digit code.");
       return;
     }
 
@@ -216,7 +244,7 @@ export default function TwoFactorSetup() {
       clearStoredCreds();
       clearStoredSetupToken();
 
-      setInfo("2FA enabled successfully. Redirecting to sign in…");
+      setInfo("2FA enabled. Redirecting to sign in…");
       setTimeout(() => nav("/login", { replace: true }), 900);
     } catch (err) {
       setError(getApiErrorMessage(err, "Invalid/expired setup token or invalid code."));
@@ -227,22 +255,77 @@ export default function TwoFactorSetup() {
 
   const actionDisabled = resendLoading || loading;
 
-  // ✅ If we have no creds, don't show hidden fields — just guide user
-  const hasSession = !!(username.trim() && password);
+  // ✅ If we have no creds, we can still verify if token was provided via email link.
+  const hasToken = !!setupToken.trim();
+  const canVerify = !actionDisabled && hasToken;
+
+  // ✅ Resend requires creds
+  const canShowResend = !!(username.trim() && password);
+
+  // ---------- UI helpers ----------
+  const cardStyle = {
+    width: "100%",
+    maxWidth: 560,
+    borderRadius: 22,
+    background: "rgba(255,255,255,0.92)",
+    boxShadow: "0 22px 60px rgba(17,24,39,0.10)",
+    border: "1px solid rgba(229,231,235,0.9)",
+    backdropFilter: "blur(10px)",
+    padding: "28px 26px",
+  };
+
+  const pillStyle = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "8px 12px",
+    borderRadius: 999,
+    border: "1px solid #e5e7eb",
+    background: "#fff",
+    color: "#374151",
+    fontSize: 12,
+    fontWeight: 800,
+  };
+
+  const primaryBtnStyle = {
+    marginTop: 14,
+    borderRadius: 14,
+    padding: "12px 14px",
+    fontWeight: 900,
+    letterSpacing: "0.2px",
+  };
+
+  const secondaryBtnStyle = {
+    border: "1px solid #e5e7eb",
+    background: "white",
+    color: "#111827",
+    fontWeight: 900,
+    padding: "10px 12px",
+    borderRadius: 14,
+    cursor: actionDisabled ? "not-allowed" : "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+  };
 
   return (
-    <div className="auth-page">
-      <div className="auth-content">
-        <div
-          className="twofactor-card"
-          style={{
-            maxWidth: 520,
-            padding: "28px 26px",
-            borderRadius: 18,
-            boxShadow: "0 18px 40px rgba(17,24,39,0.08)",
-          }}
-        >
-          <div className="brand-header" style={{ marginBottom: 18 }}>
+    <div className="auth-page" style={{ position: "relative" }}>
+      {/* subtle background accents (no new CSS required) */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          background:
+            "radial-gradient(900px 450px at 20% 10%, rgba(128,16,16,0.10), transparent 55%), radial-gradient(800px 400px at 90% 30%, rgba(29,78,216,0.10), transparent 55%)",
+        }}
+      />
+
+      <div className="auth-content" style={{ position: "relative", zIndex: 1 }}>
+        <div className="twofactor-card" style={cardStyle}>
+          {/* Header */}
+          <div className="brand-header" style={{ marginBottom: 16 }}>
             <img
               src="/logo.png"
               alt="LawAfrica Logo"
@@ -254,14 +337,33 @@ export default function TwoFactorSetup() {
             </p>
           </div>
 
-          <h2 style={{ marginBottom: 8 }}>Set up Two-Factor Authentication</h2>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            <div>
+              <h2 style={{ marginBottom: 6 }}>Two-Factor Setup</h2>
+              <p className="subtitle" style={{ marginBottom: 0, maxWidth: 460 }}>
+                Open your authenticator app and enter the <b>6-digit</b> code. If you came from an email link, your setup
+                token is already included.
+              </p>
+            </div>
 
-          <p className="subtitle" style={{ marginBottom: 16 }}>
-            Open your authenticator app (Google Authenticator / Authy), then enter the 6-digit code below.
-          </p>
+            <span style={pillStyle} title={hasToken ? "Setup token detected" : "No setup token yet"}>
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: 999,
+                  background: hasToken ? "#10b981" : "#f59e0b",
+                  display: "inline-block",
+                }}
+              />
+              {hasToken ? `Token: ${maskToken(setupToken)}` : "Token needed"}
+            </span>
+          </div>
 
+          {/* Alerts */}
           {error && (
-            <div className="error-box" style={{ marginBottom: 12 }}>
+            <div className="error-box" style={{ marginTop: 14, marginBottom: 10 }}>
               {String(error)}
             </div>
           )}
@@ -270,128 +372,189 @@ export default function TwoFactorSetup() {
             <div
               className="success-box"
               style={{
-                background: "#e9fff3",
+                background: "#ecfdf3",
                 border: "1px solid #a7f3d0",
                 color: "#065f46",
                 padding: 12,
-                borderRadius: 12,
-                marginBottom: 14,
+                borderRadius: 14,
+                marginTop: 14,
+                marginBottom: 10,
+                lineHeight: 1.35,
               }}
             >
               {String(info)}
             </div>
           )}
 
-          {/* ✅ Resend link (kept) */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14 }}>
-            <div style={{ fontSize: 13, color: "#6b7280" }}>
-              Didn’t get the setup email?
+          {/* Quick guidance */}
+          <div
+            style={{
+              marginTop: 12,
+              padding: 14,
+              borderRadius: 16,
+              border: "1px solid #eef2ff",
+              background: "#f8fafc",
+              color: "#0f172a",
+            }}
+          >
+            <div style={{ fontWeight: 900, marginBottom: 6 }}>What to do</div>
+            <ol style={{ margin: 0, paddingLeft: 18, color: "#334155", fontSize: 13, lineHeight: 1.5 }}>
+              <li>Open your authenticator app and find “LawAfrica”.</li>
+              <li>Type the <b>6-digit code</b> shown there.</li>
+              <li>Tap <b>Enable 2FA</b> to finish.</li>
+            </ol>
+          </div>
+
+          {/* Resend section */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+              marginTop: 14,
+            }}
+          >
+            <div style={{ fontSize: 13, color: "#64748b" }}>
+              Need a new setup email?
+              <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
+                (Only available if we can recover your session.)
+              </div>
             </div>
 
             <button
               type="button"
               onClick={() => !actionDisabled && resendSetupEmail()}
-              disabled={actionDisabled || !hasSession}
+              disabled={actionDisabled || !canShowResend}
               style={{
-                border: "1px solid #e5e7eb",
-                background: "white",
-                color: hasSession ? "#8b1c1c" : "#9ca3af",
-                fontWeight: 900,
-                padding: "10px 12px",
-                borderRadius: 12,
-                cursor: actionDisabled || !hasSession ? "not-allowed" : "pointer",
+                ...secondaryBtnStyle,
+                color: canShowResend ? "#801010" : "#9ca3af",
+                borderColor: "#e5e7eb",
               }}
-              title={hasSession ? "Resend setup email" : "Please sign in again to resend"}
+              title={canShowResend ? "Resend setup email" : "Sign in again to resend"}
             >
-              {resendLoading ? "Resending…" : "Resend setup email"}
+              {resendLoading ? "Sending…" : "Resend setup"}
+              <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>
+                ↻
+              </span>
             </button>
           </div>
 
-          {!hasSession && (
+          {!canShowResend && (
             <div
               style={{
+                marginTop: 12,
                 background: "#fff7ed",
                 border: "1px solid #fed7aa",
                 color: "#7c2d12",
                 padding: 12,
-                borderRadius: 12,
-                marginBottom: 14,
+                borderRadius: 14,
                 fontSize: 13,
                 lineHeight: 1.35,
               }}
             >
-              We can’t recover your session details to complete setup. Please go back to sign in and try again.
+              We can’t resend without your session details. If you didn’t open this from the email link, please sign in
+              again and complete 2FA setup.
             </div>
           )}
 
-          <form onSubmit={verifySetup} style={{ marginTop: 6 }}>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: "#111827", marginBottom: 8 }}>
-              6-digit code
+          {/* Verify form */}
+          <form onSubmit={verifySetup} style={{ marginTop: 14 }}>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                fontSize: 13,
+                fontWeight: 900,
+                color: "#0f172a",
+                marginBottom: 8,
+              }}
+            >
+              <span>Authenticator code</span>
+              <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 800 }}>6 digits</span>
             </label>
 
             <input
+              ref={codeInputRef}
               type="text"
               inputMode="numeric"
+              autoComplete="one-time-code"
               placeholder="123456"
               value={code}
               onChange={(e) => {
-                // ✅ Keep digits only, max 6
                 const v = String(e.target.value || "").replace(/\D/g, "").slice(0, 6);
                 setCode(v);
               }}
               maxLength={6}
-              disabled={actionDisabled || !hasSession}
+              disabled={actionDisabled}
               style={{
                 textAlign: "center",
-                letterSpacing: "6px",
-                fontSize: 18,
+                letterSpacing: "10px",
+                fontSize: 20,
                 fontWeight: 900,
+                borderRadius: 16,
+                padding: "14px 12px",
               }}
             />
 
             <button
               type="submit"
-              disabled={actionDisabled || !hasSession}
-              style={{
-                marginTop: 14,
-                borderRadius: 12,
-              }}
+              disabled={!canVerify}
+              style={primaryBtnStyle}
+              title={!hasToken ? "Missing setup token" : "Enable 2FA"}
             >
-              {loading ? "Verifying..." : "Enable 2FA"}
+              {loading ? "Enabling…" : "Enable 2FA"}
             </button>
 
-            <div style={{ marginTop: 14, textAlign: "center" }}>
-              <span
-                role="button"
-                tabIndex={0}
-                style={{
-                  cursor: actionDisabled ? "not-allowed" : "pointer",
-                  color: actionDisabled ? "#9ca3af" : "#8b1c1c",
-                  fontWeight: 900,
-                  textDecoration: "none",
-                }}
+            {/* token help */}
+            {!hasToken && (
+              <div style={{ marginTop: 12, fontSize: 13, color: "#64748b", lineHeight: 1.35 }}>
+                <b>Missing token?</b> Open the 2FA email link again (it includes the token), or use “Resend setup” if
+                available.
+              </div>
+            )}
+
+            {/* footer actions */}
+            <div style={{ marginTop: 14, display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+              <button
+                type="button"
                 onClick={() => !actionDisabled && nav("/login")}
-                onKeyDown={(e) => {
-                  if (actionDisabled) return;
-                  if (e.key === "Enter" || e.key === " ") nav("/login");
+                disabled={actionDisabled}
+                style={{
+                  ...secondaryBtnStyle,
+                  borderRadius: 999,
+                  padding: "10px 14px",
                 }}
-                onMouseEnter={(e) => {
-                  if (actionDisabled) return;
-                  e.currentTarget.style.textDecoration = "underline";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.textDecoration = "none";
-                }}
-                aria-disabled={actionDisabled}
               >
                 Back to sign in
-              </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (actionDisabled) return;
+                  setCode("");
+                  setError("");
+                  setInfo("");
+                  setTimeout(() => codeInputRef.current?.focus?.(), 120);
+                }}
+                disabled={actionDisabled}
+                style={{
+                  ...secondaryBtnStyle,
+                  borderRadius: 999,
+                  padding: "10px 14px",
+                }}
+                title="Clear code input"
+              >
+                Clear
+              </button>
             </div>
           </form>
         </div>
       </div>
 
-      <footer className="auth-footer">
+      <footer className="auth-footer" style={{ position: "relative", zIndex: 1 }}>
         <div className="auth-footer-inner">
           <h4 className="auth-footer-title">
             <span className="lock-icon" aria-hidden="true">

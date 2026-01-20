@@ -11,7 +11,7 @@ const PAYMENT_PURPOSE_PUBLIC_SIGNUP = "PublicSignupFee";
 
 const USER_TYPES = [
   { value: "Public", label: "Individual (Public)", sub: "Pay once, access free content and your purchases" },
-  { value: "Institution", label: "Institution User", sub: "Use your institution email & reference number" },
+  { value: "Institution", label: "Institution User", sub: "Use your institution email & access code" },
 ];
 
 const INSTITUTION_MEMBER_TYPES = [
@@ -134,8 +134,6 @@ export default function Register() {
   const [countries, setCountries] = useState([]);
   const [countryId, setCountryId] = useState("");
 
-  const [referenceNumber, setReferenceNumber] = useState("");
-
   // Institution fields (hidden for Public)
   const [institutionId, setInstitutionId] = useState("");
   const [institutionAccessCode, setInstitutionAccessCode] = useState("");
@@ -177,7 +175,7 @@ export default function Register() {
   const [registrationComplete, setRegistrationComplete] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
-  // ✅ NEW: store token so success screen button works too
+  // ✅ store token so success screen button works too
   const [postRegisterSetupToken, setPostRegisterSetupToken] = useState("");
 
   // General UI
@@ -347,10 +345,6 @@ export default function Register() {
       }
     }
 
-    if (name === "referenceNumber") {
-      if (!v.trim()) return "Reference number is required.";
-    }
-
     if (name === "institutionMemberType") {
       if (!isPublic && !v.trim()) return "Please select Student or Staff.";
     }
@@ -395,7 +389,6 @@ export default function Register() {
       ["username", username],
       ["email", email],
       ["phoneNumber", phoneNumber],
-      ["referenceNumber", referenceNumber],
       ["password", password],
       ["confirmPassword", confirmPassword],
     ];
@@ -425,7 +418,6 @@ export default function Register() {
       username: true,
       email: true,
       phoneNumber: true,
-      referenceNumber: true,
       password: true,
       confirmPassword: true,
       institutionId: true,
@@ -443,15 +435,7 @@ export default function Register() {
   }
 
   const isFormValidForSubmit = useMemo(() => {
-    const requiredNames = [
-      "firstName",
-      "lastName",
-      "username",
-      "email",
-      "referenceNumber",
-      "password",
-      "confirmPassword",
-    ];
+    const requiredNames = ["firstName", "lastName", "username", "email", "password", "confirmPassword"];
 
     if (isPublic && publicPayMethod === "MPESA") requiredNames.push("phoneNumber");
     if (!isPublic) {
@@ -471,8 +455,6 @@ export default function Register() {
           ? username
           : n === "email"
           ? email
-          : n === "referenceNumber"
-          ? referenceNumber
           : n === "password"
           ? password
           : n === "confirmPassword"
@@ -496,7 +478,6 @@ export default function Register() {
     lastName,
     username,
     email,
-    referenceNumber,
     password,
     confirmPassword,
     phoneNumber,
@@ -509,8 +490,7 @@ export default function Register() {
   ]);
 
   // -----------------------------
-  // ✅ NEW: Fetch setup token so TwoFactorSetup can auto-populate (same as your "resend" behavior)
-  // IMPORTANT: controller already returns setupToken in dev/swagger mode.
+  // ✅ Fetch setup token so TwoFactorSetup can auto-populate
   // -----------------------------
   async function fetchSetupTokenForOnboarding(user, pass) {
     const u = String(user || "").trim();
@@ -525,7 +505,6 @@ export default function Register() {
       const data = res.data?.data ?? res.data;
       return data?.setupToken || "";
     } catch {
-      // Never block onboarding if token fetch fails; user can still use email/resend.
       return "";
     }
   }
@@ -544,7 +523,6 @@ export default function Register() {
       lastName: lastName.trim(),
       phoneNumber: phoneNumber.trim() || null,
       countryId: countryId ? Number(countryId) : null,
-      referenceNumber: referenceNumber.trim() || null,
 
       institutionAccessCode: !isPublic ? institutionAccessCode.trim().toUpperCase() : null,
       userType,
@@ -597,7 +575,6 @@ export default function Register() {
     localStorage.setItem(LS_REG_INTENT, String(registrationIntentId));
     localStorage.setItem(LS_REG_EMAIL, email.trim());
 
-    // keep creds for TwoFactorSetup + token fetch after redirect
     localStorage.setItem(LS_REG_USERNAME, username.trim());
     localStorage.setItem(LS_REG_PASSWORD, password);
 
@@ -624,11 +601,9 @@ export default function Register() {
         setRegistrationComplete(true);
         setSuccessMessage("Payment confirmed and your account has been created. Proceed to set up 2FA.");
 
-        // ✅ NEW: fetch setup token and pass to twofactor page so it auto-fills
         const token = await fetchSetupTokenForOnboarding(username.trim(), password);
         setPostRegisterSetupToken(token);
 
-        // ✅ keep username/password in localStorage (TwoFactorSetup relies on them)
         localStorage.removeItem(LS_REG_INTENT);
         localStorage.removeItem(LS_REG_EMAIL);
 
@@ -755,7 +730,6 @@ export default function Register() {
               throw new Error("Mpesa initiate did not return a checkoutRequestId.");
             }
 
-            // ✅ keep creds for TwoFactorSetup/token fetch later
             localStorage.setItem(LS_REG_USERNAME, username.trim());
             localStorage.setItem(LS_REG_PASSWORD, password);
 
@@ -780,8 +754,6 @@ export default function Register() {
       setRegistrationComplete(true);
       setSuccessMessage("Account created successfully. Proceed to set up 2FA.");
 
-      // ✅ NEW: auto-fetch token immediately and pass it into TwoFactorSetup
-      // store creds in case user refreshes on setup page
       localStorage.setItem(LS_REG_USERNAME, username.trim());
       localStorage.setItem(LS_REG_PASSWORD, password);
 
@@ -1055,7 +1027,7 @@ export default function Register() {
           </p>
         ) : (
           <p className="register-tagline">
-            Use your institution email + reference number.
+            Use your institution email and complete signup securely.
             <br />
             <strong>Institution access code is required for security.</strong>
           </p>
@@ -1284,26 +1256,8 @@ export default function Register() {
                   />
                 )}
               </div>
-
-              <div>
-                <label className="field-label">Reference Number (required)</label>
-                <input
-                  value={referenceNumber}
-                  onChange={(e) => {
-                    setReferenceNumber(e.target.value);
-                    liveValidate("referenceNumber", e.target.value);
-                  }}
-                  onBlur={(e) => {
-                    markTouched("referenceNumber");
-                    const msg = validateField("referenceNumber", e.target.value);
-                    msg ? setFieldError("referenceNumber", msg) : clearFieldError("referenceNumber");
-                  }}
-                  placeholder={isPublic ? "National ID / Passport" : "Student No / Employee No"}
-                  disabled={lockForm}
-                  style={inputStyle("referenceNumber")}
-                  aria-invalid={!!(touched.referenceNumber && fieldErrors.referenceNumber)}
-                />
-                <FieldError name="referenceNumber" />
+              <div style={{ display: "flex", alignItems: "end", color: "#6b7280", fontSize: 12 }}>
+                {/* Reference number removed */}
               </div>
             </div>
 
