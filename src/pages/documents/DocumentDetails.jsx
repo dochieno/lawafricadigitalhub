@@ -151,7 +151,7 @@ export default function DocumentDetails() {
   const isInst = isInstitutionUser();
   const [coverFailed, setCoverFailed] = useState(false);
 
-  // ✅ Paystack post-return confirmation overlay state
+  // Paystack post-return confirmation overlay state
   const [paystackFinal, setPaystackFinal] = useState({
     open: false,
     phase: "LOADING", // LOADING | SUCCESS | FAILED
@@ -162,7 +162,7 @@ export default function DocumentDetails() {
     paymentIntentId: null,
   });
 
-  // ✅ MPESA status modal (waiting/success/failed)
+  // MPESA status modal (waiting/success/failed)
   const [mpesaFinal, setMpesaFinal] = useState({
     open: false,
     phase: "LOADING", // LOADING | SUCCESS | FAILED
@@ -278,7 +278,7 @@ export default function DocumentDetails() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // ✅ Paystack return confirmation
+  // Paystack return confirmation
   useEffect(() => {
     if (paystackRanRef.current) return;
     if (!(paid === "1" && provider.toLowerCase() === "paystack")) return;
@@ -311,11 +311,7 @@ export default function DocumentDetails() {
           paymentIntentId: paystackIntentId,
         });
 
-        await api.post(
-          "/payments/paystack/confirm",
-          { reference: paystackReference },
-          { __skipThrottle: true }
-        );
+        await api.post("/payments/paystack/confirm", { reference: paystackReference }, { __skipThrottle: true });
 
         await refreshOffer(doc.id);
         await refreshLibrary(doc.id);
@@ -624,7 +620,7 @@ export default function DocumentDetails() {
     <div className="doc-detail-container">
       {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
 
-      {/* ✅ Paystack confirmation overlay */}
+      {/* Paystack confirmation overlay */}
       {paystackFinal.open && (
         <div className="modal-overlay" style={{ zIndex: 1000 }}>
           <div className="modal" style={{ maxWidth: 520 }}>
@@ -676,7 +672,7 @@ export default function DocumentDetails() {
         </div>
       )}
 
-      {/* ✅ MPESA status overlay */}
+      {/* MPESA status overlay */}
       {mpesaFinal.open && (
         <div className="modal-overlay" style={{ zIndex: 1000 }}>
           <div className="modal" style={{ maxWidth: 520 }}>
@@ -741,25 +737,16 @@ export default function DocumentDetails() {
         </div>
       )}
 
-      {/* ✅ UI RESTRUCTURE: cleaner header + compact actions */}
       <div className="doc-detail-grid">
-        {/* Cover */}
         <div className="doc-detail-cover">
           {!coverFailed && coverUrl ? (
-            <img
-              src={coverUrl}
-              alt={doc.title}
-              className="doc-cover-img"
-              onError={() => setCoverFailed(true)}
-            />
+            <img src={coverUrl} alt={doc.title} className="doc-cover-img" onError={() => setCoverFailed(true)} />
           ) : (
             <div className="doc-cover-placeholder">LAW</div>
           )}
         </div>
 
-        {/* Info */}
         <div className="doc-detail-info">
-          {/* Title + meta */}
           <div className="doc-head">
             <h1 className="doc-title">{doc.title}</h1>
 
@@ -785,7 +772,6 @@ export default function DocumentDetails() {
             </div>
           </div>
 
-          {/* Institutional blocked message */}
           {isInst && isBlocked && (
             <div className="doc-offer-card doc-info-banner" style={{ marginTop: 12, opacity: 0.95 }}>
               <div className="doc-offer-title">Subscription inactive</div>
@@ -793,7 +779,7 @@ export default function DocumentDetails() {
             </div>
           )}
 
-          {/* ✅ Primary actions (compact, not huge) */}
+          {/* Top actions */}
           <div className="doc-actions doc-actions-compact">
             <button
               className="btn btn-primary"
@@ -823,16 +809,12 @@ export default function DocumentDetails() {
               {inLibrary ? "🗑️ Library" : "➕ Library"}
             </button>
 
-            <button
-              className="btn btn-outline-danger"
-              onClick={() => navigate("/dashboard/explore")}
-              type="button"
-            >
+            <button className="btn btn-outline-danger" onClick={() => navigate("/dashboard/explore")} type="button">
               Browse
             </button>
           </div>
 
-          {/* ✅ Purchase section: now looks like a single “Purchase” card, not giant stacked buttons */}
+          {/* Purchase */}
           {!!doc.isPremium && (
             <div className="doc-section" style={{ marginTop: 14 }}>
               {offerLoading ? (
@@ -845,6 +827,12 @@ export default function DocumentDetails() {
                     <div>
                       <div className="doc-offer-title">Buy this document</div>
                       <div className="doc-offer-sub">One-time purchase • Full access on this account</div>
+
+                      {/* ✅ NEW: clearer guidance */}
+                      <div className="doc-offer-note" style={{ marginTop: 8 }}>
+                        <b>M-PESA:</b> For Kenyan users (STK prompt to your phone).{" "}
+                        <b>Paystack:</b> Pay by card or bank (Visa/Mastercard), including international payments.
+                      </div>
                     </div>
 
                     <div className="doc-offer-price">
@@ -852,7 +840,7 @@ export default function DocumentDetails() {
                     </div>
                   </div>
 
-                  {/* compact purchase buttons row */}
+                  {/* ✅ No “Details” button here anymore */}
                   <div className="doc-purchase-actions">
                     <button
                       className="btn btn-primary"
@@ -863,7 +851,7 @@ export default function DocumentDetails() {
                       disabled={purchaseButtonDisabled}
                       title={purchaseButtonTitle}
                     >
-                      {purchaseLoading ? "Processing…" : "M-PESA"}
+                      {purchaseLoading ? "Processing…" : "Pay with M-PESA"}
                     </button>
 
                     <button
@@ -875,16 +863,7 @@ export default function DocumentDetails() {
                       disabled={purchaseButtonDisabled}
                       title={purchaseButtonTitle}
                     >
-                      {purchaseLoading ? "Processing…" : "Paystack"}
-                    </button>
-
-                    <button
-                      className="btn btn-outline-danger"
-                      onClick={() => navigate(`/dashboard/documents/${doc.id}`)}
-                      type="button"
-                      title="View details / preview"
-                    >
-                      Details
+                      {purchaseLoading ? "Processing…" : "Pay with Paystack"}
                     </button>
                   </div>
 
@@ -966,7 +945,6 @@ export default function DocumentDetails() {
         </div>
       </section>
 
-      {/* Unavailable modal */}
       {showUnavailable && (
         <div className="modal-overlay">
           <div className="modal">
@@ -982,13 +960,14 @@ export default function DocumentDetails() {
         </div>
       )}
 
-      {/* Payment modal (unchanged logic, UI still compact in CSS step later) */}
+      {/* Payment modal (same functionality, improved copy) */}
       {showPayModal && (
         <div className="modal-overlay">
           <div className="modal">
             <h3>Choose payment method</h3>
             <p style={{ marginTop: 6 }}>
-              MPesa is Kenya-only. Paystack supports card/bank/international. After payment, fulfillment runs automatically.
+              <b>M-PESA</b> is for Kenyan users (STK prompt to your phone).{" "}
+              <b>Paystack</b> supports card or bank payments (Visa/Mastercard) including international payments.
             </p>
 
             <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap", justifyContent: "center" }}>
@@ -998,7 +977,7 @@ export default function DocumentDetails() {
                 disabled={purchaseLoading}
                 style={{ width: "auto", padding: "10px 14px" }}
               >
-                MPesa
+                M-PESA
               </button>
               <button
                 className={`btn ${payMethod === "PAYSTACK" ? "btn-primary" : "btn-outline-danger"}`}
@@ -1037,7 +1016,7 @@ export default function DocumentDetails() {
                   Amount: <b>{currency} {formatMoney(priceToPay())}</b>
                 </div>
                 <div style={{ marginTop: 6, fontSize: 13, color: "#6b7280" }}>
-                  You’ll be redirected to Paystack to complete the payment.
+                  You’ll be redirected to Paystack to complete the payment securely.
                 </div>
               </div>
             )}
