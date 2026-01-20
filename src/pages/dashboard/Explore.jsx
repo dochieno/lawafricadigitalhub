@@ -59,7 +59,7 @@ export default function Explore() {
   const isPublic = isPublicUser();
 
   // ✅ Pagination (client-side, no API changes)
-  const PAGE_SIZE = 24; // adjust if you want (e.g. 18, 24, 30)
+  const PAGE_SIZE = 8; // adjust if you want (e.g. 18, 24, 30)
   const [page, setPage] = useState(1);
   const topRef = useRef(null);
 
