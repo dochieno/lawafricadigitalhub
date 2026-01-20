@@ -114,7 +114,8 @@ function extractAxiosError(e) {
   const data = e?.response?.data;
   if (!data) return e?.message || "Request failed.";
   if (typeof data === "string") return data;
-  if (typeof data === "object") return data.detail || data.title || data.message || e?.message || "Request failed.";
+  if (typeof data === "object")
+    return data.detail || data.title || data.message || e?.message || "Request failed.";
   return e?.message || "Request failed.";
 }
 
@@ -161,7 +162,7 @@ export default function DocumentDetails() {
     paymentIntentId: null,
   });
 
-  // ✅ NEW: MPESA status modal (waiting/success/failed)
+  // ✅ MPESA status modal (waiting/success/failed)
   const [mpesaFinal, setMpesaFinal] = useState({
     open: false,
     phase: "LOADING", // LOADING | SUCCESS | FAILED
@@ -277,7 +278,7 @@ export default function DocumentDetails() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // ✅ Paystack: when coming back from Paystack, confirm here (signup-style UX)
+  // ✅ Paystack return confirmation
   useEffect(() => {
     if (paystackRanRef.current) return;
     if (!(paid === "1" && provider.toLowerCase() === "paystack")) return;
@@ -310,10 +311,12 @@ export default function DocumentDetails() {
           paymentIntentId: paystackIntentId,
         });
 
-        // 1) Confirm on server (truth source; handles delayed webhook)
-        await api.post("/payments/paystack/confirm", { reference: paystackReference }, { __skipThrottle: true });
+        await api.post(
+          "/payments/paystack/confirm",
+          { reference: paystackReference },
+          { __skipThrottle: true }
+        );
 
-        // 2) Refresh access/offer/library so UI updates immediately
         await refreshOffer(doc.id);
         await refreshLibrary(doc.id);
         await refreshAccess(doc.id);
@@ -326,7 +329,6 @@ export default function DocumentDetails() {
           error: "",
         }));
 
-        // 3) Clear params then open reader
         clearPaystackReturnParams();
 
         setTimeout(() => {
@@ -407,7 +409,6 @@ export default function DocumentDetails() {
     return offerPrice ?? docPrice ?? 0;
   }
 
-  // ✅ NEW: MPESA now shows a proper “Waiting / Failed / Success” modal
   async function startMpesaPayment(phoneNumber) {
     if (!doc) return;
 
@@ -437,7 +438,6 @@ export default function DocumentDetails() {
 
       setPendingPaymentId(paymentIntentId);
 
-      // ✅ Show MPESA waiting modal
       setMpesaFinal({
         open: true,
         phase: "LOADING",
@@ -447,7 +447,6 @@ export default function DocumentDetails() {
         paymentIntentId,
       });
 
-      // Keep toast (some users like it)
       showToast("STK sent. Check your phone to complete payment.");
 
       await pollPayment(paymentIntentId);
@@ -474,7 +473,6 @@ export default function DocumentDetails() {
     } catch (e) {
       const msg = extractAxiosError(e);
 
-      // ✅ Show MPESA failed modal + allow retry
       setMpesaFinal((s) => ({
         ...s,
         open: true,
@@ -529,9 +527,7 @@ export default function DocumentDetails() {
       const data = initRes.data?.data ?? initRes.data;
 
       const authorizationUrl =
-        data?.authorization_url ||
-        data?.authorizationUrl ||
-        data?.data?.authorization_url;
+        data?.authorization_url || data?.authorizationUrl || data?.data?.authorization_url;
 
       const reference = data?.reference || data?.data?.reference || data?.trxref || null;
 
@@ -539,7 +535,6 @@ export default function DocumentDetails() {
         throw new Error("Paystack initialize did not return authorization_url.");
       }
 
-      // Save return context (optional)
       if (reference) {
         savePaystackCtx(reference, {
           docId: doc.id,
@@ -652,9 +647,7 @@ export default function DocumentDetails() {
             )}
 
             {paystackFinal.phase === "FAILED" && (
-              <div className="status-box error">
-                {paystackFinal.error || "Payment confirmation failed."}
-              </div>
+              <div className="status-box error">{paystackFinal.error || "Payment confirmation failed."}</div>
             )}
 
             <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
@@ -683,7 +676,7 @@ export default function DocumentDetails() {
         </div>
       )}
 
-      {/* ✅ NEW: MPESA status overlay */}
+      {/* ✅ MPESA status overlay */}
       {mpesaFinal.open && (
         <div className="modal-overlay" style={{ zIndex: 1000 }}>
           <div className="modal" style={{ maxWidth: 520 }}>
@@ -700,15 +693,11 @@ export default function DocumentDetails() {
             )}
 
             {mpesaFinal.phase === "FAILED" && (
-              <div className="status-box error">
-                {mpesaFinal.error || "Payment failed. Please try again."}
-              </div>
+              <div className="status-box error">{mpesaFinal.error || "Payment failed. Please try again."}</div>
             )}
 
             {mpesaFinal.phase === "SUCCESS" && (
-              <div className="status-box success">
-                Payment confirmed. You now own this document.
-              </div>
+              <div className="status-box success">Payment confirmed. You now own this document.</div>
             )}
 
             <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap", justifyContent: "center" }}>
@@ -717,7 +706,6 @@ export default function DocumentDetails() {
                   <button
                     className="btn btn-primary"
                     onClick={() => {
-                      // keep modal open; user can retry from payment modal
                       setMpesaFinal((s) => ({ ...s, open: false }));
                       setPayMethod("MPESA");
                       setShowPayModal(true);
@@ -725,10 +713,7 @@ export default function DocumentDetails() {
                   >
                     Retry M-PESA
                   </button>
-                  <button
-                    className="btn btn-outline-danger"
-                    onClick={() => setMpesaFinal((s) => ({ ...s, open: false }))}
-                  >
+                  <button className="btn btn-outline-danger" onClick={() => setMpesaFinal((s) => ({ ...s, open: false }))}>
                     Close
                   </button>
                 </>
@@ -756,7 +741,9 @@ export default function DocumentDetails() {
         </div>
       )}
 
+      {/* ✅ UI RESTRUCTURE: cleaner header + compact actions */}
       <div className="doc-detail-grid">
+        {/* Cover */}
         <div className="doc-detail-cover">
           {!coverFailed && coverUrl ? (
             <img
@@ -770,45 +757,90 @@ export default function DocumentDetails() {
           )}
         </div>
 
+        {/* Info */}
         <div className="doc-detail-info">
-          <h1 className="doc-title">{doc.title}</h1>
+          {/* Title + meta */}
+          <div className="doc-head">
+            <h1 className="doc-title">{doc.title}</h1>
 
-          <p className="doc-meta">
-            {doc.countryName} • {doc.category} • Version {doc.version}
-          </p>
+            <p className="doc-meta">
+              {doc.countryName} • {doc.category} • Version {doc.version}
+            </p>
 
-          <div className="doc-badge">
-            {doc.isPremium ? <span className="badge premium">Premium</span> : <span className="badge free">Free</span>}
-            {!hasContent && <span className="badge coming-soon">Coming soon</span>}
+            <div className="doc-badge">
+              {doc.isPremium ? <span className="badge premium">Premium</span> : <span className="badge free">Free</span>}
+              {!hasContent && <span className="badge coming-soon">Coming soon</span>}
 
-            {showIncludedActiveBadge && (
-              <span className="badge free" style={{ marginLeft: 8 }}>
-                Included in subscription
-              </span>
-            )}
+              {showIncludedActiveBadge && (
+                <span className="badge free" style={{ marginLeft: 8 }}>
+                  Included in subscription
+                </span>
+              )}
 
-            {showIncludedInactiveBadge && (
-              <span className="badge coming-soon" style={{ marginLeft: 8 }} title={blockMessage}>
-                Included — inactive
-              </span>
-            )}
+              {showIncludedInactiveBadge && (
+                <span className="badge coming-soon" style={{ marginLeft: 8 }} title={blockMessage}>
+                  Included — inactive
+                </span>
+              )}
+            </div>
           </div>
 
+          {/* Institutional blocked message */}
           {isInst && isBlocked && (
-            <div className="doc-offer-card" style={{ marginTop: 12, opacity: 0.95 }}>
+            <div className="doc-offer-card doc-info-banner" style={{ marginTop: 12, opacity: 0.95 }}>
               <div className="doc-offer-title">Subscription inactive</div>
               <div className="doc-offer-sub">{blockMessage}</div>
             </div>
           )}
 
+          {/* ✅ Primary actions (compact, not huge) */}
+          <div className="doc-actions doc-actions-compact">
+            <button
+              className="btn btn-primary"
+              disabled={!hasContent}
+              onClick={() => {
+                if (!hasContent) {
+                  setShowUnavailable(true);
+                  return;
+                }
+                navigate(`/dashboard/documents/${doc.id}/read`);
+              }}
+              title={!hasContent ? "Coming soon" : ""}
+            >
+              📖 {primaryLabel}
+            </button>
+
+            <button
+              className="btn btn-outline-danger"
+              disabled={actionLoading || !canAddToLibrary}
+              title={!hasContent ? "Coming soon" : ""}
+              onClick={() => (inLibrary ? removeFromLibrary() : addToLibrary())}
+              style={{
+                opacity: canAddToLibrary ? 1 : 0.5,
+                cursor: canAddToLibrary ? "pointer" : "not-allowed",
+              }}
+            >
+              {inLibrary ? "🗑️ Library" : "➕ Library"}
+            </button>
+
+            <button
+              className="btn btn-outline-danger"
+              onClick={() => navigate("/dashboard/explore")}
+              type="button"
+            >
+              Browse
+            </button>
+          </div>
+
+          {/* ✅ Purchase section: now looks like a single “Purchase” card, not giant stacked buttons */}
           {!!doc.isPremium && (
-            <div style={{ marginTop: 12 }}>
+            <div className="doc-section" style={{ marginTop: 14 }}>
               {offerLoading ? (
                 <div className="doc-offer-card" style={{ opacity: 0.75 }}>
                   Checking price…
                 </div>
               ) : showPurchaseBox ? (
-                <div className="doc-offer-card">
+                <div className="doc-offer-card doc-purchase-card">
                   <div className="doc-offer-top">
                     <div>
                       <div className="doc-offer-title">Buy this document</div>
@@ -820,31 +852,41 @@ export default function DocumentDetails() {
                     </div>
                   </div>
 
-                  <button
-                    className="btn btn-primary"
-                    onClick={() => {
-                      setPayMethod("MPESA");
-                      setShowPayModal(true);
-                    }}
-                    disabled={purchaseButtonDisabled}
-                    style={{ marginTop: 10 }}
-                    title={purchaseButtonTitle}
-                  >
-                    {purchaseLoading ? "Processing…" : "Pay with M-PESA"}
-                  </button>
+                  {/* compact purchase buttons row */}
+                  <div className="doc-purchase-actions">
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => {
+                        setPayMethod("MPESA");
+                        setShowPayModal(true);
+                      }}
+                      disabled={purchaseButtonDisabled}
+                      title={purchaseButtonTitle}
+                    >
+                      {purchaseLoading ? "Processing…" : "M-PESA"}
+                    </button>
 
-                  <button
-                    className="btn btn-outline-danger"
-                    onClick={() => {
-                      setPayMethod("PAYSTACK");
-                      setShowPayModal(true);
-                    }}
-                    disabled={purchaseButtonDisabled}
-                    style={{ marginTop: 10 }}
-                    title={purchaseButtonTitle}
-                  >
-                    {purchaseLoading ? "Processing…" : "Pay with Paystack"}
-                  </button>
+                    <button
+                      className="btn btn-outline-danger"
+                      onClick={() => {
+                        setPayMethod("PAYSTACK");
+                        setShowPayModal(true);
+                      }}
+                      disabled={purchaseButtonDisabled}
+                      title={purchaseButtonTitle}
+                    >
+                      {purchaseLoading ? "Processing…" : "Paystack"}
+                    </button>
+
+                    <button
+                      className="btn btn-outline-danger"
+                      onClick={() => navigate(`/dashboard/documents/${doc.id}`)}
+                      type="button"
+                      title="View details / preview"
+                    >
+                      Details
+                    </button>
+                  </div>
 
                   {isInst && isBlocked && !canPurchaseIndividually && (
                     <div className="doc-offer-note">{purchaseDisabledReason}</div>
@@ -867,20 +909,24 @@ export default function DocumentDetails() {
                   <div className="doc-offer-title">Owned</div>
                   <div className="doc-offer-sub">You already purchased this document.</div>
 
-                  <button
-                    className="btn btn-primary"
-                    style={{ marginTop: 10 }}
-                    disabled={!hasContent}
-                    onClick={() => {
-                      if (!hasContent) {
-                        setShowUnavailable(true);
-                        return;
-                      }
-                      navigate(`/dashboard/documents/${doc.id}/read`);
-                    }}
-                  >
-                    📖 Read now
-                  </button>
+                  <div className="doc-actions doc-actions-compact" style={{ marginTop: 10 }}>
+                    <button
+                      className="btn btn-primary"
+                      disabled={!hasContent}
+                      onClick={() => {
+                        if (!hasContent) {
+                          setShowUnavailable(true);
+                          return;
+                        }
+                        navigate(`/dashboard/documents/${doc.id}/read`);
+                      }}
+                    >
+                      📖 Read now
+                    </button>
+                    <button className="btn btn-outline-danger" onClick={() => navigate("/dashboard/library")}>
+                      My Library →
+                    </button>
+                  </div>
                 </div>
               ) : offerError ? (
                 <div className="doc-offer-card" style={{ opacity: 0.9 }}>
@@ -898,35 +944,6 @@ export default function DocumentDetails() {
               ) : null}
             </div>
           )}
-
-          <div className="doc-actions">
-            <button
-              className="btn btn-primary"
-              disabled={!hasContent}
-              onClick={() => {
-                if (!hasContent) {
-                  setShowUnavailable(true);
-                  return;
-                }
-                navigate(`/dashboard/documents/${doc.id}/read`);
-              }}
-            >
-              📖 {primaryLabel}
-            </button>
-
-            <button
-              className="btn btn-outline-danger"
-              disabled={actionLoading || !canAddToLibrary}
-              title={!hasContent ? "Coming soon" : ""}
-              onClick={() => (inLibrary ? removeFromLibrary() : addToLibrary())}
-              style={{
-                opacity: canAddToLibrary ? 1 : 0.5,
-                cursor: canAddToLibrary ? "pointer" : "not-allowed",
-              }}
-            >
-              {inLibrary ? "🗑️ Remove from my Library" : "➕ Add to my Library"}
-            </button>
-          </div>
         </div>
       </div>
 
@@ -949,6 +966,7 @@ export default function DocumentDetails() {
         </div>
       </section>
 
+      {/* Unavailable modal */}
       {showUnavailable && (
         <div className="modal-overlay">
           <div className="modal">
@@ -964,6 +982,7 @@ export default function DocumentDetails() {
         </div>
       )}
 
+      {/* Payment modal (unchanged logic, UI still compact in CSS step later) */}
       {showPayModal && (
         <div className="modal-overlay">
           <div className="modal">
@@ -972,7 +991,7 @@ export default function DocumentDetails() {
               MPesa is Kenya-only. Paystack supports card/bank/international. After payment, fulfillment runs automatically.
             </p>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap", justifyContent: "center" }}>
               <button
                 className={`btn ${payMethod === "MPESA" ? "btn-primary" : "btn-outline-danger"}`}
                 onClick={() => setPayMethod("MPESA")}
@@ -992,7 +1011,7 @@ export default function DocumentDetails() {
             </div>
 
             {payMethod === "MPESA" ? (
-              <div style={{ marginTop: 12 }}>
+              <div style={{ marginTop: 12, textAlign: "left" }}>
                 <label style={{ display: "block", marginBottom: 6 }}>M-PESA Number</label>
                 <input
                   type="tel"
@@ -1013,7 +1032,7 @@ export default function DocumentDetails() {
                 </div>
               </div>
             ) : (
-              <div style={{ marginTop: 12, opacity: 0.9 }}>
+              <div style={{ marginTop: 12, opacity: 0.9, textAlign: "left" }}>
                 <div style={{ fontSize: 13 }}>
                   Amount: <b>{currency} {formatMoney(priceToPay())}</b>
                 </div>
@@ -1023,12 +1042,8 @@ export default function DocumentDetails() {
               </div>
             )}
 
-            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-              <button
-                className="btn btn-outline-danger"
-                onClick={() => setShowPayModal(false)}
-                disabled={purchaseLoading}
-              >
+            <div style={{ display: "flex", gap: 10, marginTop: 16, justifyContent: "center", flexWrap: "wrap" }}>
+              <button className="btn btn-outline-danger" onClick={() => setShowPayModal(false)} disabled={purchaseLoading}>
                 Cancel
               </button>
 

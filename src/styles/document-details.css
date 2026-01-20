@@ -1,8 +1,8 @@
 /* ======================================================
    Document Details - Clean + Consolidated Styles
    - Keeps your existing class names
-   - Removes duplicates + conflicting re-definitions
-   - Adds missing UI bits: toast, spinner, status badges
+   - Adds compact action layout + purchase button row
+   - Keeps branding/colors the same
 ====================================================== */
 
 :root {
@@ -19,7 +19,7 @@
 -------------------------------- */
 .doc-detail-container {
   max-width: 1260px;
-  margin: 40px auto;
+  margin: 32px auto;
   padding: 0 24px;
 }
 
@@ -48,13 +48,14 @@
 .doc-detail-grid {
   display: grid;
   grid-template-columns: 360px 1fr;
-  gap: 48px;
+  gap: 44px;
   align-items: start;
 }
 
 @media (max-width: 900px) {
   .doc-detail-grid {
     grid-template-columns: 1fr;
+    gap: 22px;
   }
 }
 
@@ -100,23 +101,32 @@
 /* ------------------------------
    INFO
 -------------------------------- */
+.doc-detail-info {
+  min-width: 0;
+}
+
+.doc-head {
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(17, 24, 39, 0.06);
+  margin-bottom: 12px;
+}
+
 .doc-title {
-  font-size: 30px;
-  font-weight: 800;
-  margin: 0 0 10px;
+  font-size: 28px;
+  font-weight: 850;
+  margin: 0 0 8px;
   color: var(--la-dark);
+  letter-spacing: -0.2px;
 }
 
 .doc-meta {
-  margin-top: 8px;
+  margin: 0 0 14px;
   color: var(--la-gray);
   font-size: 0.95rem;
-  margin-bottom: 20px;
 }
 
 .doc-badge {
-  margin-top: 10px;
-  margin-bottom: 24px;
+  margin: 0;
   display: flex;
   gap: 8px;
   align-items: center;
@@ -130,6 +140,7 @@
   font-size: 12px;
   font-weight: 800;
   border: 1px solid transparent;
+  line-height: 1;
 }
 
 .badge.free {
@@ -151,6 +162,13 @@
 }
 
 /* ------------------------------
+   SECTION WRAPPER (NEW)
+-------------------------------- */
+.doc-section {
+  margin-top: 14px;
+}
+
+/* ------------------------------
    OFFER / PRICING CARD
 -------------------------------- */
 .doc-offer-card {
@@ -160,6 +178,10 @@
   padding: 12px 14px;
   background: var(--la-bg);
   box-shadow: 0 10px 18px rgba(15, 23, 42, 0.06);
+}
+
+.doc-info-banner {
+  background: #fff;
 }
 
 .doc-offer-top {
@@ -205,17 +227,67 @@
   border-color: #86efac;
 }
 
+/* Purchase card slight emphasis (no color change, just spacing) */
+.doc-purchase-card {
+  padding: 14px;
+}
+
+/* NEW: purchase actions row */
+.doc-purchase-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Make purchase buttons compact and consistent */
+.doc-purchase-actions .btn {
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+
 /* ------------------------------
    ACTIONS
 -------------------------------- */
 .doc-actions {
-  margin-top: 28px;
+  margin-top: 18px;
   display: flex;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
-/* Shared button system (you already use .btn ...) */
+/* NEW: compact action bar (prevents huge buttons) */
+.doc-actions-compact .btn {
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+
+/* Make action buttons not stretch full width */
+.doc-actions .btn {
+  width: auto;
+  min-width: unset;
+}
+
+@media (max-width: 520px) {
+  /* stack neatly on small screens */
+  .doc-actions,
+  .doc-purchase-actions {
+    gap: 8px;
+  }
+  .doc-actions .btn,
+  .doc-purchase-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Shared button system */
 .btn {
   height: 40px;
   padding: 0 16px;
@@ -262,7 +334,7 @@
 }
 
 /* ------------------------------
-   TOAST (your JSX uses .toast toast-success / toast-error)
+   TOAST
 -------------------------------- */
 .toast {
   position: fixed;
@@ -296,8 +368,8 @@
    FOOTER CTA
 -------------------------------- */
 .doc-footer-explore {
-  margin-top: 96px;
-  padding: 72px 24px;
+  margin-top: 72px;
+  padding: 64px 24px;
   background: linear-gradient(180deg, rgba(248, 241, 241, 0.9), rgba(255, 255, 255, 1));
   border-top: 1px solid #eee;
 }
@@ -309,7 +381,7 @@
 }
 
 .doc-footer-explore-inner h2 {
-  font-size: 1.9rem;
+  font-size: 1.8rem;
   margin-bottom: 12px;
   color: #111;
 }
@@ -317,27 +389,28 @@
 .doc-footer-explore-inner p {
   color: #666;
   max-width: 680px;
-  margin: 0 auto 28px;
+  margin: 0 auto 26px;
   line-height: 1.6;
 }
 
 .doc-footer-explore-actions {
   display: flex;
   justify-content: center;
-  gap: 16px;
+  gap: 14px;
   flex-wrap: wrap;
 }
 
+/* Keep branding - just slightly less bulky */
 .doc-footer-primary {
   background: #a11217;
   color: #fff;
   border: none;
-  padding: 14px 28px;
-  font-size: 1rem;
+  padding: 12px 22px;
+  font-size: 0.98rem;
   font-weight: 800;
   border-radius: 12px;
   cursor: pointer;
-  min-width: 240px;
+  min-width: 220px;
   transition: background 0.2s ease;
 }
 
@@ -349,7 +422,7 @@
   background: transparent;
   border: none;
   color: #a11217;
-  font-size: 1rem;
+  font-size: 0.98rem;
   font-weight: 800;
   cursor: pointer;
 }
@@ -360,8 +433,8 @@
 
 @media (max-width: 768px) {
   .doc-footer-explore {
-    margin-top: 64px;
-    padding: 56px 16px;
+    margin-top: 56px;
+    padding: 52px 16px;
   }
   .doc-footer-primary {
     width: 100%;
@@ -369,7 +442,7 @@
 }
 
 /* ------------------------------
-   MODAL SYSTEM (used for unavailable + pay modal + paystack/mpesa status)
+   MODAL SYSTEM
 -------------------------------- */
 .modal-overlay {
   position: fixed;
@@ -384,7 +457,7 @@
 
 .modal {
   background: #fff;
-  padding: 28px 24px;
+  padding: 26px 22px;
   border-radius: 14px;
   max-width: 520px;
   width: 100%;
@@ -394,18 +467,18 @@
 }
 
 .modal h3 {
-  margin: 0 0 12px;
-  font-size: 1.25rem;
+  margin: 0 0 10px;
+  font-size: 1.2rem;
   color: var(--la-dark);
 }
 
 .modal p {
   color: #555;
-  margin: 0 0 18px;
+  margin: 0 0 16px;
   line-height: 1.6;
 }
 
-/* Inline spinner (for Paystack / MPESA confirming) */
+/* Inline spinner */
 .la-spinner {
   width: 18px;
   height: 18px;
