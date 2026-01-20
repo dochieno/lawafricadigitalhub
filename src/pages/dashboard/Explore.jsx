@@ -1,5 +1,5 @@
 // src/pages/dashboard/Explore.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { API_BASE_URL } from "../../api/client";
 import { getAuthClaims } from "../../auth/auth";
@@ -58,6 +58,11 @@ export default function Explore() {
   const isInst = isInstitutionUser();
   const isPublic = isPublicUser();
 
+  // ✅ Pagination (client-side, no API changes)
+  const PAGE_SIZE = 24; // adjust if you want (e.g. 18, 24, 30)
+  const [page, setPage] = useState(1);
+  const topRef = useRef(null);
+
   function showToast(message, type = "success") {
     setToast({ message, type });
     setTimeout(() => setToast(null), 2500);
@@ -107,13 +112,44 @@ export default function Explore() {
     });
   }, [docs, q, showPremium]);
 
+  // ✅ Reset to page 1 when filters/search change
+  useEffect(() => {
+    setPage(1);
+  }, [q, showPremium]);
+
+  const totalPages = useMemo(() => {
+    return Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  }, [filtered.length]);
+
+  // ✅ Clamp current page if results shrink
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalPages]);
+
+  const pagedDocs = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, page]);
+
+  // ✅ Scroll to top of grid when changing pages
+  function goToPage(nextPage) {
+    setPage(nextPage);
+    // smooth jump to top of list area
+    requestAnimationFrame(() => {
+      if (topRef.current) topRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      else window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+
   useEffect(() => {
     let cancelled = false;
 
     async function fetchAccessForVisiblePremiumDocs() {
       if (!isInst && !isPublic) return;
 
-      const premiumIds = filtered.filter((d) => d.isPremium).map((d) => d.id);
+      // ✅ Only fetch for current page items (prevents unnecessary batching)
+      const premiumIds = pagedDocs.filter((d) => d.isPremium).map((d) => d.id);
       const missing = premiumIds.filter((id) => accessMap[id] == null);
       if (missing.length === 0) return;
 
@@ -157,13 +193,14 @@ export default function Explore() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered, isInst, isPublic]);
+  }, [pagedDocs, isInst, isPublic]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function fetchAvailabilityForVisibleDocs() {
-      const visibleIds = filtered.map((d) => d.id);
+      // ✅ Only fetch for current page items
+      const visibleIds = pagedDocs.map((d) => d.id);
       const missing = visibleIds.filter((id) => availabilityMap[id] == null);
       if (missing.length === 0) return;
 
@@ -211,7 +248,7 @@ export default function Explore() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered]);
+  }, [pagedDocs]);
 
   async function addToLibrary(documentId) {
     try {
@@ -263,45 +300,20 @@ export default function Explore() {
 
   return (
     <div className="explore-container">
+      <div ref={topRef} />
+
       {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
 
       <header className="explore-header">
-        <div className="explore-header-top">
-          <div className="explore-title-wrap">
-            <h1 className="explore-title">Explore LawAfrica Legal Knowledge Hub</h1>
-            <p className="explore-subtitle">
-              Search, preview, and save trusted legal resources to your library.
-            </p>
-          </div>
-
-          <div className="explore-stats" aria-label="Results count">
-            <span className="explore-count">
-              {filtered.length} {filtered.length === 1 ? "result" : "results"}
-            </span>
-          </div>
-        </div>
+        <h1 className="explore-title">Explore LawAfrica Legal Knowledge Hub</h1>
 
         <div className="explore-controls">
-          <div className="explore-searchWrap">
-            <span className="explore-searchIcon" aria-hidden="true">⌕</span>
-            <input
-              className="explore-search"
-              placeholder="Search by title, category, country…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-            {q ? (
-              <button
-                type="button"
-                className="explore-clearBtn"
-                onClick={() => setQ("")}
-                aria-label="Clear search"
-                title="Clear"
-              >
-                ✕
-              </button>
-            ) : null}
-          </div>
+          <input
+            className="explore-search"
+            placeholder="Search by title, category, country…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
 
           <label className="explore-checkbox">
             <input
@@ -309,9 +321,34 @@ export default function Explore() {
               checked={showPremium}
               onChange={(e) => setShowPremium(e.target.checked)}
             />
-            <span>Show premium content</span>
+            Show premium content
           </label>
         </div>
+
+        {/* ✅ Pagination bar (top) */}
+        {filtered.length > PAGE_SIZE && (
+          <div className="explore-pager">
+            <button
+              className="explore-pager-btn"
+              disabled={page <= 1}
+              onClick={() => goToPage(page - 1)}
+            >
+              ← Previous
+            </button>
+
+            <span className="explore-pager-info">
+              Page <b>{page}</b> of <b>{totalPages}</b> • {filtered.length} items
+            </span>
+
+            <button
+              className="explore-pager-btn"
+              disabled={page >= totalPages}
+              onClick={() => goToPage(page + 1)}
+            >
+              Next →
+            </button>
+          </div>
+        )}
       </header>
 
       {filtered.length === 0 ? (
@@ -320,186 +357,206 @@ export default function Explore() {
           <p>Try a different search term or adjust filters.</p>
         </div>
       ) : (
-        <div className="explore-grid">
-          {filtered.map((d) => {
-            const inLibrary = libraryIds.has(d.id);
-            const coverUrl = buildCoverUrl(d.coverImagePath);
+        <>
+          <div className="explore-grid">
+            {pagedDocs.map((d) => {
+              const inLibrary = libraryIds.has(d.id);
+              const coverUrl = buildCoverUrl(d.coverImagePath);
 
-            const access = accessMap[d.id];
-            const hasFullAccess = !!access?.hasFullAccess;
-            const accessLoading = accessLoadingIds.has(d.id);
+              const access = accessMap[d.id];
+              const hasFullAccess = !!access?.hasFullAccess;
+              const accessLoading = accessLoadingIds.has(d.id);
 
-            const hasContent = availabilityMap[d.id] == null ? true : !!availabilityMap[d.id];
-            const availabilityLoading = availabilityLoadingIds.has(d.id);
+              const hasContent = availabilityMap[d.id] == null ? true : !!availabilityMap[d.id];
+              const availabilityLoading = availabilityLoadingIds.has(d.id);
 
-            const showPremiumAsLibraryAction = d.isPremium && isInst && hasFullAccess;
-            const showPublicReadNow = d.isPremium && isPublic && hasFullAccess;
+              const showPremiumAsLibraryAction = d.isPremium && isInst && hasFullAccess;
+              const showPublicReadNow = d.isPremium && isPublic && hasFullAccess;
 
-            const canAddLibraryHere = hasContent && (!d.isPremium || showPremiumAsLibraryAction);
-            const disabledReason = !hasContent ? "Coming soon" : "";
+              const canAddLibraryHere = hasContent && (!d.isPremium || showPremiumAsLibraryAction);
+              const disabledReason = !hasContent ? "Coming soon" : "";
 
-            return (
-              <div
-                key={d.id}
-                className="explore-card"
-                role="button"
-                tabIndex={0}
-                onClick={() => navigate(`/dashboard/documents/${d.id}`)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    navigate(`/dashboard/documents/${d.id}`);
-                  }
-                }}
-              >
-                <div className="explore-cover">
-                  {coverUrl ? (
-                    <img
-                      src={coverUrl}
-                      alt={d.title}
-                      className="explore-cover-img"
-                      loading="lazy"
-                      onError={(e) => {
-                        e.currentTarget.style.display = "none";
-                      }}
-                    />
-                  ) : (
-                    <span className="explore-cover-text">LAW</span>
-                  )}
-                </div>
-
-                <div className="explore-info">
-                  <div className="explore-badges">
-                    {d.isPremium ? (
-                      <span className="badge premium">Premium</span>
+              return (
+                <div
+                  key={d.id}
+                  className="explore-card"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate(`/dashboard/documents/${d.id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      navigate(`/dashboard/documents/${d.id}`);
+                    }
+                  }}
+                >
+                  <div className="explore-cover">
+                    {coverUrl ? (
+                      <img
+                        src={coverUrl}
+                        alt={d.title}
+                        className="explore-cover-img"
+                        loading="lazy"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                        }}
+                      />
                     ) : (
-                      <span className="badge free">Free</span>
-                    )}
-
-                    {!hasContent && (
-                      <span className="badge coming-soon" style={{ marginLeft: 8 }}>
-                        Coming soon
-                      </span>
-                    )}
-
-                    {d.isPremium && isInst && !accessLoading && hasFullAccess && (
-                      <span className="badge included" style={{ marginLeft: 8 }}>
-                        Included
-                      </span>
+                      <span className="explore-cover-text">LAW</span>
                     )}
                   </div>
 
-                  <h3 className="explore-doc-title" title={d.title}>
-                    {d.title}
-                  </h3>
+                  <div className="explore-info">
+                    <div className="explore-badges">
+                      {d.isPremium ? (
+                        <span className="badge premium">Premium</span>
+                      ) : (
+                        <span className="badge free">Free</span>
+                      )}
 
-                  <p className="explore-meta" title={`${d.countryName} • ${d.category}`}>
-                    {d.countryName} • {d.category}
-                  </p>
+                      {!hasContent && (
+                        <span className="badge coming-soon" style={{ marginLeft: 8 }}>
+                          Coming soon
+                        </span>
+                      )}
 
-                  {/* Actions (logic unchanged) */}
-                  {!d.isPremium && (
-                    <button
-                      className="explore-btn"
-                      disabled={actionLoading === d.id || !canAddLibraryHere || availabilityLoading}
-                      title={disabledReason}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (!canAddLibraryHere) return;
-                        inLibrary ? removeFromLibrary(d.id) : addToLibrary(d.id);
-                      }}
-                      style={{
-                        opacity: canAddLibraryHere ? 1 : 0.55,
-                        cursor: canAddLibraryHere ? "pointer" : "not-allowed",
-                      }}
-                    >
-                      {availabilityLoading
-                        ? "Checking…"
-                        : inLibrary
-                        ? "Remove from Library"
-                        : "Add to Library"}
-                    </button>
-                  )}
+                      {d.isPremium && isInst && !accessLoading && hasFullAccess && (
+                        <span className="badge free" style={{ marginLeft: 8 }}>
+                          Included
+                        </span>
+                      )}
+                    </div>
 
-                  {d.isPremium && showPremiumAsLibraryAction && (
-                    <button
-                      className="explore-btn"
-                      disabled={
-                        actionLoading === d.id ||
-                        accessLoading ||
-                        availabilityLoading ||
-                        !canAddLibraryHere
-                      }
-                      title={disabledReason}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (!canAddLibraryHere) return;
-                        inLibrary ? removeFromLibrary(d.id) : addToLibrary(d.id);
-                      }}
-                      style={{
-                        opacity: canAddLibraryHere ? 1 : 0.55,
-                        cursor: canAddLibraryHere ? "pointer" : "not-allowed",
-                      }}
-                    >
-                      {accessLoading || availabilityLoading
-                        ? "Checking…"
-                        : inLibrary
-                        ? "Remove from Library"
-                        : "Add to Library"}
-                    </button>
-                  )}
+                    <h3 className="explore-doc-title">{d.title}</h3>
 
-                  {d.isPremium && showPublicReadNow && (
-                    <button
-                      className="explore-btn explore-btn-premium"
-                      disabled={!hasContent}
-                      title={!hasContent ? "Coming soon" : ""}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (!hasContent) return;
-                        navigate(`/dashboard/documents/${d.id}/read`);
-                      }}
-                      style={{
-                        opacity: hasContent ? 1 : 0.55,
-                        cursor: hasContent ? "pointer" : "not-allowed",
-                      }}
-                    >
-                      Read Now
-                    </button>
-                  )}
+                    <p className="explore-meta">
+                      {d.countryName} • {d.category}
+                    </p>
 
-                  {d.isPremium && !showPremiumAsLibraryAction && !showPublicReadNow && (
-                    <button
-                      className="explore-btn explore-btn-premium"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/dashboard/documents/${d.id}`);
-                      }}
-                    >
-                      View / Preview
-                    </button>
-                  )}
+                    {!d.isPremium && (
+                      <button
+                        className="explore-btn"
+                        disabled={actionLoading === d.id || !canAddLibraryHere || availabilityLoading}
+                        title={disabledReason}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!canAddLibraryHere) return;
+                          inLibrary ? removeFromLibrary(d.id) : addToLibrary(d.id);
+                        }}
+                        style={{
+                          opacity: canAddLibraryHere ? 1 : 0.5,
+                          cursor: canAddLibraryHere ? "pointer" : "not-allowed",
+                        }}
+                      >
+                        {availabilityLoading
+                          ? "Checking…"
+                          : inLibrary
+                          ? "🗑️ Remove from Library"
+                          : "➕ Add to Library"}
+                      </button>
+                    )}
+
+                    {d.isPremium && showPremiumAsLibraryAction && (
+                      <button
+                        className="explore-btn"
+                        disabled={
+                          actionLoading === d.id ||
+                          accessLoading ||
+                          availabilityLoading ||
+                          !canAddLibraryHere
+                        }
+                        title={disabledReason}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!canAddLibraryHere) return;
+                          inLibrary ? removeFromLibrary(d.id) : addToLibrary(d.id);
+                        }}
+                        style={{
+                          opacity: canAddLibraryHere ? 1 : 0.5,
+                          cursor: canAddLibraryHere ? "pointer" : "not-allowed",
+                        }}
+                      >
+                        {accessLoading || availabilityLoading
+                          ? "Checking…"
+                          : inLibrary
+                          ? "🗑️ Remove from Library"
+                          : "➕ Add to Library"}
+                      </button>
+                    )}
+
+                    {d.isPremium && showPublicReadNow && (
+                      <button
+                        className="explore-btn explore-btn-premium"
+                        disabled={!hasContent}
+                        title={!hasContent ? "Coming soon" : ""}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!hasContent) return;
+                          navigate(`/dashboard/documents/${d.id}/read`);
+                        }}
+                        style={{
+                          opacity: hasContent ? 1 : 0.5,
+                          cursor: hasContent ? "pointer" : "not-allowed",
+                        }}
+                      >
+                        📖 Read Now
+                      </button>
+                    )}
+
+                    {d.isPremium && !showPremiumAsLibraryAction && !showPublicReadNow && (
+                      <button
+                        className="explore-btn explore-btn-premium"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/dashboard/documents/${d.id}`);
+                        }}
+                      >
+                        📖 View / Preview
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+
+          {/* ✅ Pagination bar (bottom) */}
+          {filtered.length > PAGE_SIZE && (
+            <div className="explore-pager explore-pager-bottom">
+              <button
+                className="explore-pager-btn"
+                disabled={page <= 1}
+                onClick={() => goToPage(page - 1)}
+              >
+                ← Previous
+              </button>
+
+              <span className="explore-pager-info">
+                Page <b>{page}</b> of <b>{totalPages}</b>
+              </span>
+
+              <button
+                className="explore-pager-btn"
+                disabled={page >= totalPages}
+                onClick={() => goToPage(page + 1)}
+              >
+                Next →
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       <section className="explore-cta">
-        <div className="explore-cta-inner">
-          <div>
-            <h2>Build Your Personal Legal Library</h2>
-            <p>
-              Save free publications to your library and keep all your trusted legal resources
-              organized in one place for quick access anytime.
-            </p>
-          </div>
+        <h2>Build Your Personal Legal Library</h2>
+        <p>
+          Save free publications to your library and keep all your trusted legal
+          resources organized in one place for quick access anytime.
+        </p>
 
-          <button className="explore-cta-btn" onClick={() => navigate("/dashboard/library")}>
-            Go to My Library
-          </button>
-        </div>
+        <button className="explore-cta-btn" onClick={() => navigate("/dashboard/library")}>
+          📚 Go to My Library
+        </button>
       </section>
     </div>
   );
