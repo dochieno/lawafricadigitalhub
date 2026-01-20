@@ -86,28 +86,39 @@
 
 .explore-cover {
   width: 100%;
-  height: 180px;              /* keep your card height */
-  background: #7a1e1e;        /* fallback red */
+  height: 180px;
+  background: #7a1e1e; /* fallback red */
   border-radius: 10px;
   overflow: hidden;
-
+  position: relative; /* required for absolute image */
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.explore-cover img {
+/* The cover image */
+.explore-cover-img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain;        /* 🔑 THIS IS THE FIX */
+  object-fit: cover;
+  z-index: 1;
+  display: block;
+  transition: transform 0.3s ease;
 }
 
-
-
+/* LAW text sits above */
 .explore-cover-text {
+  position: relative;
+  z-index: 2;
   color: white;
   font-weight: 700;
   letter-spacing: 2px;
+}
+
+.explore-card:hover .explore-cover-img {
+  transform: scale(1.04);
 }
 
 .explore-badges {
@@ -131,6 +142,11 @@
   color: #a11212;
 }
 
+.badge.coming-soon {
+  background: #eef2f7;
+  color: #475569;
+}
+
 .explore-doc-title {
   margin: 0;
   font-size: 16px;
@@ -143,33 +159,6 @@
   color: var(--la-gray);
 }
 
-.btn-primary {
-  margin-top: auto;
-  padding: 10px;
-  border-radius: 8px;
-  border: none;
-  background: var(--la-red);
-  color: var(--la-white);
-  cursor: pointer;
-}
-
-.btn-primary:hover {
-  background: var(--la-red-hover);
-}
-
-.btn-outline {
-  margin-top: auto;
-  padding: 10px;
-  border-radius: 8px;
-  background: transparent;
-  border: 1px solid var(--la-red);
-  color: var(--la-red);
-  cursor: pointer;
-}
-
-.btn-outline:hover {
-  background: rgba(164, 22, 26, 0.06);
-}
 /* Shared button base */
 .explore-btn {
   width: 100%;
@@ -214,39 +203,8 @@
   margin-top: 60px;
   color: var(--la-gray);
 }
-.explore-cover-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.explore-cover {
-  position: relative; /* REQUIRED for absolute children */
-  overflow: hidden;
-}
 
-/* The real cover image */
-.explore-cover-img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  z-index: 1;
-}
-
-/* LAW text sits above background, but below image */
-.explore-cover-text {
-  position: relative;
-  z-index: 2;
-}
-.explore-cover img {
-  transition: transform 0.3s ease;
-}
-
-.explore-card:hover .explore-cover img {
-  transform: scale(1.04);
-}
+/* Toast */
 .toast {
   position: fixed;
   top: 20px;
@@ -256,7 +214,7 @@
   font-size: 14px;
   color: #fff;
   z-index: 1000;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
 }
 
 .toast-success {
@@ -266,18 +224,13 @@
 .toast-error {
   background: #dc2626;
 }
-/* -------------------------------- */
-/* FINAL CTA */
-/* -------------------------------- */
+
+/* CTA */
 .explore-cta {
   margin-top: 60px;
   padding: 32px;
   border-radius: 14px;
-  background: linear-gradient(
-    135deg,
-    rgba(161, 24, 30, 0.08),
-    rgba(0, 0, 0, 0.02)
-  );
+  background: linear-gradient(135deg, rgba(161, 24, 30, 0.08), rgba(0, 0, 0, 0.02));
   text-align: center;
 }
 
@@ -305,32 +258,63 @@
 .explore-cta-btn:hover {
   background: var(--la-red-hover);
 }
-/* Pagination controls */
+
+/* -------------------------------- */
+/* ✅ Compact Pagination controls */
+/* -------------------------------- */
 .explore-pager {
-  margin-top: 12px;
+  margin-top: 14px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: center; /* center the group */
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .explore-pager-bottom {
-  margin: 16px 0 6px;
+  margin: 18px auto 6px auto;
+  max-width: 1280px;
 }
 
-.explore-pager-info {
+.explore-pager-mid {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+}
+
+.explore-pager-text {
   font-size: 0.95rem;
-  opacity: 0.9;
+  color: var(--la-gray);
+  white-space: nowrap;
+}
+
+.explore-pager-dot {
+  opacity: 0.6;
+  color: var(--la-gray);
+}
+
+/* IMPORTANT: prevent pager buttons from inheriting explore-btn's 100% width */
+.explore-pager button {
+  flex: 0 0 auto;
 }
 
 .explore-pager-btn {
-  padding: 10px 12px;
+  width: auto;
+  min-width: unset;
+  padding: 6px 10px; /* smaller */
   border-radius: 10px;
-  border: 1px solid rgba(0,0,0,0.15);
-  background: rgba(255,255,255,0.9);
+  border: 1px solid var(--la-border);
+  background: var(--la-white);
   cursor: pointer;
   font-weight: 600;
+  color: var(--la-dark);
+  white-space: nowrap;
+}
+
+.explore-pager-btn:hover:enabled {
+  border-color: var(--la-red);
 }
 
 .explore-pager-btn:disabled {

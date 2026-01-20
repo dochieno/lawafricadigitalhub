@@ -59,7 +59,7 @@ export default function Explore() {
   const isPublic = isPublicUser();
 
   // ✅ Pagination (client-side, no API changes)
-  const PAGE_SIZE = 8; // adjust if you want (e.g. 18, 24, 30)
+  const PAGE_SIZE = 8;
   const [page, setPage] = useState(1);
   const topRef = useRef(null);
 
@@ -135,7 +135,6 @@ export default function Explore() {
   // ✅ Scroll to top of grid when changing pages
   function goToPage(nextPage) {
     setPage(nextPage);
-    // smooth jump to top of list area
     requestAnimationFrame(() => {
       if (topRef.current) topRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
       else window.scrollTo({ top: 0, behavior: "smooth" });
@@ -148,7 +147,7 @@ export default function Explore() {
     async function fetchAccessForVisiblePremiumDocs() {
       if (!isInst && !isPublic) return;
 
-      // ✅ Only fetch for current page items (prevents unnecessary batching)
+      // ✅ Only fetch for current page items
       const premiumIds = pagedDocs.filter((d) => d.isPremium).map((d) => d.id);
       const missing = premiumIds.filter((id) => accessMap[id] == null);
       if (missing.length === 0) return;
@@ -298,6 +297,8 @@ export default function Explore() {
     );
   }
 
+  const showPager = filtered.length > PAGE_SIZE;
+
   return (
     <div className="explore-container">
       <div ref={topRef} />
@@ -325,25 +326,33 @@ export default function Explore() {
           </label>
         </div>
 
-        {/* ✅ Pagination bar (top) */}
-        {filtered.length > PAGE_SIZE && (
-          <div className="explore-pager">
+        {/* ✅ Compact Pagination bar (top) */}
+        {showPager && (
+          <div className="explore-pager" aria-label="Pagination">
             <button
+              type="button"
               className="explore-pager-btn"
               disabled={page <= 1}
               onClick={() => goToPage(page - 1)}
+              aria-label="Previous page"
             >
-              ← Previous
+              ← Prev
             </button>
 
-            <span className="explore-pager-info">
-              Page <b>{page}</b> of <b>{totalPages}</b> • {filtered.length} items
-            </span>
+            <div className="explore-pager-mid">
+              <span className="explore-pager-text">
+                Page <b>{page}</b> of <b>{totalPages}</b>
+              </span>
+              <span className="explore-pager-dot">•</span>
+              <span className="explore-pager-text">{filtered.length} items</span>
+            </div>
 
             <button
+              type="button"
               className="explore-pager-btn"
               disabled={page >= totalPages}
               onClick={() => goToPage(page + 1)}
+              aria-label="Next page"
             >
               Next →
             </button>
@@ -520,25 +529,31 @@ export default function Explore() {
             })}
           </div>
 
-          {/* ✅ Pagination bar (bottom) */}
-          {filtered.length > PAGE_SIZE && (
-            <div className="explore-pager explore-pager-bottom">
+          {/* ✅ Compact Pagination bar (bottom) */}
+          {showPager && (
+            <div className="explore-pager explore-pager-bottom" aria-label="Pagination">
               <button
+                type="button"
                 className="explore-pager-btn"
                 disabled={page <= 1}
                 onClick={() => goToPage(page - 1)}
+                aria-label="Previous page"
               >
-                ← Previous
+                ← Prev
               </button>
 
-              <span className="explore-pager-info">
-                Page <b>{page}</b> of <b>{totalPages}</b>
-              </span>
+              <div className="explore-pager-mid">
+                <span className="explore-pager-text">
+                  Page <b>{page}</b> of <b>{totalPages}</b>
+                </span>
+              </div>
 
               <button
+                type="button"
                 className="explore-pager-btn"
                 disabled={page >= totalPages}
                 onClick={() => goToPage(page + 1)}
+                aria-label="Next page"
               >
                 Next →
               </button>
