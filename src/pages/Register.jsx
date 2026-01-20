@@ -5,8 +5,6 @@ import api from "../api/client.js";
 import "../styles/register.css";
 
 const SIGNUP_FEE_KES = 10;
-
-// Backend expects enum names for PaymentPurpose (string) unless you mapped numeric.
 const PAYMENT_PURPOSE_PUBLIC_SIGNUP = "PublicSignupFee";
 
 const USER_TYPES = [
@@ -19,10 +17,8 @@ const INSTITUTION_MEMBER_TYPES = [
   { value: "Staff", label: "Staff", sub: "Employee / lecturer" },
 ];
 
-// ✅ Username policy regex
 const USERNAME_REGEX = /^[A-Za-z]+(\.[A-Za-z]+)*$/;
 
-// ✅ Password policy helpers
 function getPasswordRules(pwd) {
   const v = String(pwd || "");
   return {
@@ -38,22 +34,17 @@ function isEmail(v) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 }
 
-// ✅ normalize Kenyan phone formats to 2547XXXXXXXX for MPesa STK
 function normalizePhone(phone) {
   let p = String(phone || "").trim();
   p = p.replace(/\s+/g, "");
   if (p.startsWith("+")) p = p.slice(1);
 
-  // 07XXXXXXXX -> 2547XXXXXXXX
   if (p.startsWith("07") && p.length === 10) {
     p = "254" + p.slice(1);
   }
-
-  // 7XXXXXXXX -> 2547XXXXXXXX
   if (/^7\d{8}$/.test(p)) {
     p = "254" + p;
   }
-
   return p;
 }
 
@@ -104,13 +95,16 @@ function extractAxiosError(e) {
   return data?.message || data || e?.message || "Request failed.";
 }
 
-// localStorage keys for returning from Paystack
+// localStorage keys for resuming after leaving
 const LS_REG_INTENT = "la_reg_intent_id";
 const LS_REG_EMAIL = "la_reg_email";
-
-// ✅ store creds across Paystack redirect so TwoFactorSetup works
 const LS_REG_USERNAME = "la_reg_username";
 const LS_REG_PASSWORD = "la_reg_password";
+
+// ✅ NEW: remember how the user was paying + phone/country for better resume UX
+const LS_REG_PAYMETHOD = "la_reg_pay_method"; // MPESA | PAYSTACK
+const LS_REG_PHONE = "la_reg_phone";
+const LS_REG_COUNTRY = "la_reg_country";
 
 export default function Register() {
   const nav = useNavigate();
@@ -134,7 +128,7 @@ export default function Register() {
   const [countries, setCountries] = useState([]);
   const [countryId, setCountryId] = useState("");
 
-  // Institution fields (hidden for Public)
+  // Institution fields
   const [institutionId, setInstitutionId] = useState("");
   const [institutionAccessCode, setInstitutionAccessCode] = useState("");
   const [institutionMemberType, setInstitutionMemberType] = useState("Student");
@@ -151,10 +145,8 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  // ✅ Touched tracking for live validation UX
+  // Touched + errors
   const [touched, setTouched] = useState({});
-
-  // Inline field errors
   const [fieldErrors, setFieldErrors] = useState({});
 
   // Flow state
@@ -163,7 +155,7 @@ export default function Register() {
   const [paymentInfo, setPaymentInfo] = useState(null);
 
   // Payment method (Public only)
-  const [publicPayMethod, setPublicPayMethod] = useState("MPESA"); // MPESA | PAYSTACK
+  const [publicPayMethod, setPublicPayMethod] = useState("MPESA");
 
   // Waiting / polling
   const [waitingPayment, setWaitingPayment] = useState(false);
@@ -171,11 +163,16 @@ export default function Register() {
   const [lastCheckedAt, setLastCheckedAt] = useState(null);
   const pollRef = useRef(null);
 
+  // ✅ NEW: resume banner state
+  const [resumeAvailable, setResumeAvailable] = useState(false);
+  const [resumeIntentId, setResumeIntentId] = useState(null);
+  const [resumePayMethod, setResumePayMethod] = useState(null);
+
   // Completion UX
   const [registrationComplete, setRegistrationComplete] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
-  // ✅ store token so success screen button works too
+  // Token for 2FA flow
   const [postRegisterSetupToken, setPostRegisterSetupToken] = useState("");
 
   // General UI
@@ -185,7 +182,6 @@ export default function Register() {
 
   const lockForm = waitingPayment || loading;
 
-  // ✅ live password rules
   const passwordRules = useMemo(() => getPasswordRules(password), [password]);
   const passwordRulesOk = useMemo(() => Object.values(passwordRules).every(Boolean), [passwordRules]);
 
@@ -219,7 +215,7 @@ export default function Register() {
   }, []);
 
   // -----------------------------
-  // Load institutions (PUBLIC LIST)
+  // Load institutions
   // -----------------------------
   useEffect(() => {
     (async () => {
@@ -227,7 +223,6 @@ export default function Register() {
         setInstitutionsLoadFailed(false);
 
         const candidates = ["/institutions/public", "/public/institutions", "/institutions?public=true"];
-
         let data = null;
 
         for (const url of candidates) {
@@ -281,6 +276,46 @@ export default function Register() {
   }, [isPublic]);
 
   // -----------------------------
+  // ✅ NEW: detect resume data
+  // -----------------------------
+  useEffect(() => {
+    const storedIntent = localStorage.getItem(LS_REG_INTENT);
+    const storedPayMethod = localStorage.getItem(LS_REG_PAYMETHOD);
+    if (!storedIntent) {
+      setResumeAvailable(false);
+      setResumeIntentId(null);
+      setResumePayMethod(null);
+      return;
+    }
+
+    const parsed = Number(storedIntent);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setResumeAvailable(false);
+      setResumeIntentId(null);
+      setResumePayMethod(null);
+      return;
+    }
+
+    setResumeAvailable(true);
+    setResumeIntentId(parsed);
+    setResumePayMethod(storedPayMethod || null);
+
+    // also prefill known basics if empty (nice UX)
+    const storedEmail = localStorage.getItem(LS_REG_EMAIL) || "";
+    const storedUsername = localStorage.getItem(LS_REG_USERNAME) || "";
+    const storedPassword = localStorage.getItem(LS_REG_PASSWORD) || "";
+    const storedPhone = localStorage.getItem(LS_REG_PHONE) || "";
+    const storedCountry = localStorage.getItem(LS_REG_COUNTRY) || "";
+
+    if (!email && storedEmail) setEmail(storedEmail);
+    if (!username && storedUsername) setUsername(storedUsername);
+    if (!password && storedPassword) setPassword(storedPassword);
+    if (!phoneNumber && storedPhone) setPhoneNumber(storedPhone);
+    if (!countryId && storedCountry) setCountryId(storedCountry);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // -----------------------------
   // Validation helpers
   // -----------------------------
   function markTouched(name) {
@@ -312,7 +347,6 @@ export default function Register() {
 
     if (name === "username") {
       const u = v.trim();
-
       if (!u) return "Username is required.";
       if (/\s/.test(u)) return "Username cannot contain spaces.";
       if (!USERNAME_REGEX.test(u)) {
@@ -490,7 +524,7 @@ export default function Register() {
   ]);
 
   // -----------------------------
-  // ✅ Fetch setup token so TwoFactorSetup can auto-populate
+  // Fetch setup token
   // -----------------------------
   async function fetchSetupTokenForOnboarding(user, pass) {
     const u = String(user || "").trim();
@@ -572,11 +606,14 @@ export default function Register() {
       throw new Error("Paystack initialize did not return authorizationUrl.");
     }
 
+    // ✅ Persist for resume
     localStorage.setItem(LS_REG_INTENT, String(registrationIntentId));
     localStorage.setItem(LS_REG_EMAIL, email.trim());
-
     localStorage.setItem(LS_REG_USERNAME, username.trim());
     localStorage.setItem(LS_REG_PASSWORD, password);
+    localStorage.setItem(LS_REG_PAYMETHOD, "PAYSTACK");
+    localStorage.setItem(LS_REG_PHONE, phoneNumber.trim());
+    localStorage.setItem(LS_REG_COUNTRY, countryId || "");
 
     window.location.href = authorizationUrl;
   }
@@ -604,8 +641,14 @@ export default function Register() {
         const token = await fetchSetupTokenForOnboarding(username.trim(), password);
         setPostRegisterSetupToken(token);
 
+        // ✅ registration is done, clear resume keys
         localStorage.removeItem(LS_REG_INTENT);
         localStorage.removeItem(LS_REG_EMAIL);
+        localStorage.removeItem(LS_REG_USERNAME);
+        localStorage.removeItem(LS_REG_PASSWORD);
+        localStorage.removeItem(LS_REG_PAYMETHOD);
+        localStorage.removeItem(LS_REG_PHONE);
+        localStorage.removeItem(LS_REG_COUNTRY);
 
         nav("/twofactor-setup", {
           replace: true,
@@ -617,12 +660,13 @@ export default function Register() {
 
       if (data?.status === "PAID") {
         setWaitingPayment(true);
-        setStatusText("Payment received. Finalizing account creation (sending emails)...");
+        setStatusText("Payment received. Finalizing account creation...");
         return;
       }
 
+      // Still pending / not paid
       setWaitingPayment(true);
-      setStatusText("Still waiting for payment confirmation. Please complete the payment.");
+      setStatusText("Waiting for payment. If you didn’t get a prompt or payment failed, you can resend the prompt.");
     } catch (e) {
       setStatusText("");
       setError(toText(extractAxiosError(e)));
@@ -653,7 +697,7 @@ export default function Register() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waitingPayment, intentId]);
 
-  // ✅ Handle Paystack return to registration
+  // Handle Paystack return
   useEffect(() => {
     const qs = new URLSearchParams(location.search);
     const paid = (qs.get("paid") || "").trim();
@@ -669,6 +713,11 @@ export default function Register() {
     const storedPassword = localStorage.getItem(LS_REG_PASSWORD) || "";
     if (!username && storedUsername) setUsername(storedUsername);
     if (!password && storedPassword) setPassword(storedPassword);
+
+    const storedPhone = localStorage.getItem(LS_REG_PHONE) || "";
+    const storedCountry = localStorage.getItem(LS_REG_COUNTRY) || "";
+    if (!phoneNumber && storedPhone) setPhoneNumber(storedPhone);
+    if (!countryId && storedCountry) setCountryId(storedCountry);
 
     const parsedIntent = Number(storedIntent);
     if (Number.isFinite(parsedIntent) && parsedIntent > 0) {
@@ -695,6 +744,36 @@ export default function Register() {
   }, [location.search]);
 
   // -----------------------------
+  // ✅ NEW: Resume registration action
+  // -----------------------------
+  async function resumeRegistration() {
+    const storedIntent = localStorage.getItem(LS_REG_INTENT);
+    if (!storedIntent) return;
+
+    const parsedIntent = Number(storedIntent);
+    if (!Number.isFinite(parsedIntent) || parsedIntent <= 0) return;
+
+    // Ensure we also restore pay method + phone/country (nice UX)
+    const storedPayMethod = localStorage.getItem(LS_REG_PAYMETHOD);
+    if (storedPayMethod === "MPESA") setPublicPayMethod("MPESA");
+    if (storedPayMethod === "PAYSTACK") setPublicPayMethod("PAYSTACK");
+
+    const storedPhone = localStorage.getItem(LS_REG_PHONE) || "";
+    const storedCountry = localStorage.getItem(LS_REG_COUNTRY) || "";
+    if (storedPhone) setPhoneNumber(storedPhone);
+    if (storedCountry) setCountryId(storedCountry);
+
+    setIntentId(parsedIntent);
+    setNextAction("PAYMENT_REQUIRED");
+
+    setError("");
+    setInfo("Resuming your registration…");
+    setWaitingPayment(true);
+    setStatusText("Checking your payment status…");
+    await checkIntentStatus(parsedIntent);
+  }
+
+  // -----------------------------
   // Actions
   // -----------------------------
   async function onCreateAccount(e) {
@@ -719,26 +798,36 @@ export default function Register() {
       const { intentId: createdIntentId, nextAction: action } = await createRegistrationIntentIfNeeded();
 
       if (action === "PAYMENT_REQUIRED") {
+        // ✅ Persist intent for BOTH pay methods so user can resume later
+        localStorage.setItem(LS_REG_INTENT, String(createdIntentId));
+        localStorage.setItem(LS_REG_EMAIL, email.trim());
+        localStorage.setItem(LS_REG_USERNAME, username.trim());
+        localStorage.setItem(LS_REG_PASSWORD, password);
+        localStorage.setItem(LS_REG_PAYMETHOD, publicPayMethod);
+        localStorage.setItem(LS_REG_PHONE, phoneNumber.trim());
+        localStorage.setItem(LS_REG_COUNTRY, countryId || "");
+
         if (publicPayMethod === "MPESA") {
-          setInfo(`Signup fee: KES ${SIGNUP_FEE_KES}. An Mpesa prompt is being sent — approve on your phone.`);
+          setInfo(
+            `Signup fee: KES ${SIGNUP_FEE_KES}. If you don’t receive a prompt, use “Resend prompt”. If you can’t pay now, you can close and resume later.`
+          );
 
           try {
             const pay = await initiateSignupPaymentMpesa(createdIntentId);
-
             const checkoutId = pay?.checkoutRequestId || pay?.CheckoutRequestId;
             if (!checkoutId) {
               throw new Error("Mpesa initiate did not return a checkoutRequestId.");
             }
 
-            localStorage.setItem(LS_REG_USERNAME, username.trim());
-            localStorage.setItem(LS_REG_PASSWORD, password);
-
             setWaitingPayment(true);
-            setStatusText("Waiting for payment confirmation... Check your phone and approve.");
+            setStatusText("Mpesa prompt sent. Approve it on your phone. If you didn’t get it, resend.");
             return;
           } catch (mpErr) {
-            setWaitingPayment(false);
-            setStatusText("");
+            // Insufficient funds / user cancelled / phone offline etc.
+            setWaitingPayment(true);
+            setStatusText(
+              "We could not send the prompt (or it failed). You can resend the prompt after topping up or try again later."
+            );
             setError(toText(extractAxiosError(mpErr)));
             return;
           }
@@ -771,6 +860,47 @@ export default function Register() {
     }
   }
 
+  // ✅ NEW: Resend Mpesa STK prompt (same intent)
+  async function resendMpesaPrompt() {
+    const useIntent = intentId || Number(localStorage.getItem(LS_REG_INTENT) || 0);
+    if (!useIntent) return;
+
+    setError("");
+    setInfo("");
+    setStatusText("Sending a new Mpesa prompt…");
+
+    try {
+      // Persist latest phone/country in case user edited it
+      localStorage.setItem(LS_REG_PHONE, phoneNumber.trim());
+      localStorage.setItem(LS_REG_COUNTRY, countryId || "");
+      localStorage.setItem(LS_REG_PAYMETHOD, "MPESA");
+
+      const pay = await initiateSignupPaymentMpesa(useIntent);
+      const checkoutId = pay?.checkoutRequestId || pay?.CheckoutRequestId;
+      if (!checkoutId) throw new Error("Mpesa initiate did not return a checkoutRequestId.");
+
+      setWaitingPayment(true);
+      setStatusText("New Mpesa prompt sent. Check your phone and approve.");
+    } catch (e) {
+      // Often “insufficient funds” / “user cannot be reached” etc
+      setWaitingPayment(true);
+      setStatusText("Prompt could not be sent. You can top up and try again, or retry later.");
+      setError(toText(extractAxiosError(e)));
+    }
+  }
+
+  // ✅ NEW: Let user change phone and resend (unlock form, keep intent)
+  function changePhoneAndResend() {
+    stopPolling();
+    setWaitingPayment(false);
+    setStatusText("");
+    setInfo(
+      "Update your phone number, then click “Resend Mpesa prompt”. Your registration intent is saved — you won’t lose it."
+    );
+    setError("");
+    // keep intentId as-is for reuse
+  }
+
   function startOver() {
     stopPolling();
 
@@ -796,6 +926,9 @@ export default function Register() {
     localStorage.removeItem(LS_REG_EMAIL);
     localStorage.removeItem(LS_REG_USERNAME);
     localStorage.removeItem(LS_REG_PASSWORD);
+    localStorage.removeItem(LS_REG_PAYMETHOD);
+    localStorage.removeItem(LS_REG_PHONE);
+    localStorage.removeItem(LS_REG_COUNTRY);
   }
 
   // -----------------------------
@@ -842,13 +975,6 @@ export default function Register() {
                 flex: "1 1 240px",
                 textAlign: "left",
                 boxShadow: active ? "0 10px 22px rgba(0,0,0,0.06)" : "none",
-                transition: "transform 120ms ease, box-shadow 120ms ease",
-              }}
-              onMouseDown={(e) => {
-                if (!disabled) e.currentTarget.style.transform = "scale(0.99)";
-              }}
-              onMouseUp={(e) => {
-                e.currentTarget.style.transform = "scale(1)";
               }}
             >
               <div style={{ fontSize: 14 }}>{t.label}</div>
@@ -932,10 +1058,9 @@ export default function Register() {
         <div className="register-info-panel" style={{ flex: "0 0 40%" }}>
           <img src="/logo.png" alt="LawAfrica" className="register-brand-logo" />
           <h1>Account created ✅</h1>
-          <p className="register-tagline">Next step: verify email and complete 2FA setup.</p>
+          <p className="register-tagline">Next step: complete 2FA setup.</p>
 
           <ul className="register-benefits">
-            <li>✔ Verify your email (activation link sent)</li>
             <li>✔ Check your email for the 2FA setup QR/setup instructions</li>
             <li>✔ Add LawAfrica to your Authenticator app</li>
             <li>✔ Verify using setup token + 6-digit code</li>
@@ -1035,7 +1160,7 @@ export default function Register() {
 
         <ul className="register-benefits">
           <li>✔ Secure signup via registration intent</li>
-          <li>✔ Email verification + 2FA setup after account creation</li>
+          <li>✔ 2FA setup after account creation</li>
           <li>✔ Institution memberships can be managed by your admin</li>
         </ul>
       </div>
@@ -1043,6 +1168,43 @@ export default function Register() {
       <div className="register-form-panel" style={{ flex: "1 1 60%" }}>
         <div className="register-card" style={{ borderRadius: 18 }}>
           <h2>Sign up</h2>
+
+          {/* ✅ NEW: Resume banner */}
+          {resumeAvailable && !waitingPayment && !intentId && (
+            <div
+              style={{
+                marginBottom: 12,
+                padding: "12px 12px",
+                borderRadius: 14,
+                border: "1px solid #fde68a",
+                background: "#fffbeb",
+                color: "#92400e",
+              }}
+            >
+              <div style={{ fontWeight: 900 }}>You have an unfinished registration.</div>
+              <div style={{ marginTop: 6, fontSize: 13, lineHeight: 1.35 }}>
+                Intent #{resumeIntentId} {resumePayMethod ? `• Method: ${resumePayMethod}` : ""}. You can resume and
+                complete payment now.
+              </div>
+              <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={resumeRegistration}
+                  style={{ width: "auto", padding: "10px 14px", borderRadius: 12, background: "#92400e", color: "white" }}
+                >
+                  Resume registration
+                </button>
+                <button
+                  type="button"
+                  onClick={startOver}
+                  style={{ width: "auto", padding: "10px 14px", borderRadius: 12, background: "#6b7280", color: "white" }}
+                >
+                  Discard and start new
+                </button>
+              </div>
+            </div>
+          )}
+
           <p className="subtitle">
             {isPublic
               ? `Public signup requires a one-time fee of KES ${SIGNUP_FEE_KES}.`
@@ -1077,7 +1239,8 @@ export default function Register() {
               <div style={{ marginTop: 6, fontSize: 13, color: "#075985" }}>
                 {publicPayMethod === "MPESA" ? (
                   <>
-                    We’ll send an <b>Mpesa STK push</b>. Approve it on your phone, then we’ll confirm automatically.
+                    We’ll send an <b>Mpesa STK push</b>. If you don’t receive it or you can’t pay now, you can resend or
+                    resume later.
                   </>
                 ) : (
                   <>
@@ -1174,7 +1337,6 @@ export default function Register() {
                 markTouched("username");
                 const trimmed = e.target.value.trim();
                 if (trimmed !== e.target.value) setUsername(trimmed);
-
                 const msg = validateField("username", trimmed);
                 msg ? setFieldError("username", msg) : clearFieldError("username");
               }}
@@ -1213,7 +1375,7 @@ export default function Register() {
               </div>
             )}
 
-            {/* ✅ CHANGED: Phone + Country on same row */}
+            {/* Phone + Country same row */}
             <div className="grid-2">
               <div>
                 <label className="field-label">
@@ -1231,7 +1393,7 @@ export default function Register() {
                     const msg = validateField("phoneNumber", e.target.value);
                     msg ? setFieldError("phoneNumber", msg) : clearFieldError("phoneNumber");
                   }}
-                  disabled={lockForm}
+                  disabled={lockForm && !(waitingPayment && publicPayMethod === "MPESA")}
                   style={inputStyle("phoneNumber")}
                   placeholder={isPublic && publicPayMethod === "MPESA" ? "e.g. 2547XXXXXXXX or 07XXXXXXXX" : "Optional"}
                   aria-invalid={!!(touched.phoneNumber && fieldErrors.phoneNumber)}
@@ -1466,7 +1628,7 @@ export default function Register() {
                   color: "#0e7490",
                 }}
               >
-                <div style={{ fontWeight: 950, marginBottom: 6 }}>{statusText || "Finalizing payment..."}</div>
+                <div style={{ fontWeight: 950, marginBottom: 6 }}>{statusText || "Waiting for payment..."}</div>
 
                 <div style={{ fontSize: 13, color: "#155e75", display: "grid", gap: 6 }}>
                   <div>We auto-refresh every 5 seconds.</div>
@@ -1502,6 +1664,41 @@ export default function Register() {
                     I’ve paid — Check status
                   </button>
 
+                  {/* ✅ NEW: Mpesa help actions */}
+                  {isPublic && publicPayMethod === "MPESA" && (
+                    <>
+                      <button
+                        type="button"
+                        style={{
+                          width: "auto",
+                          padding: "10px 14px",
+                          borderRadius: 12,
+                          background: "#0f766e",
+                          color: "white",
+                        }}
+                        onClick={resendMpesaPrompt}
+                        disabled={loading}
+                      >
+                        Resend Mpesa prompt
+                      </button>
+
+                      <button
+                        type="button"
+                        style={{
+                          width: "auto",
+                          padding: "10px 14px",
+                          borderRadius: 12,
+                          background: "#111827",
+                          color: "white",
+                        }}
+                        onClick={changePhoneAndResend}
+                        disabled={loading}
+                      >
+                        Change phone & resend
+                      </button>
+                    </>
+                  )}
+
                   <button
                     type="button"
                     style={{
@@ -1515,6 +1712,10 @@ export default function Register() {
                   >
                     Start over
                   </button>
+                </div>
+
+                <div style={{ marginTop: 10, fontSize: 12, color: "#155e75" }}>
+                  If you can’t pay now, you can close this page. When you come back, click <b>Resume registration</b>.
                 </div>
               </div>
             )}
