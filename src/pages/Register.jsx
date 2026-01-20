@@ -106,7 +106,7 @@ const LS_REG_PAYMETHOD = "la_reg_pay_method"; // MPESA | PAYSTACK
 const LS_REG_PHONE = "la_reg_phone";
 const LS_REG_COUNTRY = "la_reg_country";
 
-// ✅ NEW (Option 2): resume with email + OTP (works across browsers/devices)
+// ✅ Resume with email + OTP (works across browsers/devices)
 const LS_RESUME_TOKEN = "la_resume_token";
 const LS_RESUME_EMAIL = "la_resume_email";
 
@@ -172,7 +172,7 @@ export default function Register() {
   const [resumeIntentId, setResumeIntentId] = useState(null);
   const [resumePayMethod, setResumePayMethod] = useState(null);
 
-  // ✅ NEW (Option 2): Resume-with-OTP UI state (single screen: request OTP → enter OTP → verify)
+  // ✅ Resume-with-OTP UI state
   const [resumeOtpOpen, setResumeOtpOpen] = useState(false);
   const [resumeEmail, setResumeEmail] = useState(() => localStorage.getItem(LS_RESUME_EMAIL) || "");
   const [resumeCode, setResumeCode] = useState("");
@@ -185,8 +185,13 @@ export default function Register() {
   const [resumeError, setResumeError] = useState("");
   const [resumeInfo, setResumeInfo] = useState("");
   const [resumeVerified, setResumeVerified] = useState(false);
+
+  // ✅ initialize from localStorage so users can proceed even after refresh
   const [resumeToken, setResumeToken] = useState(() => localStorage.getItem(LS_RESUME_TOKEN) || "");
   const [resumePending, setResumePending] = useState(null); // Step 2 data from /pending
+
+  // ✅ NEW: Step 3 - continuing payment from resumed intent
+  const [resumeContinueLoading, setResumeContinueLoading] = useState(false);
 
   // Completion UX
   const [registrationComplete, setRegistrationComplete] = useState(false);
@@ -203,7 +208,6 @@ export default function Register() {
   const lockForm = waitingPayment || loading;
 
   const passwordRules = useMemo(() => getPasswordRules(password), [password]);
-  // kept (in case you use it later)
   // eslint-disable-next-line no-unused-vars
   const passwordRulesOk = useMemo(() => Object.values(passwordRules).every(Boolean), [passwordRules]);
 
@@ -636,6 +640,7 @@ export default function Register() {
   }
 
   async function initiateSignupPaymentPaystack(registrationIntentId) {
+    // Reuse existing endpoint as requested
     const res = await api.post("/payments/paystack/initialize", {
       purpose: PAYMENT_PURPOSE_PUBLIC_SIGNUP,
       amount: SIGNUP_FEE_KES,
@@ -821,7 +826,7 @@ export default function Register() {
   }
 
   // -----------------------------
-  // NEW (Step 1): Resume with Email + OTP (single screen)
+  // Resume with Email + OTP
   // -----------------------------
   async function requestResumeOtp() {
     const em = String(resumeEmail || "").trim().toLowerCase();
@@ -829,7 +834,6 @@ export default function Register() {
     setResumeError("");
     setResumeInfo("");
     setResumeVerified(false);
-    // Do not clear resumeToken if it exists; user may be resuming again
     setResumePending(null);
 
     if (!em) {
@@ -858,7 +862,6 @@ export default function Register() {
       setResumeCooldown(Number.isFinite(cooldownSeconds) ? cooldownSeconds : 60);
       setResumeExpires(Number.isFinite(expiresSeconds) ? expiresSeconds : 600);
 
-      // Backend now sends OTP only if there is a pending intent (but still returns 200 always).
       setResumeInfo("If an unfinished registration exists for this email, we’ve sent a 6-digit code. Check your inbox.");
       localStorage.setItem(LS_RESUME_EMAIL, em);
     } catch (e) {
@@ -896,17 +899,15 @@ export default function Register() {
       setResumeToken(token);
       setResumeVerified(true);
 
-      // store token for Step 2/3
       if (token) localStorage.setItem(LS_RESUME_TOKEN, token);
       localStorage.setItem(LS_RESUME_EMAIL, em);
 
-      // Keep the server-returned "pending" (might be the DTO object)
       setResumePending(pending);
 
       if (pending?.hasPending === false || pending?.HasPending === false) {
         setResumeInfo("Verified ✅ We couldn’t find an unfinished registration for this email.");
       } else {
-        setResumeInfo("Verified ✅ Now click “Proceed to Step 2” to load your pending registration.");
+        setResumeInfo("Verified ✅ Now click “Load pending registration” to continue.");
       }
     } catch (e) {
       setResumeError(toText(extractAxiosError(e)));
@@ -928,9 +929,7 @@ export default function Register() {
     resumeTimerRef.current = null;
   }
 
-  // -----------------------------
-  // ✅ NEW: Step 2 (pending) - GET /registration/resume/pending with X-Resume-Token
-  // -----------------------------
+  // Step 2: pending
   async function fetchResumePending() {
     const token = String(resumeToken || localStorage.getItem(LS_RESUME_TOKEN) || "").trim();
     if (!token) {
@@ -947,18 +946,142 @@ export default function Register() {
       });
       const data = res.data?.data ?? res.data;
 
-      // backend returns: { hasPending: bool, registrationIntentId, status, expiresAt, nextAction }
       setResumePending(data);
 
       if (!data?.hasPending) {
         setResumeInfo("No pending registration found for this verified session.");
       } else {
-        setResumeInfo("Pending registration loaded ✅ You can continue in the next step.");
+        setResumeInfo("Pending registration loaded ✅");
       }
     } catch (e) {
       setResumeError(toText(extractAxiosError(e)));
     } finally {
       setResumeLoading(false);
+    }
+  }
+
+  // -----------------------------
+  // ✅ Step 3 buttons: Continue with Mpesa / Paystack (using resumed intent)
+  // -----------------------------
+  function getPendingIntentId(p) {
+    if (!p) return null;
+
+    // From GET /registration/resume/pending:
+    // { hasPending, registrationIntentId, status, expiresAt, nextAction }
+    const id1 = p.registrationIntentId;
+
+    // From verify-otp DTO:
+    // { HasPending, RegistrationIntentId, ... }
+    const id2 = p.RegistrationIntentId;
+
+    // From nested shapes if any:
+    const id3 = p?.pending?.registrationIntentId || p?.pending?.RegistrationIntentId;
+
+    const picked = id1 ?? id2 ?? id3;
+    const n = Number(picked);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  function getPendingHasPending(p) {
+    if (!p) return false;
+    return Boolean(p.hasPending ?? p.HasPending ?? p?.pending?.hasPending ?? p?.pending?.HasPending ?? false);
+  }
+
+  async function continueResumeWithMpesa() {
+    const regId = getPendingIntentId(resumePending);
+    if (!regId) {
+      setResumeError("Missing RegistrationIntentId. Please load pending registration again.");
+      return;
+    }
+
+    // Mpesa needs phone number. Prefer what the user typed on main form; otherwise use stored.
+    const phone = String(phoneNumber || localStorage.getItem(LS_REG_PHONE) || "").trim();
+    if (!phone) {
+      setResumeError("Enter your phone number above (Mpesa) then try again.");
+      return;
+    }
+    const norm = normalizePhone(phone);
+    if (!/^2547\d{8}$/.test(norm)) {
+      setResumeError("Enter a valid Mpesa number like 2547XXXXXXXX (or 07XXXXXXXX).");
+      return;
+    }
+
+    setResumeContinueLoading(true);
+    setResumeError("");
+    setResumeInfo("");
+    try {
+      // ✅ This is Step 3: re-initiate STK using existing endpoint and recovered intent id.
+      await initiateSignupPaymentMpesa(regId);
+
+      // Persist so polling/resume works like the old flow
+      localStorage.setItem(LS_REG_INTENT, String(regId));
+      localStorage.setItem(LS_REG_PAYMETHOD, "MPESA");
+      localStorage.setItem(LS_REG_PHONE, phone.trim());
+      localStorage.setItem(LS_REG_COUNTRY, countryId || "");
+
+      setPublicPayMethod("MPESA");
+      setIntentId(regId);
+      setNextAction("PAYMENT_REQUIRED");
+
+      setWaitingPayment(true);
+      setStatusText("Mpesa prompt sent. Approve it on your phone. If you didn’t get it, resend.");
+      setInfo("Resumed ✅ Waiting for payment confirmation...");
+    } catch (e) {
+      setResumeError(toText(extractAxiosError(e)));
+    } finally {
+      setResumeContinueLoading(false);
+    }
+  }
+
+  async function continueResumeWithPaystack() {
+    const regId = getPendingIntentId(resumePending);
+    if (!regId) {
+      setResumeError("Missing RegistrationIntentId. Please load pending registration again.");
+      return;
+    }
+
+    // Paystack needs an email. Prefer resumeEmail; fallback to main email.
+    const em = String(resumeEmail || email || "").trim().toLowerCase();
+    if (!em || !isEmail(em)) {
+      setResumeError("Enter a valid email address for Paystack.");
+      return;
+    }
+
+    setResumeContinueLoading(true);
+    setResumeError("");
+    setResumeInfo("");
+    try {
+      // ✅ Reuse existing endpoint as requested
+      const res = await api.post("/payments/paystack/initialize", {
+        purpose: PAYMENT_PURPOSE_PUBLIC_SIGNUP,
+        amount: SIGNUP_FEE_KES,
+        currency: "KES",
+        email: em,
+        registrationIntentId: regId,
+      });
+
+      const data = res.data?.data ?? res.data;
+      const authorizationUrl =
+        data?.authorization_url || data?.authorizationUrl || data?.data?.authorization_url || data?.authorizationUrl;
+
+      if (!authorizationUrl) throw new Error("Paystack initialize did not return authorizationUrl.");
+
+      // Persist like old flow so return handler + polling works
+      localStorage.setItem(LS_REG_INTENT, String(regId));
+      localStorage.setItem(LS_REG_EMAIL, em);
+      localStorage.setItem(LS_REG_PAYMETHOD, "PAYSTACK");
+      localStorage.setItem(LS_REG_COUNTRY, countryId || "");
+
+      // keep these if already present; do not overwrite with blanks
+      if (username) localStorage.setItem(LS_REG_USERNAME, username.trim());
+      if (password) localStorage.setItem(LS_REG_PASSWORD, password);
+
+      // Redirect to Paystack
+      window.location.href = authorizationUrl;
+    } catch (e) {
+      setResumeError(toText(extractAxiosError(e)));
+    } finally {
+      setResumeContinueLoading(false);
     }
   }
 
@@ -1113,6 +1236,15 @@ export default function Register() {
     localStorage.removeItem(LS_REG_PAYMETHOD);
     localStorage.removeItem(LS_REG_PHONE);
     localStorage.removeItem(LS_REG_COUNTRY);
+
+    localStorage.removeItem(LS_RESUME_TOKEN);
+    localStorage.removeItem(LS_RESUME_EMAIL);
+
+    setResumeToken("");
+    setResumePending(null);
+    setResumeVerified(false);
+    setResumeOtpSent(false);
+    setResumeCode("");
   }
 
   // -----------------------------
@@ -1333,6 +1465,9 @@ export default function Register() {
   // -----------------------------
   // MAIN REGISTER
   // -----------------------------
+  const resumeHasPending = getPendingHasPending(resumePending);
+  const resumeRegId = getPendingIntentId(resumePending);
+
   return (
     <div className="register-layout">
       <div className="register-info-panel" style={{ flex: "0 0 40%" }}>
@@ -1400,7 +1535,7 @@ export default function Register() {
             </div>
           )}
 
-          {/* NEW: Resume on any device/browser via Email + OTP */}
+          {/* Resume on any device/browser via Email + OTP */}
           {!waitingPayment && !intentId && (
             <div
               style={{
@@ -1456,7 +1591,7 @@ export default function Register() {
                           setResumeError("");
                         }}
                         placeholder="e.g. name@example.com"
-                        disabled={resumeLoading}
+                        disabled={resumeLoading || resumeContinueLoading}
                       />
                       <div style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>
                         We’ll send a 6-digit code if an unfinished registration exists for this email.
@@ -1468,7 +1603,7 @@ export default function Register() {
                       <button
                         type="button"
                         onClick={requestResumeOtp}
-                        disabled={resumeLoading || resumeCooldown > 0}
+                        disabled={resumeLoading || resumeContinueLoading || resumeCooldown > 0}
                         style={{
                           width: "auto",
                           padding: "10px 14px",
@@ -1485,7 +1620,7 @@ export default function Register() {
                       <button
                         type="button"
                         onClick={resetResumeOtpUi}
-                        disabled={resumeLoading}
+                        disabled={resumeLoading || resumeContinueLoading}
                         style={{
                           width: "auto",
                           padding: "10px 14px",
@@ -1505,7 +1640,7 @@ export default function Register() {
                       )}
                     </div>
 
-                    {/* Enter + Verify OTP (same screen) */}
+                    {/* Enter + Verify OTP */}
                     <div
                       style={{
                         padding: 12,
@@ -1524,7 +1659,7 @@ export default function Register() {
                         }}
                         inputMode="numeric"
                         placeholder="123456"
-                        disabled={resumeLoading || !resumeOtpSent}
+                        disabled={resumeLoading || resumeContinueLoading || !resumeOtpSent}
                         style={{
                           textAlign: "center",
                           letterSpacing: "6px",
@@ -1537,7 +1672,12 @@ export default function Register() {
                         <button
                           type="button"
                           onClick={verifyResumeOtp}
-                          disabled={resumeLoading || !resumeOtpSent || !/^\d{6}$/.test(String(resumeCode))}
+                          disabled={
+                            resumeLoading ||
+                            resumeContinueLoading ||
+                            !resumeOtpSent ||
+                            !/^\d{6}$/.test(String(resumeCode))
+                          }
                           style={{
                             width: "auto",
                             padding: "10px 14px",
@@ -1555,50 +1695,27 @@ export default function Register() {
                         )}
                       </div>
 
-                      {/* ✅ NEW: Proceed to Step 2 button */}
-                      {resumeVerified && (
-                        <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                          <button
-                            type="button"
-                            onClick={fetchResumePending}
-                            disabled={resumeLoading || !String(resumeToken || "").trim()}
-                            style={{
-                              width: "auto",
-                              padding: "10px 14px",
-                              borderRadius: 12,
-                              background: "#8b1c1c",
-                              color: "white",
-                              fontWeight: 950,
-                            }}
-                          >
-                            Proceed to Step 2 → Load pending registration
-                          </button>
+                      {/* Step 2 */}
+                      <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          onClick={fetchResumePending}
+                          disabled={resumeLoading || resumeContinueLoading || !String(resumeToken || "").trim()}
+                          style={{
+                            width: "auto",
+                            padding: "10px 14px",
+                            borderRadius: 12,
+                            background: "#8b1c1c",
+                            color: "white",
+                            fontWeight: 950,
+                          }}
+                        >
+                          Load pending registration (Step 2)
+                        </button>
+                      </div>
 
-                          <button
-                            type="button"
-                            onClick={() => {
-                              // convenience: keep token but clear pending display
-                              setResumePending(null);
-                              setResumeInfo("Pending view cleared. You can load again when ready.");
-                              setResumeError("");
-                            }}
-                            disabled={resumeLoading}
-                            style={{
-                              width: "auto",
-                              padding: "10px 14px",
-                              borderRadius: 12,
-                              background: "#6b7280",
-                              color: "white",
-                              fontWeight: 900,
-                            }}
-                          >
-                            Clear pending view
-                          </button>
-                        </div>
-                      )}
-
-                      {/* ✅ NEW: show pending details on the same page */}
-                      {resumeVerified && resumePending && (
+                      {/* Pending details + Step 3 buttons */}
+                      {resumePending && (
                         <div
                           style={{
                             marginTop: 12,
@@ -1609,31 +1726,21 @@ export default function Register() {
                             color: "#1e3a8a",
                           }}
                         >
-                          <div style={{ fontWeight: 950, marginBottom: 6 }}>Pending registration (Step 2)</div>
+                          <div style={{ fontWeight: 950, marginBottom: 6 }}>Pending registration</div>
 
-                          {/* Handles both shapes:
-                              - verify-otp response DTO: { HasPending, RegistrationIntentId, Status, ExpiresAt, NextAction }
-                              - pending endpoint: { hasPending, registrationIntentId, status, expiresAt, nextAction }
-                          */}
                           {(() => {
-                            const hasPending =
-                              resumePending?.hasPending ?? resumePending?.HasPending ?? resumePending?.pending?.hasPending ?? false;
-
-                            const regId =
-                              resumePending?.registrationIntentId ?? resumePending?.RegistrationIntentId ?? resumePending?.pending?.registrationIntentId;
-
-                            const status = resumePending?.status ?? resumePending?.Status ?? resumePending?.pending?.status;
-                            const next = resumePending?.nextAction ?? resumePending?.NextAction ?? resumePending?.pending?.nextAction;
-                            const exp = resumePending?.expiresAt ?? resumePending?.ExpiresAt ?? resumePending?.pending?.expiresAt;
-
-                            if (!hasPending) {
+                            if (!resumeHasPending) {
                               return <div style={{ fontSize: 13 }}>No pending registration found for this email.</div>;
                             }
+
+                            const status = resumePending?.status ?? resumePending?.Status ?? null;
+                            const next = resumePending?.nextAction ?? resumePending?.NextAction ?? null;
+                            const exp = resumePending?.expiresAt ?? resumePending?.ExpiresAt ?? null;
 
                             return (
                               <div style={{ display: "grid", gap: 6, fontSize: 13 }}>
                                 <div>
-                                  <strong>Intent:</strong> #{regId ?? "—"}
+                                  <strong>Intent:</strong> #{resumeRegId ?? "—"}
                                 </div>
                                 <div>
                                   <strong>Status:</strong> {status ?? "—"}
@@ -1644,9 +1751,45 @@ export default function Register() {
                                 <div>
                                   <strong>Expires:</strong> {exp ? formatDateMaybe(exp) : "—"}
                                 </div>
+
+                                <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                                  {/* ✅ Step 3 button: Continue Mpesa */}
+                                  <button
+                                    type="button"
+                                    onClick={continueResumeWithMpesa}
+                                    disabled={resumeContinueLoading}
+                                    style={{
+                                      width: "auto",
+                                      padding: "10px 14px",
+                                      borderRadius: 12,
+                                      background: "#0f766e",
+                                      color: "white",
+                                      fontWeight: 950,
+                                    }}
+                                  >
+                                    {resumeContinueLoading ? "Working..." : "Continue with Mpesa"}
+                                  </button>
+
+                                  {/* ✅ Step 3 button: Continue Paystack */}
+                                  <button
+                                    type="button"
+                                    onClick={continueResumeWithPaystack}
+                                    disabled={resumeContinueLoading}
+                                    style={{
+                                      width: "auto",
+                                      padding: "10px 14px",
+                                      borderRadius: 12,
+                                      background: "#111827",
+                                      color: "white",
+                                      fontWeight: 950,
+                                    }}
+                                  >
+                                    {resumeContinueLoading ? "Working..." : "Continue with Paystack"}
+                                  </button>
+                                </div>
+
                                 <div style={{ marginTop: 6, fontSize: 12, color: "#1f2937" }}>
-                                  Step 3 will use this intent to continue payment (Mpesa/Paystack) or complete creation for
-                                  institution users — we’ll wire that next.
+                                  Mpesa will send an STK prompt. Paystack will redirect you to checkout.
                                 </div>
                               </div>
                             );
