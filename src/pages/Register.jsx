@@ -185,8 +185,8 @@ export default function Register() {
   const [resumeError, setResumeError] = useState("");
   const [resumeInfo, setResumeInfo] = useState("");
   const [resumeVerified, setResumeVerified] = useState(false);
-  const [resumeToken, setResumeToken] = useState("");
-  const [resumePending, setResumePending] = useState(null); // step 2 uses this later
+  const [resumeToken, setResumeToken] = useState(() => localStorage.getItem(LS_RESUME_TOKEN) || "");
+  const [resumePending, setResumePending] = useState(null); // Step 2 data from /pending
 
   // Completion UX
   const [registrationComplete, setRegistrationComplete] = useState(false);
@@ -203,6 +203,8 @@ export default function Register() {
   const lockForm = waitingPayment || loading;
 
   const passwordRules = useMemo(() => getPasswordRules(password), [password]);
+  // kept (in case you use it later)
+  // eslint-disable-next-line no-unused-vars
   const passwordRulesOk = useMemo(() => Object.values(passwordRules).every(Boolean), [passwordRules]);
 
   // -----------------------------
@@ -354,12 +356,9 @@ export default function Register() {
     };
   }, [resumeOtpSent]);
 
-  // If expiry hits 0, allow user to request again (UI hint)
   useEffect(() => {
     if (!resumeOtpSent) return;
     if (resumeExpires > 0) return;
-
-    // expired
     setResumeInfo("Code expired. Request a new code to continue.");
   }, [resumeExpires, resumeOtpSent]);
 
@@ -792,7 +791,7 @@ export default function Register() {
   }, [location.search]);
 
   // -----------------------------
-  // ✅ Existing: Resume registration (old/local intent-based)
+  // Existing: Resume registration (old/local intent-based)
   // -----------------------------
   async function resumeRegistration() {
     const storedIntent = localStorage.getItem(LS_REG_INTENT);
@@ -822,7 +821,7 @@ export default function Register() {
   }
 
   // -----------------------------
-  // ✅ NEW (Step 1): Resume with Email + OTP (single screen)
+  // NEW (Step 1): Resume with Email + OTP (single screen)
   // -----------------------------
   async function requestResumeOtp() {
     const em = String(resumeEmail || "").trim().toLowerCase();
@@ -830,7 +829,7 @@ export default function Register() {
     setResumeError("");
     setResumeInfo("");
     setResumeVerified(false);
-    setResumeToken("");
+    // Do not clear resumeToken if it exists; user may be resuming again
     setResumePending(null);
 
     if (!em) {
@@ -849,7 +848,6 @@ export default function Register() {
 
     setResumeLoading(true);
     try {
-      // ✅ calls your backend: POST /api/registration/resume/start-otp
       const res = await api.post("/registration/resume/start-otp", { email: em });
       const data = res.data?.data ?? res.data;
 
@@ -860,6 +858,7 @@ export default function Register() {
       setResumeCooldown(Number.isFinite(cooldownSeconds) ? cooldownSeconds : 60);
       setResumeExpires(Number.isFinite(expiresSeconds) ? expiresSeconds : 600);
 
+      // Backend now sends OTP only if there is a pending intent (but still returns 200 always).
       setResumeInfo("If an unfinished registration exists for this email, we’ve sent a 6-digit code. Check your inbox.");
       localStorage.setItem(LS_RESUME_EMAIL, em);
     } catch (e) {
@@ -875,6 +874,7 @@ export default function Register() {
 
     setResumeError("");
     setResumeInfo("");
+    setResumePending(null);
 
     if (!em || !isEmail(em)) {
       setResumeError("Enter a valid email address.");
@@ -887,7 +887,6 @@ export default function Register() {
 
     setResumeLoading(true);
     try {
-      // ✅ calls your backend: POST /api/registration/resume/verify-otp
       const res = await api.post("/registration/resume/verify-otp", { email: em, code });
       const data = res.data?.data ?? res.data;
 
@@ -895,17 +894,19 @@ export default function Register() {
       const pending = data?.pending || data?.Pending || null;
 
       setResumeToken(token);
-      setResumePending(pending);
       setResumeVerified(true);
 
-      // ✅ save token for Step 2/3 (we will use it later)
+      // store token for Step 2/3
       if (token) localStorage.setItem(LS_RESUME_TOKEN, token);
       localStorage.setItem(LS_RESUME_EMAIL, em);
+
+      // Keep the server-returned "pending" (might be the DTO object)
+      setResumePending(pending);
 
       if (pending?.hasPending === false || pending?.HasPending === false) {
         setResumeInfo("Verified ✅ We couldn’t find an unfinished registration for this email.");
       } else {
-        setResumeInfo("Verified ✅ Great. Next we’ll load your pending registration and help you continue.");
+        setResumeInfo("Verified ✅ Now click “Proceed to Step 2” to load your pending registration.");
       }
     } catch (e) {
       setResumeError(toText(extractAxiosError(e)));
@@ -922,10 +923,43 @@ export default function Register() {
     setResumeCooldown(0);
     setResumeExpires(0);
     setResumeVerified(false);
-    setResumeToken("");
     setResumePending(null);
     if (resumeTimerRef.current) clearInterval(resumeTimerRef.current);
     resumeTimerRef.current = null;
+  }
+
+  // -----------------------------
+  // ✅ NEW: Step 2 (pending) - GET /registration/resume/pending with X-Resume-Token
+  // -----------------------------
+  async function fetchResumePending() {
+    const token = String(resumeToken || localStorage.getItem(LS_RESUME_TOKEN) || "").trim();
+    if (!token) {
+      setResumeError("Missing resume token. Please verify the OTP again.");
+      return;
+    }
+
+    setResumeLoading(true);
+    setResumeError("");
+    setResumeInfo("");
+    try {
+      const res = await api.get("/registration/resume/pending", {
+        headers: { "X-Resume-Token": token },
+      });
+      const data = res.data?.data ?? res.data;
+
+      // backend returns: { hasPending: bool, registrationIntentId, status, expiresAt, nextAction }
+      setResumePending(data);
+
+      if (!data?.hasPending) {
+        setResumeInfo("No pending registration found for this verified session.");
+      } else {
+        setResumeInfo("Pending registration loaded ✅ You can continue in the next step.");
+      }
+    } catch (e) {
+      setResumeError(toText(extractAxiosError(e)));
+    } finally {
+      setResumeLoading(false);
+    }
   }
 
   // -----------------------------
@@ -1199,6 +1233,17 @@ export default function Register() {
     );
   }
 
+  function formatDateMaybe(d) {
+    if (!d) return "";
+    try {
+      const dt = new Date(d);
+      if (Number.isNaN(dt.getTime())) return String(d);
+      return dt.toLocaleString();
+    } catch {
+      return String(d);
+    }
+  }
+
   // -----------------------------
   // SUCCESS SCREEN (unchanged)
   // -----------------------------
@@ -1319,7 +1364,7 @@ export default function Register() {
         <div className="register-card" style={{ borderRadius: 18 }}>
           <h2>Sign up</h2>
 
-          {/* ✅ Existing (old/local resume): unchanged */}
+          {/* Existing (old/local resume): unchanged */}
           {resumeAvailable && !waitingPayment && !intentId && (
             <div
               style={{
@@ -1355,7 +1400,7 @@ export default function Register() {
             </div>
           )}
 
-          {/* ✅ NEW (Step 1): Resume on any device/browser via Email + OTP */}
+          {/* NEW: Resume on any device/browser via Email + OTP */}
           {!waitingPayment && !intentId && (
             <div
               style={{
@@ -1380,7 +1425,6 @@ export default function Register() {
                     setResumeOtpOpen((s) => !s);
                     setResumeError("");
                     setResumeInfo("");
-                    // small convenience: prefill email from signup field if empty
                     if (!resumeEmail && email) setResumeEmail(String(email).trim());
                   }}
                   style={{
@@ -1456,8 +1500,7 @@ export default function Register() {
 
                       {resumeOtpSent && (
                         <div style={{ alignSelf: "center", fontSize: 12, color: "#6b7280" }}>
-                          Code expires in{" "}
-                          <strong>{resumeExpires > 0 ? `${Math.ceil(resumeExpires / 60)} min` : "—"}</strong>
+                          Code expires in <strong>{resumeExpires > 0 ? `${Math.ceil(resumeExpires / 60)} min` : "—"}</strong>
                         </div>
                       )}
                     </div>
@@ -1490,7 +1533,7 @@ export default function Register() {
                         }}
                       />
 
-                      <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                         <button
                           type="button"
                           onClick={verifyResumeOtp}
@@ -1508,27 +1551,109 @@ export default function Register() {
                         </button>
 
                         {resumeVerified && (
-                          <div style={{ alignSelf: "center", fontSize: 13, color: "#065f46", fontWeight: 900 }}>
-                            Verified ✅ (Step 1 complete)
-                          </div>
+                          <span style={{ fontSize: 13, color: "#065f46", fontWeight: 900 }}>Verified ✅ (Step 1)</span>
                         )}
                       </div>
 
-                      {/* Debug/info (safe) */}
-                      {resumeVerified && resumeToken && (
-                        <div style={{ marginTop: 10, fontSize: 12, color: "#6b7280" }}>
-                          Resume token saved for next steps.
+                      {/* ✅ NEW: Proceed to Step 2 button */}
+                      {resumeVerified && (
+                        <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                          <button
+                            type="button"
+                            onClick={fetchResumePending}
+                            disabled={resumeLoading || !String(resumeToken || "").trim()}
+                            style={{
+                              width: "auto",
+                              padding: "10px 14px",
+                              borderRadius: 12,
+                              background: "#8b1c1c",
+                              color: "white",
+                              fontWeight: 950,
+                            }}
+                          >
+                            Proceed to Step 2 → Load pending registration
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // convenience: keep token but clear pending display
+                              setResumePending(null);
+                              setResumeInfo("Pending view cleared. You can load again when ready.");
+                              setResumeError("");
+                            }}
+                            disabled={resumeLoading}
+                            style={{
+                              width: "auto",
+                              padding: "10px 14px",
+                              borderRadius: 12,
+                              background: "#6b7280",
+                              color: "white",
+                              fontWeight: 900,
+                            }}
+                          >
+                            Clear pending view
+                          </button>
+                        </div>
+                      )}
+
+                      {/* ✅ NEW: show pending details on the same page */}
+                      {resumeVerified && resumePending && (
+                        <div
+                          style={{
+                            marginTop: 12,
+                            padding: 12,
+                            borderRadius: 14,
+                            border: "1px solid #dbeafe",
+                            background: "#eff6ff",
+                            color: "#1e3a8a",
+                          }}
+                        >
+                          <div style={{ fontWeight: 950, marginBottom: 6 }}>Pending registration (Step 2)</div>
+
+                          {/* Handles both shapes:
+                              - verify-otp response DTO: { HasPending, RegistrationIntentId, Status, ExpiresAt, NextAction }
+                              - pending endpoint: { hasPending, registrationIntentId, status, expiresAt, nextAction }
+                          */}
+                          {(() => {
+                            const hasPending =
+                              resumePending?.hasPending ?? resumePending?.HasPending ?? resumePending?.pending?.hasPending ?? false;
+
+                            const regId =
+                              resumePending?.registrationIntentId ?? resumePending?.RegistrationIntentId ?? resumePending?.pending?.registrationIntentId;
+
+                            const status = resumePending?.status ?? resumePending?.Status ?? resumePending?.pending?.status;
+                            const next = resumePending?.nextAction ?? resumePending?.NextAction ?? resumePending?.pending?.nextAction;
+                            const exp = resumePending?.expiresAt ?? resumePending?.ExpiresAt ?? resumePending?.pending?.expiresAt;
+
+                            if (!hasPending) {
+                              return <div style={{ fontSize: 13 }}>No pending registration found for this email.</div>;
+                            }
+
+                            return (
+                              <div style={{ display: "grid", gap: 6, fontSize: 13 }}>
+                                <div>
+                                  <strong>Intent:</strong> #{regId ?? "—"}
+                                </div>
+                                <div>
+                                  <strong>Status:</strong> {status ?? "—"}
+                                </div>
+                                <div>
+                                  <strong>Next action:</strong> {next ?? "—"}
+                                </div>
+                                <div>
+                                  <strong>Expires:</strong> {exp ? formatDateMaybe(exp) : "—"}
+                                </div>
+                                <div style={{ marginTop: 6, fontSize: 12, color: "#1f2937" }}>
+                                  Step 3 will use this intent to continue payment (Mpesa/Paystack) or complete creation for
+                                  institution users — we’ll wire that next.
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>
-
-                    {/* NOTE: Step 2/3 will use resumeToken + pending endpoints later */}
-                    {resumeVerified && (
-                      <div style={{ fontSize: 12.5, color: "#6b7280", lineHeight: 1.45 }}>
-                        Next: we’ll use your verified session to load your pending registration and help you complete
-                        payment. (We’ll implement this in Step 2.)
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
@@ -1581,6 +1706,7 @@ export default function Register() {
             </div>
           )}
 
+          {/* ---- Existing signup form continues below (unchanged) ---- */}
           <form onSubmit={onCreateAccount}>
             <label className="field-label">Account Type</label>
             <div style={{ marginBottom: 14 }}>
