@@ -12,24 +12,14 @@ const LS_REG_PASSWORD = "la_reg_password";
 const LS_LOGIN_USERNAME = "la_login_username";
 const LS_LOGIN_PASSWORD = "la_login_password";
 
-// ✅ NEW: store setup token so refresh still auto-populates
+// ✅ store setup token so refresh still auto-populates
 const LS_2FA_SETUP_TOKEN = "la_2fa_setup_token";
 
-// ✅ Small helper: avoid [object Object]
 function getApiErrorMessage(err, fallback = "Request failed.") {
   const data = err?.response?.data;
-
-  // If API returns { message: "..." }
-  if (data && typeof data === "object" && typeof data.message === "string") {
-    return data.message;
-  }
-
-  // If API returns plain string
+  if (data && typeof data === "object" && typeof data.message === "string") return data.message;
   if (typeof data === "string") return data;
-
-  // Axios generic
   if (typeof err?.message === "string") return err.message;
-
   return fallback;
 }
 
@@ -37,13 +27,12 @@ export default function TwoFactorSetup() {
   const nav = useNavigate();
   const location = useLocation();
 
-  // ✅ NEW: only auto-fetch when coming from Register flow
+  // ✅ only auto-fetch when coming from Register flow
   const autoFetchSetupToken = !!location.state?.autoFetchSetupToken;
 
   const initialUsername = location.state?.username || "";
   const initialPassword = location.state?.password || "";
 
-  // ✅ NEW: initial token can come from navigation state OR storage
   const initialSetupToken =
     (location.state?.setupToken || "").trim() ||
     (() => {
@@ -54,7 +43,6 @@ export default function TwoFactorSetup() {
       }
     })();
 
-  // ✅ Fallback after Paystack redirect OR login refresh
   const storedUsername = (() => {
     try {
       return (
@@ -79,30 +67,24 @@ export default function TwoFactorSetup() {
     }
   })();
 
-  const [username, setUsername] = useState(
-    initialUsername || storedUsername || ""
-  );
-  const [password, setPassword] = useState(
-    initialPassword || storedPassword || ""
-  );
-
+  // ✅ these remain in background (not rendered)
+  const [username, setUsername] = useState(initialUsername || storedUsername || "");
+  const [password, setPassword] = useState(initialPassword || storedPassword || "");
   const [setupToken, setSetupToken] = useState(initialSetupToken);
+
+  // ✅ Only visible input
   const [code, setCode] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
-
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
-  const canResend = useMemo(
-    () => username.trim() && password,
-    [username, password]
-  );
+  const canResend = useMemo(() => username.trim() && password, [username, password]);
 
   const autoFetchRanRef = useRef(false);
 
-  // ✅ Keep localStorage in sync if user edits (best-effort)
+  // ✅ keep creds stored (best effort) — still hidden
   useEffect(() => {
     try {
       const u = username?.trim();
@@ -119,7 +101,7 @@ export default function TwoFactorSetup() {
     }
   }, [username, password]);
 
-  // ✅ NEW: persist setup token so refresh keeps it
+  // ✅ persist setup token for refresh — still hidden
   useEffect(() => {
     try {
       const t = (setupToken || "").trim();
@@ -155,7 +137,7 @@ export default function TwoFactorSetup() {
     }
 
     if (!canResend) {
-      if (!silent) setError("Enter username and password to resend your setup email.");
+      if (!silent) setError("We couldn’t recover your session details. Please sign in again.");
       return "";
     }
 
@@ -170,19 +152,16 @@ export default function TwoFactorSetup() {
 
       const data = res.data?.data ?? res.data;
 
-      // In dev you might get setupToken back
       if (data?.setupToken) {
         setSetupToken(data.setupToken);
-        if (!silent) setInfo("Setup token has been filled automatically.");
+        if (!silent) setInfo("Setup prepared. Enter your 6-digit code to continue.");
         return data.setupToken;
-      } else {
-        if (!silent) {
-          setInfo(
-            "A new 2FA setup email has been sent. If your API doesn’t return a token in production, use the token from the email."
-          );
-        }
-        return "";
       }
+
+      if (!silent) {
+        setInfo("A new setup email has been sent. If token isn’t returned by the API, use the email token.");
+      }
+      return "";
     } catch (err) {
       if (!silent) setError(getApiErrorMessage(err, "Failed to resend setup email."));
       return "";
@@ -191,7 +170,7 @@ export default function TwoFactorSetup() {
     }
   }
 
-  // ✅ NEW: auto-fetch token ONCE when coming from Register and token is empty
+  // ✅ auto-fetch token ONCE when coming from Register and token is empty
   useEffect(() => {
     if (!autoFetchSetupToken) return;
     if (autoFetchRanRef.current) return;
@@ -204,10 +183,9 @@ export default function TwoFactorSetup() {
       setInfo("Preparing your 2FA setup…");
       const t = await resendSetupEmail({ silent: true });
       if (t) {
-        setInfo("Setup token has been filled automatically. Enter your 6-digit code to continue.");
+        setInfo("Ready. Enter the 6-digit code from your authenticator app.");
       } else {
-        // fallback message
-        setInfo("Check your email for the setup token. If it didn’t auto-fill, click “Resend setup email”.");
+        setInfo("Check your email for setup instructions. If needed, click “Resend setup email”.");
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -219,7 +197,7 @@ export default function TwoFactorSetup() {
     setInfo("");
 
     if (!setupToken.trim()) {
-      setError("Setup token is missing. Click “Resend setup email” to auto-fill it.");
+      setError("Setup is not ready yet. Click “Resend setup email” to prepare it.");
       return;
     }
 
@@ -235,16 +213,13 @@ export default function TwoFactorSetup() {
         code: code.trim(),
       });
 
-      // ✅ Cleanup temporary creds once user completes 2FA setup
       clearStoredCreds();
       clearStoredSetupToken();
 
-      setInfo("2FA enabled successfully. You can now sign in.");
+      setInfo("2FA enabled successfully. Redirecting to sign in…");
       setTimeout(() => nav("/login", { replace: true }), 900);
     } catch (err) {
-      setError(
-        getApiErrorMessage(err, "Invalid/expired setup token or invalid code.")
-      );
+      setError(getApiErrorMessage(err, "Invalid/expired setup token or invalid code."));
     } finally {
       setLoading(false);
     }
@@ -252,35 +227,45 @@ export default function TwoFactorSetup() {
 
   const actionDisabled = resendLoading || loading;
 
-  const linkStyleBase = {
-    display: "inline-block",
-    fontWeight: 800,
-    fontSize: 14,
-    letterSpacing: "0.1px",
-    color: actionDisabled ? "#9ca3af" : "#8b1c1c",
-    cursor: actionDisabled ? "not-allowed" : "pointer",
-    userSelect: "none",
-    marginTop: 10,
-    padding: "6px 2px",
-  };
+  // ✅ If we have no creds, don't show hidden fields — just guide user
+  const hasSession = !!(username.trim() && password);
 
   return (
     <div className="auth-page">
       <div className="auth-content">
-        <div className="twofactor-card">
-          <div className="brand-header">
-            <img src="/logo.png" alt="LawAfrica Logo" className="brand-logo" />
-            <p className="brand-tagline">Know. Do. Be More.</p>
+        <div
+          className="twofactor-card"
+          style={{
+            maxWidth: 520,
+            padding: "28px 26px",
+            borderRadius: 18,
+            boxShadow: "0 18px 40px rgba(17,24,39,0.08)",
+          }}
+        >
+          <div className="brand-header" style={{ marginBottom: 18 }}>
+            <img
+              src="/logo.png"
+              alt="LawAfrica Logo"
+              className="brand-logo"
+              style={{ height: 54, objectFit: "contain" }}
+            />
+            <p className="brand-tagline" style={{ marginTop: 6 }}>
+              Know. Do. Be More.
+            </p>
           </div>
 
-          <h2>Set up Two-Factor Authentication</h2>
-          <p className="subtitle">
-            Check your email for the QR / setup instructions, add LawAfrica to
-            your Authenticator app, then verify using the setup token and
-            6-digit code.
+          <h2 style={{ marginBottom: 8 }}>Set up Two-Factor Authentication</h2>
+
+          <p className="subtitle" style={{ marginBottom: 16 }}>
+            Open your authenticator app (Google Authenticator / Authy), then enter the 6-digit code below.
           </p>
 
-          {error && <div className="error-box">{String(error)}</div>}
+          {error && (
+            <div className="error-box" style={{ marginBottom: 12 }}>
+              {String(error)}
+            </div>
+          )}
+
           {info && (
             <div
               className="success-box"
@@ -289,7 +274,7 @@ export default function TwoFactorSetup() {
                 border: "1px solid #a7f3d0",
                 color: "#065f46",
                 padding: 12,
-                borderRadius: 8,
+                borderRadius: 12,
                 marginBottom: 14,
               }}
             >
@@ -297,106 +282,112 @@ export default function TwoFactorSetup() {
             </div>
           )}
 
-          <div style={{ textAlign: "left", marginBottom: 14 }}>
-            <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 8 }}>
-              Didn’t receive the email? Resend it:
+          {/* ✅ Resend link (kept) */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14 }}>
+            <div style={{ fontSize: 13, color: "#6b7280" }}>
+              Didn’t get the setup email?
             </div>
 
-            <input
-              type="text"
-              placeholder="Username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              disabled={actionDisabled}
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={actionDisabled}
-            />
-
-            <span
-              role="button"
-              tabIndex={0}
+            <button
+              type="button"
               onClick={() => !actionDisabled && resendSetupEmail()}
-              onKeyDown={(e) => {
-                if (actionDisabled) return;
-                if (e.key === "Enter" || e.key === " ") resendSetupEmail();
+              disabled={actionDisabled || !hasSession}
+              style={{
+                border: "1px solid #e5e7eb",
+                background: "white",
+                color: hasSession ? "#8b1c1c" : "#9ca3af",
+                fontWeight: 900,
+                padding: "10px 12px",
+                borderRadius: 12,
+                cursor: actionDisabled || !hasSession ? "not-allowed" : "pointer",
               }}
-              style={linkStyleBase}
-              onMouseEnter={(e) => {
-                if (actionDisabled) return;
-                e.currentTarget.style.textDecoration = "underline";
-                e.currentTarget.style.opacity = "0.92";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.textDecoration = "none";
-                e.currentTarget.style.opacity = "1";
-              }}
-              aria-disabled={actionDisabled}
-              title={
-                canResend
-                  ? "Resend your setup email"
-                  : "Enter username and password first"
-              }
+              title={hasSession ? "Resend setup email" : "Please sign in again to resend"}
             >
-              {resendLoading ? "Resending setup email…" : "Resend setup email"}
-            </span>
+              {resendLoading ? "Resending…" : "Resend setup email"}
+            </button>
           </div>
 
-          <form onSubmit={verifySetup}>
-            <input
-              type="text"
-              placeholder="Setup token (from email)"
-              value={setupToken}
-              onChange={(e) => setSetupToken(e.target.value)}
-              disabled={actionDisabled}
-            />
+          {!hasSession && (
+            <div
+              style={{
+                background: "#fff7ed",
+                border: "1px solid #fed7aa",
+                color: "#7c2d12",
+                padding: 12,
+                borderRadius: 12,
+                marginBottom: 14,
+                fontSize: 13,
+                lineHeight: 1.35,
+              }}
+            >
+              We can’t recover your session details to complete setup. Please go back to sign in and try again.
+            </div>
+          )}
+
+          <form onSubmit={verifySetup} style={{ marginTop: 6 }}>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: "#111827", marginBottom: 8 }}>
+              6-digit code
+            </label>
 
             <input
               type="text"
               inputMode="numeric"
-              placeholder="6-digit code"
+              placeholder="123456"
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={(e) => {
+                // ✅ Keep digits only, max 6
+                const v = String(e.target.value || "").replace(/\D/g, "").slice(0, 6);
+                setCode(v);
+              }}
               maxLength={6}
-              disabled={actionDisabled}
+              disabled={actionDisabled || !hasSession}
+              style={{
+                textAlign: "center",
+                letterSpacing: "6px",
+                fontSize: 18,
+                fontWeight: 900,
+              }}
             />
 
-            <button type="submit" disabled={actionDisabled}>
+            <button
+              type="submit"
+              disabled={actionDisabled || !hasSession}
+              style={{
+                marginTop: 14,
+                borderRadius: 12,
+              }}
+            >
               {loading ? "Verifying..." : "Enable 2FA"}
             </button>
-          </form>
 
-          <div className="footer-text" style={{ marginTop: 14 }}>
-            <span
-              role="button"
-              tabIndex={0}
-              style={{
-                cursor: actionDisabled ? "not-allowed" : "pointer",
-                color: actionDisabled ? "#9ca3af" : "#8b1c1c",
-                fontWeight: 800,
-                textDecoration: "none",
-              }}
-              onClick={() => !actionDisabled && nav("/login")}
-              onKeyDown={(e) => {
-                if (actionDisabled) return;
-                if (e.key === "Enter" || e.key === " ") nav("/login");
-              }}
-              onMouseEnter={(e) => {
-                if (actionDisabled) return;
-                e.currentTarget.style.textDecoration = "underline";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.textDecoration = "none";
-              }}
-              aria-disabled={actionDisabled}
-            >
-              Back to sign in
-            </span>
-          </div>
+            <div style={{ marginTop: 14, textAlign: "center" }}>
+              <span
+                role="button"
+                tabIndex={0}
+                style={{
+                  cursor: actionDisabled ? "not-allowed" : "pointer",
+                  color: actionDisabled ? "#9ca3af" : "#8b1c1c",
+                  fontWeight: 900,
+                  textDecoration: "none",
+                }}
+                onClick={() => !actionDisabled && nav("/login")}
+                onKeyDown={(e) => {
+                  if (actionDisabled) return;
+                  if (e.key === "Enter" || e.key === " ") nav("/login");
+                }}
+                onMouseEnter={(e) => {
+                  if (actionDisabled) return;
+                  e.currentTarget.style.textDecoration = "underline";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.textDecoration = "none";
+                }}
+                aria-disabled={actionDisabled}
+              >
+                Back to sign in
+              </span>
+            </div>
+          </form>
         </div>
       </div>
 
@@ -422,9 +413,8 @@ export default function TwoFactorSetup() {
           </h4>
 
           <p>
-            LawAfrica protects your legal research with industry-grade security
-            while giving you access to Africa’s most authoritative legal
-            knowledge.
+            LawAfrica protects your legal research with industry-grade security while giving you access to Africa’s most
+            authoritative legal knowledge.
           </p>
         </div>
       </footer>
