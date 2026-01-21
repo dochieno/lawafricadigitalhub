@@ -145,8 +145,8 @@ export default function AdminInvoices() {
       </div>
 
       <div className="card invoiceCard">
-        {/* ===== Filters (aligned) ===== */}
-        <div className="invoiceFilters invoiceFilters--aligned">
+        {/* Filters (clean alignment) */}
+        <div className="invoiceFilters invoiceFilters--grid">
           <div className="field">
             <label>Search</label>
             <input
@@ -189,7 +189,7 @@ export default function AdminInvoices() {
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           </div>
 
-          <div className="invoiceFilters__actions invoiceFilters__actions--flush">
+          <div className="invoiceFilters__actions">
             <button
               type="button"
               className="btnSm btnSm--primary"
@@ -217,20 +217,20 @@ export default function AdminInvoices() {
         {err ? <div className="alert alert--danger">{err}</div> : null}
         {loading ? <div className="alert alert--info">Loading invoices…</div> : null}
 
-        {/* ===== Table ===== */}
+        {/* Table (full-width + scroll when needed) */}
         <div className="tableWrap tableWrap--full">
-          <table className="adminTable adminTable--stickyHead">
+          <table className="adminTable adminTable--stickyHead adminTable--finance">
             <thead>
               <tr>
-                <th>Invoice No.</th>
-                <th>Document Date</th>
-                <th>Customer Name</th>
-                <th>Status</th>
-                <th>Purpose</th>
-                <th className="num">Currency</th>
-                <th className="num">Invoice Amount</th>
-                <th className="num">Paid Amount</th>
-                <th className="actions">Actions</th>
+                <th className="colInvoice">Invoice No.</th>
+                <th className="colDate">Document Date</th>
+                <th className="colCustomer">Customer Name</th>
+                <th className="colStatus">Status</th>
+                <th className="colPurpose">Purpose</th>
+                <th className="num colCurrency">Currency</th>
+                <th className="num colAmount">Invoice Amount</th>
+                <th className="num colAmount">Paid Amount</th>
+                <th className="actions colActions">Actions</th>
               </tr>
             </thead>
 
@@ -301,7 +301,7 @@ export default function AdminInvoices() {
           </table>
         </div>
 
-        {/* ===== Pager ===== */}
+        {/* Pager */}
         <div className="pager pager--compact">
           <div className="muted">{pageLabel}</div>
 

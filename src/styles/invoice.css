@@ -1,19 +1,24 @@
-/* src/styles/invoice.css */
-
-/* ===== Shared small controls (Finance pages) ===== */
+/* =========================
+   Shared small controls
+========================= */
 .btnSm {
   border: 1px solid rgba(148, 163, 184, 0.35);
   background: rgba(255, 255, 255, 0.03);
   color: inherit;
   padding: 7px 10px;
-  border-radius: 10px;
+  border-radius: 12px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   line-height: 1;
-  font-weight: 700;
+  font-weight: 800;
+  font-size: 12px;
   white-space: nowrap;
+}
+
+.btnSm:hover {
+  background: rgba(148, 163, 184, 0.12);
 }
 
 .btnSm:disabled {
@@ -23,11 +28,11 @@
 
 .btnSm--primary {
   border-color: rgba(239, 68, 68, 0.45);
-  background: rgba(239, 68, 68, 0.14);
+  background: rgba(239, 68, 68, 0.12);
 }
 
 .btnSm__text {
-  font-weight: 800;
+  font-weight: 900;
 }
 
 /* Small icon button variant (works with your existing .iconBtn) */
@@ -38,75 +43,126 @@
   font-size: 16px;
 }
 
-/* ===== Cards ===== */
+/* Make header/action icons neutral (remove any danger/red look from other styles) */
+.iconBtn--neutral {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(148, 163, 184, 0.35) !important;
+  color: inherit !important;
+}
+
+.iconBtn--neutral:hover {
+  background: rgba(148, 163, 184, 0.12) !important;
+  border-color: rgba(148, 163, 184, 0.45) !important;
+}
+
+.iconBtn--neutral:focus-visible {
+  outline: 2px solid rgba(100, 116, 139, 0.45);
+  outline-offset: 2px;
+}
+
+/* =========================
+   Invoices list page
+========================= */
 .invoiceCard {
+  width: 100%;
+  max-width: 100%;
   padding: 14px;
 }
 
-/* ===== Filters ===== */
+/* Filters: single grid, aligned + actions right */
 .invoiceFilters {
   display: grid;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 12px;
+  margin-bottom: 14px;
 }
 
-.invoiceFilters__row {
-  display: grid;
-  grid-template-columns: 1.4fr 0.8fr 1fr;
-  gap: 10px;
-}
-
-.invoiceFilters__row--tight {
-  grid-template-columns: 0.8fr 0.8fr auto;
+.invoiceFilters--grid {
+  grid-template-columns: 1.6fr 0.7fr 1.1fr 0.8fr 0.8fr auto;
   align-items: end;
 }
 
 .invoiceFilters__actions {
   display: flex;
-  justify-content: flex-end;
   gap: 10px;
+  justify-content: flex-end;
+  align-items: center;
+  padding-bottom: 2px; /* align buttons with inputs */
 }
-
-/* Clamp cell text */
-.cellClamp {
-  max-width: 540px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* ===== Table width / columns ===== */
-.adminTable--tight th,
-.adminTable--tight td {
-  padding: 10px 10px;
-}
-
-.col-invno { width: 170px; }
-.col-date { width: 120px; }
-.col-customer { width: 220px; }
-.col-status { width: 120px; }
-.col-money { width: 150px; }
-.col-actions { width: 120px; }
 
 @media (max-width: 1100px) {
-  .invoiceFilters__row {
-    grid-template-columns: 1fr;
-  }
-
-  .invoiceFilters__row--tight {
-    grid-template-columns: 1fr;
+  .invoiceFilters--grid {
+    grid-template-columns: 1fr 1fr;
   }
 
   .invoiceFilters__actions {
     justify-content: flex-start;
   }
-
-  .cellClamp {
-    max-width: 260px;
-  }
 }
 
-/* ===== Pager compact ===== */
+/* Table wrapper: fit window, allow horizontal scroll instead of squishing */
+.tableWrap--full {
+  width: 100%;
+  overflow: auto;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+/* Sticky + highlighted header */
+.adminTable--stickyHead thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: rgba(248, 250, 252, 0.95);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+  font-weight: 900;
+  letter-spacing: 0.2px;
+}
+
+/* Subtle hover for readability */
+.adminTable--stickyHead tbody tr:hover td {
+  background: rgba(148, 163, 184, 0.08);
+}
+
+/* Give finance tables a minimum width so columns don't collapse */
+.adminTable--finance {
+  min-width: 1180px;
+}
+
+/* Column sizing hints */
+.colInvoice {
+  min-width: 180px;
+}
+.colDate {
+  min-width: 120px;
+}
+.colCustomer {
+  min-width: 220px;
+}
+.colStatus {
+  min-width: 120px;
+}
+.colPurpose {
+  min-width: 240px;
+}
+.colCurrency {
+  min-width: 80px;
+}
+.colAmount {
+  min-width: 140px;
+}
+.colActions {
+  min-width: 120px;
+}
+
+/* Clamp long text (Purpose, etc.) */
+.cellClamp {
+  max-width: 340px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Compact pager */
 .pager--compact {
   display: flex;
   gap: 12px;
@@ -129,21 +185,72 @@
   opacity: 0.92;
 }
 
-/* ===== Invoice Page Layout ===== */
+/* =========================
+   Invoice detail page
+========================= */
 .invoicePage {
-  padding: 12px 0;
+  padding: 10px 0 0;
 }
 
-/* Summary row (requested columns) */
+/* Header invoice number styling (smaller + status color) */
+.invTitleStrong {
+  font-weight: 900;
+}
+
+.invTitleStrong--sm {
+  font-size: 22px; /* reduced vs H1 */
+  letter-spacing: 0.2px;
+}
+
+.invPaid {
+  color: #16a34a; /* green */
+}
+
+.invUnpaid {
+  color: #b91c1c; /* red */
+}
+
+/* Optional summary status helpers */
+.sumV--paid {
+  font-weight: 900;
+  color: #16a34a;
+}
+.sumV--unpaid {
+  font-weight: 900;
+  color: #dc2626;
+}
+
+.metaStatusPaid {
+  color: #16a34a;
+  font-weight: 900;
+}
+.metaStatusUnpaid {
+  color: #b91c1c;
+  font-weight: 900;
+}
+
+/* Summary row */
 .invoiceSummary {
   display: grid;
-  grid-template-columns: 1.1fr 0.8fr 1.4fr 0.8fr 1.6fr 0.9fr 0.9fr;
+  grid-template-columns: repeat(8, minmax(120px, 1fr));
   gap: 10px;
   padding: 12px;
   border: 1px solid rgba(148, 163, 184, 0.25);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.02);
   margin-bottom: 12px;
+}
+
+@media (max-width: 1200px) {
+  .invoiceSummary {
+    grid-template-columns: repeat(3, minmax(160px, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .invoiceSummary {
+    grid-template-columns: 1fr;
+  }
 }
 
 .sumItem {
@@ -151,50 +258,56 @@
 }
 
 .sumItem--wide {
-  min-width: 0;
+  grid-column: span 2;
 }
 
 .sumK {
   font-size: 12px;
-  opacity: 0.7;
   font-weight: 800;
+  opacity: 0.7;
+  margin-bottom: 2px;
 }
 
 .sumV {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 900;
-  margin-top: 2px;
 }
 
 .sumSub {
-  font-size: 12px;
-  opacity: 0.75;
+  font-size: 11px;
   margin-top: 2px;
+  opacity: 0.75;
 }
 
 .sumClamp {
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .sumDue {
-  color: #fca5a5;
-  opacity: 1;
+  color: #b91c1c;
+  font-weight: 800;
 }
 
 .sumOk {
-  color: #86efac;
-  opacity: 1;
+  color: #16a34a;
+  font-weight: 800;
 }
 
-.invTitleStrong {
-  font-weight: 900;
+.sumStatusPaid {
+  color: #16a34a;
 }
 
-/* ===== Paper wrapper ===== */
+.sumStatusUnpaid {
+  color: #b91c1c;
+}
+
+/* Paper wrapper */
 .invoicePaperWrap {
-  display: block;
+  width: 100%;
+  display: flex;
+  justify-content: center;
 }
 
 .invoicePaper {
@@ -202,14 +315,14 @@
   border: 1px solid rgba(148, 163, 184, 0.25);
   border-radius: 16px;
   padding: 18px;
-  max-width: 980px;
+  max-width: 920px;
+  width: 100%;
   margin: 0 auto;
   color: #0f172a;
 }
 
-/* Make detail screen stretch more (still keeps a max) */
 .invoicePaper--wide {
-  max-width: 1180px;
+  max-width: 1100px;
 }
 
 /* Invoice header */
@@ -219,6 +332,12 @@
   gap: 18px;
   align-items: start;
   margin-bottom: 14px;
+}
+
+@media (max-width: 980px) {
+  .invoiceHeader {
+    grid-template-columns: 1fr;
+  }
 }
 
 .brandBlock {
@@ -234,6 +353,19 @@
   border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.25);
   background: #fff;
+}
+
+.brandLogo--placeholder {
+  width: 120px;
+  height: 70px;
+  border-radius: 12px;
+  border: 1px dashed rgba(148, 163, 184, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  opacity: 0.7;
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .brandText .brandName {
@@ -285,7 +417,7 @@
 
 .metaRow .k {
   opacity: 0.75;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .metaRow .v {
@@ -299,6 +431,12 @@
   grid-template-columns: 1.1fr 1fr;
   gap: 12px;
   margin: 10px 0 14px;
+}
+
+@media (max-width: 980px) {
+  .invoiceBillTo {
+    grid-template-columns: 1fr;
+  }
 }
 
 .sectionLabel {
@@ -345,8 +483,14 @@
   margin-top: 10px;
 }
 
+.linesTableWrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
 .linesTable {
   width: 100%;
+  min-width: 860px; /* prevents squeeze; scrolls on smaller screens */
   border-collapse: collapse;
   font-size: 13px;
 }
@@ -361,8 +505,9 @@
 
 .linesTable th {
   font-weight: 900;
+  background: rgba(248, 250, 252, 0.9);
   font-size: 12px;
-  opacity: 0.8;
+  opacity: 0.85;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -377,6 +522,12 @@
   grid-template-columns: 0.9fr 1.1fr;
   gap: 12px;
   margin-top: 14px;
+}
+
+@media (max-width: 980px) {
+  .invoiceTotals {
+    grid-template-columns: 1fr;
+  }
 }
 
 .totalsBox,
@@ -402,7 +553,7 @@
 
 .tRow .k {
   opacity: 0.8;
-  font-weight: 800;
+  font-weight: 900;
 }
 
 .tRow .v {
@@ -455,7 +606,9 @@
   margin-bottom: 6px;
 }
 
-/* ===== Settings page helpers ===== */
+/* =========================
+   Settings page helpers
+========================= */
 .sectionHead {
   display: grid;
   gap: 4px;
@@ -494,6 +647,12 @@
   align-items: center;
 }
 
+@media (max-width: 980px) {
+  .logoRow {
+    grid-template-columns: 1fr;
+  }
+}
+
 .logoPreview {
   border: 1px dashed rgba(148, 163, 184, 0.35);
   border-radius: 14px;
@@ -514,29 +673,6 @@
   width: 100%;
 }
 
-/* ===== Responsive invoice ===== */
-@media (max-width: 980px) {
-  .invoiceSummary {
-    grid-template-columns: 1fr;
-  }
-
-  .invoiceHeader {
-    grid-template-columns: 1fr;
-  }
-
-  .invoiceBillTo {
-    grid-template-columns: 1fr;
-  }
-
-  .invoiceTotals {
-    grid-template-columns: 1fr;
-  }
-
-  .logoRow {
-    grid-template-columns: 1fr;
-  }
-}
-
 /* =========================
    PRINT STYLES
 ========================= */
@@ -545,6 +681,7 @@
   .sidebar,
   .content-topbar,
   .topbar-right,
+  .invoice-actions,
   .nav,
   .modal-overlay,
   .noPrint,
@@ -557,6 +694,10 @@
   .app-container,
   body {
     background: #fff !important;
+  }
+
+  .invoicePage {
+    padding: 0 !important;
   }
 
   .invoicePaperWrap {
@@ -580,160 +721,4 @@
     size: A4;
     margin: 12mm;
   }
-}
-
-/* ===== Header invoice number styling (smaller + status color) ===== */
-.invTitleStrong {
-  font-weight: 900;
-  font-size: 0.92em; /* reduce size vs the H1 */
-  letter-spacing: 0.2px;
-}
-
-.invTitleStrong--paid {
-  color: #16a34a; /* green */
-}
-
-.invTitleStrong--unpaid {
-  color: #dc2626; /* red */
-}
-
-/* ===== Make header icons neutral (remove red backgrounds) ===== */
-.iconBtn--neutral {
-  background: rgba(148, 163, 184, 0.10) !important;
-  border: 1px solid rgba(148, 163, 184, 0.35) !important;
-  color: inherit !important;
-}
-
-.iconBtn--neutral:hover {
-  background: rgba(148, 163, 184, 0.16) !important;
-  border-color: rgba(148, 163, 184, 0.45) !important;
-}
-
-/* If any icon buttons were inheriting "danger" styles from invoice.css/adminCrud.css */
-.iconBtn--neutral:focus-visible {
-  outline: 2px solid rgba(100, 116, 139, 0.45);
-  outline-offset: 2px;
-}
-
-/* ===== Optional: make summary status also reflect paid/unpaid ===== */
-.sumV--paid {
-  font-weight: 800;
-  color: #16a34a;
-}
-.sumV--unpaid {
-  font-weight: 800;
-  color: #dc2626;
-}
-
-.iconBtn--neutral {
-  background: rgba(148, 163, 184, 0.10) !important;
-  border: 1px solid rgba(148, 163, 184, 0.35) !important;
-  color: inherit !important;
-}
-.iconBtn--neutral:hover {
-  background: rgba(148, 163, 184, 0.16) !important;
-  border-color: rgba(148, 163, 184, 0.45) !important;
-}
-.iconBtn--neutral:focus-visible {
-  outline: 2px solid rgba(100, 116, 139, 0.45);
-  outline-offset: 2px;
-}
-
-/* ===== Make the invoices card/table use the window nicely ===== */
-.invoiceCard {
-  width: 100%;
-  max-width: 100%;
-}
-
-/* Filters: single grid, aligned + actions right */
-.invoiceFilters--aligned {
-  display: grid;
-  grid-template-columns: 1.6fr 0.9fr 1.2fr 0.85fr 0.85fr auto;
-  gap: 12px;
-  align-items: end;
-  margin-bottom: 12px;
-}
-
-.invoiceFilters__actions--flush {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  align-items: center;
-  padding-bottom: 2px; /* align with inputs */
-}
-
-/* Responsive: stack nicely */
-@media (max-width: 1100px) {
-  .invoiceFilters--aligned {
-    grid-template-columns: 1fr 1fr;
-  }
-  .invoiceFilters__actions--flush {
-    justify-content: flex-start;
-  }
-}
-
-.tableWrap--full {
-  width: 100%;
-  overflow: auto;
-  border-radius: 14px;
-}
-
-/* ===== Header row highlight + sticky ===== */
-.adminTable--stickyHead thead th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: rgba(148, 163, 184, 0.14);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.35);
-  font-weight: 800;
-}
-
-/* Slight row separation for readability */
-.adminTable--stickyHead tbody tr:hover td {
-  background: rgba(148, 163, 184, 0.08);
-}
-
-/* Clamp long purpose */
-.cellClamp {
-  max-width: 340px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Make small buttons consistent if not already present */
-.btnSm {
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: rgba(255, 255, 255, 0.03);
-  padding: 8px 10px;
-  border-radius: 12px;
-  cursor: pointer;
-  line-height: 1;
-}
-.btnSm:hover {
-  background: rgba(148, 163, 184, 0.12);
-}
-.btnSm:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.btnSm--primary {
-  border-color: rgba(34, 197, 94, 0.45);
-  background: rgba(34, 197, 94, 0.14);
-}
-/* Invoice number in header */
-.invTitleStrong {
-  font-weight: 900;
-}
-.invTitleStrong--sm {
-  font-size: 0.92em; /* slightly smaller than title */
-  letter-spacing: 0.2px;
-}
-
-/* Paid vs unpaid */
-.invPaid {
-  color: #16a34a; /* green */
-}
-.invUnpaid {
-  color: #dc2626; /* red */
 }

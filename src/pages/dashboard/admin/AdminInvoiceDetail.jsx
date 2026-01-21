@@ -39,7 +39,6 @@ function buildAssetUrl(path, apiBaseUrl) {
   if (/^https?:\/\//i.test(raw)) return raw;
 
   const base = String(apiBaseUrl || "").trim();
-  const isRelativeBase = base.startsWith("/") && !base.startsWith("//");
   const origin = base
     ? String(base).replace(/\/api\/?$/i, "").replace(/\/+$/g, "")
     : "";
@@ -47,8 +46,11 @@ function buildAssetUrl(path, apiBaseUrl) {
   let clean = raw.replace(/^\/+/, "");
   if (!/^storage\//i.test(clean)) clean = `Storage/${clean}`;
 
-  if (!origin || isRelativeBase) return `/${clean}`;
-  return `${origin}/${clean}`;
+  // If we know the API origin, always use it (prevents Vercel trying to load from frontend host).
+  if (origin) return `${origin}/${clean}`;
+
+  // Fallback: relative (only if your deployment proxies /Storage)
+  return `/${clean}`;
 }
 
 async function safeCopy(text) {
@@ -82,6 +84,10 @@ export default function AdminInvoiceDetail() {
   const [err, setErr] = useState("");
   const [inv, setInv] = useState(null);
   const [copied, setCopied] = useState(false);
+
+  // ✅ Logo is checked via HEAD first so 404 doesn't trigger your window.onerror overlay
+  const [logoOk, setLogoOk] = useState(false);
+  const [checkingLogo, setCheckingLogo] = useState(false);
 
   const shouldAutoPrint = useMemo(() => {
     const qs = new URLSearchParams(location.search);
@@ -122,9 +128,32 @@ export default function AdminInvoiceDetail() {
 
   const company = inv?.company || {};
 
-  // ✅ Use actual API base URL used by axios first, fallback to exported API_BASE_URL
   const apiBase = api?.defaults?.baseURL || API_BASE_URL;
-  const logoUrl = buildAssetUrl(company.logoPath, apiBase);
+  const logoUrl = useMemo(() => buildAssetUrl(company.logoPath, apiBase), [company.logoPath, apiBase]);
+
+  // ✅ Pre-check logo URL so missing image doesn't become a window "resource error"
+  useEffect(() => {
+    let cancelled = false;
+
+    async function check() {
+      setLogoOk(false);
+      if (!logoUrl) return;
+      setCheckingLogo(true);
+      try {
+        const r = await fetch(logoUrl, { method: "HEAD", cache: "no-store" });
+        if (!cancelled) setLogoOk(r.ok);
+      } catch {
+        if (!cancelled) setLogoOk(false);
+      } finally {
+        if (!cancelled) setCheckingLogo(false);
+      }
+    }
+
+    check();
+    return () => {
+      cancelled = true;
+    };
+  }, [logoUrl]);
 
   const balance = useMemo(() => {
     const total = Number(inv?.total || 0);
@@ -143,10 +172,7 @@ export default function AdminInvoiceDetail() {
       <div className="adminCrud__header noPrint">
         <div>
           <h1 className="adminCrud__title">
-            Invoice{" "}
-            <span className={invNumberClass}>
-              {inv?.invoiceNumber || (loading ? "…" : "")}
-            </span>
+            Invoice <span className={invNumberClass}>{inv?.invoiceNumber || (loading ? "…" : "")}</span>
           </h1>
           <p className="adminCrud__sub">Print-ready preview. Use browser print to download PDF.</p>
         </div>
@@ -199,6 +225,7 @@ export default function AdminInvoiceDetail() {
 
       {inv ? (
         <div className="invoicePage">
+          {/* Summary row (full width, wraps nicely) */}
           <div className="invoiceSummary noPrint">
             <div className="sumItem">
               <div className="sumK">Invoice No.</div>
@@ -218,7 +245,7 @@ export default function AdminInvoiceDetail() {
 
             <div className="sumItem">
               <div className="sumK">Status</div>
-              <div className="sumV">{inv.status}</div>
+              <div className={`sumV ${isPaid ? "sumStatusPaid" : "sumStatusUnpaid"}`}>{inv.status}</div>
             </div>
 
             <div className="sumItem sumItem--wide">
@@ -226,6 +253,11 @@ export default function AdminInvoiceDetail() {
               <div className="sumV sumClamp" title={inv.purpose || ""}>
                 {inv.purpose || "-"}
               </div>
+            </div>
+
+            <div className="sumItem">
+              <div className="sumK">Currency</div>
+              <div className="sumV">{inv.currency || "KES"}</div>
             </div>
 
             <div className="sumItem">
@@ -242,11 +274,25 @@ export default function AdminInvoiceDetail() {
             </div>
           </div>
 
+          {/* Paper (full width with sensible max) */}
           <div className="invoicePaperWrap">
             <div className="invoicePaper invoicePaper--wide" ref={printRef}>
               <div className="invoiceHeader">
                 <div className="brandBlock">
-                  {logoUrl ? <img className="brandLogo" src={logoUrl} alt="Company logo" /> : null}
+                  {/* ✅ Only render logo if HEAD check succeeded */}
+                  {logoUrl && logoOk ? (
+                    <img
+                      className="brandLogo"
+                      src={logoUrl}
+                      alt="Company logo"
+                      loading="eager"
+                      onError={() => setLogoOk(false)}
+                    />
+                  ) : (
+                    <div className="brandLogo brandLogo--placeholder">
+                      {checkingLogo ? "Loading…" : "Company logo"}
+                    </div>
+                  )}
 
                   <div className="brandText">
                     <div className="brandName">{company.companyName || "Company"}</div>
@@ -277,7 +323,7 @@ export default function AdminInvoiceDetail() {
                     </div>
                     <div className="metaRow">
                       <div className="k">Status</div>
-                      <div className="v">{inv.status}</div>
+                      <div className={`v ${isPaid ? "metaStatusPaid" : "metaStatusUnpaid"}`}>{inv.status}</div>
                     </div>
                     <div className="metaRow">
                       <div className="k">Issued</div>
@@ -322,44 +368,46 @@ export default function AdminInvoiceDetail() {
               </div>
 
               <div className="invoiceLines">
-                <table className="linesTable">
-                  <thead>
-                    <tr>
-                      <th>Description</th>
-                      <th className="num">Qty</th>
-                      <th className="num">Unit</th>
-                      <th className="num">Subtotal</th>
-                      <th className="num">Tax</th>
-                      <th className="num">Discount</th>
-                      <th className="num">Total</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {(inv.lines || []).map((l, idx) => (
-                      <tr key={idx}>
-                        <td>
-                          <div className="strong">{l.description}</div>
-                          {l.itemCode ? <div className="mutedSmall">Code: {l.itemCode}</div> : null}
-                        </td>
-                        <td className="num">{Number(l.quantity || 0).toFixed(2)}</td>
-                        <td className="num">{fmtMoney(l.unitPrice, inv.currency)}</td>
-                        <td className="num">{fmtMoney(l.lineSubtotal, inv.currency)}</td>
-                        <td className="num">{fmtMoney(l.taxAmount, inv.currency)}</td>
-                        <td className="num">{fmtMoney(l.discountAmount, inv.currency)}</td>
-                        <td className="num">{fmtMoney(l.lineTotal, inv.currency)}</td>
-                      </tr>
-                    ))}
-
-                    {(inv.lines || []).length === 0 ? (
+                <div className="linesTableWrap">
+                  <table className="linesTable">
+                    <thead>
                       <tr>
-                        <td colSpan={7}>
-                          <div className="mutedSmall">No invoice line items.</div>
-                        </td>
+                        <th>Description</th>
+                        <th className="num">Qty</th>
+                        <th className="num">Unit</th>
+                        <th className="num">Subtotal</th>
+                        <th className="num">Tax</th>
+                        <th className="num">Discount</th>
+                        <th className="num">Total</th>
                       </tr>
-                    ) : null}
-                  </tbody>
-                </table>
+                    </thead>
+
+                    <tbody>
+                      {(inv.lines || []).map((l, idx) => (
+                        <tr key={idx}>
+                          <td>
+                            <div className="strong">{l.description}</div>
+                            {l.itemCode ? <div className="mutedSmall">Code: {l.itemCode}</div> : null}
+                          </td>
+                          <td className="num">{Number(l.quantity || 0).toFixed(2)}</td>
+                          <td className="num">{fmtMoney(l.unitPrice, inv.currency)}</td>
+                          <td className="num">{fmtMoney(l.lineSubtotal, inv.currency)}</td>
+                          <td className="num">{fmtMoney(l.taxAmount, inv.currency)}</td>
+                          <td className="num">{fmtMoney(l.discountAmount, inv.currency)}</td>
+                          <td className="num">{fmtMoney(l.lineTotal, inv.currency)}</td>
+                        </tr>
+                      ))}
+
+                      {(inv.lines || []).length === 0 ? (
+                        <tr>
+                          <td colSpan={7}>
+                            <div className="mutedSmall">No invoice line items.</div>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               <div className="invoiceTotals">
@@ -427,7 +475,10 @@ export default function AdminInvoiceDetail() {
                       </div>
                     ) : null}
 
-                    {!company.paybillNumber && !company.tillNumber && !company.bankName && !company.bankAccountNumber ? (
+                    {!company.paybillNumber &&
+                    !company.tillNumber &&
+                    !company.bankName &&
+                    !company.bankAccountNumber ? (
                       <div className="mutedSmall">Set payment details in Invoice Settings.</div>
                     ) : null}
                   </div>
