@@ -1092,3 +1092,188 @@
 .admin-btn.primary:active {
   transform: translateY(1px);
 }
+/* =========================================================
+   Admin CRUD — De-dupe + Icon buttons + Modal polish
+   Paste at END of adminCrud.css
+========================================================= */
+
+/* ---------- ICON BUTTONS (for table actions & header tools) ---------- */
+.admin-icon-btn {
+  appearance: none;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #111827;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.05);
+  transition: background 0.15s ease, transform 0.06s ease, border-color 0.15s ease;
+}
+
+.admin-icon-btn:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.admin-icon-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.admin-icon-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* small icon button (tight rows) */
+.admin-icon-btn.sm {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+}
+
+/* Semantic variants */
+.admin-icon-btn.ok {
+  background: #ecfdf5;
+  border-color: #86efac;
+  color: #065f46;
+}
+.admin-icon-btn.ok:hover:not(:disabled) {
+  background: #dcfce7;
+}
+
+.admin-icon-btn.danger {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #7f1d1d;
+}
+.admin-icon-btn.danger:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+.admin-icon-btn.neutral {
+  border-color: #d1d5db;
+}
+
+/* Make inline SVG icons look crisp */
+.admin-icon-btn svg {
+  display: block;
+}
+
+/* ---------- TABLE ACTION ROW (single source of truth) ---------- */
+/* You define .admin-row-actions in multiple places; unify it here. */
+.admin-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+/* Keep action column compact on all pages */
+.admin-table td:last-child {
+  width: 1%;
+  white-space: nowrap;
+}
+
+/* ---------- MODAL CLOSE BUTTON (remove red version + duplicates) ---------- */
+/* You had multiple definitions: .admin-modal-close, .admin-modal-xbtn, etc.
+   This standardizes the one you actually use in JSX: .admin-modal-xbtn
+*/
+.admin-modal-head-x {
+  position: relative;
+  padding-right: 54px; /* reserve space for close btn */
+}
+
+.admin-modal-xbtn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #111827;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
+}
+
+.admin-modal-xbtn:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.admin-modal-xbtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Softer overlay (you also redefine this later) */
+.admin-modal-overlay {
+  background: rgba(15, 23, 42, 0.38);
+}
+
+/* ---------- MODAL VISUAL POLISH (safe) ---------- */
+.admin-modal {
+  width: min(940px, 100%);
+  max-height: 88vh;
+  border-radius: 20px;
+}
+
+.admin-modal-head {
+  background: #ffffff;
+}
+
+.admin-modal-body {
+  background: #fbfbfc;
+}
+
+.admin-modal-foot {
+  background: #ffffff;
+}
+
+/* ---------- OPTIONAL: Make primary buttons feel consistent ---------- */
+.admin-btn.primary {
+  box-shadow: 0 10px 18px rgba(122, 31, 31, 0.18);
+}
+
+.admin-btn.primary:active {
+  transform: translateY(1px);
+}
+/* Institutions: keep action icons in ONE row always */
+.admin-row-actions.actions-inline.no-wrap {
+  flex-wrap: nowrap !important;
+  white-space: nowrap !important;
+}
+
+/* Make icon buttons compact + consistent (no big buttons) */
+.admin-icon-btn {
+  padding: 6px 10px !important;
+  height: 34px !important;
+  min-width: 36px !important;
+  border-radius: 12px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+}
+
+/* Optional: slightly smaller icons for tighter row */
+.admin-icon-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Ensure the actions column never grows tall */
+.admin-table td:last-child {
+  width: 1%;
+  white-space: nowrap;
+}
