@@ -239,9 +239,6 @@ export default function Register() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // -----------------------------
-  // Load institutions
-  // -----------------------------
   useEffect(() => {
     (async () => {
       try {
@@ -1677,8 +1674,7 @@ export default function Register() {
 
                       {resumeOtpSent && (
                         <div style={{ alignSelf: "center", fontSize: 12, color: "#6b7280" }}>
-                          Code expires in{" "}
-                          <strong>{resumeExpires > 0 ? `${Math.ceil(resumeExpires / 60)} min` : "—"}</strong>
+                          Code expires in <strong>{resumeExpires > 0 ? `${Math.ceil(resumeExpires / 60)} min` : "—"}</strong>
                         </div>
                       )}
                     </div>
@@ -1716,10 +1712,7 @@ export default function Register() {
                           type="button"
                           onClick={verifyResumeOtp}
                           disabled={
-                            resumeLoading ||
-                            resumeContinueLoading ||
-                            !resumeOtpSent ||
-                            !/^\d{6}$/.test(String(resumeCode))
+                            resumeLoading || resumeContinueLoading || !resumeOtpSent || !/^\d{6}$/.test(String(resumeCode))
                           }
                           style={{
                             width: "auto",
@@ -1796,7 +1789,6 @@ export default function Register() {
                                 </div>
 
                                 <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                                  {/* ✅ Step 3 button: Continue Mpesa */}
                                   <button
                                     type="button"
                                     onClick={continueResumeWithMpesa}
@@ -1813,7 +1805,6 @@ export default function Register() {
                                     {resumeContinueLoading ? "Working..." : "Continue with Mpesa"}
                                   </button>
 
-                                  {/* ✅ Step 3 button: Continue Paystack */}
                                   <button
                                     type="button"
                                     onClick={continueResumeWithPaystack}
@@ -1892,7 +1883,6 @@ export default function Register() {
             </div>
           )}
 
-          {/* ---- Existing signup form continues below (unchanged except reference field for institution) ---- */}
           <form onSubmit={onCreateAccount}>
             <label className="field-label">Account Type</label>
             <div style={{ marginBottom: 14 }}>
@@ -2123,60 +2113,70 @@ export default function Register() {
                 <div style={{ display: "none" }}>{touched.institutionMemberType}</div>
                 <FieldError name="institutionMemberType" />
 
-                {/* ✅ Reference number (institution users only) */}
-                <label className="field-label" style={{ marginTop: 10 }}>
-                  Reference Number (required)
-                </label>
-                <input
-                  value={referenceNumber}
-                  onChange={(e) => {
-                    setReferenceNumber(e.target.value);
-                    liveValidate("referenceNumber", e.target.value);
-                  }}
-                  onBlur={(e) => {
-                    markTouched("referenceNumber");
-                    const msg = validateField("referenceNumber", e.target.value);
-                    msg ? setFieldError("referenceNumber", msg) : clearFieldError("referenceNumber");
-                  }}
-                  disabled={lockForm}
-                  style={inputStyle("referenceNumber")}
-                  placeholder="e.g. Student/Staff number"
-                  aria-invalid={!!(touched.referenceNumber && fieldErrors.referenceNumber)}
-                />
-                <div style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>
-                  Required for institution registrations (Student/Staff). Public users won’t see or use this field.
-                </div>
-                <FieldError name="referenceNumber" />
-
-                {selectedInstitution?.accessCodeRequired !== false && (
-                  <>
-                    <label className="field-label" style={{ marginTop: 10 }}>
-                      Institution Access Code (required)
-                    </label>
+                {/* ✅ Reference Number + Access Code on same row */}
+                <div className="grid-2" style={{ marginTop: 10 }}>
+                  <div>
+                    <label className="field-label">Reference Number (required)</label>
                     <input
-                      value={institutionAccessCode}
+                      value={referenceNumber}
                       onChange={(e) => {
-                        setInstitutionAccessCode(e.target.value);
-                        liveValidate("institutionAccessCode", e.target.value);
+                        setReferenceNumber(e.target.value);
+                        liveValidate("referenceNumber", e.target.value);
                       }}
                       onBlur={(e) => {
-                        markTouched("institutionAccessCode");
-                        const msg = validateField("institutionAccessCode", e.target.value);
-                        msg ? setFieldError("institutionAccessCode", msg) : clearFieldError("institutionAccessCode");
+                        markTouched("referenceNumber");
+                        const msg = validateField("referenceNumber", e.target.value);
+                        msg ? setFieldError("referenceNumber", msg) : clearFieldError("referenceNumber");
                       }}
                       disabled={lockForm}
-                      style={inputStyle("institutionAccessCode")}
-                      placeholder="Enter access code provided by your institution"
-                      aria-invalid={!!(touched.institutionAccessCode && fieldErrors.institutionAccessCode)}
+                      style={inputStyle("referenceNumber")}
+                      placeholder="e.g. Student/Staff number"
+                      aria-invalid={!!(touched.referenceNumber && fieldErrors.referenceNumber)}
                     />
-                    <FieldError name="institutionAccessCode" />
-                  </>
-                )}
+                    <div style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>
+                      Required for institution registrations (Student/Staff). Public users won’t see or use this field.
+                    </div>
+                    <FieldError name="referenceNumber" />
+                  </div>
+
+                  <div>
+                    {selectedInstitution?.accessCodeRequired !== false ? (
+                      <>
+                        <label className="field-label">Institution Access Code (required)</label>
+                        <input
+                          value={institutionAccessCode}
+                          onChange={(e) => {
+                            setInstitutionAccessCode(e.target.value);
+                            liveValidate("institutionAccessCode", e.target.value);
+                          }}
+                          onBlur={(e) => {
+                            markTouched("institutionAccessCode");
+                            const msg = validateField("institutionAccessCode", e.target.value);
+                            msg ? setFieldError("institutionAccessCode", msg) : clearFieldError("institutionAccessCode");
+                          }}
+                          disabled={lockForm}
+                          style={inputStyle("institutionAccessCode")}
+                          placeholder="Enter access code provided by your institution"
+                          aria-invalid={!!(touched.institutionAccessCode && fieldErrors.institutionAccessCode)}
+                        />
+                        <FieldError name="institutionAccessCode" />
+                      </>
+                    ) : (
+                      <>
+                        <label className="field-label">Institution Access Code (not required)</label>
+                        <input value="Not required for this institution" disabled style={{ opacity: 0.85 }} />
+                        <div style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>
+                          Your institution does not require an access code for signup.
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
               </>
             )}
 
             <div className="divider" />
-            <h3 className="section-title">Password</h3>
+            {/* ✅ Removed the "Password" section title as requested */}
 
             <div className="grid-2">
               <div>
@@ -2391,6 +2391,7 @@ export default function Register() {
               </span>
             </div>
           </form>
+
           {(intentId || nextAction) && (
             <div style={{ marginTop: 14, fontSize: 12, color: "#6b7280" }}>
               Intent: {intentId ? `#${intentId}` : "—"} | Next: {nextAction || "—"}
