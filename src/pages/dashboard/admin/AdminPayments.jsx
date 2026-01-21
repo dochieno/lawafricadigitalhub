@@ -54,18 +54,37 @@ function StatusPill({ value }) {
 
 function Pager({ page, pageSize, totalCount, loading, onPage }) {
   const pageCount = Math.max(1, Math.ceil((totalCount || 0) / (pageSize || 25)));
+  const canPrev = !loading && page > 1;
+  const canNext = !loading && page < pageCount;
+
   return (
-    <div className="pager">
-      <div className="muted">
-        Page <b>{page}</b> of <b>{pageCount}</b> — total <b>{totalCount}</b>
+    <div className="pager pager--compact">
+      <div className="pagerBtns pagerBtns--compact">
+        <button
+          className="btnSm"
+          disabled={!canPrev}
+          onClick={() => onPage(page - 1)}
+          title="Previous page"
+        >
+          ‹ <span className="btnSm__text">Previous</span>
+        </button>
+
+        <div className="pagerMeta" aria-label="Page indicator">
+          <b>{page}</b> of <b>{pageCount}</b>
+        </div>
+
+        <button
+          className="btnSm"
+          disabled={!canNext}
+          onClick={() => onPage(page + 1)}
+          title="Next page"
+        >
+          <span className="btnSm__text">Next</span> ›
+        </button>
       </div>
-      <div className="pagerBtns">
-        <button className="btnGhost" disabled={loading || page <= 1} onClick={() => onPage(page - 1)}>
-          Prev
-        </button>
-        <button className="btnGhost" disabled={loading || page >= pageCount} onClick={() => onPage(page + 1)}>
-          Next
-        </button>
+
+      <div className="muted" style={{ fontSize: 12, opacity: 0.85 }}>
+        Total <b>{totalCount || 0}</b>
       </div>
     </div>
   );
@@ -111,7 +130,6 @@ export default function AdminPayments() {
         { value: "Error", label: "Error" },
       ];
     }
-    // intents
     return [
       { value: "", label: "All" },
       { value: "Pending", label: "Pending" },
@@ -187,7 +205,13 @@ export default function AdminPayments() {
         </div>
 
         <div className="adminCrud__actionsRow">
-          <button className="iconBtn" title="Refresh" aria-label="Refresh" onClick={() => load(page)} disabled={loading}>
+          <button
+            className={cn("iconBtn", "iconBtn--neutral", "iconBtn--sm")}
+            title="Refresh"
+            aria-label="Refresh"
+            onClick={() => load(page)}
+            disabled={loading}
+          >
             🔄
           </button>
         </div>
@@ -209,7 +233,7 @@ export default function AdminPayments() {
 
         {/* Toolbar (subscriptions-like layout) */}
         <div className="paymentsToolbar">
-          {/* Row 1: Search left, pills + filters right */}
+          {/* Row 1 */}
           <div className="paymentsToolbarRow">
             <div className="paymentsToolbarLeft">
               <div className="toolbarField toolbarField--search">
@@ -260,7 +284,7 @@ export default function AdminPayments() {
             </div>
           </div>
 
-          {/* Row 2: Dates + actions right */}
+          {/* Row 2 */}
           <div className="paymentsToolbarRow">
             <div className="paymentsToolbarLeft">
               <div className="toolbarField toolbarField--compact">
@@ -275,11 +299,11 @@ export default function AdminPayments() {
 
             <div className="paymentsToolbarRight">
               <div className="toolbarActions">
-                <button className="btnPrimary" onClick={apply} disabled={loading}>
-                  Apply
+                <button className="btnSm btnSm--primary" onClick={apply} disabled={loading} title="Apply filters">
+                  <span className="btnSm__text">Apply</span>
                 </button>
-                <button className="btnGhost" onClick={clear} disabled={loading}>
-                  Clear
+                <button className="btnSm" onClick={clear} disabled={loading} title="Clear filters">
+                  <span className="btnSm__text">Clear</span>
                 </button>
               </div>
             </div>
