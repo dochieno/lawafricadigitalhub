@@ -1,3 +1,4 @@
+// src/pages/dashboard/admin/AdminInvoiceSettings.jsx
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api, { API_BASE_URL } from "../../../api/client";
@@ -5,39 +6,45 @@ import "../../../styles/adminCrud.css";
 import "../../../styles/invoice.css";
 import AdminPageFooter from "../../../components/AdminPageFooter";
 
+function isAbsoluteHttpUrl(u) {
+  return /^https?:\/\//i.test(String(u || "").trim());
+}
+
+function getBestApiOrigin() {
+  // Prefer an absolute API base so /storage is served from backend, not Vercel.
+  const candidates = [api?.defaults?.baseURL, API_BASE_URL].filter(Boolean).map(String);
+
+  const abs = candidates.find((x) => isAbsoluteHttpUrl(x));
+  if (abs) return abs.replace(/\/api\/?$/i, "").replace(/\/+$/g, "");
+
+  // If both are relative ("/api"), fall back to current origin (dev / same-origin only).
+  return window.location.origin;
+}
+
 /**
  * Build a public asset URL for Storage paths.
  *
- * IMPORTANT:
- * - Backend serves: /storage/{**filePath}   (lowercase!)
- * - DB might store: Storage/Invoice/... or storage/Invoice/...
- * - We normalize and ALWAYS request via /storage/ to avoid Linux case issues (Render).
- *
- * API_BASE_URL should be absolute in production: https://lawfricaapi.onrender.com/api
+ * Backend serves: GET /storage/{**filePath} (lowercase)
+ * DB might store: Storage/Invoice/invoice-logo.png OR Invoice/invoice-logo.png OR invoice-logo.png
+ * We normalize and ALWAYS request via /storage/ (Linux case-safe).
  */
 function buildAssetUrl(path) {
   if (!path) return null;
 
-  // Normalize slashes + trim leading slash
-  let p = String(path).trim().replace(/\\/g, "/").replace(/^\/+/, "");
+  const raw = String(path).trim();
+  if (!raw) return null;
 
-  // Strip any leading Storage/ or storage/
-  p = p.replace(/^Storage\//i, "");
-  p = p.replace(/^storage\//i, "");
+  if (isAbsoluteHttpUrl(raw)) return raw;
 
-  const base = String(API_BASE_URL || "").trim();
+  // Normalize slashes and remove leading slash
+  let clean = raw.replace(/\\/g, "/").replace(/^\/+/, "");
 
-  // If API base is relative (e.g. "/api"), we cannot infer backend origin reliably.
-  // Fall back to same-origin but still use /storage route.
-  if (!base || base.startsWith("/")) {
-    return `/storage/${p}`;
-  }
+  // Remove any stored prefix "Storage/" or "storage/"
+  clean = clean.replace(/^Storage\//i, "");
+  clean = clean.replace(/^storage\//i, "");
 
-  // Convert ".../api" to origin
-  const origin = base.replace(/\/api\/?$/i, "");
-
-  // ALWAYS use lowercase route that matches your backend mapping
-  return `${origin}/storage/${p}`;
+  const origin = getBestApiOrigin();
+  return `${origin}/storage/${clean}`;
 }
 
 function Field({ label, hint, children }) {
@@ -78,21 +85,22 @@ export default function AdminInvoiceSettings() {
     footerNotes: "",
   });
 
-  // If logo fails to load, don't let it trip global error overlay
+  // If logo fails to load, don't keep retrying + don't show overlay
   const [logoBroken, setLogoBroken] = useState(false);
 
-  // Cache-buster when re-uploading
+  // Cache-buster only after upload
   const [logoNonce, setLogoNonce] = useState(0);
 
   const rawLogoUrl = useMemo(() => buildAssetUrl(form.logoPath), [form.logoPath]);
+
   const logoUrl = useMemo(() => {
-    if (!rawLogoUrl) return null;
+    if (!rawLogoUrl || logoBroken) return null;
     const sep = rawLogoUrl.includes("?") ? "&" : "?";
     return `${rawLogoUrl}${sep}v=${logoNonce}`;
-  }, [rawLogoUrl, logoNonce]);
+  }, [rawLogoUrl, logoBroken, logoNonce]);
 
   useEffect(() => {
-    // Whenever the path changes, try loading again
+    // when path changes, try again
     setLogoBroken(false);
   }, [rawLogoUrl]);
 
@@ -146,8 +154,8 @@ export default function AdminInvoiceSettings() {
       const res = await api.post("/admin/invoice-settings/logo", fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      const path = res?.data?.logoPath;
 
+      const path = res?.data?.logoPath;
       if (path) {
         set("logoPath", path);
         setLogoBroken(false);
@@ -245,13 +253,17 @@ export default function AdminInvoiceSettings() {
 
             <div className="logoRow">
               <div className="logoPreview">
-                {logoUrl && !logoBroken ? (
+                {logoUrl ? (
                   <img
                     src={logoUrl}
                     alt="Invoice logo"
-                    onError={() => setLogoBroken(true)}
                     loading="lazy"
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      // prevent your global overlay from treating this as an app crash
+                      e?.stopPropagation?.();
+                      setLogoBroken(true);
+                    }}
                   />
                 ) : (
                   <div className="mutedSmall">No logo</div>
@@ -265,6 +277,7 @@ export default function AdminInvoiceSettings() {
                   onChange={(e) => uploadLogo(e.target.files?.[0])}
                 />
                 <div className="mutedSmall">Tip: use a transparent PNG for best results.</div>
+
                 {form.logoPath ? (
                   <div className="mutedSmall" style={{ marginTop: 6 }}>
                     Path: <span className="mutedSmall">{form.logoPath}</span>
@@ -304,11 +317,17 @@ export default function AdminInvoiceSettings() {
             </Field>
 
             <Field label="Account Name">
-              <input value={form.bankAccountName || ""} onChange={(e) => set("bankAccountName", e.target.value)} />
+              <input
+                value={form.bankAccountName || ""}
+                onChange={(e) => set("bankAccountName", e.target.value)}
+              />
             </Field>
 
             <Field label="Account Number">
-              <input value={form.bankAccountNumber || ""} onChange={(e) => set("bankAccountNumber", e.target.value)} />
+              <input
+                value={form.bankAccountNumber || ""}
+                onChange={(e) => set("bankAccountNumber", e.target.value)}
+              />
             </Field>
 
             <div className="sectionHead sectionHead--mt">
