@@ -95,18 +95,15 @@ function extractAxiosError(e) {
   return data?.message || data || e?.message || "Request failed.";
 }
 
-// localStorage keys for resuming after leaving (old/local resume)
 const LS_REG_INTENT = "la_reg_intent_id";
 const LS_REG_EMAIL = "la_reg_email";
 const LS_REG_USERNAME = "la_reg_username";
 const LS_REG_PASSWORD = "la_reg_password";
 
-// remember how the user was paying + phone/country for better resume UX
 const LS_REG_PAYMETHOD = "la_reg_pay_method"; // MPESA | PAYSTACK
 const LS_REG_PHONE = "la_reg_phone";
 const LS_REG_COUNTRY = "la_reg_country";
 
-// ✅ Resume with email + OTP (works across browsers/devices)
 const LS_RESUME_TOKEN = "la_resume_token";
 const LS_RESUME_EMAIL = "la_resume_email";
 
@@ -137,6 +134,9 @@ export default function Register() {
   const [institutionAccessCode, setInstitutionAccessCode] = useState("");
   const [institutionMemberType, setInstitutionMemberType] = useState("Student");
 
+  // ✅ NEW: Reference number (institution users only; nullable overall)
+  const [referenceNumber, setReferenceNumber] = useState("");
+
   const [institutions, setInstitutions] = useState([]);
   const [institutionsLoadFailed, setInstitutionsLoadFailed] = useState(false);
 
@@ -145,7 +145,6 @@ export default function Register() {
     return institutions.find((i) => String(i.id) === String(institutionId)) || null;
   }, [institutionId, institutions]);
 
-  // Password
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -291,11 +290,14 @@ export default function Register() {
       setInstitutionId("");
       setInstitutionAccessCode("");
       setInstitutionMemberType("Student");
+      setReferenceNumber(""); // ✅ clear when switching away from institution
+
       setFieldErrors((prev) => {
         const next = { ...prev };
         delete next.institutionId;
         delete next.institutionMemberType;
         delete next.institutionAccessCode;
+        delete next.referenceNumber;
         return next;
       });
     }
@@ -442,6 +444,14 @@ export default function Register() {
       }
     }
 
+    // ✅ Reference number: only validate for institution users
+    if (name === "referenceNumber") {
+      if (!isPublic) {
+        if (!v.trim()) return "Reference number is required for institution users.";
+        if (v.trim().length < 3) return "Reference number looks too short.";
+      }
+    }
+
     if (name === "password") {
       if (!v) return "Password is required.";
       const rules = getPasswordRules(v);
@@ -493,6 +503,9 @@ export default function Register() {
 
       const msgCode = validateField("institutionAccessCode", institutionAccessCode);
       if (msgCode) next.institutionAccessCode = msgCode;
+
+      const msgRef = validateField("referenceNumber", referenceNumber);
+      if (msgRef) next.referenceNumber = msgRef;
     }
 
     setFieldErrors(next);
@@ -508,6 +521,7 @@ export default function Register() {
       institutionId: true,
       institutionMemberType: true,
       institutionAccessCode: true,
+      referenceNumber: true,
     }));
 
     return Object.keys(next).length === 0;
@@ -528,6 +542,7 @@ export default function Register() {
       requiredNames.push("institutionMemberType");
       const requiredCode = selectedInstitution?.accessCodeRequired !== false;
       if (requiredCode) requiredNames.push("institutionAccessCode");
+      requiredNames.push("referenceNumber");
     }
 
     for (const n of requiredNames) {
@@ -552,6 +567,8 @@ export default function Register() {
           ? institutionMemberType
           : n === "institutionAccessCode"
           ? institutionAccessCode
+          : n === "referenceNumber"
+          ? referenceNumber
           : "";
 
       if (validateField(n, value)) return false;
@@ -569,6 +586,7 @@ export default function Register() {
     institutionId,
     institutionMemberType,
     institutionAccessCode,
+    referenceNumber,
     isPublic,
     publicPayMethod,
     selectedInstitution,
@@ -595,6 +613,17 @@ export default function Register() {
   }
 
   // -----------------------------
+  // Server-error -> field mapping
+  // -----------------------------
+  function applyServerFieldHints(message) {
+    const msg = String(message || "");
+    if (/reference\s*number/i.test(msg)) {
+      setFieldError("referenceNumber", msg);
+      setTouched((prev) => ({ ...prev, referenceNumber: true }));
+    }
+  }
+
+  // -----------------------------
   // API helpers
   // -----------------------------
   async function createRegistrationIntentIfNeeded() {
@@ -613,6 +642,9 @@ export default function Register() {
       userType,
       institutionId: !isPublic && institutionId ? Number(institutionId) : null,
       institutionMemberType: !isPublic ? institutionMemberType : null,
+
+      // ✅ Only send referenceNumber for institution users; nullable overall
+      referenceNumber: !isPublic ? (referenceNumber.trim() ? referenceNumber.trim() : null) : null,
     };
 
     const res = await api.post("/registration/intent", payload);
@@ -721,7 +753,9 @@ export default function Register() {
       setStatusText("Waiting for payment. If you didn’t get a prompt or payment failed, you can resend the prompt.");
     } catch (e) {
       setStatusText("");
-      setError(toText(extractAxiosError(e)));
+      const msg = toText(extractAxiosError(e));
+      setError(toText(msg));
+      applyServerFieldHints(msg);
     }
   }
 
@@ -1139,7 +1173,9 @@ export default function Register() {
             setStatusText(
               "We could not send the prompt (or it failed). You can resend the prompt after topping up or try again later."
             );
-            setError(toText(extractAxiosError(mpErr)));
+            const msg = toText(extractAxiosError(mpErr));
+            setError(toText(msg));
+            applyServerFieldHints(msg);
             return;
           }
         }
@@ -1165,7 +1201,9 @@ export default function Register() {
         state: { username: username.trim(), password, setupToken: token },
       });
     } catch (e2) {
-      setError(toText(extractAxiosError(e2)));
+      const msg = toText(extractAxiosError(e2));
+      setError(toText(msg));
+      applyServerFieldHints(msg);
     } finally {
       setLoading(false);
     }
@@ -1194,7 +1232,9 @@ export default function Register() {
     } catch (e) {
       setWaitingPayment(true);
       setStatusText("Prompt could not be sent. You can top up and try again, or retry later.");
-      setError(toText(extractAxiosError(e)));
+      const msg = toText(extractAxiosError(e));
+      setError(toText(msg));
+      applyServerFieldHints(msg);
     }
   }
 
@@ -1245,6 +1285,8 @@ export default function Register() {
     setResumeVerified(false);
     setResumeOtpSent(false);
     setResumeCode("");
+
+    // keep existing form values as-is (existing behavior); do not reset unless you already had that elsewhere
   }
 
   // -----------------------------
@@ -1635,7 +1677,8 @@ export default function Register() {
 
                       {resumeOtpSent && (
                         <div style={{ alignSelf: "center", fontSize: 12, color: "#6b7280" }}>
-                          Code expires in <strong>{resumeExpires > 0 ? `${Math.ceil(resumeExpires / 60)} min` : "—"}</strong>
+                          Code expires in{" "}
+                          <strong>{resumeExpires > 0 ? `${Math.ceil(resumeExpires / 60)} min` : "—"}</strong>
                         </div>
                       )}
                     </div>
@@ -1849,7 +1892,7 @@ export default function Register() {
             </div>
           )}
 
-          {/* ---- Existing signup form continues below (unchanged) ---- */}
+          {/* ---- Existing signup form continues below (unchanged except reference field for institution) ---- */}
           <form onSubmit={onCreateAccount}>
             <label className="field-label">Account Type</label>
             <div style={{ marginBottom: 14 }}>
@@ -2039,6 +2082,7 @@ export default function Register() {
                       liveValidate("institutionId", e.target.value);
                       clearFieldError("institutionId");
                       clearFieldError("institutionAccessCode");
+                      clearFieldError("referenceNumber");
                       clearFieldError("email");
                     }}
                     onBlur={(e) => {
@@ -2078,6 +2122,31 @@ export default function Register() {
                 </div>
                 <div style={{ display: "none" }}>{touched.institutionMemberType}</div>
                 <FieldError name="institutionMemberType" />
+
+                {/* ✅ Reference number (institution users only) */}
+                <label className="field-label" style={{ marginTop: 10 }}>
+                  Reference Number (required)
+                </label>
+                <input
+                  value={referenceNumber}
+                  onChange={(e) => {
+                    setReferenceNumber(e.target.value);
+                    liveValidate("referenceNumber", e.target.value);
+                  }}
+                  onBlur={(e) => {
+                    markTouched("referenceNumber");
+                    const msg = validateField("referenceNumber", e.target.value);
+                    msg ? setFieldError("referenceNumber", msg) : clearFieldError("referenceNumber");
+                  }}
+                  disabled={lockForm}
+                  style={inputStyle("referenceNumber")}
+                  placeholder="e.g. Student/Staff number"
+                  aria-invalid={!!(touched.referenceNumber && fieldErrors.referenceNumber)}
+                />
+                <div style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>
+                  Required for institution registrations (Student/Staff). Public users won’t see or use this field.
+                </div>
+                <FieldError name="referenceNumber" />
 
                 {selectedInstitution?.accessCodeRequired !== false && (
                   <>
@@ -2315,7 +2384,6 @@ export default function Register() {
                 </div>
               </div>
             )}
-
             <div className="register-footer">
               Already have an account?{" "}
               <span className="linkish" onClick={() => nav("/login")}>
@@ -2323,7 +2391,6 @@ export default function Register() {
               </span>
             </div>
           </form>
-
           {(intentId || nextAction) && (
             <div style={{ marginTop: 14, fontSize: 12, color: "#6b7280" }}>
               Intent: {intentId ? `#${intentId}` : "—"} | Next: {nextAction || "—"}
