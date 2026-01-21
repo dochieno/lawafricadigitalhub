@@ -9,27 +9,35 @@ import AdminPageFooter from "../../../components/AdminPageFooter";
  * Build a public asset URL for Storage paths.
  *
  * IMPORTANT:
- * - In production, API_BASE_URL MUST be an absolute backend URL, e.g. https://api.yoursite.com/api
- * - If API_BASE_URL is "/api" (relative), origin becomes "" and the logo will load from Vercel (wrong).
+ * - Backend serves: /storage/{**filePath}   (lowercase!)
+ * - DB might store: Storage/Invoice/... or storage/Invoice/...
+ * - We normalize and ALWAYS request via /storage/ to avoid Linux case issues (Render).
+ *
+ * API_BASE_URL should be absolute in production: https://lawfricaapi.onrender.com/api
  */
 function buildAssetUrl(path) {
   if (!path) return null;
 
-  // Normalize path -> ensure it starts with Storage/
-  let clean = String(path).trim().replace(/^\/+/, "").replace(/\\/g, "/");
-  if (!/^Storage\//i.test(clean)) clean = `Storage/${clean}`;
-  clean = clean.replace(/^Storage\/+/i, "Storage/"); // de-dupe
+  // Normalize slashes + trim leading slash
+  let p = String(path).trim().replace(/\\/g, "/").replace(/^\/+/, "");
+
+  // Strip any leading Storage/ or storage/
+  p = p.replace(/^Storage\//i, "");
+  p = p.replace(/^storage\//i, "");
 
   const base = String(API_BASE_URL || "").trim();
 
   // If API base is relative (e.g. "/api"), we cannot infer backend origin reliably.
-  // Return relative path so it doesn't crash; but you should fix env to absolute.
+  // Fall back to same-origin but still use /storage route.
   if (!base || base.startsWith("/")) {
-    return `/${clean}`;
+    return `/storage/${p}`;
   }
 
+  // Convert ".../api" to origin
   const origin = base.replace(/\/api\/?$/i, "");
-  return `${origin}/${clean}`;
+
+  // ALWAYS use lowercase route that matches your backend mapping
+  return `${origin}/storage/${p}`;
 }
 
 function Field({ label, hint, children }) {
@@ -79,7 +87,6 @@ export default function AdminInvoiceSettings() {
   const rawLogoUrl = useMemo(() => buildAssetUrl(form.logoPath), [form.logoPath]);
   const logoUrl = useMemo(() => {
     if (!rawLogoUrl) return null;
-    // Cache bust only when nonce changes (e.g. after upload), not on every render
     const sep = rawLogoUrl.includes("?") ? "&" : "?";
     return `${rawLogoUrl}${sep}v=${logoNonce}`;
   }, [rawLogoUrl, logoNonce]);
@@ -242,7 +249,6 @@ export default function AdminInvoiceSettings() {
                   <img
                     src={logoUrl}
                     alt="Invoice logo"
-                    // Prevent resource load errors from tripping your global debug overlay
                     onError={() => setLogoBroken(true)}
                     loading="lazy"
                     referrerPolicy="no-referrer"

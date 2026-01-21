@@ -37,7 +37,7 @@ function isAbsoluteHttpUrl(u) {
 }
 
 function getBestApiOrigin() {
-  // Prefer an absolute API base (so /Storage is served from backend, not Vercel static).
+  // Prefer an absolute API base (so /storage is served from backend, not Vercel static).
   const candidates = [api?.defaults?.baseURL, API_BASE_URL].filter(Boolean).map(String);
 
   const abs = candidates.find((x) => isAbsoluteHttpUrl(x));
@@ -48,6 +48,14 @@ function getBestApiOrigin() {
   return window.location.origin;
 }
 
+/**
+ * Build a public asset URL for Storage paths.
+ *
+ * IMPORTANT:
+ * - Backend serves: /storage/{**filePath} (lowercase)
+ * - DB might store: Storage/... or storage/...
+ * - We normalize and ALWAYS request via /storage/ to avoid Linux case issues (Render).
+ */
 function buildAssetUrl(path) {
   if (!path) return null;
 
@@ -57,12 +65,17 @@ function buildAssetUrl(path) {
   // Already absolute
   if (isAbsoluteHttpUrl(raw)) return raw;
 
-  // Normalize "Storage/..." no matter what comes in
-  let clean = raw.replace(/^\/+/, "");
-  if (!/^storage\//i.test(clean)) clean = `Storage/${clean}`;
+  // Normalize to a relative file path (strip leading slashes)
+  let clean = raw.replace(/\\/g, "/").replace(/^\/+/, "");
+
+  // Remove any stored prefix (Storage/ or storage/)
+  clean = clean.replace(/^Storage\//i, "");
+  clean = clean.replace(/^storage\//i, "");
 
   const origin = getBestApiOrigin();
-  return `${origin}/${clean}`;
+
+  // ALWAYS use lowercase route that matches backend mapping
+  return `${origin}/storage/${clean}`;
 }
 
 async function safeCopy(text) {

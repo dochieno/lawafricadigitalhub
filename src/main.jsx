@@ -14,14 +14,46 @@ const rootEl = document.getElementById("root");
 console.log("[LA DEBUG] main.jsx executing", location.href);
 console.log("[LA DEBUG] root element exists:", !!rootEl);
 
-// ✅ Mount checkpoint (if you don't see the next log, something is blocking render)
+// ------------------------------
+// ✅ Ignore common resource errors (like IMG 404) so debug overlay doesn’t treat them as runtime crashes
+// ------------------------------
+function isResourceLoadErrorEvent(e) {
+  const t = e?.target;
+  if (!t) return false;
+
+  const tag = String(t.tagName || "").toUpperCase();
+  if (tag === "IMG" || tag === "SCRIPT" || tag === "LINK") return true;
+
+  // fallback checks
+  if (typeof t.src === "string" && t.src) return true;
+  if (typeof t.href === "string" && t.href) return true;
+
+  return false;
+}
+
+// Capture phase to see errors early, but FILTER OUT resource load errors.
+window.addEventListener(
+  "error",
+  (e) => {
+    if (isResourceLoadErrorEvent(e)) return;
+    console.log("[LA DEBUG] window.error:", e);
+  },
+  true
+);
+
+window.addEventListener("unhandledrejection", (e) => {
+  console.log("[LA DEBUG] unhandledrejection:", e?.reason || e);
+});
+
+// ✅ Mount checkpoint
 console.log("[LA DEBUG] about to mount React");
 
-// ✅ KEY FIX: StrictMode can double-run effects in dev AND can expose timing bugs.
-// For production stability (especially around payment return redirects), disable StrictMode outside DEV.
+// StrictMode in dev only
 const Wrapper = import.meta.env.DEV ? React.StrictMode : React.Fragment;
 
 try {
+  if (!rootEl) throw new Error("Root element #root not found.");
+
   ReactDOM.createRoot(rootEl).render(
     <Wrapper>
       <AuthProvider>
@@ -34,7 +66,6 @@ try {
 } catch (e) {
   console.error("[LA DEBUG] FATAL mount error:", e);
 
-  // ✅ If React never mounts, show a visible fallback so you're not stuck on white screen
   if (rootEl) {
     rootEl.innerHTML = `
       <div style="padding:16px;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
