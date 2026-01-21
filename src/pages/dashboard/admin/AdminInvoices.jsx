@@ -41,6 +41,12 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
+function normStatusKey(s) {
+  const x = String(s || "").toLowerCase();
+  if (x === "partiallypaid" || x === "partially-paid") return "partiallypaid";
+  return x;
+}
+
 export default function AdminInvoices() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -113,6 +119,17 @@ export default function AdminInvoices() {
     if (e.key === "Enter") onApplyFilters();
   }
 
+  // Quick summary pills (current page)
+  const pageSummary = useMemo(() => {
+    const items = data?.items || [];
+    const out = { total: items.length, paid: 0, issued: 0, partiallypaid: 0, draft: 0, void: 0 };
+    for (const it of items) {
+      const k = normStatusKey(it.status);
+      if (k in out) out[k] += 1;
+    }
+    return out;
+  }, [data]);
+
   return (
     <div className="adminCrud">
       <div className="adminCrud__header">
@@ -144,87 +161,104 @@ export default function AdminInvoices() {
         </div>
       </div>
 
-      <div className="card invoiceCard">
-        {/* Filters (clean alignment) */}
-        <div className="invoiceFilters invoiceFilters--grid">
-          <div className="field">
-            <label>Search</label>
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              onKeyDown={onKeyDownApply}
-              placeholder="Invoice number, external ref, purpose..."
-            />
+      <div className="card invoiceCard invoiceCard--fill">
+        {/* ===== Toolbar (like Institution Subscriptions) ===== */}
+        <div className="invoiceToolbar">
+          <div className="invoiceToolbar__top">
+            <div className="invoiceToolbar__left">
+              <div className="field field--compact">
+                <label>Search</label>
+                <input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  onKeyDown={onKeyDownApply}
+                  placeholder="Invoice number, external ref, purpose..."
+                />
+              </div>
+            </div>
+
+            <div className="invoiceToolbar__right">
+              <span className="invPill invPill--muted" title="Current page count">
+                {pageSummary.total} on page
+              </span>
+              <span className="invPill invPill--ok">{pageSummary.paid} Paid</span>
+              <span className="invPill invPill--info">{pageSummary.issued} Issued</span>
+              <span className="invPill invPill--warn">{pageSummary.partiallypaid} PartiallyPaid</span>
+              <span className="invPill invPill--muted">{pageSummary.draft} Draft</span>
+              <span className="invPill invPill--danger">{pageSummary.void} Void</span>
+
+              <div className="field field--compact">
+                <label>Status</label>
+                <select value={status} onChange={(e) => setStatus(e.target.value)}>
+                  <option value="">All</option>
+                  <option value="Draft">Draft</option>
+                  <option value="Issued">Issued</option>
+                  <option value="PartiallyPaid">PartiallyPaid</option>
+                  <option value="Paid">Paid</option>
+                  <option value="Void">Void</option>
+                </select>
+              </div>
+            </div>
           </div>
 
-          <div className="field">
-            <label>Status</label>
-            <select value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="">All</option>
-              <option value="Draft">Draft</option>
-              <option value="Issued">Issued</option>
-              <option value="PartiallyPaid">PartiallyPaid</option>
-              <option value="Paid">Paid</option>
-              <option value="Void">Void</option>
-            </select>
-          </div>
+          <div className="invoiceToolbar__bottom">
+            <div className="field field--compact">
+              <label>Customer</label>
+              <input
+                value={customer}
+                onChange={(e) => setCustomer(e.target.value)}
+                onKeyDown={onKeyDownApply}
+                placeholder="Name/email fragment..."
+              />
+            </div>
 
-          <div className="field">
-            <label>Customer</label>
-            <input
-              value={customer}
-              onChange={(e) => setCustomer(e.target.value)}
-              onKeyDown={onKeyDownApply}
-              placeholder="Name/email fragment..."
-            />
-          </div>
+            <div className="field field--compact">
+              <label>From</label>
+              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </div>
 
-          <div className="field">
-            <label>From</label>
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </div>
+            <div className="field field--compact">
+              <label>To</label>
+              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </div>
 
-          <div className="field">
-            <label>To</label>
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-          </div>
+            <div className="invoiceToolbar__actions">
+              <button
+                type="button"
+                className="btnSm btnSm--primary"
+                onClick={onApplyFilters}
+                disabled={loading}
+                title="Apply filters"
+                aria-label="Apply filters"
+              >
+                ✅ Apply
+              </button>
 
-          <div className="invoiceFilters__actions">
-            <button
-              type="button"
-              className="btnSm btnSm--primary"
-              onClick={onApplyFilters}
-              disabled={loading}
-              title="Apply filters"
-              aria-label="Apply filters"
-            >
-              ✅ Apply
-            </button>
-
-            <button
-              type="button"
-              className="btnSm"
-              onClick={onClear}
-              disabled={loading}
-              title="Clear filters"
-              aria-label="Clear filters"
-            >
-              🧹 Clear
-            </button>
+              <button
+                type="button"
+                className="btnSm"
+                onClick={onClear}
+                disabled={loading}
+                title="Clear filters"
+                aria-label="Clear filters"
+              >
+                🧹 Clear
+              </button>
+            </div>
           </div>
         </div>
 
         {err ? <div className="alert alert--danger">{err}</div> : null}
         {loading ? <div className="alert alert--info">Loading invoices…</div> : null}
 
-        {/* Table (full-width + scroll when needed) */}
+        {/* ===== Table (full width + scroll) ===== */}
         <div className="tableWrap tableWrap--full">
           <table className="adminTable adminTable--stickyHead adminTable--finance">
             <thead>
               <tr>
                 <th className="colInvoice">Invoice No.</th>
                 <th className="colDate">Document Date</th>
-                <th className="colCustomer">Customer Name</th>
+                <th className="colCustomer">Customer</th>
                 <th className="colStatus">Status</th>
                 <th className="colPurpose">Purpose</th>
                 <th className="num colCurrency">Currency</th>
@@ -301,7 +335,7 @@ export default function AdminInvoices() {
           </table>
         </div>
 
-        {/* Pager */}
+        {/* ===== Pager ===== */}
         <div className="pager pager--compact">
           <div className="muted">{pageLabel}</div>
 

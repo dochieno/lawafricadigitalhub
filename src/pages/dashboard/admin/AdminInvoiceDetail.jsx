@@ -32,25 +32,37 @@ function fmtDateShort(iso) {
   return `${dd}-${mm}-${yy}`;
 }
 
-function buildAssetUrl(path, apiBaseUrl) {
+function isAbsoluteHttpUrl(u) {
+  return /^https?:\/\//i.test(String(u || "").trim());
+}
+
+function getBestApiOrigin() {
+  // Prefer an absolute API base (so /Storage is served from backend, not Vercel static).
+  const candidates = [api?.defaults?.baseURL, API_BASE_URL].filter(Boolean).map(String);
+
+  const abs = candidates.find((x) => isAbsoluteHttpUrl(x));
+  if (abs) return abs.replace(/\/api\/?$/i, "").replace(/\/+$/g, "");
+
+  // If both are relative (e.g. "/api"), fall back to current origin.
+  // This works in dev / same-origin deployments.
+  return window.location.origin;
+}
+
+function buildAssetUrl(path) {
   if (!path) return null;
 
   const raw = String(path).trim();
-  if (/^https?:\/\//i.test(raw)) return raw;
+  if (!raw) return null;
 
-  const base = String(apiBaseUrl || "").trim();
-  const origin = base
-    ? String(base).replace(/\/api\/?$/i, "").replace(/\/+$/g, "")
-    : "";
+  // Already absolute
+  if (isAbsoluteHttpUrl(raw)) return raw;
 
+  // Normalize "Storage/..." no matter what comes in
   let clean = raw.replace(/^\/+/, "");
   if (!/^storage\//i.test(clean)) clean = `Storage/${clean}`;
 
-  // If we know the API origin, always use it (prevents Vercel trying to load from frontend host).
-  if (origin) return `${origin}/${clean}`;
-
-  // Fallback: relative (only if your deployment proxies /Storage)
-  return `/${clean}`;
+  const origin = getBestApiOrigin();
+  return `${origin}/${clean}`;
 }
 
 async function safeCopy(text) {
@@ -84,10 +96,7 @@ export default function AdminInvoiceDetail() {
   const [err, setErr] = useState("");
   const [inv, setInv] = useState(null);
   const [copied, setCopied] = useState(false);
-
-  // ✅ Logo is checked via HEAD first so 404 doesn't trigger your window.onerror overlay
-  const [logoOk, setLogoOk] = useState(false);
-  const [checkingLogo, setCheckingLogo] = useState(false);
+  const [logoBroken, setLogoBroken] = useState(false);
 
   const shouldAutoPrint = useMemo(() => {
     const qs = new URLSearchParams(location.search);
@@ -100,6 +109,7 @@ export default function AdminInvoiceDetail() {
     try {
       const res = await api.get(`/admin/invoices/${id}`);
       setInv(res.data);
+      setLogoBroken(false);
     } catch (e) {
       setErr(e?.response?.data?.message || e?.response?.data || e?.message || "Failed to load invoice.");
     } finally {
@@ -128,33 +138,6 @@ export default function AdminInvoiceDetail() {
 
   const company = inv?.company || {};
 
-  const apiBase = api?.defaults?.baseURL || API_BASE_URL;
-  const logoUrl = useMemo(() => buildAssetUrl(company.logoPath, apiBase), [company.logoPath, apiBase]);
-
-  // ✅ Pre-check logo URL so missing image doesn't become a window "resource error"
-  useEffect(() => {
-    let cancelled = false;
-
-    async function check() {
-      setLogoOk(false);
-      if (!logoUrl) return;
-      setCheckingLogo(true);
-      try {
-        const r = await fetch(logoUrl, { method: "HEAD", cache: "no-store" });
-        if (!cancelled) setLogoOk(r.ok);
-      } catch {
-        if (!cancelled) setLogoOk(false);
-      } finally {
-        if (!cancelled) setCheckingLogo(false);
-      }
-    }
-
-    check();
-    return () => {
-      cancelled = true;
-    };
-  }, [logoUrl]);
-
   const balance = useMemo(() => {
     const total = Number(inv?.total || 0);
     const paid = Number(inv?.amountPaid || 0);
@@ -162,17 +145,26 @@ export default function AdminInvoiceDetail() {
   }, [inv]);
 
   const isPaid = useMemo(() => String(inv?.status || "").toLowerCase() === "paid", [inv]);
+
   const invNumberClass = useMemo(
     () => `invTitleStrong invTitleStrong--sm ${isPaid ? "invPaid" : "invUnpaid"}`,
     [isPaid]
   );
+
+  const metaStatusClass = useMemo(() => (isPaid ? "metaStatusPaid" : "metaStatusUnpaid"), [isPaid]);
+
+  const logoUrl = useMemo(() => {
+    if (logoBroken) return null;
+    return buildAssetUrl(company.logoPath);
+  }, [company.logoPath, logoBroken]);
 
   return (
     <div className="adminCrud">
       <div className="adminCrud__header noPrint">
         <div>
           <h1 className="adminCrud__title">
-            Invoice <span className={invNumberClass}>{inv?.invoiceNumber || (loading ? "…" : "")}</span>
+            Invoice{" "}
+            <span className={invNumberClass}>{inv?.invoiceNumber || (loading ? "…" : "")}</span>
           </h1>
           <p className="adminCrud__sub">Print-ready preview. Use browser print to download PDF.</p>
         </div>
@@ -225,7 +217,7 @@ export default function AdminInvoiceDetail() {
 
       {inv ? (
         <div className="invoicePage">
-          {/* Summary row (full width, wraps nicely) */}
+          {/* Summary row */}
           <div className="invoiceSummary noPrint">
             <div className="sumItem">
               <div className="sumK">Invoice No.</div>
@@ -238,7 +230,7 @@ export default function AdminInvoiceDetail() {
             </div>
 
             <div className="sumItem sumItem--wide">
-              <div className="sumK">Customer Name</div>
+              <div className="sumK">Customer</div>
               <div className="sumV">{inv.customerName || "-"}</div>
               {inv.customerEmail ? <div className="sumSub">{inv.customerEmail}</div> : null}
             </div>
@@ -274,24 +266,20 @@ export default function AdminInvoiceDetail() {
             </div>
           </div>
 
-          {/* Paper (full width with sensible max) */}
           <div className="invoicePaperWrap">
             <div className="invoicePaper invoicePaper--wide" ref={printRef}>
+              {/* Header */}
               <div className="invoiceHeader">
                 <div className="brandBlock">
-                  {/* ✅ Only render logo if HEAD check succeeded */}
-                  {logoUrl && logoOk ? (
+                  {logoUrl ? (
                     <img
                       className="brandLogo"
                       src={logoUrl}
                       alt="Company logo"
-                      loading="eager"
-                      onError={() => setLogoOk(false)}
+                      onError={() => setLogoBroken(true)}
                     />
                   ) : (
-                    <div className="brandLogo brandLogo--placeholder">
-                      {checkingLogo ? "Loading…" : "Company logo"}
-                    </div>
+                    <div className="brandLogo brandLogo--placeholder">Company logo</div>
                   )}
 
                   <div className="brandText">
@@ -321,26 +309,31 @@ export default function AdminInvoiceDetail() {
                       <div className="k">Invoice No</div>
                       <div className="v">{inv.invoiceNumber}</div>
                     </div>
+
                     <div className="metaRow">
                       <div className="k">Status</div>
-                      <div className={`v ${isPaid ? "metaStatusPaid" : "metaStatusUnpaid"}`}>{inv.status}</div>
+                      <div className={`v ${metaStatusClass}`}>{inv.status}</div>
                     </div>
+
                     <div className="metaRow">
                       <div className="k">Issued</div>
                       <div className="v">{fmtDateShort(inv.issuedAt)}</div>
                     </div>
+
                     <div className="metaRow">
                       <div className="k">Due</div>
                       <div className="v">{inv.dueAt ? fmtDateShort(inv.dueAt) : "-"}</div>
                     </div>
+
                     <div className="metaRow">
                       <div className="k">Currency</div>
-                      <div className="v">{inv.currency}</div>
+                      <div className="v">{inv.currency || "KES"}</div>
                     </div>
                   </div>
                 </div>
               </div>
 
+              {/* Bill to */}
               <div className="invoiceBillTo">
                 <div>
                   <div className="sectionLabel">Bill To</div>
@@ -367,6 +360,7 @@ export default function AdminInvoiceDetail() {
                 </div>
               </div>
 
+              {/* Lines */}
               <div className="invoiceLines">
                 <div className="linesTableWrap">
                   <table className="linesTable">
@@ -389,6 +383,7 @@ export default function AdminInvoiceDetail() {
                             <div className="strong">{l.description}</div>
                             {l.itemCode ? <div className="mutedSmall">Code: {l.itemCode}</div> : null}
                           </td>
+
                           <td className="num">{Number(l.quantity || 0).toFixed(2)}</td>
                           <td className="num">{fmtMoney(l.unitPrice, inv.currency)}</td>
                           <td className="num">{fmtMoney(l.lineSubtotal, inv.currency)}</td>
@@ -410,28 +405,34 @@ export default function AdminInvoiceDetail() {
                 </div>
               </div>
 
+              {/* Totals */}
               <div className="invoiceTotals">
                 <div className="totalsBox">
                   <div className="tRow">
                     <div className="k">Subtotal</div>
                     <div className="v">{fmtMoney(inv.subtotal, inv.currency)}</div>
                   </div>
+
                   <div className="tRow">
                     <div className="k">Tax</div>
                     <div className="v">{fmtMoney(inv.taxTotal, inv.currency)}</div>
                   </div>
+
                   <div className="tRow">
                     <div className="k">Discount</div>
                     <div className="v">{fmtMoney(inv.discountTotal, inv.currency)}</div>
                   </div>
+
                   <div className="tRow tRow--grand">
                     <div className="k">Total</div>
                     <div className="v">{fmtMoney(inv.total, inv.currency)}</div>
                   </div>
+
                   <div className="tRow">
                     <div className="k">Amount Paid</div>
                     <div className="v">{fmtMoney(inv.amountPaid, inv.currency)}</div>
                   </div>
+
                   <div className="tRow tRow--due">
                     <div className="k">Balance</div>
                     <div className="v">{fmtMoney(balance, inv.currency)}</div>
@@ -485,6 +486,7 @@ export default function AdminInvoiceDetail() {
                 </div>
               </div>
 
+              {/* Notes */}
               {inv.notes ? (
                 <div className="invoiceNotes">
                   <div className="sectionLabel">Notes</div>
@@ -492,6 +494,7 @@ export default function AdminInvoiceDetail() {
                 </div>
               ) : null}
 
+              {/* Footer */}
               <div className="invoiceFooter">
                 {company.footerNotes ? <div className="footerNotes">{company.footerNotes}</div> : null}
                 <div className="mutedSmall">Generated by LawAfrica Platform</div>
