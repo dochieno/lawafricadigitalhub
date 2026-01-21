@@ -31,8 +31,15 @@ export default function AppShell() {
     [location.pathname]
   );
 
+  // ✅ NEW: Finance section (admin-only)
+  const isInFinance = useMemo(
+    () => location.pathname.startsWith("/dashboard/admin/finance"),
+    [location.pathname]
+  );
+
   const [approvalsOpen, setApprovalsOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [financeOpen, setFinanceOpen] = useState(false);
 
   useEffect(() => {
     if (isInApprovals) setApprovalsOpen(true);
@@ -41,6 +48,10 @@ export default function AppShell() {
   useEffect(() => {
     if (isInAdmin) setAdminOpen(true);
   }, [isInAdmin]);
+
+  useEffect(() => {
+    if (isInFinance) setFinanceOpen(true);
+  }, [isInFinance]);
 
   function confirmLogout() {
     setShowLogoutConfirm(true);
@@ -84,7 +95,7 @@ export default function AppShell() {
             <NavLink to="/dashboard/law-reports" className="nav-link">
               Law Reports
             </NavLink>
-            
+
             <NavLink to="/dashboard/security" className="nav-link">
               Security
             </NavLink>
@@ -133,6 +144,47 @@ export default function AppShell() {
               </div>
             )}
 
+            {/* ================= FINANCE (collapsible, Admin-only) ================= */}
+            {meIsAdminRole && (
+              <div className="nav-group-wrap">
+                <button
+                  type="button"
+                  className={`nav-link nav-group-toggle ${isInFinance ? "active" : ""}`}
+                  onClick={() => setFinanceOpen((v) => !v)}
+                  aria-expanded={financeOpen}
+                  aria-controls="nav-finance"
+                >
+                  <Chevron open={financeOpen} />
+                  <span>Finance</span>
+                </button>
+
+                {financeOpen && (
+                  <div id="nav-finance" className="nav-group">
+                    <NavLink
+                      to="/dashboard/admin/finance/invoices"
+                      className="nav-link nav-child"
+                    >
+                      Invoices
+                    </NavLink>
+
+                    <NavLink
+                      to="/dashboard/admin/finance/payments"
+                      className="nav-link nav-child"
+                    >
+                      Payments
+                    </NavLink>
+
+                    <NavLink
+                      to="/dashboard/admin/finance/invoice-settings"
+                      className="nav-link nav-child"
+                    >
+                      Invoice Settings
+                    </NavLink>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* ================= ADMIN (collapsible) ================= */}
             {meIsAdminRole && (
               <div className="nav-group-wrap">
@@ -149,41 +201,66 @@ export default function AppShell() {
 
                 {adminOpen && (
                   <div id="nav-admin" className="nav-group">
-                    <NavLink to="/dashboard/admin/institutions" className="nav-link nav-child">
+                    <NavLink
+                      to="/dashboard/admin/institutions"
+                      className="nav-link nav-child"
+                    >
                       Institutions
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/content-products" className="nav-link nav-child">
+                    <NavLink
+                      to="/dashboard/admin/content-products"
+                      className="nav-link nav-child"
+                    >
                       Products
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/documents" className="nav-link nav-child">
+                    <NavLink
+                      to="/dashboard/admin/documents"
+                      className="nav-link nav-child"
+                    >
                       Books
                     </NavLink>
-                    <NavLink to="/dashboard/admin/llr-services" className="nav-link nav-child">
+
+                    <NavLink
+                      to="/dashboard/admin/llr-services"
+                      className="nav-link nav-child"
+                    >
                       LLR Services
                     </NavLink>
-                    
-                    <NavLink to="/dashboard/admin/llr-services/import" className="nav-link nav-child">
+
+                    <NavLink
+                      to="/dashboard/admin/llr-services/import"
+                      className="nav-link nav-child"
+                    >
                       Import Cases
                     </NavLink>
-                    
-                    
-                    <NavLink to="/dashboard/admin/institution-subscriptions" className="nav-link nav-child">
+
+                    <NavLink
+                      to="/dashboard/admin/institution-subscriptions"
+                      className="nav-link nav-child"
+                    >
                       Subscriptions
                     </NavLink>
 
                     <NavLink to="/dashboard/admin/trials" className="nav-link nav-child">
-                        Trials
-                   </NavLink>
+                      Trials
+                    </NavLink>
 
-                    <NavLink to="/dashboard/admin/institution-bundle-subscriptions" className="nav-link nav-child">
+                    <NavLink
+                      to="/dashboard/admin/institution-bundle-subscriptions"
+                      className="nav-link nav-child"
+                    >
                       Bundle
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/institution-admins" className="nav-link nav-child">
+                    <NavLink
+                      to="/dashboard/admin/institution-admins"
+                      className="nav-link nav-child"
+                    >
                       Institution Admins
                     </NavLink>
+
                     <NavLink to="/dashboard/admin/users" className="nav-link nav-child">
                       Users
                     </NavLink>

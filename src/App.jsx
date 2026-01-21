@@ -3,6 +3,7 @@ import { AuthProvider } from "./auth/AuthContext";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import AdminOrInstitutionAdminRoute from "./routes/AdminOrInstitutionAdminRoute";
 import AdminRoute from "./routes/AdminRoute";
+
 import AdminLLRImport from "./pages/dashboard/admin/AdminLLRImport";
 import LawReportReader from "./pages/dashboard/LawReportReader";
 import Login from "./pages/Login";
@@ -10,7 +11,7 @@ import Register from "./pages/Register";
 import TwoFactor from "./pages/TwoFactor";
 import TwoFactorSetup from "./pages/TwoFactorSetup";
 
-// ✅ NEW: Paystack return handler (public route)
+// ✅ Paystack return handler (public route)
 import PaystackReturn from "./pages/payments/PaystackReturn";
 import ResetPassword from "./pages/ResetPassword";
 
@@ -36,8 +37,7 @@ import Library from "./pages/dashboard/Library";
 import AdminTrials from "./pages/dashboard/admin/AdminTrials";
 import "./styles/lawAfricaBrand.css";
 
-
-// ✅ NEW: Switch Home -> Global Admin dashboard (charts) only for Global Admin
+// ✅ Home -> Global Admin dashboard (charts) only for Global Admin
 import GlobalAdminHomeSwitch from "./pages/dashboard/GlobalAdminHomeSwitch";
 
 import DocumentDetails from "./pages/documents/DocumentDetails";
@@ -45,6 +45,16 @@ import DocumentReader from "./pages/documents/DocumentReader";
 
 // ✅ Law Reports
 import LawReports from "./pages/dashboard/LawReports";
+
+// =====================
+// ✅ FINANCE (Admin-only)
+// =====================
+// Invoices pages (you already created these)
+import AdminInvoices from "./pages/dashboard/admin/AdminInvoices";
+import AdminInvoiceDetail from "./pages/dashboard/admin/AdminInvoiceDetail";
+import AdminInvoiceSettings from "./pages/dashboard/admin/AdminInvoiceSettings";
+import AdminPayments from "./pages/dashboard/admin/AdminPayments";
+
 
 export default function App() {
   return (
@@ -60,7 +70,7 @@ export default function App() {
           <Route path="/twofactor" element={<TwoFactor />} />
           <Route path="/twofactor-setup" element={<TwoFactorSetup />} />
 
-          {/* ✅ NEW: Paystack redirects here after payment */}
+          {/* ✅ Paystack redirects here after payment */}
           <Route path="/payments/paystack/return" element={<PaystackReturn />} />
 
           {/* ✅ OPTIONAL FRIENDLY ALIASES (protected) */}
@@ -148,6 +158,17 @@ export default function App() {
                 element={<AdminInstitutionUsers />}
               />
               <Route path="admin/users" element={<AdminUsers />} />
+
+              {/* ===================== */}
+              {/* ✅ FINANCE (Admin-only) */}
+              {/* ===================== */}
+              <Route path="admin/finance/invoices" element={<AdminInvoices />} />
+              <Route path="admin/finance/invoices/:id" element={<AdminInvoiceDetail />} />
+              <Route
+                path="admin/finance/invoice-settings"
+                element={<AdminInvoiceSettings />}
+              />
+              <Route path="admin/finance/payments" element={<AdminPayments />} />
             </Route>
 
             {/* Documents */}
