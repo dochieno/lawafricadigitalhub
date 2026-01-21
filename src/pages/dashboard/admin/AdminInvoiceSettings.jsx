@@ -5,10 +5,6 @@ import "../../../styles/adminCrud.css";
 import "../../../styles/invoice.css";
 import AdminPageFooter from "../../../components/AdminPageFooter";
 
-function cn(...classes) {
-  return classes.filter(Boolean).join(" ");
-}
-
 function buildAssetUrl(path) {
   if (!path) return null;
   const origin = String(API_BASE_URL || "").replace(/\/api\/?$/i, "");
@@ -18,7 +14,7 @@ function buildAssetUrl(path) {
 
 function Field({ label, hint, children }) {
   return (
-    <label className="field">
+    <label className="field field--nice">
       <div className="field__top">
         <span className="field__label">{label}</span>
         {hint ? <span className="field__hint">{hint}</span> : null}
@@ -123,10 +119,22 @@ export default function AdminInvoiceSettings() {
         </div>
 
         <div className="adminCrud__actionsRow">
-          <Link className="iconBtn" to="/dashboard/admin/invoices" title="Back to invoices" aria-label="Back">
+          <Link
+            className="iconBtn iconBtn--sm"
+            to="/dashboard/admin/finance/invoices"
+            title="Back to invoices"
+            aria-label="Back to invoices"
+          >
             ⬅️
           </Link>
-          <button className="iconBtn" onClick={save} disabled={saving} title="Save" aria-label="Save">
+
+          <button
+            className="iconBtn iconBtn--sm"
+            onClick={save}
+            disabled={saving}
+            title={saving ? "Saving..." : "Save"}
+            aria-label="Save"
+          >
             💾
           </button>
         </div>
@@ -136,10 +144,13 @@ export default function AdminInvoiceSettings() {
       {ok ? <div className="alert alert--ok">{ok}</div> : null}
       {loading ? <div className="alert alert--info">Loading settings…</div> : null}
 
-      <div className="card">
+      <div className="card invoiceCard">
         <div className="settingsGrid">
           <div className="settingsCol">
-            <h3 className="sectionTitle">Company</h3>
+            <div className="sectionHead">
+              <h3 className="sectionTitle">Company</h3>
+              <div className="sectionHint">Shown on every invoice header.</div>
+            </div>
 
             <Field label="Company Name">
               <input value={form.companyName || ""} onChange={(e) => set("companyName", e.target.value)} />
@@ -177,38 +188,51 @@ export default function AdminInvoiceSettings() {
               <input value={form.email || ""} onChange={(e) => set("email", e.target.value)} />
             </Field>
 
-            <h3 className="sectionTitle mt">Logo</h3>
+            <div className="sectionHead sectionHead--mt">
+              <h3 className="sectionTitle">Logo</h3>
+              <div className="sectionHint">Optional (PNG/JPG/WEBP).</div>
+            </div>
+
             <div className="logoRow">
               <div className="logoPreview">
                 {logoUrl ? <img src={logoUrl} alt="Invoice logo" /> : <div className="mutedSmall">No logo</div>}
               </div>
+
               <div className="logoActions">
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp"
                   onChange={(e) => uploadLogo(e.target.files?.[0])}
                 />
-                <div className="mutedSmall">PNG/JPG/WEBP, max 5MB.</div>
+                <div className="mutedSmall">Tip: use a transparent PNG for best results.</div>
               </div>
             </div>
           </div>
 
           <div className="settingsCol">
-            <h3 className="sectionTitle">Payment Details</h3>
+            <div className="sectionHead">
+              <h3 className="sectionTitle">Payment Details</h3>
+              <div className="sectionHint">Printed in the payment section.</div>
+            </div>
 
-            <Field label="Paybill Number">
-              <input value={form.paybillNumber || ""} onChange={(e) => set("paybillNumber", e.target.value)} />
-            </Field>
+            <div className="twoCols">
+              <Field label="Paybill Number">
+                <input value={form.paybillNumber || ""} onChange={(e) => set("paybillNumber", e.target.value)} />
+              </Field>
 
-            <Field label="Till Number">
-              <input value={form.tillNumber || ""} onChange={(e) => set("tillNumber", e.target.value)} />
-            </Field>
+              <Field label="Till Number">
+                <input value={form.tillNumber || ""} onChange={(e) => set("tillNumber", e.target.value)} />
+              </Field>
+            </div>
 
-            <Field label="Account Reference" hint="e.g. Your company name or invoice number rule">
+            <Field label="Account Reference" hint="e.g. Company name or invoice number rule">
               <input value={form.accountReference || ""} onChange={(e) => set("accountReference", e.target.value)} />
             </Field>
 
-            <h3 className="sectionTitle mt">Bank</h3>
+            <div className="sectionHead sectionHead--mt">
+              <h3 className="sectionTitle">Bank</h3>
+              <div className="sectionHint">Only if you accept bank payments.</div>
+            </div>
 
             <Field label="Bank Name">
               <input value={form.bankName || ""} onChange={(e) => set("bankName", e.target.value)} />
@@ -222,8 +246,12 @@ export default function AdminInvoiceSettings() {
               <input value={form.bankAccountNumber || ""} onChange={(e) => set("bankAccountNumber", e.target.value)} />
             </Field>
 
-            <h3 className="sectionTitle mt">Footer Notes</h3>
-            <Field label="Footer Notes" hint="Printed at the bottom of the invoice">
+            <div className="sectionHead sectionHead--mt">
+              <h3 className="sectionTitle">Footer Notes</h3>
+              <div className="sectionHint">Printed at the bottom of the invoice.</div>
+            </div>
+
+            <Field label="Footer Notes">
               <textarea
                 rows={5}
                 value={form.footerNotes || ""}
@@ -232,12 +260,12 @@ export default function AdminInvoiceSettings() {
               />
             </Field>
 
-            <div className="rowActions">
-              <button className="btnPrimary" onClick={save} disabled={saving}>
-                Save
+            <div className="rowActions rowActions--right">
+              <button className="btnPrimary btnPrimary--sm" onClick={save} disabled={saving}>
+                💾 Save
               </button>
-              <Link className="btnGhost" to="/dashboard/admin/invoices">
-                Back
+              <Link className="btnGhost btnGhost--sm" to="/dashboard/admin/finance/invoices">
+                ⬅ Back
               </Link>
             </div>
           </div>

@@ -1,13 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import api, { API_BASE_URL } from "../../../api/client";
+import api from "../../../api/client";
 import "../../../styles/adminCrud.css";
 import "../../../styles/invoice.css";
 import AdminPageFooter from "../../../components/AdminPageFooter";
-
-function cn(...classes) {
-  return classes.filter(Boolean).join(" ");
-}
 
 function fmtMoney(amount, currency = "KES") {
   const n = Number(amount || 0);
@@ -18,7 +14,7 @@ function fmtMoney(amount, currency = "KES") {
   }
 }
 
-function fmtDate(iso) {
+function fmtDateShort(iso) {
   if (!iso) return "-";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "-";
@@ -38,14 +34,6 @@ function statusPill(status) {
     void: "pill pill--danger",
   };
   return map[s] || "pill pill--muted";
-}
-
-// kept (may be used later)
-function buildLogoUrl(path) {
-  if (!path) return null;
-  const origin = String(API_BASE_URL || "").replace(/\/api\/?$/i, "");
-  const clean = String(path).replace(/^Storage\//i, "Storage/");
-  return `${origin}/${clean}`;
 }
 
 function clamp(n, min, max) {
@@ -73,16 +61,13 @@ export default function AdminInvoices() {
     setLoading(true);
     setErr("");
     try {
-      const params = {
-        page,
-        pageSize: data.pageSize,
-      };
+      const params = { page, pageSize: data.pageSize };
 
       if (q.trim()) params.q = q.trim();
       if (status) params.status = status;
       if (customer.trim()) params.customer = customer.trim();
 
-      // Keep your backend expectation: ISO utc
+      // Backend expects ISO UTC
       if (from) params.from = new Date(from).toISOString();
       if (to) params.to = new Date(to).toISOString();
 
@@ -125,7 +110,6 @@ export default function AdminInvoices() {
     return `Showing ${start}-${end} of ${total}`;
   }, [data]);
 
-  // Nice: press Enter in search/customer triggers apply
   function onKeyDownApply(e) {
     if (e.key === "Enter") onApplyFilters();
   }
@@ -140,7 +124,7 @@ export default function AdminInvoices() {
 
         <div className="adminCrud__actionsRow">
           <Link
-            className="iconBtn"
+            className="iconBtn iconBtn--sm"
             to="/dashboard/admin/finance/invoice-settings"
             title="Invoice Settings"
             aria-label="Invoice Settings"
@@ -150,7 +134,7 @@ export default function AdminInvoices() {
 
           <button
             type="button"
-            className="iconBtn"
+            className="iconBtn iconBtn--sm"
             onClick={() => load(data.page || 1)}
             title="Refresh"
             aria-label="Refresh"
@@ -161,8 +145,8 @@ export default function AdminInvoices() {
         </div>
       </div>
 
-      <div className="card">
-        {/* ===== Filters (compact, clean) ===== */}
+      <div className="card invoiceCard">
+        {/* ===== Filters ===== */}
         <div className="invoiceFilters">
           <div className="invoiceFilters__row">
             <div className="field">
@@ -171,7 +155,7 @@ export default function AdminInvoices() {
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 onKeyDown={onKeyDownApply}
-                placeholder="Invoice number, external ref, customer..."
+                placeholder="Invoice number, external ref, purpose..."
               />
             </div>
 
@@ -218,7 +202,8 @@ export default function AdminInvoices() {
                 title="Apply filters"
                 aria-label="Apply filters"
               >
-                ✅ Apply
+                ✅
+                <span className="btnSm__text">Apply</span>
               </button>
 
               <button
@@ -229,7 +214,8 @@ export default function AdminInvoices() {
                 title="Clear filters"
                 aria-label="Clear filters"
               >
-                🧹 Clear
+                🧹
+                <span className="btnSm__text">Clear</span>
               </button>
             </div>
           </div>
@@ -238,53 +224,53 @@ export default function AdminInvoices() {
         {err ? <div className="alert alert--danger">{err}</div> : null}
         {loading ? <div className="alert alert--info">Loading invoices…</div> : null}
 
-        {/* ===== Table ===== */}
+        {/* ===== Table (columns requested) ===== */}
         <div className="tableWrap">
-          <table className="adminTable">
+          <table className="adminTable adminTable--tight">
             <thead>
               <tr>
-                <th>Invoice</th>
-                <th>Status</th>
-                <th>Issued</th>
-                <th>Customer</th>
+                <th className="col-invno">Invoice No.</th>
+                <th className="col-date">Document Date</th>
+                <th className="col-customer">Customer Name</th>
+                <th className="col-status">Status</th>
                 <th>Purpose</th>
-                <th className="num">Total</th>
-                <th className="num">Paid</th>
-                <th className="actions">Actions</th>
+                <th className="num col-money">Invoice Amount</th>
+                <th className="num col-money">Paid Amount</th>
+                <th className="actions col-actions">Actions</th>
               </tr>
             </thead>
 
             <tbody>
               {(data?.items || []).map((x) => (
                 <tr key={x.id}>
-                  <td>
+                  <td className="col-invno">
                     <div className="stack">
                       <div className="strong">{x.invoiceNumber}</div>
                       <div className="muted">{x.currency}</div>
                     </div>
                   </td>
 
-                  <td>
-                    <span className={statusPill(x.status)}>{x.status}</span>
-                  </td>
+                  <td className="col-date">{fmtDateShort(x.issuedAt)}</td>
 
-                  <td>{fmtDate(x.issuedAt)}</td>
-
-                  <td>
+                  <td className="col-customer">
                     <div className="stack">
                       <div className="strong">{x.customerName || "-"}</div>
                       <div className="muted">{x.customerType || "-"}</div>
                     </div>
                   </td>
 
+                  <td className="col-status">
+                    <span className={statusPill(x.status)}>{x.status}</span>
+                  </td>
+
                   <td className="cellClamp" title={x.purpose || ""}>
                     {x.purpose}
                   </td>
 
-                  <td className="num">{fmtMoney(x.total, x.currency)}</td>
-                  <td className="num">{fmtMoney(x.amountPaid, x.currency)}</td>
+                  <td className="num col-money">{fmtMoney(x.total, x.currency)}</td>
+                  <td className="num col-money">{fmtMoney(x.amountPaid, x.currency)}</td>
 
-                  <td className="actions">
+                  <td className="actions col-actions">
                     <div className="iconRow">
                       <Link
                         className="iconBtn iconBtn--sm"
