@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../../../api/client";
 import "../../../styles/adminCrud.css";
 import "../../../styles/invoice.css";
@@ -60,12 +60,7 @@ function Pager({ page, pageSize, totalCount, loading, onPage }) {
   return (
     <div className="pager pager--compact">
       <div className="pagerBtns pagerBtns--compact">
-        <button
-          className="btnSm"
-          disabled={!canPrev}
-          onClick={() => onPage(page - 1)}
-          title="Previous page"
-        >
+        <button className="btnSm" disabled={!canPrev} onClick={() => onPage(page - 1)} title="Previous page">
           ‹ <span className="btnSm__text">Previous</span>
         </button>
 
@@ -73,12 +68,7 @@ function Pager({ page, pageSize, totalCount, loading, onPage }) {
           <b>{page}</b> of <b>{pageCount}</b>
         </div>
 
-        <button
-          className="btnSm"
-          disabled={!canNext}
-          onClick={() => onPage(page + 1)}
-          title="Next page"
-        >
+        <button className="btnSm" disabled={!canNext} onClick={() => onPage(page + 1)} title="Next page">
           <span className="btnSm__text">Next</span> ›
         </button>
       </div>
@@ -93,7 +83,10 @@ function Pager({ page, pageSize, totalCount, loading, onPage }) {
 export default function AdminPayments() {
   const [tab, setTab] = useState("intents"); // intents | transactions | webhooks
 
+  // Search is debounced: qUi updates immediately, q is committed after delay
+  const [qUi, setQUi] = useState("");
   const [q, setQ] = useState("");
+
   const [provider, setProvider] = useState("");
   const [status, setStatus] = useState("");
   const [from, setFrom] = useState("");
@@ -177,23 +170,65 @@ export default function AdminPayments() {
     }
   }
 
+  // Reset + load on tab change (existing behavior)
   useEffect(() => {
     setPage(1);
     load(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
+  /* =========================
+     Debounced search
+     - User types into qUi
+     - After delay, commit q and trigger load(1)
+  ========================= */
+  const debounceRef = useRef(null);
+  const lastCommittedRef = useRef("");
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    debounceRef.current = setTimeout(() => {
+      const next = qUi;
+      if (next !== lastCommittedRef.current) {
+        lastCommittedRef.current = next;
+        setQ(next);
+        load(1);
+      }
+    }, 450);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qUi]);
+
   function apply() {
+    // Flush pending debounce immediately before applying
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    lastCommittedRef.current = qUi;
+    setQ(qUi);
     load(1);
   }
 
   function clear() {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    lastCommittedRef.current = "";
+    setQUi("");
     setQ("");
     setProvider("");
     setStatus("");
     setFrom("");
     setTo("");
     setTimeout(() => load(1), 0);
+  }
+
+  // Enter key handler for search/date inputs
+  function onEnterApply(e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      apply();
+    }
   }
 
   return (
@@ -218,20 +253,40 @@ export default function AdminPayments() {
       </div>
 
       <div className="card">
-        {/* Tabs */}
-        <div className="tabsRow">
-          <button className={cn("tabBtn", tab === "intents" && "active")} onClick={() => setTab("intents")}>
+        {/* Tabs (single row + small buttons) */}
+        <div className="tabsRow tabsRow--compact" role="tablist" aria-label="Payments tabs">
+          <button
+            role="tab"
+            aria-selected={tab === "intents"}
+            className={cn("tabBtn", "tabBtn--sm", tab === "intents" && "active")}
+            onClick={() => setTab("intents")}
+            type="button"
+          >
             Payment Intents
           </button>
-          <button className={cn("tabBtn", tab === "transactions" && "active")} onClick={() => setTab("transactions")}>
+
+          <button
+            role="tab"
+            aria-selected={tab === "transactions"}
+            className={cn("tabBtn", "tabBtn--sm", tab === "transactions" && "active")}
+            onClick={() => setTab("transactions")}
+            type="button"
+          >
             Transactions
           </button>
-          <button className={cn("tabBtn", tab === "webhooks" && "active")} onClick={() => setTab("webhooks")}>
+
+          <button
+            role="tab"
+            aria-selected={tab === "webhooks"}
+            className={cn("tabBtn", "tabBtn--sm", tab === "webhooks" && "active")}
+            onClick={() => setTab("webhooks")}
+            type="button"
+          >
             Webhooks
           </button>
         </div>
 
-        {/* Toolbar (subscriptions-like layout) */}
+        {/* Toolbar */}
         <div className="paymentsToolbar">
           {/* Row 1 */}
           <div className="paymentsToolbarRow">
@@ -239,8 +294,9 @@ export default function AdminPayments() {
               <div className="toolbarField toolbarField--search">
                 <label>Search</label>
                 <input
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
+                  value={qUi}
+                  onChange={(e) => setQUi(e.target.value)}
+                  onKeyDown={onEnterApply}
                   placeholder="Reference, txn id, invoice id…"
                 />
               </div>
@@ -289,11 +345,11 @@ export default function AdminPayments() {
             <div className="paymentsToolbarLeft">
               <div className="toolbarField toolbarField--compact">
                 <label>From</label>
-                <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+                <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} onKeyDown={onEnterApply} />
               </div>
               <div className="toolbarField toolbarField--compact">
                 <label>To</label>
-                <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+                <input type="date" value={to} onChange={(e) => setTo(e.target.value)} onKeyDown={onEnterApply} />
               </div>
             </div>
 

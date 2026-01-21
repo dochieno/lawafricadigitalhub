@@ -1164,3 +1164,55 @@
     margin: 12mm;
   }
 }
+/* =========================
+   Payments tabs: single row + visible + smaller
+========================= */
+.adminCrud.paymentsPage .tabsRow.tabsRow--compact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: nowrap;          /* single row */
+  overflow-x: auto;           /* if small screen, allow scroll */
+  -webkit-overflow-scrolling: touch;
+
+  padding: 10px;
+  margin-bottom: 12px;
+
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* Smaller tab buttons with strong contrast */
+.adminCrud.paymentsPage .tabBtn.tabBtn--sm {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+
+  font-size: 12px;
+  font-weight: 900;
+
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.02);
+  color: #0f172a;             /* ensure visible text */
+  white-space: nowrap;
+}
+
+.adminCrud.paymentsPage .tabBtn.tabBtn--sm:hover {
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.adminCrud.paymentsPage .tabBtn.tabBtn--sm.active {
+  background: rgba(112, 40, 64, 0.92);
+  border-color: rgba(112, 40, 64, 0.55);
+  color: #ffffff;
+  box-shadow: 0 6px 18px rgba(112, 40, 64, 0.22);
+}
+
+/* On very small screens, align left so it doesn't look empty */
+@media (max-width: 680px) {
+  .adminCrud.paymentsPage .tabsRow.tabsRow--compact {
+    justify-content: flex-start;
+  }
+}
