@@ -1,3 +1,4 @@
+// src/pages/dashboard/admin/AdminInvoiceDetail.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import api, { API_BASE_URL } from "../../../api/client";
@@ -116,30 +117,41 @@ export default function AdminInvoiceDetail() {
     return total - paid;
   }, [inv]);
 
+  const isPaid = useMemo(() => {
+    const s = String(inv?.status || "").toLowerCase();
+    if (s === "paid") return true;
+    if (s === "void" || s === "draft" || s === "issued" || s === "partiallypaid") return false;
+    // fallback: treat as paid if no balance
+    return balance <= 0;
+  }, [inv, balance]);
+
   return (
     <div className="adminCrud">
       {/* ===== Header (No print) ===== */}
       <div className="adminCrud__header noPrint">
         <div>
           <h1 className="adminCrud__title">
-            Invoice <span className="invTitleStrong">{inv?.invoiceNumber || (loading ? "…" : "")}</span>
+            Invoice{" "}
+            <span className={isPaid ? "invTitleStrong invTitleStrong--paid" : "invTitleStrong invTitleStrong--unpaid"}>
+              {inv?.invoiceNumber || (loading ? "…" : "")}
+            </span>
           </h1>
           <p className="adminCrud__sub">Print-ready preview. Use browser print to download PDF.</p>
         </div>
 
         <div className="adminCrud__actionsRow">
           <Link
-            className="iconBtn iconBtn--sm"
+            className="iconBtn iconBtn--sm iconBtn--neutral"
             to="/dashboard/admin/finance/invoices"
             title="Back to invoices"
             aria-label="Back to invoices"
           >
-            ⬅️
+            ←
           </Link>
 
           <button
             type="button"
-            className="iconBtn iconBtn--sm"
+            className="iconBtn iconBtn--sm iconBtn--neutral"
             onClick={() => window.print()}
             title="Print / Download PDF"
             aria-label="Print / Download PDF"
@@ -150,17 +162,17 @@ export default function AdminInvoiceDetail() {
 
           <button
             type="button"
-            className="iconBtn iconBtn--sm"
+            className="iconBtn iconBtn--sm iconBtn--neutral"
             onClick={copyInvoiceNumber}
             title={copied ? "Copied!" : "Copy invoice number"}
             aria-label="Copy invoice number"
             disabled={!inv?.invoiceNumber}
           >
-            {copied ? "✅" : "📋"}
+            {copied ? "✓" : "📋"}
           </button>
 
           <Link
-            className="iconBtn iconBtn--sm"
+            className="iconBtn iconBtn--sm iconBtn--neutral"
             to="/dashboard/admin/finance/invoice-settings"
             title="Invoice Settings"
             aria-label="Invoice Settings"
@@ -175,7 +187,7 @@ export default function AdminInvoiceDetail() {
 
       {inv ? (
         <div className="invoicePage">
-          {/* ===== Summary row (your requested columns) ===== */}
+          {/* ===== Summary row (columns you requested) ===== */}
           <div className="invoiceSummary noPrint">
             <div className="sumItem">
               <div className="sumK">Invoice No.</div>
@@ -195,12 +207,14 @@ export default function AdminInvoiceDetail() {
 
             <div className="sumItem">
               <div className="sumK">Status</div>
-              <div className="sumV">{inv.status}</div>
+              <div className={isPaid ? "sumV sumV--paid" : "sumV sumV--unpaid"}>{inv.status}</div>
             </div>
 
             <div className="sumItem sumItem--wide">
               <div className="sumK">Purpose</div>
-              <div className="sumV sumClamp" title={inv.purpose || ""}>{inv.purpose || "-"}</div>
+              <div className="sumV sumClamp" title={inv.purpose || ""}>
+                {inv.purpose || "-"}
+              </div>
             </div>
 
             <div className="sumItem">
@@ -217,7 +231,7 @@ export default function AdminInvoiceDetail() {
             </div>
           </div>
 
-          {/* ===== Paper (full width, centered max) ===== */}
+          {/* ===== Paper ===== */}
           <div className="invoicePaperWrap">
             <div className="invoicePaper invoicePaper--wide" ref={printRef}>
               {/* Header */}
@@ -231,7 +245,7 @@ export default function AdminInvoiceDetail() {
                     <div className="brandMeta">
                       {company.addressLine1 ? <div>{company.addressLine1}</div> : null}
                       {company.addressLine2 ? <div>{company.addressLine2}</div> : null}
-                      {(company.city || company.country) ? (
+                      {company.city || company.country ? (
                         <div>{[company.city, company.country].filter(Boolean).join(", ")}</div>
                       ) : null}
 
@@ -299,9 +313,7 @@ export default function AdminInvoiceDetail() {
                     <div className="mutedSmall">External Ref: {inv.externalInvoiceNumber}</div>
                   ) : null}
 
-                  {inv.paidAt ? (
-                    <div className="mutedSmall">Paid At: {fmtDateLong(inv.paidAt)}</div>
-                  ) : null}
+                  {inv.paidAt ? <div className="mutedSmall">Paid At: {fmtDateLong(inv.paidAt)}</div> : null}
                 </div>
               </div>
 
@@ -419,10 +431,7 @@ export default function AdminInvoiceDetail() {
                       </div>
                     ) : null}
 
-                    {!company.paybillNumber &&
-                    !company.tillNumber &&
-                    !company.bankName &&
-                    !company.bankAccountNumber ? (
+                    {!company.paybillNumber && !company.tillNumber && !company.bankName && !company.bankAccountNumber ? (
                       <div className="mutedSmall">Set payment details in Invoice Settings.</div>
                     ) : null}
                   </div>

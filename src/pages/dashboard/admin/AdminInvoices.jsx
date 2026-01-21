@@ -1,3 +1,4 @@
+// src/pages/dashboard/admin/AdminInvoices.jsx
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../../api/client";
@@ -14,7 +15,7 @@ function fmtMoney(amount, currency = "KES") {
   }
 }
 
-function fmtDateShort(iso) {
+function fmtDate(iso) {
   if (!iso) return "-";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "-";
@@ -66,8 +67,6 @@ export default function AdminInvoices() {
       if (q.trim()) params.q = q.trim();
       if (status) params.status = status;
       if (customer.trim()) params.customer = customer.trim();
-
-      // Backend expects ISO UTC
       if (from) params.from = new Date(from).toISOString();
       if (to) params.to = new Date(to).toISOString();
 
@@ -124,7 +123,7 @@ export default function AdminInvoices() {
 
         <div className="adminCrud__actionsRow">
           <Link
-            className="iconBtn iconBtn--sm"
+            className="iconBtn iconBtn--sm iconBtn--neutral"
             to="/dashboard/admin/finance/invoice-settings"
             title="Invoice Settings"
             aria-label="Invoice Settings"
@@ -134,7 +133,7 @@ export default function AdminInvoices() {
 
           <button
             type="button"
-            className="iconBtn iconBtn--sm"
+            className="iconBtn iconBtn--sm iconBtn--neutral"
             onClick={() => load(data.page || 1)}
             title="Refresh"
             aria-label="Refresh"
@@ -146,134 +145,131 @@ export default function AdminInvoices() {
       </div>
 
       <div className="card invoiceCard">
-        {/* ===== Filters ===== */}
-        <div className="invoiceFilters">
-          <div className="invoiceFilters__row">
-            <div className="field">
-              <label>Search</label>
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                onKeyDown={onKeyDownApply}
-                placeholder="Invoice number, external ref, purpose..."
-              />
-            </div>
-
-            <div className="field">
-              <label>Status</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="">All</option>
-                <option value="Draft">Draft</option>
-                <option value="Issued">Issued</option>
-                <option value="PartiallyPaid">PartiallyPaid</option>
-                <option value="Paid">Paid</option>
-                <option value="Void">Void</option>
-              </select>
-            </div>
-
-            <div className="field">
-              <label>Customer</label>
-              <input
-                value={customer}
-                onChange={(e) => setCustomer(e.target.value)}
-                onKeyDown={onKeyDownApply}
-                placeholder="Name/email fragment..."
-              />
-            </div>
+        {/* ===== Filters (aligned) ===== */}
+        <div className="invoiceFilters invoiceFilters--aligned">
+          <div className="field">
+            <label>Search</label>
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={onKeyDownApply}
+              placeholder="Invoice number, external ref, purpose..."
+            />
           </div>
 
-          <div className="invoiceFilters__row invoiceFilters__row--tight">
-            <div className="field">
-              <label>From</label>
-              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-            </div>
+          <div className="field">
+            <label>Status</label>
+            <select value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">All</option>
+              <option value="Draft">Draft</option>
+              <option value="Issued">Issued</option>
+              <option value="PartiallyPaid">PartiallyPaid</option>
+              <option value="Paid">Paid</option>
+              <option value="Void">Void</option>
+            </select>
+          </div>
 
-            <div className="field">
-              <label>To</label>
-              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-            </div>
+          <div className="field">
+            <label>Customer</label>
+            <input
+              value={customer}
+              onChange={(e) => setCustomer(e.target.value)}
+              onKeyDown={onKeyDownApply}
+              placeholder="Name/email fragment..."
+            />
+          </div>
 
-            <div className="invoiceFilters__actions">
-              <button
-                type="button"
-                className="btnSm btnSm--primary"
-                onClick={onApplyFilters}
-                disabled={loading}
-                title="Apply filters"
-                aria-label="Apply filters"
-              >
-                ✅
-                <span className="btnSm__text">Apply</span>
-              </button>
+          <div className="field">
+            <label>From</label>
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </div>
 
-              <button
-                type="button"
-                className="btnSm"
-                onClick={onClear}
-                disabled={loading}
-                title="Clear filters"
-                aria-label="Clear filters"
-              >
-                🧹
-                <span className="btnSm__text">Clear</span>
-              </button>
-            </div>
+          <div className="field">
+            <label>To</label>
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+
+          <div className="invoiceFilters__actions invoiceFilters__actions--flush">
+            <button
+              type="button"
+              className="btnSm btnSm--primary"
+              onClick={onApplyFilters}
+              disabled={loading}
+              title="Apply filters"
+              aria-label="Apply filters"
+            >
+              ✅ Apply
+            </button>
+
+            <button
+              type="button"
+              className="btnSm"
+              onClick={onClear}
+              disabled={loading}
+              title="Clear filters"
+              aria-label="Clear filters"
+            >
+              🧹 Clear
+            </button>
           </div>
         </div>
 
         {err ? <div className="alert alert--danger">{err}</div> : null}
         {loading ? <div className="alert alert--info">Loading invoices…</div> : null}
 
-        {/* ===== Table (columns requested) ===== */}
-        <div className="tableWrap">
-          <table className="adminTable adminTable--tight">
+        {/* ===== Table ===== */}
+        <div className="tableWrap tableWrap--full">
+          <table className="adminTable adminTable--stickyHead">
             <thead>
               <tr>
-                <th className="col-invno">Invoice No.</th>
-                <th className="col-date">Document Date</th>
-                <th className="col-customer">Customer Name</th>
-                <th className="col-status">Status</th>
+                <th>Invoice No.</th>
+                <th>Document Date</th>
+                <th>Customer Name</th>
+                <th>Status</th>
                 <th>Purpose</th>
-                <th className="num col-money">Invoice Amount</th>
-                <th className="num col-money">Paid Amount</th>
-                <th className="actions col-actions">Actions</th>
+                <th className="num">Currency</th>
+                <th className="num">Invoice Amount</th>
+                <th className="num">Paid Amount</th>
+                <th className="actions">Actions</th>
               </tr>
             </thead>
 
             <tbody>
               {(data?.items || []).map((x) => (
                 <tr key={x.id}>
-                  <td className="col-invno">
+                  <td>
                     <div className="stack">
                       <div className="strong">{x.invoiceNumber}</div>
-                      <div className="muted">{x.currency}</div>
                     </div>
                   </td>
 
-                  <td className="col-date">{fmtDateShort(x.issuedAt)}</td>
+                  <td>{fmtDate(x.issuedAt)}</td>
 
-                  <td className="col-customer">
+                  <td>
                     <div className="stack">
                       <div className="strong">{x.customerName || "-"}</div>
                       <div className="muted">{x.customerType || "-"}</div>
                     </div>
                   </td>
 
-                  <td className="col-status">
+                  <td>
                     <span className={statusPill(x.status)}>{x.status}</span>
                   </td>
 
                   <td className="cellClamp" title={x.purpose || ""}>
-                    {x.purpose}
+                    {x.purpose || "-"}
                   </td>
 
-                  <td className="num col-money">{fmtMoney(x.total, x.currency)}</td>
-                  <td className="num col-money">{fmtMoney(x.amountPaid, x.currency)}</td>
+                  <td className="num">{x.currency || "KES"}</td>
 
-                  <td className="actions col-actions">
+                  <td className="num">{fmtMoney(x.total, x.currency)}</td>
+
+                  <td className="num">{fmtMoney(x.amountPaid, x.currency)}</td>
+
+                  <td className="actions">
                     <div className="iconRow">
                       <Link
-                        className="iconBtn iconBtn--sm"
+                        className="iconBtn iconBtn--sm iconBtn--neutral"
                         to={`/dashboard/admin/finance/invoices/${x.id}`}
                         title="Open invoice"
                         aria-label="Open invoice"
@@ -282,7 +278,7 @@ export default function AdminInvoices() {
                       </Link>
 
                       <Link
-                        className="iconBtn iconBtn--sm"
+                        className="iconBtn iconBtn--sm iconBtn--neutral"
                         to={`/dashboard/admin/finance/invoices/${x.id}?print=1`}
                         title="Open & print"
                         aria-label="Open & print"
@@ -296,7 +292,7 @@ export default function AdminInvoices() {
 
               {!loading && (data?.items || []).length === 0 ? (
                 <tr>
-                  <td colSpan={8}>
+                  <td colSpan={9}>
                     <div className="emptyState">No invoices found.</div>
                   </td>
                 </tr>
@@ -305,7 +301,7 @@ export default function AdminInvoices() {
           </table>
         </div>
 
-        {/* ===== Pager (First/Prev/Page/Next/Last) ===== */}
+        {/* ===== Pager ===== */}
         <div className="pager pager--compact">
           <div className="muted">{pageLabel}</div>
 

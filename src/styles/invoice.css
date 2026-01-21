@@ -581,3 +581,143 @@
     margin: 12mm;
   }
 }
+
+/* ===== Header invoice number styling (smaller + status color) ===== */
+.invTitleStrong {
+  font-weight: 900;
+  font-size: 0.92em; /* reduce size vs the H1 */
+  letter-spacing: 0.2px;
+}
+
+.invTitleStrong--paid {
+  color: #16a34a; /* green */
+}
+
+.invTitleStrong--unpaid {
+  color: #dc2626; /* red */
+}
+
+/* ===== Make header icons neutral (remove red backgrounds) ===== */
+.iconBtn--neutral {
+  background: rgba(148, 163, 184, 0.10) !important;
+  border: 1px solid rgba(148, 163, 184, 0.35) !important;
+  color: inherit !important;
+}
+
+.iconBtn--neutral:hover {
+  background: rgba(148, 163, 184, 0.16) !important;
+  border-color: rgba(148, 163, 184, 0.45) !important;
+}
+
+/* If any icon buttons were inheriting "danger" styles from invoice.css/adminCrud.css */
+.iconBtn--neutral:focus-visible {
+  outline: 2px solid rgba(100, 116, 139, 0.45);
+  outline-offset: 2px;
+}
+
+/* ===== Optional: make summary status also reflect paid/unpaid ===== */
+.sumV--paid {
+  font-weight: 800;
+  color: #16a34a;
+}
+.sumV--unpaid {
+  font-weight: 800;
+  color: #dc2626;
+}
+
+.iconBtn--neutral {
+  background: rgba(148, 163, 184, 0.10) !important;
+  border: 1px solid rgba(148, 163, 184, 0.35) !important;
+  color: inherit !important;
+}
+.iconBtn--neutral:hover {
+  background: rgba(148, 163, 184, 0.16) !important;
+  border-color: rgba(148, 163, 184, 0.45) !important;
+}
+.iconBtn--neutral:focus-visible {
+  outline: 2px solid rgba(100, 116, 139, 0.45);
+  outline-offset: 2px;
+}
+
+/* ===== Make the invoices card/table use the window nicely ===== */
+.invoiceCard {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Filters: single grid, aligned + actions right */
+.invoiceFilters--aligned {
+  display: grid;
+  grid-template-columns: 1.6fr 0.9fr 1.2fr 0.85fr 0.85fr auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+
+.invoiceFilters__actions--flush {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  align-items: center;
+  padding-bottom: 2px; /* align with inputs */
+}
+
+/* Responsive: stack nicely */
+@media (max-width: 1100px) {
+  .invoiceFilters--aligned {
+    grid-template-columns: 1fr 1fr;
+  }
+  .invoiceFilters__actions--flush {
+    justify-content: flex-start;
+  }
+}
+
+.tableWrap--full {
+  width: 100%;
+  overflow: auto;
+  border-radius: 14px;
+}
+
+/* ===== Header row highlight + sticky ===== */
+.adminTable--stickyHead thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: rgba(148, 163, 184, 0.14);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+  font-weight: 800;
+}
+
+/* Slight row separation for readability */
+.adminTable--stickyHead tbody tr:hover td {
+  background: rgba(148, 163, 184, 0.08);
+}
+
+/* Clamp long purpose */
+.cellClamp {
+  max-width: 340px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Make small buttons consistent if not already present */
+.btnSm {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  line-height: 1;
+}
+.btnSm:hover {
+  background: rgba(148, 163, 184, 0.12);
+}
+.btnSm:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.btnSm--primary {
+  border-color: rgba(34, 197, 94, 0.45);
+  background: rgba(34, 197, 94, 0.14);
+}
