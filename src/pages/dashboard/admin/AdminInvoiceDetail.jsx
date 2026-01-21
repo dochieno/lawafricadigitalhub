@@ -13,12 +13,14 @@ function fmtMoney(amount, currency = "KES") {
     return `${currency} ${n.toFixed(2)}`;
   }
 }
+
 function fmtDateLong(iso) {
   if (!iso) return "-";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "-";
   return d.toLocaleString();
 }
+
 function fmtDateShort(iso) {
   if (!iso) return "-";
   const d = new Date(iso);
@@ -28,11 +30,34 @@ function fmtDateShort(iso) {
   const yy = String(d.getFullYear()).slice(-2);
   return `${dd}-${mm}-${yy}`;
 }
+
 function buildAssetUrl(path) {
   if (!path) return null;
   const origin = String(API_BASE_URL || "").replace(/\/api\/?$/i, "");
   const clean = String(path).replace(/^Storage\//i, "Storage/");
   return `${origin}/${clean}`;
+}
+
+async function safeCopy(text) {
+  try {
+    await navigator.clipboard.writeText(String(text || ""));
+    return true;
+  } catch {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = String(text || "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
 }
 
 export default function AdminInvoiceDetail() {
@@ -43,6 +68,7 @@ export default function AdminInvoiceDetail() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [inv, setInv] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   const shouldAutoPrint = useMemo(() => {
     const qs = new URLSearchParams(location.search);
@@ -74,27 +100,65 @@ export default function AdminInvoiceDetail() {
     return () => clearTimeout(t);
   }, [inv, shouldAutoPrint]);
 
+  async function copyInvoiceNumber() {
+    if (!inv?.invoiceNumber) return;
+    const ok = await safeCopy(inv.invoiceNumber);
+    setCopied(ok);
+    setTimeout(() => setCopied(false), 1200);
+  }
+
   const company = inv?.company || {};
   const logoUrl = buildAssetUrl(company.logoPath);
 
   return (
     <div className="adminCrud">
+      {/* ===== Header (No print) ===== */}
       <div className="adminCrud__header noPrint">
         <div>
-          <h1 className="adminCrud__title">Invoice {inv?.invoiceNumber || ""}</h1>
+          <h1 className="adminCrud__title">
+            Invoice{" "}
+            <span style={{ fontWeight: 800 }}>
+              {inv?.invoiceNumber || (loading ? "…" : "")}
+            </span>
+          </h1>
           <p className="adminCrud__sub">Print-ready preview. Use browser print to download PDF.</p>
         </div>
 
         <div className="adminCrud__actionsRow">
-          <Link className="iconBtn" to="/dashboard/admin/invoices" title="Back" aria-label="Back">
+          <Link
+            className="iconBtn iconBtn--sm"
+            to="/dashboard/admin/finance/invoices"
+            title="Back to invoices"
+            aria-label="Back to invoices"
+          >
             ⬅️
           </Link>
-          <button className="iconBtn" onClick={() => window.print()} title="Print / Download PDF" aria-label="Print">
+
+          <button
+            type="button"
+            className="iconBtn iconBtn--sm"
+            onClick={() => window.print()}
+            title="Print / Download PDF"
+            aria-label="Print / Download PDF"
+            disabled={loading || !inv}
+          >
             🖨️
           </button>
+
+          <button
+            type="button"
+            className="iconBtn iconBtn--sm"
+            onClick={copyInvoiceNumber}
+            title={copied ? "Copied!" : "Copy invoice number"}
+            aria-label="Copy invoice number"
+            disabled={!inv?.invoiceNumber}
+          >
+            {copied ? "✅" : "📋"}
+          </button>
+
           <Link
-            className="iconBtn"
-            to="/dashboard/admin/invoice-settings"
+            className="iconBtn iconBtn--sm"
+            to="/dashboard/admin/finance/invoice-settings"
             title="Invoice Settings"
             aria-label="Invoice Settings"
           >
@@ -113,14 +177,18 @@ export default function AdminInvoiceDetail() {
             <div className="invoiceHeader">
               <div className="brandBlock">
                 {logoUrl ? <img className="brandLogo" src={logoUrl} alt="Company logo" /> : null}
+
                 <div className="brandText">
                   <div className="brandName">{company.companyName || "Company"}</div>
+
                   <div className="brandMeta">
                     {company.addressLine1 ? <div>{company.addressLine1}</div> : null}
                     {company.addressLine2 ? <div>{company.addressLine2}</div> : null}
-                    <div>
-                      {[company.city, company.country].filter(Boolean).join(", ")}
-                    </div>
+
+                    {(company.city || company.country) ? (
+                      <div>{[company.city, company.country].filter(Boolean).join(", ")}</div>
+                    ) : null}
+
                     <div className="brandRow">
                       {company.vatOrPin ? <span>VAT/PIN: {company.vatOrPin}</span> : null}
                       {company.email ? <span>Email: {company.email}</span> : null}
@@ -132,23 +200,28 @@ export default function AdminInvoiceDetail() {
 
               <div className="invoiceMeta">
                 <div className="invoiceTitle">INVOICE</div>
+
                 <div className="metaTable">
                   <div className="metaRow">
                     <div className="k">Invoice No</div>
                     <div className="v">{inv.invoiceNumber}</div>
                   </div>
+
                   <div className="metaRow">
                     <div className="k">Status</div>
                     <div className="v">{inv.status}</div>
                   </div>
+
                   <div className="metaRow">
                     <div className="k">Issued</div>
                     <div className="v">{fmtDateShort(inv.issuedAt)}</div>
                   </div>
+
                   <div className="metaRow">
                     <div className="k">Due</div>
                     <div className="v">{inv.dueAt ? fmtDateShort(inv.dueAt) : "-"}</div>
                   </div>
+
                   <div className="metaRow">
                     <div className="k">Currency</div>
                     <div className="v">{inv.currency}</div>
@@ -162,6 +235,7 @@ export default function AdminInvoiceDetail() {
               <div>
                 <div className="sectionLabel">Bill To</div>
                 <div className="billName">{inv.customerName || "-"}</div>
+
                 <div className="billMeta">
                   {inv.customerType ? <div>{inv.customerType}</div> : null}
                   {inv.customerEmail ? <div>{inv.customerEmail}</div> : null}
@@ -174,9 +248,11 @@ export default function AdminInvoiceDetail() {
               <div className="purposeBox">
                 <div className="sectionLabel">Purpose</div>
                 <div className="purposeText">{inv.purpose}</div>
+
                 {inv.externalInvoiceNumber ? (
                   <div className="mutedSmall">External Ref: {inv.externalInvoiceNumber}</div>
                 ) : null}
+
                 {inv.paidAt ? (
                   <div className="mutedSmall">Paid At: {fmtDateLong(inv.paidAt)}</div>
                 ) : null}
@@ -197,6 +273,7 @@ export default function AdminInvoiceDetail() {
                     <th className="num">Total</th>
                   </tr>
                 </thead>
+
                 <tbody>
                   {(inv.lines || []).map((l, idx) => (
                     <tr key={idx}>
@@ -204,6 +281,7 @@ export default function AdminInvoiceDetail() {
                         <div className="strong">{l.description}</div>
                         {l.itemCode ? <div className="mutedSmall">Code: {l.itemCode}</div> : null}
                       </td>
+
                       <td className="num">{Number(l.quantity || 0).toFixed(2)}</td>
                       <td className="num">{fmtMoney(l.unitPrice, inv.currency)}</td>
                       <td className="num">{fmtMoney(l.lineSubtotal, inv.currency)}</td>
@@ -212,6 +290,14 @@ export default function AdminInvoiceDetail() {
                       <td className="num">{fmtMoney(l.lineTotal, inv.currency)}</td>
                     </tr>
                   ))}
+
+                  {(inv.lines || []).length === 0 ? (
+                    <tr>
+                      <td colSpan={7}>
+                        <div className="mutedSmall">No invoice line items.</div>
+                      </td>
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>
@@ -223,30 +309,38 @@ export default function AdminInvoiceDetail() {
                   <div className="k">Subtotal</div>
                   <div className="v">{fmtMoney(inv.subtotal, inv.currency)}</div>
                 </div>
+
                 <div className="tRow">
                   <div className="k">Tax</div>
                   <div className="v">{fmtMoney(inv.taxTotal, inv.currency)}</div>
                 </div>
+
                 <div className="tRow">
                   <div className="k">Discount</div>
                   <div className="v">{fmtMoney(inv.discountTotal, inv.currency)}</div>
                 </div>
+
                 <div className="tRow tRow--grand">
                   <div className="k">Total</div>
                   <div className="v">{fmtMoney(inv.total, inv.currency)}</div>
                 </div>
+
                 <div className="tRow">
                   <div className="k">Amount Paid</div>
                   <div className="v">{fmtMoney(inv.amountPaid, inv.currency)}</div>
                 </div>
+
                 <div className="tRow tRow--due">
                   <div className="k">Balance</div>
-                  <div className="v">{fmtMoney((inv.total || 0) - (inv.amountPaid || 0), inv.currency)}</div>
+                  <div className="v">
+                    {fmtMoney((inv.total || 0) - (inv.amountPaid || 0), inv.currency)}
+                  </div>
                 </div>
               </div>
 
               <div className="payBox">
                 <div className="sectionLabel">Payment Details</div>
+
                 <div className="payGrid">
                   {company.paybillNumber ? (
                     <div>
@@ -272,14 +366,19 @@ export default function AdminInvoiceDetail() {
                   {company.bankName || company.bankAccountNumber ? (
                     <div className="payFull">
                       <div className="mutedSmall">Bank</div>
-                      <div className="strong">{[company.bankName, company.bankAccountName].filter(Boolean).join(" — ")}</div>
+                      <div className="strong">
+                        {[company.bankName, company.bankAccountName].filter(Boolean).join(" — ")}
+                      </div>
                       {company.bankAccountNumber ? (
                         <div className="mutedSmall">A/C: {company.bankAccountNumber}</div>
                       ) : null}
                     </div>
                   ) : null}
 
-                  {!company.paybillNumber && !company.tillNumber && !company.bankName && !company.bankAccountNumber ? (
+                  {!company.paybillNumber &&
+                  !company.tillNumber &&
+                  !company.bankName &&
+                  !company.bankAccountNumber ? (
                     <div className="mutedSmall">Set payment details in Invoice Settings.</div>
                   ) : null}
                 </div>

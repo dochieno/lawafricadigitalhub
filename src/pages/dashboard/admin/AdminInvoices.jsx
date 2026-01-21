@@ -22,7 +22,6 @@ function fmtDate(iso) {
   if (!iso) return "-";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "-";
-  // dd-mm-yy
   const dd = String(d.getDate()).padStart(2, "0");
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const yy = String(d.getFullYear()).slice(-2);
@@ -41,11 +40,16 @@ function statusPill(status) {
   return map[s] || "pill pill--muted";
 }
 
+// kept (may be used later)
 function buildLogoUrl(path) {
   if (!path) return null;
   const origin = String(API_BASE_URL || "").replace(/\/api\/?$/i, "");
   const clean = String(path).replace(/^Storage\//i, "Storage/");
   return `${origin}/${clean}`;
+}
+
+function clamp(n, min, max) {
+  return Math.max(min, Math.min(max, n));
 }
 
 export default function AdminInvoices() {
@@ -73,9 +77,12 @@ export default function AdminInvoices() {
         page,
         pageSize: data.pageSize,
       };
+
       if (q.trim()) params.q = q.trim();
       if (status) params.status = status;
       if (customer.trim()) params.customer = customer.trim();
+
+      // Keep your backend expectation: ISO utc
       if (from) params.from = new Date(from).toISOString();
       if (to) params.to = new Date(to).toISOString();
 
@@ -106,6 +113,23 @@ export default function AdminInvoices() {
     setTimeout(() => load(1), 0);
   }
 
+  const canPrev = !loading && (data.page || 1) > 1;
+  const canNext = !loading && (data.page || 1) < pageCount;
+
+  const pageLabel = useMemo(() => {
+    const p = data?.page || 1;
+    const total = data?.totalCount || 0;
+    const size = data?.pageSize || 20;
+    const start = total === 0 ? 0 : (p - 1) * size + 1;
+    const end = Math.min(p * size, total);
+    return `Showing ${start}-${end} of ${total}`;
+  }, [data]);
+
+  // Nice: press Enter in search/customer triggers apply
+  function onKeyDownApply(e) {
+    if (e.key === "Enter") onApplyFilters();
+  }
+
   return (
     <div className="adminCrud">
       <div className="adminCrud__header">
@@ -117,68 +141,95 @@ export default function AdminInvoices() {
         <div className="adminCrud__actionsRow">
           <Link
             className="iconBtn"
-            to="/dashboard/admin/invoice-settings"
+            to="/dashboard/admin/finance/invoice-settings"
             title="Invoice Settings"
             aria-label="Invoice Settings"
           >
             ⚙️
           </Link>
-          <button className="iconBtn" onClick={onApplyFilters} title="Refresh" aria-label="Refresh">
+
+          <button
+            type="button"
+            className="iconBtn"
+            onClick={() => load(data.page || 1)}
+            title="Refresh"
+            aria-label="Refresh"
+            disabled={loading}
+          >
             🔄
           </button>
         </div>
       </div>
 
       <div className="card">
-        <div className="filtersGrid">
-          <div className="field">
-            <label>Search</label>
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Invoice number, external ref, customer..."
-            />
+        {/* ===== Filters (compact, clean) ===== */}
+        <div className="invoiceFilters">
+          <div className="invoiceFilters__row">
+            <div className="field">
+              <label>Search</label>
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                onKeyDown={onKeyDownApply}
+                placeholder="Invoice number, external ref, customer..."
+              />
+            </div>
+
+            <div className="field">
+              <label>Status</label>
+              <select value={status} onChange={(e) => setStatus(e.target.value)}>
+                <option value="">All</option>
+                <option value="Draft">Draft</option>
+                <option value="Issued">Issued</option>
+                <option value="PartiallyPaid">PartiallyPaid</option>
+                <option value="Paid">Paid</option>
+                <option value="Void">Void</option>
+              </select>
+            </div>
+
+            <div className="field">
+              <label>Customer</label>
+              <input
+                value={customer}
+                onChange={(e) => setCustomer(e.target.value)}
+                onKeyDown={onKeyDownApply}
+                placeholder="Name/email fragment..."
+              />
+            </div>
           </div>
 
-          <div className="field">
-            <label>Status</label>
-            <select value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="">All</option>
-              <option value="Draft">Draft</option>
-              <option value="Issued">Issued</option>
-              <option value="PartiallyPaid">PartiallyPaid</option>
-              <option value="Paid">Paid</option>
-              <option value="Void">Void</option>
-            </select>
-          </div>
+          <div className="invoiceFilters__row invoiceFilters__row--tight">
+            <div className="field">
+              <label>From</label>
+              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </div>
 
-          <div className="field">
-            <label>Customer</label>
-            <input
-              value={customer}
-              onChange={(e) => setCustomer(e.target.value)}
-              placeholder="Name/email fragment..."
-            />
-          </div>
+            <div className="field">
+              <label>To</label>
+              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </div>
 
-          <div className="field">
-            <label>From</label>
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </div>
-
-          <div className="field">
-            <label>To</label>
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-          </div>
-
-          <div className="field field--actions">
-            <label>&nbsp;</label>
-            <div className="rowActions">
-              <button className="btnPrimary" onClick={onApplyFilters} disabled={loading}>
-                Apply
+            <div className="invoiceFilters__actions">
+              <button
+                type="button"
+                className="btnSm btnSm--primary"
+                onClick={onApplyFilters}
+                disabled={loading}
+                title="Apply filters"
+                aria-label="Apply filters"
+              >
+                ✅ Apply
               </button>
-              <button className="btnGhost" onClick={onClear} disabled={loading}>
-                Clear
+
+              <button
+                type="button"
+                className="btnSm"
+                onClick={onClear}
+                disabled={loading}
+                title="Clear filters"
+                aria-label="Clear filters"
+              >
+                🧹 Clear
               </button>
             </div>
           </div>
@@ -187,6 +238,7 @@ export default function AdminInvoices() {
         {err ? <div className="alert alert--danger">{err}</div> : null}
         {loading ? <div className="alert alert--info">Loading invoices…</div> : null}
 
+        {/* ===== Table ===== */}
         <div className="tableWrap">
           <table className="adminTable">
             <thead>
@@ -211,32 +263,41 @@ export default function AdminInvoices() {
                       <div className="muted">{x.currency}</div>
                     </div>
                   </td>
+
                   <td>
                     <span className={statusPill(x.status)}>{x.status}</span>
                   </td>
+
                   <td>{fmtDate(x.issuedAt)}</td>
+
                   <td>
                     <div className="stack">
                       <div className="strong">{x.customerName || "-"}</div>
                       <div className="muted">{x.customerType || "-"}</div>
                     </div>
                   </td>
-                  <td>{x.purpose}</td>
+
+                  <td className="cellClamp" title={x.purpose || ""}>
+                    {x.purpose}
+                  </td>
+
                   <td className="num">{fmtMoney(x.total, x.currency)}</td>
                   <td className="num">{fmtMoney(x.amountPaid, x.currency)}</td>
+
                   <td className="actions">
                     <div className="iconRow">
                       <Link
-                        className="iconBtn"
-                        to={`/dashboard/admin/invoices/${x.id}`}
+                        className="iconBtn iconBtn--sm"
+                        to={`/dashboard/admin/finance/invoices/${x.id}`}
                         title="Open invoice"
                         aria-label="Open invoice"
                       >
                         👁️
                       </Link>
+
                       <Link
-                        className="iconBtn"
-                        to={`/dashboard/admin/invoices/${x.id}?print=1`}
+                        className="iconBtn iconBtn--sm"
+                        to={`/dashboard/admin/finance/invoices/${x.id}?print=1`}
                         title="Open & print"
                         aria-label="Open & print"
                       >
@@ -258,21 +319,57 @@ export default function AdminInvoices() {
           </table>
         </div>
 
-        <div className="pager">
-          <div className="muted">
-            Showing page <b>{data.page}</b> of <b>{pageCount}</b> — total <b>{data.totalCount}</b>
-          </div>
+        {/* ===== Pager (First/Prev/Page/Next/Last) ===== */}
+        <div className="pager pager--compact">
+          <div className="muted">{pageLabel}</div>
 
-          <div className="pagerBtns">
-            <button className="btnGhost" disabled={loading || data.page <= 1} onClick={() => load(data.page - 1)}>
-              Prev
-            </button>
+          <div className="pagerBtns pagerBtns--compact" role="navigation" aria-label="Invoices pagination">
             <button
-              className="btnGhost"
-              disabled={loading || data.page >= pageCount}
-              onClick={() => load(data.page + 1)}
+              type="button"
+              className="btnSm"
+              disabled={!canPrev}
+              onClick={() => load(1)}
+              title="First page"
+              aria-label="First page"
             >
-              Next
+              ⏮
+            </button>
+
+            <button
+              type="button"
+              className="btnSm"
+              disabled={!canPrev}
+              onClick={() => load((data.page || 1) - 1)}
+              title="Previous page"
+              aria-label="Previous page"
+            >
+              ◀
+            </button>
+
+            <div className="pagerMeta" aria-label="Current page">
+              Page <b>{clamp(data.page || 1, 1, pageCount)}</b> of <b>{pageCount}</b>
+            </div>
+
+            <button
+              type="button"
+              className="btnSm"
+              disabled={!canNext}
+              onClick={() => load((data.page || 1) + 1)}
+              title="Next page"
+              aria-label="Next page"
+            >
+              ▶
+            </button>
+
+            <button
+              type="button"
+              className="btnSm"
+              disabled={!canNext}
+              onClick={() => load(pageCount)}
+              title="Last page"
+              aria-label="Last page"
+            >
+              ⏭
             </button>
           </div>
         </div>

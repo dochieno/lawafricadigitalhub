@@ -130,3 +130,101 @@
     margin: 12mm;
   }
 }
+/* ===== Finance: compact filter + small buttons ===== */
+.invoiceFilters {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.invoiceFilters__row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 2fr;
+  gap: 12px;
+  align-items: end;
+}
+
+.invoiceFilters__row--tight {
+  grid-template-columns: 1fr 1fr auto;
+}
+
+.invoiceFilters__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+  padding-bottom: 2px;
+}
+
+.btnSm {
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.btnSm:hover {
+  filter: brightness(1.03);
+}
+
+.btnSm:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btnSm--primary {
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.14);
+}
+
+.iconBtn--sm {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pager--compact {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pagerBtns--compact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pagerMeta {
+  font-size: 13px;
+  opacity: 0.85;
+  padding: 0 6px;
+  white-space: nowrap;
+}
+
+.cellClamp {
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 980px) {
+  .invoiceFilters__row {
+    grid-template-columns: 1fr;
+  }
+  .invoiceFilters__row--tight {
+    grid-template-columns: 1fr;
+  }
+  .invoiceFilters__actions {
+    justify-content: flex-start;
+  }
+}
