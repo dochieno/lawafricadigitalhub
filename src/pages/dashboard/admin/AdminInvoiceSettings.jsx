@@ -5,10 +5,30 @@ import "../../../styles/adminCrud.css";
 import "../../../styles/invoice.css";
 import AdminPageFooter from "../../../components/AdminPageFooter";
 
+/**
+ * Build a public asset URL for Storage paths.
+ *
+ * IMPORTANT:
+ * - In production, API_BASE_URL MUST be an absolute backend URL, e.g. https://api.yoursite.com/api
+ * - If API_BASE_URL is "/api" (relative), origin becomes "" and the logo will load from Vercel (wrong).
+ */
 function buildAssetUrl(path) {
   if (!path) return null;
-  const origin = String(API_BASE_URL || "").replace(/\/api\/?$/i, "");
-  const clean = String(path).replace(/^Storage\//i, "Storage/");
+
+  // Normalize path -> ensure it starts with Storage/
+  let clean = String(path).trim().replace(/^\/+/, "").replace(/\\/g, "/");
+  if (!/^Storage\//i.test(clean)) clean = `Storage/${clean}`;
+  clean = clean.replace(/^Storage\/+/i, "Storage/"); // de-dupe
+
+  const base = String(API_BASE_URL || "").trim();
+
+  // If API base is relative (e.g. "/api"), we cannot infer backend origin reliably.
+  // Return relative path so it doesn't crash; but you should fix env to absolute.
+  if (!base || base.startsWith("/")) {
+    return `/${clean}`;
+  }
+
+  const origin = base.replace(/\/api\/?$/i, "");
   return `${origin}/${clean}`;
 }
 
@@ -50,7 +70,24 @@ export default function AdminInvoiceSettings() {
     footerNotes: "",
   });
 
-  const logoUrl = useMemo(() => buildAssetUrl(form.logoPath), [form.logoPath]);
+  // If logo fails to load, don't let it trip global error overlay
+  const [logoBroken, setLogoBroken] = useState(false);
+
+  // Cache-buster when re-uploading
+  const [logoNonce, setLogoNonce] = useState(0);
+
+  const rawLogoUrl = useMemo(() => buildAssetUrl(form.logoPath), [form.logoPath]);
+  const logoUrl = useMemo(() => {
+    if (!rawLogoUrl) return null;
+    // Cache bust only when nonce changes (e.g. after upload), not on every render
+    const sep = rawLogoUrl.includes("?") ? "&" : "?";
+    return `${rawLogoUrl}${sep}v=${logoNonce}`;
+  }, [rawLogoUrl, logoNonce]);
+
+  useEffect(() => {
+    // Whenever the path changes, try loading again
+    setLogoBroken(false);
+  }, [rawLogoUrl]);
 
   function set(k, v) {
     setForm((p) => ({ ...p, [k]: v }));
@@ -103,7 +140,13 @@ export default function AdminInvoiceSettings() {
         headers: { "Content-Type": "multipart/form-data" },
       });
       const path = res?.data?.logoPath;
-      if (path) set("logoPath", path);
+
+      if (path) {
+        set("logoPath", path);
+        setLogoBroken(false);
+        setLogoNonce((n) => n + 1); // bust cache after upload
+      }
+
       setOk("Logo uploaded.");
     } catch (e) {
       setErr(e?.response?.data?.message || e?.response?.data || e?.message || "Logo upload failed.");
@@ -195,7 +238,18 @@ export default function AdminInvoiceSettings() {
 
             <div className="logoRow">
               <div className="logoPreview">
-                {logoUrl ? <img src={logoUrl} alt="Invoice logo" /> : <div className="mutedSmall">No logo</div>}
+                {logoUrl && !logoBroken ? (
+                  <img
+                    src={logoUrl}
+                    alt="Invoice logo"
+                    // Prevent resource load errors from tripping your global debug overlay
+                    onError={() => setLogoBroken(true)}
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="mutedSmall">No logo</div>
+                )}
               </div>
 
               <div className="logoActions">
@@ -205,6 +259,11 @@ export default function AdminInvoiceSettings() {
                   onChange={(e) => uploadLogo(e.target.files?.[0])}
                 />
                 <div className="mutedSmall">Tip: use a transparent PNG for best results.</div>
+                {form.logoPath ? (
+                  <div className="mutedSmall" style={{ marginTop: 6 }}>
+                    Path: <span className="mutedSmall">{form.logoPath}</span>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
