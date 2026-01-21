@@ -32,10 +32,22 @@ function fmtDateShort(iso) {
   return `${dd}-${mm}-${yy}`;
 }
 
-function buildAssetUrl(path) {
+function buildAssetUrl(path, apiBaseUrl) {
   if (!path) return null;
-  const origin = String(API_BASE_URL || "").replace(/\/api\/?$/i, "");
-  const clean = String(path).replace(/^Storage\//i, "Storage/");
+
+  const raw = String(path).trim();
+  if (/^https?:\/\//i.test(raw)) return raw;
+
+  const base = String(apiBaseUrl || "").trim();
+  const isRelativeBase = base.startsWith("/") && !base.startsWith("//");
+  const origin = base
+    ? String(base).replace(/\/api\/?$/i, "").replace(/\/+$/g, "")
+    : "";
+
+  let clean = raw.replace(/^\/+/, "");
+  if (!/^storage\//i.test(clean)) clean = `Storage/${clean}`;
+
+  if (!origin || isRelativeBase) return `/${clean}`;
   return `${origin}/${clean}`;
 }
 
@@ -109,7 +121,10 @@ export default function AdminInvoiceDetail() {
   }
 
   const company = inv?.company || {};
-  const logoUrl = buildAssetUrl(company.logoPath);
+
+  // ✅ Use actual API base URL used by axios first, fallback to exported API_BASE_URL
+  const apiBase = api?.defaults?.baseURL || API_BASE_URL;
+  const logoUrl = buildAssetUrl(company.logoPath, apiBase);
 
   const balance = useMemo(() => {
     const total = Number(inv?.total || 0);
@@ -117,22 +132,19 @@ export default function AdminInvoiceDetail() {
     return total - paid;
   }, [inv]);
 
-  const isPaid = useMemo(() => {
-    const s = String(inv?.status || "").toLowerCase();
-    if (s === "paid") return true;
-    if (s === "void" || s === "draft" || s === "issued" || s === "partiallypaid") return false;
-    // fallback: treat as paid if no balance
-    return balance <= 0;
-  }, [inv, balance]);
+  const isPaid = useMemo(() => String(inv?.status || "").toLowerCase() === "paid", [inv]);
+  const invNumberClass = useMemo(
+    () => `invTitleStrong invTitleStrong--sm ${isPaid ? "invPaid" : "invUnpaid"}`,
+    [isPaid]
+  );
 
   return (
     <div className="adminCrud">
-      {/* ===== Header (No print) ===== */}
       <div className="adminCrud__header noPrint">
         <div>
           <h1 className="adminCrud__title">
             Invoice{" "}
-            <span className={isPaid ? "invTitleStrong invTitleStrong--paid" : "invTitleStrong invTitleStrong--unpaid"}>
+            <span className={invNumberClass}>
               {inv?.invoiceNumber || (loading ? "…" : "")}
             </span>
           </h1>
@@ -146,7 +158,7 @@ export default function AdminInvoiceDetail() {
             title="Back to invoices"
             aria-label="Back to invoices"
           >
-            ←
+            ⬅️
           </Link>
 
           <button
@@ -168,7 +180,7 @@ export default function AdminInvoiceDetail() {
             aria-label="Copy invoice number"
             disabled={!inv?.invoiceNumber}
           >
-            {copied ? "✓" : "📋"}
+            {copied ? "✅" : "📋"}
           </button>
 
           <Link
@@ -187,7 +199,6 @@ export default function AdminInvoiceDetail() {
 
       {inv ? (
         <div className="invoicePage">
-          {/* ===== Summary row (columns you requested) ===== */}
           <div className="invoiceSummary noPrint">
             <div className="sumItem">
               <div className="sumK">Invoice No.</div>
@@ -207,7 +218,7 @@ export default function AdminInvoiceDetail() {
 
             <div className="sumItem">
               <div className="sumK">Status</div>
-              <div className={isPaid ? "sumV sumV--paid" : "sumV sumV--unpaid"}>{inv.status}</div>
+              <div className="sumV">{inv.status}</div>
             </div>
 
             <div className="sumItem sumItem--wide">
@@ -231,10 +242,8 @@ export default function AdminInvoiceDetail() {
             </div>
           </div>
 
-          {/* ===== Paper ===== */}
           <div className="invoicePaperWrap">
             <div className="invoicePaper invoicePaper--wide" ref={printRef}>
-              {/* Header */}
               <div className="invoiceHeader">
                 <div className="brandBlock">
                   {logoUrl ? <img className="brandLogo" src={logoUrl} alt="Company logo" /> : null}
@@ -266,22 +275,18 @@ export default function AdminInvoiceDetail() {
                       <div className="k">Invoice No</div>
                       <div className="v">{inv.invoiceNumber}</div>
                     </div>
-
                     <div className="metaRow">
                       <div className="k">Status</div>
                       <div className="v">{inv.status}</div>
                     </div>
-
                     <div className="metaRow">
                       <div className="k">Issued</div>
                       <div className="v">{fmtDateShort(inv.issuedAt)}</div>
                     </div>
-
                     <div className="metaRow">
                       <div className="k">Due</div>
                       <div className="v">{inv.dueAt ? fmtDateShort(inv.dueAt) : "-"}</div>
                     </div>
-
                     <div className="metaRow">
                       <div className="k">Currency</div>
                       <div className="v">{inv.currency}</div>
@@ -290,7 +295,6 @@ export default function AdminInvoiceDetail() {
                 </div>
               </div>
 
-              {/* Bill to */}
               <div className="invoiceBillTo">
                 <div>
                   <div className="sectionLabel">Bill To</div>
@@ -317,7 +321,6 @@ export default function AdminInvoiceDetail() {
                 </div>
               </div>
 
-              {/* Lines */}
               <div className="invoiceLines">
                 <table className="linesTable">
                   <thead>
@@ -339,7 +342,6 @@ export default function AdminInvoiceDetail() {
                           <div className="strong">{l.description}</div>
                           {l.itemCode ? <div className="mutedSmall">Code: {l.itemCode}</div> : null}
                         </td>
-
                         <td className="num">{Number(l.quantity || 0).toFixed(2)}</td>
                         <td className="num">{fmtMoney(l.unitPrice, inv.currency)}</td>
                         <td className="num">{fmtMoney(l.lineSubtotal, inv.currency)}</td>
@@ -360,34 +362,28 @@ export default function AdminInvoiceDetail() {
                 </table>
               </div>
 
-              {/* Totals */}
               <div className="invoiceTotals">
                 <div className="totalsBox">
                   <div className="tRow">
                     <div className="k">Subtotal</div>
                     <div className="v">{fmtMoney(inv.subtotal, inv.currency)}</div>
                   </div>
-
                   <div className="tRow">
                     <div className="k">Tax</div>
                     <div className="v">{fmtMoney(inv.taxTotal, inv.currency)}</div>
                   </div>
-
                   <div className="tRow">
                     <div className="k">Discount</div>
                     <div className="v">{fmtMoney(inv.discountTotal, inv.currency)}</div>
                   </div>
-
                   <div className="tRow tRow--grand">
                     <div className="k">Total</div>
                     <div className="v">{fmtMoney(inv.total, inv.currency)}</div>
                   </div>
-
                   <div className="tRow">
                     <div className="k">Amount Paid</div>
                     <div className="v">{fmtMoney(inv.amountPaid, inv.currency)}</div>
                   </div>
-
                   <div className="tRow tRow--due">
                     <div className="k">Balance</div>
                     <div className="v">{fmtMoney(balance, inv.currency)}</div>
@@ -438,7 +434,6 @@ export default function AdminInvoiceDetail() {
                 </div>
               </div>
 
-              {/* Notes */}
               {inv.notes ? (
                 <div className="invoiceNotes">
                   <div className="sectionLabel">Notes</div>
@@ -446,7 +441,6 @@ export default function AdminInvoiceDetail() {
                 </div>
               ) : null}
 
-              {/* Footer */}
               <div className="invoiceFooter">
                 {company.footerNotes ? <div className="footerNotes">{company.footerNotes}</div> : null}
                 <div className="mutedSmall">Generated by LawAfrica Platform</div>
