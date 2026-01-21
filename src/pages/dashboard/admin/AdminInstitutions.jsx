@@ -6,12 +6,16 @@ import "../../../styles/adminCrud.css";
 import AdminPageFooter from "../../../components/AdminPageFooter";
 import { getAuthClaims } from "../../../auth/auth";
 
+/* =========================
+   Helpers
+========================= */
 function toText(v) {
   if (v == null) return "";
   if (typeof v === "string") return v;
   if (typeof v === "number" || typeof v === "boolean") return String(v);
   if (typeof v === "object") {
     if (v.message) return String(v.message);
+    if (v.error) return String(v.error);
     try {
       return JSON.stringify(v, null, 2);
     } catch {
@@ -32,6 +36,7 @@ function parseIntOrZero(v) {
   return Math.max(0, Math.trunc(n));
 }
 
+/** Friendly message for form validation / saves */
 function friendlyApiError(e) {
   const status = e?.response?.status;
   const data = e?.response?.data;
@@ -63,6 +68,67 @@ function friendlyApiError(e) {
   }
 
   return toText(data || e?.message || "Save failed.");
+}
+
+/**
+ * Friendly + consistent error object for all fetches/actions
+ * (includes optional technical details for debugging).
+ */
+function toUiError(e, fallbackMessage = "Something went wrong.") {
+  // Network / CORS / DNS: axios has no response
+  if (e?.request && !e?.response) {
+    return {
+      title: "Connection problem",
+      message:
+        "We couldn’t reach the server. Check your internet connection and try again.",
+      details: toText(e?.message || "No response from server."),
+    };
+  }
+
+  const status = e?.response?.status;
+  const data = e?.response?.data;
+
+  // Auth
+  if (status === 401) {
+    return {
+      title: "Session expired",
+      message: "Please sign in again and retry.",
+      details: toText(data || "401 Unauthorized"),
+    };
+  }
+  if (status === 403) {
+    return {
+      title: "Not allowed",
+      message: "You don’t have permission to perform this action.",
+      details: toText(data || "403 Forbidden"),
+    };
+  }
+
+  // Server error
+  if (status >= 500) {
+    return {
+      title: "Server error",
+      message:
+        "The server ran into a problem while processing your request. Please try again shortly.",
+      details: toText(data || e?.message || `HTTP ${status}`),
+    };
+  }
+
+  // Validation / client error
+  if (status === 400) {
+    return {
+      title: "Couldn’t save changes",
+      message: friendlyApiError(e),
+      details: toText(data),
+    };
+  }
+
+  // Everything else
+  return {
+    title: "Something went wrong",
+    message: toText(data || e?.message || fallbackMessage),
+    details: toText(data || e?.message || fallbackMessage),
+  };
 }
 
 const emptyForm = {
@@ -163,6 +229,167 @@ function isGlobalAdmin() {
   return false;
 }
 
+/* =========================
+   Tiny icons (no deps)
+========================= */
+function IconButton({ title, onClick, disabled, children, kind = "neutral" }) {
+  // Uses existing button styling classes; adds compact modern feel with inline styles.
+  const className = ["admin-action-btn", "neutral", "small"].join(" ");
+  const border =
+    kind === "danger" ? "rgba(225,29,72,0.25)" : kind === "ok" ? "rgba(34,197,94,0.25)" : "rgba(148,163,184,0.35)";
+  const bg =
+    kind === "danger" ? "rgba(225,29,72,0.06)" : kind === "ok" ? "rgba(34,197,94,0.06)" : "rgba(15,23,42,0.03)";
+  const color =
+    kind === "danger" ? "#b91c1c" : kind === "ok" ? "#166534" : "#111827";
+
+  return (
+    <button
+      type="button"
+      className={className}
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={title}
+      style={{
+        padding: "6px 10px",
+        borderRadius: 12,
+        border: `1px solid ${border}`,
+        background: bg,
+        color,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        minWidth: 38,
+        height: 34,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function IRefresh() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M21 12a9 9 0 1 1-2.64-6.36"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M21 3v6h-6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IPlus() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IEdit() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 20h9"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IUsers() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M23 21v-2a4 4 0 0 0-3-3.87"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M16 3.13a4 4 0 0 1 0 7.75"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function IPower() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 2v10"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M6.38 6.38a9 9 0 1 0 11.24 0"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function ICopy() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M9 9h13v13H9V9z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M5 15H2V2h13v3"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/* =========================
+   Component
+========================= */
 export default function AdminInstitutions() {
   const navigate = useNavigate();
 
@@ -171,7 +398,9 @@ export default function AdminInstitutions() {
   const [busy, setBusy] = useState(false);
 
   const [q, setQ] = useState("");
-  const [error, setError] = useState("");
+
+  // NEW: richer error / info state
+  const [uiError, setUiError] = useState(null); // {title,message,details}
   const [info, setInfo] = useState("");
 
   const [open, setOpen] = useState(false);
@@ -186,7 +415,7 @@ export default function AdminInstitutions() {
   const canEditPolicy = isGlobalAdmin();
 
   async function loadAll() {
-    setError("");
+    setUiError(null);
     setInfo("");
     setLoading(true);
     try {
@@ -195,7 +424,7 @@ export default function AdminInstitutions() {
       setRows(Array.isArray(data) ? data : []);
     } catch (e) {
       setRows([]);
-      setError(toText(e?.response?.data || e?.message || "Failed to load institutions."));
+      setUiError(toUiError(e, "Failed to load institutions."));
     } finally {
       setLoading(false);
     }
@@ -229,7 +458,7 @@ export default function AdminInstitutions() {
   }, [rows, q]);
 
   function openCreate() {
-    setError("");
+    setUiError(null);
     setInfo("");
     setEditing(null);
     setForm({ ...emptyForm });
@@ -237,7 +466,7 @@ export default function AdminInstitutions() {
   }
 
   async function openEdit(row) {
-    setError("");
+    setUiError(null);
     setInfo("");
     setEditing(row);
     setOpen(true);
@@ -250,8 +479,10 @@ export default function AdminInstitutions() {
       const res = await api.get(`/Institutions/${id}`);
       const data = res.data?.data ?? res.data;
       setForm({ ...emptyForm, ...mapInstitutionToForm(data) });
-    } catch {
-      setInfo("Loaded partial record (details endpoint failed).");
+    } catch (e) {
+      // Not fatal; keep partial record
+      setInfo("Loaded basic institution data, but couldn’t fetch the full details.");
+      // Optional: keep details in UI error? Not necessary; info is enough.
     } finally {
       setModalLoading(false);
     }
@@ -293,12 +524,14 @@ export default function AdminInstitutions() {
   }
 
   async function save() {
-    setError("");
+    setUiError(null);
     setInfo("");
 
-    if (!form.name.trim()) return setError("Name is required.");
-    if (!form.emailDomain.trim()) return setError("Email domain is required.");
-    if (!form.officialEmail.trim()) return setError("Official email is required.");
+    if (!form.name.trim()) return setUiError({ title: "Missing information", message: "Name is required." });
+    if (!form.emailDomain.trim())
+      return setUiError({ title: "Missing information", message: "Email domain is required." });
+    if (!form.officialEmail.trim())
+      return setUiError({ title: "Missing information", message: "Official email is required." });
 
     setBusy(true);
     try {
@@ -310,13 +543,13 @@ export default function AdminInstitutions() {
         setInfo("Institution updated.");
       } else {
         await api.post("/Institutions", payload);
-        setInfo("Institution created.");
+        setInfo("Institution created. A welcome email will be sent if email sending is enabled.");
       }
 
       closeModal();
       await loadAll();
     } catch (e) {
-      setError(friendlyApiError(e));
+      setUiError(toUiError(e, "Save failed."));
     } finally {
       setBusy(false);
     }
@@ -326,7 +559,7 @@ export default function AdminInstitutions() {
     const id = row.id ?? row.Id;
     const isActive = row.isActive ?? row.IsActive ?? false;
 
-    setError("");
+    setUiError(null);
     setInfo("");
     setBusy(true);
     try {
@@ -334,19 +567,23 @@ export default function AdminInstitutions() {
       setInfo(isActive ? "Institution deactivated." : "Institution activated.");
       await loadAll();
     } catch (e) {
-      setError(toText(e?.response?.data || e?.message || "Failed to update status."));
+      setUiError(toUiError(e, "Failed to update status."));
     } finally {
       setBusy(false);
     }
   }
 
   async function copyToClipboard(text) {
+    setUiError(null);
     try {
       await navigator.clipboard.writeText(String(text || ""));
       setInfo("Copied to clipboard.");
       setTimeout(() => setInfo(""), 1500);
     } catch {
-      setError("Copy failed. Please copy manually.");
+      setUiError({
+        title: "Copy failed",
+        message: "Your browser blocked clipboard access. Please copy manually.",
+      });
     }
   }
 
@@ -356,7 +593,7 @@ export default function AdminInstitutions() {
 
     const id = editing.id ?? editing.Id;
 
-    setError("");
+    setUiError(null);
     setInfo("");
     setPolicyBusy(true);
 
@@ -371,11 +608,7 @@ export default function AdminInstitutions() {
       await loadAll();
     } catch (e) {
       setField("allowIndividualPurchasesWhenInstitutionInactive", !nextValue);
-      setError(
-        toText(
-          e?.response?.data || e?.message || "Failed to update purchase policy."
-        )
-      );
+      setUiError(toUiError(e, "Failed to update purchase policy."));
     } finally {
       setPolicyBusy(false);
     }
@@ -393,19 +626,67 @@ export default function AdminInstitutions() {
           </p>
         </div>
 
-        <div className="admin-actions">
-          <button className="admin-btn" onClick={loadAll} disabled={busy || loading}>
-            Refresh
-          </button>
-          <button className="admin-btn primary compact" onClick={openCreate} disabled={busy}>
-            + New
+        {/* Modern compact header actions */}
+        <div className="admin-actions" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <IconButton
+            title="Refresh list"
+            onClick={loadAll}
+            disabled={busy || loading}
+          >
+            <IRefresh />
+          </IconButton>
+
+          <button
+            className="admin-btn primary compact"
+            onClick={openCreate}
+            disabled={busy}
+            title="Create a new institution"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              borderRadius: 12,
+              padding: "10px 12px",
+            }}
+          >
+            <IPlus /> New
           </button>
         </div>
       </div>
 
-      {(error || info) && (
-        <div className={`admin-alert ${error ? "error" : "ok"}`}>
-          {error ? error : info}
+      {/* NEW: clearer alert block */}
+      {(uiError || info) && (
+        <div className={`admin-alert ${uiError ? "error" : "ok"}`}>
+          {uiError ? (
+            <div style={{ display: "grid", gap: 6 }}>
+              <div style={{ fontWeight: 900 }}>{uiError.title || "Error"}</div>
+              <div style={{ whiteSpace: "pre-wrap" }}>{uiError.message}</div>
+
+              {uiError.details && uiError.details !== uiError.message ? (
+                <details style={{ marginTop: 6 }}>
+                  <summary style={{ cursor: "pointer", fontWeight: 800 }}>
+                    Show technical details
+                  </summary>
+                  <pre
+                    style={{
+                      marginTop: 8,
+                      padding: 10,
+                      borderRadius: 10,
+                      background: "rgba(0,0,0,0.04)",
+                      overflow: "auto",
+                      maxHeight: 220,
+                      fontSize: 12,
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {uiError.details}
+                  </pre>
+                </details>
+              ) : null}
+            </div>
+          ) : (
+            info
+          )}
         </div>
       )}
 
@@ -481,33 +762,40 @@ export default function AdminInstitutions() {
                   </td>
 
                   <td>
-                    <div className="admin-row-actions">
-                      <button
-                        className="admin-action-btn neutral small"
+                    {/* Modern compact icon row */}
+                    <div
+                      className="admin-row-actions"
+                      style={{
+                        display: "flex",
+                        justifyContent: "flex-end",
+                        gap: 8,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <IconButton
+                        title="Edit institution"
                         onClick={() => openEdit(r)}
                         disabled={busy}
-                        title="Edit institution"
                       >
-                        Edit
-                      </button>
+                        <IEdit />
+                      </IconButton>
 
-                      <button
-                        className="admin-action-btn neutral small"
+                      <IconButton
+                        title="View users"
                         onClick={() => navigate(`/dashboard/admin/institutions/${id}/users`)}
                         disabled={busy}
-                        title="View institution users"
                       >
-                        Users
-                      </button>
+                        <IUsers />
+                      </IconButton>
 
-                      <button
-                        className={`admin-action-btn small ${isActive ? "warn" : "ok"}`}
+                      <IconButton
+                        title={isActive ? "Deactivate institution" : "Activate institution"}
                         onClick={() => toggleActive(r)}
                         disabled={busy}
-                        title={isActive ? "Deactivate institution" : "Activate institution"}
+                        kind={isActive ? "danger" : "ok"}
                       >
-                        {isActive ? "Deactivate" : "Activate"}
-                      </button>
+                        <IPower />
+                      </IconButton>
                     </div>
                   </td>
                 </tr>
@@ -520,7 +808,7 @@ export default function AdminInstitutions() {
       <AdminPageFooter
         right={
           <span className="admin-footer-muted">
-            Tip: Use “+ New” to create a record quickly.
+            Tip: Use “New” to create a record quickly.
           </span>
         }
       />
@@ -539,7 +827,7 @@ export default function AdminInstitutions() {
                 </div>
               </div>
 
-              {/* ✅ ALWAYS-VISIBLE X */}
+              {/* Always-visible X */}
               <button
                 type="button"
                 className="admin-modal-xbtn"
@@ -555,7 +843,7 @@ export default function AdminInstitutions() {
             <div className="admin-modal-body admin-modal-scroll">
               {modalLoading && <div className="admin-inline-loading">Fetching details…</div>}
 
-              {/* ✅ Policy section (UNCHANGED) */}
+              {/* Policy section (UNCHANGED logic) */}
               {!!editing && (
                 <div
                   style={{
@@ -721,22 +1009,21 @@ export default function AdminInstitutions() {
 
                 <div className="admin-field">
                   <label>Institution access code (locked)</label>
-                  <div style={{ display: "flex", gap: 8 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <input
                       value={form.institutionAccessCode || (isCreate ? "Auto-generated after save" : "")}
                       disabled
                       readOnly
                       style={{ opacity: 0.85, flex: 1 }}
                     />
-                    <button
-                      className="admin-btn"
-                      type="button"
+
+                    <IconButton
+                      title="Copy access code"
                       disabled={!form.institutionAccessCode}
                       onClick={() => copyToClipboard(form.institutionAccessCode)}
-                      title="Copy access code"
                     >
-                      Copy
-                    </button>
+                      <ICopy />
+                    </IconButton>
                   </div>
                   <div className="admin-hint" style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
                     This code is used by institution users to join. Keep it secure.
