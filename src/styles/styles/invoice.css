@@ -14,9 +14,6 @@
   border: 1px solid rgba(15, 23, 42, 0.08);
   padding: 26px;
 }
-
-.noPrint {}
-
 /* Filters grid on list page */
 .filtersGrid {
   display: grid;
