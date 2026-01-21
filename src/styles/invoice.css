@@ -63,6 +63,305 @@
 }
 
 /* =========================
+   Payments list page (AdminPayments.jsx)
+   - Subscriptions-like toolbar
+   - Denser readable tables (sticky head, hover, widths, clamp)
+========================= */
+
+/* Fill width nicely without awkward whitespace */
+.adminCrud.paymentsPage .card {
+  width: 100%;
+  max-width: 100%;
+  padding: 14px;
+}
+
+@media (min-width: 900px) {
+  .adminCrud.paymentsPage .card {
+    padding: 16px;
+  }
+}
+
+/* Tabs row (keeps existing markup; centered like screenshot) */
+.tabsRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: 12px 10px;
+  border-radius: 14px;
+  margin-bottom: 12px;
+}
+
+.tabBtn {
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-weight: 800;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+}
+
+.tabBtn:hover {
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.tabBtn.active {
+  border-color: rgba(112, 40, 64, 0.35);
+  box-shadow: 0 6px 20px rgba(112, 40, 64, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Toolbar layout (Row1: Search left, pills+filters right; Row2: dates left, actions right) */
+.paymentsToolbar {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.paymentsToolbarRow {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.paymentsToolbarLeft {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  flex: 1 1 520px;
+  min-width: 260px;
+}
+
+.paymentsToolbarRight {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  justify-content: flex-end;
+  flex: 1 1 420px;
+  min-width: 260px;
+}
+
+.toolbarField {
+  display: grid;
+  gap: 6px;
+  min-width: 160px;
+}
+
+.toolbarField label {
+  font-size: 12px;
+  font-weight: 800;
+  opacity: 0.9;
+}
+
+.toolbarField input,
+.toolbarField select {
+  height: 38px;
+  border-radius: 12px;
+}
+
+.toolbarField--search {
+  flex: 1 1 520px;
+  min-width: 260px;
+}
+
+.toolbarField--search input {
+  width: 100%;
+}
+
+.toolbarActions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  align-items: center;
+  padding-bottom: 2px; /* align buttons with inputs */
+}
+
+/* Summary pills (reuse your invoice pill vibe but scoped) */
+.pillsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.pill b {
+  font-weight: 900;
+}
+
+.pill--ok {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.30);
+}
+
+.pill--warn {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.32);
+}
+
+.pill--bad {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.30);
+}
+
+@media (max-width: 1100px) {
+  .paymentsToolbarRight {
+    justify-content: flex-start;
+  }
+  .toolbarActions {
+    justify-content: flex-start;
+  }
+  .pillsRow {
+    justify-content: flex-start;
+  }
+}
+
+/* Table wrapper: fit window, allow horizontal scroll instead of squishing */
+.adminCrud.paymentsPage .tableWrap {
+  width: 100%;
+  overflow: auto;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+/* Make the list feel “full” on large screens without breaking small screens */
+@media (min-width: 900px) {
+  .adminCrud.paymentsPage .tableWrap {
+    max-height: calc(100vh - 360px);
+  }
+}
+
+/* Payments tables: denser, sticky header, subtle hover */
+.adminCrud.paymentsPage .adminTable {
+  min-width: 980px; /* prevents collapse; scrolls on smaller screens */
+}
+
+/* Sticky + highlighted header (scoped so we don't affect other admin tables) */
+.adminCrud.paymentsPage .adminTable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: rgba(248, 250, 252, 0.95);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+  font-weight: 900;
+  letter-spacing: 0.2px;
+  padding: 10px 10px;
+  white-space: nowrap;
+}
+
+/* Denser body rows */
+.adminCrud.paymentsPage .adminTable tbody td {
+  padding: 10px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* Subtle hover */
+.adminCrud.paymentsPage .adminTable tbody tr:hover td {
+  background: rgba(148, 163, 184, 0.08);
+}
+
+/* Column sizing hints for payments */
+.col-id {
+  width: 72px;
+}
+.col-provider {
+  width: 120px;
+}
+.col-purpose {
+  width: 280px;
+}
+.col-ref {
+  width: 320px;
+}
+.col-status {
+  width: 140px;
+}
+.col-date {
+  width: 120px;
+}
+.col-amount {
+  width: 160px;
+}
+.col-invoice {
+  width: 90px;
+}
+
+/* Clamp long text */
+.purposeCell {
+  max-width: 320px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.refCell {
+  max-width: 360px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Status pill (payments) */
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-weight: 900;
+  font-size: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(148, 163, 184, 0.10);
+  white-space: nowrap;
+}
+
+.statusPill--success,
+.statusPill--paid,
+.statusPill--processed {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.30);
+  color: #166534;
+}
+
+.statusPill--failed,
+.statusPill--error {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.30);
+  color: #7f1d1d;
+}
+
+.statusPill--pending,
+.statusPill--unprocessed {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.32);
+  color: #7c4700;
+}
+
+.statusPill--unknown {
+  background: rgba(148, 163, 184, 0.10);
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
+/* =========================
    Invoices list page
 ========================= */
 .invoiceCard {
@@ -809,6 +1108,15 @@
     display: none !important;
   }
 
+  /* Also hide payments interactive chrome */
+  .tabsRow,
+  .paymentsToolbar,
+  .pager,
+  .adminCrud__actionsRow,
+  .iconBtn {
+    display: none !important;
+  }
+
   /* Use full page */
   .content,
   .app-container,
@@ -830,6 +1138,20 @@
     padding: 0 !important;
     max-width: none !important;
     margin: 0 !important;
+  }
+
+  /* Payments tables: disable sticky header for print */
+  .adminCrud.paymentsPage .adminTable thead th,
+  .adminTable--stickyHead thead th {
+    position: static !important;
+    background: #fff !important;
+  }
+
+  .adminCrud.paymentsPage .tableWrap,
+  .tableWrap--full {
+    border: none !important;
+    max-height: none !important;
+    overflow: visible !important;
   }
 
   * {

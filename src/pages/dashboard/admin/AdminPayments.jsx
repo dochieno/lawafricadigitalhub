@@ -27,6 +27,31 @@ function fmtMoney(amount, currency = "KES") {
   }
 }
 
+function statusTone(v) {
+  const s = String(v || "").toLowerCase();
+  if (!s) return "unknown";
+
+  if (s.includes("success") || s === "paid" || s.includes("processed")) return "success";
+  if (s.includes("fail") || s.includes("error")) return "failed";
+  if (s.includes("pending") || s.includes("unprocessed")) return "pending";
+
+  return "unknown";
+}
+
+function StatusPill({ value }) {
+  const tone = statusTone(value);
+  const cls =
+    tone === "success"
+      ? "statusPill statusPill--success"
+      : tone === "failed"
+      ? "statusPill statusPill--failed"
+      : tone === "pending"
+      ? "statusPill statusPill--pending"
+      : "statusPill statusPill--unknown";
+
+  return <span className={cls}>{String(value || "Unknown")}</span>;
+}
+
 function Pager({ page, pageSize, totalCount, loading, onPage }) {
   const pageCount = Math.max(1, Math.ceil((totalCount || 0) / (pageSize || 25)));
   return (
@@ -51,6 +76,7 @@ export default function AdminPayments() {
 
   const [q, setQ] = useState("");
   const [provider, setProvider] = useState("");
+  const [status, setStatus] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
@@ -68,6 +94,46 @@ export default function AdminPayments() {
     return "/admin/payments/intents";
   }, [tab]);
 
+  const statusOptions = useMemo(() => {
+    if (tab === "transactions") {
+      return [
+        { value: "", label: "All" },
+        { value: "Paid", label: "Paid" },
+        { value: "Pending", label: "Pending" },
+        { value: "Failed", label: "Failed" },
+      ];
+    }
+    if (tab === "webhooks") {
+      return [
+        { value: "", label: "All" },
+        { value: "Processed", label: "Processed" },
+        { value: "Unprocessed", label: "Unprocessed" },
+        { value: "Error", label: "Error" },
+      ];
+    }
+    // intents
+    return [
+      { value: "", label: "All" },
+      { value: "Pending", label: "Pending" },
+      { value: "Success", label: "Success" },
+      { value: "Failed", label: "Failed" },
+    ];
+  }, [tab]);
+
+  const pageCounts = useMemo(() => {
+    const items = data.items || [];
+    let ok = 0,
+      bad = 0,
+      pend = 0;
+    for (const x of items) {
+      const t = statusTone(tab === "webhooks" ? (x.processed ? "Processed" : "Unprocessed") : x.status);
+      if (t === "success") ok++;
+      else if (t === "failed") bad++;
+      else if (t === "pending") pend++;
+    }
+    return { ok, bad, pend, total: items.length };
+  }, [data.items, tab]);
+
   async function load(p = 1) {
     setLoading(true);
     setErr("");
@@ -76,6 +142,9 @@ export default function AdminPayments() {
 
       if (q.trim()) params.q = q.trim();
       if (provider) params.provider = provider;
+
+      // Safe: backend can ignore if unsupported
+      if (status) params.status = status;
 
       if (from) params.from = new Date(from).toISOString();
       if (to) params.to = new Date(to).toISOString();
@@ -103,13 +172,14 @@ export default function AdminPayments() {
   function clear() {
     setQ("");
     setProvider("");
+    setStatus("");
     setFrom("");
     setTo("");
     setTimeout(() => load(1), 0);
   }
 
   return (
-    <div className="adminCrud">
+    <div className="adminCrud paymentsPage">
       <div className="adminCrud__header">
         <div>
           <h1 className="adminCrud__title">Payments</h1>
@@ -126,61 +196,92 @@ export default function AdminPayments() {
       <div className="card">
         {/* Tabs */}
         <div className="tabsRow">
-          <button
-            className={cn("tabBtn", tab === "intents" && "active")}
-            onClick={() => setTab("intents")}
-          >
+          <button className={cn("tabBtn", tab === "intents" && "active")} onClick={() => setTab("intents")}>
             Payment Intents
           </button>
-          <button
-            className={cn("tabBtn", tab === "transactions" && "active")}
-            onClick={() => setTab("transactions")}
-          >
+          <button className={cn("tabBtn", tab === "transactions" && "active")} onClick={() => setTab("transactions")}>
             Transactions
           </button>
-          <button
-            className={cn("tabBtn", tab === "webhooks" && "active")}
-            onClick={() => setTab("webhooks")}
-          >
+          <button className={cn("tabBtn", tab === "webhooks" && "active")} onClick={() => setTab("webhooks")}>
             Webhooks
           </button>
         </div>
 
-        {/* Filters */}
-        <div className="filtersGrid" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr" }}>
-          <div className="field">
-            <label>Search</label>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Reference, txn id, invoice id..." />
+        {/* Toolbar (subscriptions-like layout) */}
+        <div className="paymentsToolbar">
+          {/* Row 1: Search left, pills + filters right */}
+          <div className="paymentsToolbarRow">
+            <div className="paymentsToolbarLeft">
+              <div className="toolbarField toolbarField--search">
+                <label>Search</label>
+                <input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Reference, txn id, invoice id…"
+                />
+              </div>
+            </div>
+
+            <div className="paymentsToolbarRight">
+              <div className="pillsRow" aria-label="Summary">
+                <span className="pill">
+                  Total <b>{data.totalCount || 0}</b>
+                </span>
+                <span className={cn("pill", pageCounts.ok ? "pill--ok" : "")}>
+                  Success <b>{pageCounts.ok}</b>
+                </span>
+                <span className={cn("pill", pageCounts.pend ? "pill--warn" : "")}>
+                  Pending <b>{pageCounts.pend}</b>
+                </span>
+                <span className={cn("pill", pageCounts.bad ? "pill--bad" : "")}>
+                  Failed <b>{pageCounts.bad}</b>
+                </span>
+              </div>
+
+              <div className="toolbarField toolbarField--compact">
+                <label>Provider</label>
+                <select value={provider} onChange={(e) => setProvider(e.target.value)}>
+                  <option value="">All</option>
+                  <option value="Mpesa">Mpesa</option>
+                  <option value="Paystack">Paystack</option>
+                </select>
+              </div>
+
+              <div className="toolbarField toolbarField--compact">
+                <label>Status</label>
+                <select value={status} onChange={(e) => setStatus(e.target.value)}>
+                  {statusOptions.map((o) => (
+                    <option key={o.value || "all"} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
 
-          <div className="field">
-            <label>Provider</label>
-            <select value={provider} onChange={(e) => setProvider(e.target.value)}>
-              <option value="">All</option>
-              <option value="Mpesa">Mpesa</option>
-              <option value="Paystack">Paystack</option>
-            </select>
-          </div>
+          {/* Row 2: Dates + actions right */}
+          <div className="paymentsToolbarRow">
+            <div className="paymentsToolbarLeft">
+              <div className="toolbarField toolbarField--compact">
+                <label>From</label>
+                <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+              </div>
+              <div className="toolbarField toolbarField--compact">
+                <label>To</label>
+                <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+              </div>
+            </div>
 
-          <div className="field">
-            <label>From</label>
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </div>
-
-          <div className="field">
-            <label>To</label>
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-          </div>
-
-          <div className="field field--actions">
-            <label>&nbsp;</label>
-            <div className="rowActions">
-              <button className="btnPrimary" onClick={apply} disabled={loading}>
-                Apply
-              </button>
-              <button className="btnGhost" onClick={clear} disabled={loading}>
-                Clear
-              </button>
+            <div className="paymentsToolbarRight">
+              <div className="toolbarActions">
+                <button className="btnPrimary" onClick={apply} disabled={loading}>
+                  Apply
+                </button>
+                <button className="btnGhost" onClick={clear} disabled={loading}>
+                  Clear
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -194,14 +295,14 @@ export default function AdminPayments() {
             <table className="adminTable">
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>Provider</th>
-                  <th>Purpose</th>
-                  <th>Reference</th>
-                  <th>Status</th>
-                  <th>Issued</th>
-                  <th className="num">Amount</th>
-                  <th className="num">Invoice</th>
+                  <th className="col-id">ID</th>
+                  <th className="col-provider">Provider</th>
+                  <th className="col-purpose">Purpose</th>
+                  <th className="col-ref">Reference</th>
+                  <th className="col-status">Status</th>
+                  <th className="col-date">Issued</th>
+                  <th className="col-amount num">Amount</th>
+                  <th className="col-invoice num">Invoice</th>
                 </tr>
               </thead>
               <tbody>
@@ -209,9 +310,15 @@ export default function AdminPayments() {
                   <tr key={x.id}>
                     <td>{x.id}</td>
                     <td>{x.provider}</td>
-                    <td>{x.purpose}</td>
-                    <td className="mutedSmall">{x.providerReference || x.providerTransactionId || "-"}</td>
-                    <td>{x.status}</td>
+                    <td className="purposeCell" title={x.purpose || ""}>
+                      {x.purpose}
+                    </td>
+                    <td className="mutedSmall refCell" title={x.providerReference || x.providerTransactionId || ""}>
+                      {x.providerReference || x.providerTransactionId || "-"}
+                    </td>
+                    <td>
+                      <StatusPill value={x.status} />
+                    </td>
                     <td>{fmtDate(x.createdAt)}</td>
                     <td className="num">{fmtMoney(x.amount, x.currency)}</td>
                     <td className="num">{x.invoiceId ?? "-"}</td>
@@ -232,14 +339,14 @@ export default function AdminPayments() {
             <table className="adminTable">
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>Provider</th>
-                  <th>Txn ID</th>
-                  <th>Reference</th>
-                  <th>Paid</th>
-                  <th className="num">Amount</th>
-                  <th>Channel</th>
-                  <th>Created</th>
+                  <th className="col-id">ID</th>
+                  <th className="col-provider">Provider</th>
+                  <th className="col-ref">Txn ID</th>
+                  <th className="col-ref">Reference</th>
+                  <th className="col-date">Paid</th>
+                  <th className="col-amount num">Amount</th>
+                  <th className="col-provider">Channel</th>
+                  <th className="col-date">Created</th>
                 </tr>
               </thead>
               <tbody>
@@ -247,8 +354,12 @@ export default function AdminPayments() {
                   <tr key={x.id}>
                     <td>{x.id}</td>
                     <td>{x.provider}</td>
-                    <td className="mutedSmall">{x.providerTransactionId}</td>
-                    <td className="mutedSmall">{x.reference || "-"}</td>
+                    <td className="mutedSmall refCell" title={x.providerTransactionId || ""}>
+                      {x.providerTransactionId}
+                    </td>
+                    <td className="mutedSmall refCell" title={x.reference || ""}>
+                      {x.reference || "-"}
+                    </td>
                     <td>{x.paidAt ? fmtDate(x.paidAt) : "-"}</td>
                     <td className="num">{fmtMoney(x.amount, x.currency)}</td>
                     <td>{x.channel || "-"}</td>
@@ -270,13 +381,13 @@ export default function AdminPayments() {
             <table className="adminTable">
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>Provider</th>
-                  <th>Type</th>
-                  <th>Ref</th>
-                  <th>Received</th>
-                  <th>Processed</th>
-                  <th>Error</th>
+                  <th className="col-id">ID</th>
+                  <th className="col-provider">Provider</th>
+                  <th className="col-purpose">Type</th>
+                  <th className="col-ref">Ref</th>
+                  <th className="col-date">Received</th>
+                  <th className="col-status">Processed</th>
+                  <th className="col-purpose">Error</th>
                 </tr>
               </thead>
               <tbody>
@@ -284,11 +395,19 @@ export default function AdminPayments() {
                   <tr key={x.id}>
                     <td>{x.id}</td>
                     <td>{x.provider}</td>
-                    <td className="mutedSmall">{x.eventType}</td>
-                    <td className="mutedSmall">{x.reference || "-"}</td>
+                    <td className="mutedSmall purposeCell" title={x.eventType || ""}>
+                      {x.eventType}
+                    </td>
+                    <td className="mutedSmall refCell" title={x.reference || ""}>
+                      {x.reference || "-"}
+                    </td>
                     <td>{fmtDate(x.receivedAt)}</td>
-                    <td>{x.processed ? "Yes" : "No"}</td>
-                    <td className="mutedSmall">{x.processingError || "-"}</td>
+                    <td>
+                      <StatusPill value={x.processed ? "Processed" : "Unprocessed"} />
+                    </td>
+                    <td className="mutedSmall purposeCell" title={x.processingError || ""}>
+                      {x.processingError || "-"}
+                    </td>
                   </tr>
                 ))}
                 {!loading && (data.items || []).length === 0 ? (
