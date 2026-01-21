@@ -93,14 +93,7 @@ async function postMultipartWithFallback(paths, formData) {
 }
 
 /** ✅ Must match backend enum values EXACTLY */
-const CATEGORY_OPTIONS = [
-  "Commentaries",
-  "InternationalTitles",
-  "Journals",
-  "LawReports",
-  "Statutes",
-  "LLRServices",
-];
+const CATEGORY_OPTIONS = ["Commentaries", "InternationalTitles", "Journals", "LawReports", "Statutes", "LLRServices"];
 
 function pickKind(r) {
   return r?.kind ?? r?.Kind ?? null;
@@ -136,7 +129,6 @@ async function enrichAdminListIfNeeded(all) {
 
   if (needs.length === 0) return all;
 
-  // limit concurrency by chunking
   const byId = new Map(all.map((r) => [r.id, { ...r }]));
   const ids = needs.map((r) => r.id).filter(Boolean);
 
@@ -157,7 +149,6 @@ async function enrichAdminListIfNeeded(all) {
     for (const d of results) {
       if (!d?.id) continue;
       const existing = byId.get(d.id) || {};
-      // merge: keep list fields, overlay detail fields (kind/fileType/contentProductId/etc)
       byId.set(d.id, { ...existing, ...d });
     }
   }
@@ -186,6 +177,68 @@ const emptyForm = {
   publicPrice: "",
   publicCurrency: "KES",
 };
+
+/* =========================
+   Tiny icons (no deps)
+========================= */
+function IRefresh() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M21 3v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function IPlus() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IEdit() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 20h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path
+        d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+function ICopy() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M9 9h13v13H9V9z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path
+        d="M5 15H2V2h13v3"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IconButton({ title, onClick, disabled, kind = "neutral", children }) {
+  return (
+    <button
+      type="button"
+      className={`admin-icon-btn ${kind}`}
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={title}
+    >
+      {children}
+    </button>
+  );
+}
 
 export default function AdminDocuments() {
   const [rows, setRows] = useState([]);
@@ -222,17 +275,14 @@ export default function AdminDocuments() {
     setLoading(true);
 
     try {
-      const [docsRes, countriesRes] = await Promise.all([
-        api.get("/legal-documents/admin"),
-        api.get("/Country"),
-      ]);
+      const [docsRes, countriesRes] = await Promise.all([api.get("/legal-documents/admin"), api.get("/Country")]);
 
       let all = Array.isArray(docsRes.data) ? docsRes.data : [];
 
-      // 🔧 key fix: enrich missing Kind/FileType
+      // 🔧 enrich missing Kind/FileType
       all = await enrichAdminListIfNeeded(all);
 
-      // ✅ filter out reports (this page is Standard-only)
+      // ✅ filter out reports
       setRows(all.filter((r) => !isReportRow(r)));
 
       setCountries(Array.isArray(countriesRes.data) ? countriesRes.data : []);
@@ -296,7 +346,6 @@ export default function AdminDocuments() {
       const res = await api.get(`/legal-documents/${row.id}`);
       const d = res.data;
 
-      // ✅ If someone tries to open a report here, block it (safety)
       if (isReportRow(d)) {
         setInfo("This item is a Report. Please manage it from Admin → LLR Services.");
         setOpen(false);
@@ -324,6 +373,12 @@ export default function AdminDocuments() {
         publicPrice: d.publicPrice ?? d.PublicPrice ?? "",
         publicCurrency: d.publicCurrency ?? d.PublicCurrency ?? "KES",
       });
+
+      // keep latest server cover path if present
+      setEditing((p) => ({
+        ...(p || row),
+        coverImagePath: d.coverImagePath ?? d.CoverImagePath ?? (p?.coverImagePath ?? row?.coverImagePath ?? null),
+      }));
     } catch {
       setInfo("Loaded partial row (details endpoint failed).");
     }
@@ -348,7 +403,7 @@ export default function AdminDocuments() {
       category: form.category,
       countryId: Number(form.countryId),
 
-      // ✅ Standard page forces Kind=Standard (no UI field)
+      // ✅ Standard page forces Kind=Standard
       kind: "Standard",
 
       filePath: "",
@@ -415,10 +470,8 @@ export default function AdminDocuments() {
 
     if (form.isPremium && form.allowPublicPurchase) {
       const priceNum = Number(form.publicPrice);
-      if (!form.publicCurrency?.trim())
-        return setError("Currency is required when public purchase is ON.");
-      if (!Number.isFinite(priceNum) || priceNum <= 0)
-        return setError("Price must be greater than 0.");
+      if (!form.publicCurrency?.trim()) return setError("Currency is required when public purchase is ON.");
+      if (!Number.isFinite(priceNum) || priceNum <= 0) return setError("Price must be greater than 0.");
     }
 
     setBusy(true);
@@ -502,6 +555,16 @@ export default function AdminDocuments() {
     }
   }
 
+  async function copyToClipboard(text) {
+    try {
+      await navigator.clipboard.writeText(String(text || ""));
+      setInfo("Copied to clipboard.");
+      setTimeout(() => setInfo(""), 1200);
+    } catch {
+      setError("Copy failed. Please copy manually.");
+    }
+  }
+
   function getCurrency(r) {
     return r.publicCurrency ?? r.PublicCurrency ?? null;
   }
@@ -514,6 +577,7 @@ export default function AdminDocuments() {
   }
 
   const showPricing = !!form.isPremium;
+  const canClose = !(busy || uploadingCover || uploadingEbook);
 
   return (
     <div className="admin-page admin-page-wide">
@@ -525,6 +589,7 @@ export default function AdminDocuments() {
         .num-cell { text-align: right; font-variant-numeric: tabular-nums; }
         .price-on { font-weight: 900; }
 
+        /* modal section blocks */
         .admin-form-section {
           margin: 12px 0 10px;
           padding: 12px 12px;
@@ -555,6 +620,9 @@ export default function AdminDocuments() {
           padding:8px 10px; border-radius:12px; margin-top:8px;
           font-size:12px; font-weight:800;
         }
+
+        /* allow 2-col span helper without touching global css */
+        .admin-span2 { grid-column: 1 / -1; }
       `}</style>
 
       <div className="admin-header">
@@ -565,12 +633,20 @@ export default function AdminDocuments() {
           </p>
         </div>
 
-        <div className="admin-actions">
-          <button className="admin-btn" onClick={loadAll} disabled={busy || loading}>
-            Refresh
-          </button>
-          <button className="admin-btn primary compact" onClick={openCreate} disabled={busy}>
-            + New
+        {/* ✅ Icon actions + single row */}
+        <div className="admin-actions admin-actions-inline">
+          <IconButton title="Refresh list" onClick={loadAll} disabled={busy || loading}>
+            <IRefresh />
+          </IconButton>
+
+          <button
+            className="admin-btn primary compact"
+            onClick={openCreate}
+            disabled={busy}
+            title="Create a new document"
+            style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+          >
+            <IPlus /> New
           </button>
         </div>
       </div>
@@ -592,12 +668,16 @@ export default function AdminDocuments() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th style={{ width: "50%" }}>Title</th>
-                <th style={{ width: "14%" }}>Status</th>
+                <th style={{ width: "46%" }}>Title</th>
+                <th style={{ width: "12%" }}>Status</th>
                 <th style={{ width: "10%" }}>Premium</th>
-                <th style={{ width: "8%" }} className="num-cell">Pages</th>
-                <th style={{ width: "10%" }}>Currency</th>
-                <th style={{ width: "10%" }} className="num-cell">Public Price</th>
+                <th style={{ width: "8%" }} className="num-cell">
+                  Pages
+                </th>
+                <th style={{ width: "10%" }}>Public</th>
+                <th style={{ width: "14%" }} className="num-cell">
+                  Price
+                </th>
                 <th style={{ textAlign: "right", width: "16%" }}>Actions</th>
               </tr>
             </thead>
@@ -637,9 +717,9 @@ export default function AdminDocuments() {
                       {!isPremium ? (
                         <span className="admin-pill muted">N/A</span>
                       ) : allow ? (
-                        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                           <span className="admin-pill ok">On</span>
-                          <span>{currency || "—"}</span>
+                          <span style={{ fontWeight: 800, color: "#111827" }}>{currency || "—"}</span>
                         </span>
                       ) : (
                         <span className="admin-pill muted">Off</span>
@@ -658,11 +738,12 @@ export default function AdminDocuments() {
                       )}
                     </td>
 
-                    <td>
-                      <div className="admin-row-actions" style={{ justifyContent: "flex-end", gap: 10 }}>
-                        <button className="admin-action-btn neutral small" onClick={() => openEdit(r)} disabled={busy}>
-                          Edit
-                        </button>
+                    <td style={{ textAlign: "right" }}>
+                      {/* ✅ single-row icon action */}
+                      <div className="admin-row-actions actions-inline no-wrap" style={{ justifyContent: "flex-end" }}>
+                        <IconButton title="Edit document" onClick={() => openEdit(r)} disabled={busy} kind="neutral">
+                          <IEdit />
+                        </IconButton>
                       </div>
                     </td>
                   </tr>
@@ -673,10 +754,11 @@ export default function AdminDocuments() {
         </div>
       </div>
 
+      {/* MODAL */}
       {open && (
         <div className="admin-modal-overlay" onClick={closeModal}>
           <div className="admin-modal admin-modal-tight" onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-head">
+            <div className="admin-modal-head admin-modal-head-x">
               <div>
                 <h3 className="admin-modal-title">{editing ? `Edit Document #${editing.id}` : "Create Document"}</h3>
                 <div className="admin-modal-subtitle">
@@ -684,17 +766,23 @@ export default function AdminDocuments() {
                 </div>
               </div>
 
-              <button className="admin-btn" onClick={closeModal} disabled={busy || uploadingCover || uploadingEbook}>
-                Close
+              {/* ✅ Always-visible X */}
+              <button
+                type="button"
+                className="admin-modal-xbtn"
+                onClick={closeModal}
+                disabled={!canClose}
+                aria-label="Close"
+                title="Close"
+              >
+                ✕
               </button>
             </div>
 
             <div className="admin-modal-body admin-modal-scroll">
               <div className="admin-form-section">
                 <div className="admin-form-section-title">Document details</div>
-                <div className="admin-form-section-sub">
-                  Title, jurisdiction, category, pages and descriptive metadata.
-                </div>
+                <div className="admin-form-section-sub">Title, jurisdiction, category, pages and descriptive metadata.</div>
               </div>
 
               <div className="admin-grid">
@@ -733,9 +821,7 @@ export default function AdminDocuments() {
                       </option>
                     ))}
                   </select>
-                  <div className="minihelp">
-                    These options match the backend enum (prevents 400 errors).
-                  </div>
+                  <div className="minihelp">These options match the backend enum (prevents 400 errors).</div>
                 </div>
 
                 <div className="admin-field">
@@ -753,10 +839,7 @@ export default function AdminDocuments() {
 
                 <div className="admin-field">
                   <label>Premium?</label>
-                  <select
-                    value={String(!!form.isPremium)}
-                    onChange={(e) => setField("isPremium", e.target.value === "true")}
-                  >
+                  <select value={String(!!form.isPremium)} onChange={(e) => setField("isPremium", e.target.value === "true")}>
                     <option value="true">Yes</option>
                     <option value="false">No</option>
                   </select>
@@ -795,15 +878,8 @@ export default function AdminDocuments() {
 
               <div className="admin-form-section">
                 <div className="admin-form-section-title">Pricing rules</div>
-                <div className="admin-form-section-sub">
-                  Only premium documents can be sold publicly.
-                </div>
-
-                {!showPricing && (
-                  <div className="minihelp warn">
-                    This document is FREE (Premium = No). Pricing is disabled and will not be saved.
-                  </div>
-                )}
+                <div className="admin-form-section-sub">Only premium documents can be sold publicly.</div>
+                {!showPricing && <div className="minihelp warn">This document is FREE (Premium = No). Pricing is disabled and will not be saved.</div>}
               </div>
 
               <div className="admin-grid">
@@ -843,9 +919,7 @@ export default function AdminDocuments() {
 
               <div className="admin-form-section">
                 <div className="admin-form-section-title">Files</div>
-                <div className="admin-form-section-sub">
-                  Save first (to get an ID), then upload ebook and cover.
-                </div>
+                <div className="admin-form-section-sub">Save first (to get an ID), then upload ebook and cover.</div>
               </div>
 
               <div className="admin-grid">
@@ -862,11 +936,7 @@ export default function AdminDocuments() {
                     />
 
                     <div className="admin-upload-actions">
-                      <button
-                        className="admin-btn"
-                        onClick={uploadEbook}
-                        disabled={!editing || uploadingEbook || uploadingCover || busy}
-                      >
+                      <button className="admin-btn" type="button" onClick={uploadEbook} disabled={!editing || uploadingEbook || uploadingCover || busy}>
                         {uploadingEbook ? "Uploading…" : "Upload ebook"}
                       </button>
                       <span className="filehint">{ebookFile ? ebookFile.name : "No file selected."}</span>
@@ -887,17 +957,25 @@ export default function AdminDocuments() {
                     />
 
                     <div className="admin-upload-actions">
-                      <button
-                        className="admin-btn"
-                        onClick={uploadCover}
-                        disabled={!editing || uploadingCover || uploadingEbook || busy}
-                      >
+                      <button className="admin-btn" type="button" onClick={uploadCover} disabled={!editing || uploadingCover || uploadingEbook || busy}>
                         {uploadingCover ? "Uploading…" : "Upload cover"}
                       </button>
                       <span className="filehint">{coverFile ? coverFile.name : "No file selected."}</span>
+
+                      {/* handy copy for cover url/debug */}
+                      {editing?.coverImagePath ? (
+                        <IconButton
+                          title="Copy cover URL"
+                          onClick={() => copyToClipboard(buildCoverUrl(editing.coverImagePath))}
+                          disabled={!editing?.coverImagePath}
+                          kind="neutral"
+                        >
+                          <ICopy />
+                        </IconButton>
+                      ) : null}
                     </div>
 
-                    {editing?.coverImagePath && (
+                    {editing?.coverImagePath ? (
                       <div style={{ marginTop: 10, display: "flex", gap: 12, alignItems: "center" }}>
                         <img
                           src={buildCoverUrl(editing.coverImagePath)}
@@ -915,6 +993,10 @@ export default function AdminDocuments() {
                           Current cover is shown if available.
                         </div>
                       </div>
+                    ) : (
+                      <div className="minihelp" style={{ marginTop: 8 }}>
+                        No cover uploaded yet.
+                      </div>
                     )}
                   </div>
                 </div>
@@ -922,11 +1004,11 @@ export default function AdminDocuments() {
             </div>
 
             <div className="admin-modal-foot">
-              <button className="admin-btn" onClick={closeModal} disabled={busy || uploadingCover || uploadingEbook}>
+              <button className="admin-btn" onClick={closeModal} disabled={!canClose}>
                 Cancel
               </button>
 
-              <button className="admin-btn primary" onClick={save} disabled={busy || uploadingCover || uploadingEbook}>
+              <button className="admin-btn primary" onClick={save} disabled={!canClose}>
                 {busy ? "Saving…" : editing ? "Save changes" : "Create"}
               </button>
             </div>

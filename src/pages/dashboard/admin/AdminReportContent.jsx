@@ -44,7 +44,6 @@ function toInt(v, fallback = 0) {
 
 function enumToInt(value, options, fallback = 0) {
   if (value === null || value === undefined) return fallback;
-
   if (typeof value === "number") return toInt(value, fallback);
 
   const s = String(value).trim();
@@ -80,81 +79,43 @@ const CASETYPE_OPTIONS = [
 ];
 
 /* =========================
-   Inline SVG Icons (no deps)
+   Icons + Icon button
 ========================= */
-function Icon({ name }) {
-  const common = {
-    width: 18,
-    height: 18,
-    viewBox: "0 0 24 24",
-    fill: "none",
-    xmlns: "http://www.w3.org/2000/svg",
-  };
-
-  switch (name) {
-    case "back":
-      return (
-        <svg {...common}>
-          <path
-            d="M15 18l-6-6 6-6"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      );
-    case "refresh":
-      return (
-        <svg {...common}>
-          <path
-            d="M21 12a9 9 0 1 1-2.64-6.36"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-          <path
-            d="M21 3v6h-6"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      );
-    case "save":
-      return (
-        <svg {...common}>
-          <path
-            d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M17 21v-8H7v8"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M7 3v5h8"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
-        </svg>
-      );
-    default:
-      return null;
-  }
+function IBack() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function IRefresh() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M21 3v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function ISave() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path d="M17 21v-8H7v8" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M7 3v5h8" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
-function IconButton({ title, onClick, disabled, tone = "neutral", children }) {
+function IconButton({ title, onClick, disabled, kind = "neutral", children }) {
   return (
     <button
       type="button"
-      className={`la-icon-btn ${tone}`}
+      className={`admin-icon-btn ${kind}`}
       title={title}
       onClick={onClick}
       disabled={disabled}
@@ -183,7 +144,6 @@ function resolveReportId({ params, location }) {
     if (Number.isFinite(n) && n > 0) return Math.floor(n);
   }
 
-  // querystring: ?id=123
   try {
     const qs = new URLSearchParams(location?.search || "");
     const qid = qs.get("id");
@@ -193,7 +153,6 @@ function resolveReportId({ params, location }) {
     // ignore
   }
 
-  // pathname fallback: extract first number (e.g. /llr-services/123/content)
   const path = String(location?.pathname || "");
   const m = path.match(/\/(\d+)(?:\/|$)/);
   if (m && m[1]) {
@@ -210,7 +169,6 @@ export default function AdminReportContent() {
   const location = useLocation();
 
   const initialTitle = location.state?.title || "";
-
   const reportId = useMemo(() => resolveReportId({ params, location }), [params, location]);
 
   const [loading, setLoading] = useState(true);
@@ -256,7 +214,6 @@ export default function AdminReportContent() {
     setInfo("");
 
     try {
-      // Pull enum values from dto (or fall back to defaults)
       const decisionType = enumToInt(pick(dto, ["decisionType", "DecisionType"], 1), DECISION_OPTIONS, 1);
       const caseType = enumToInt(pick(dto, ["caseType", "CaseType"], 2), CASETYPE_OPTIONS, 2);
 
@@ -268,14 +225,12 @@ export default function AdminReportContent() {
 
       if (!payload.contentText.trim()) throw new Error("Content is required.");
 
-      // ✅ IMPORTANT: use content-only endpoint to avoid CourtType validation
+      // ✅ content-only endpoint
       await api.put(`/law-reports/${reportId}/content`, payload);
 
       const nowIso = new Date().toISOString();
       setLastSavedAt(nowIso);
       setInfo("Saved.");
-
-      // Refresh to keep dto in sync (optional but nice)
       await load();
     } catch (e) {
       setError(getApiErrorMessage(e, "Failed to save report content."));
@@ -300,31 +255,44 @@ export default function AdminReportContent() {
   return (
     <div className="admin-page admin-page-wide">
       <style>{`
-        .rc-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+        .rc-head {
+          display:flex;
+          align-items:flex-start;
+          justify-content:space-between;
+          gap:12px;
+        }
         .rc-title { font-size: 22px; font-weight: 900; margin: 0; }
         .rc-sub { color:#6b7280; margin-top:6px; font-size: 13px; font-weight: 700; }
-        .rc-actions { display:flex; gap:10px; align-items:center; flex-wrap:nowrap; }
-        .rc-card { margin-top: 14px; border-radius: 16px; border: 1px solid #e5e7eb; background: #fff; overflow: hidden; }
-        .rc-meta { display:flex; gap:10px; flex-wrap:wrap; padding: 12px 14px; background: #fafafa; border-bottom: 1px solid #e5e7eb; color:#374151; font-weight: 800; font-size: 12px; }
-        .rc-pill { display:inline-flex; align-items:center; gap:8px; border: 1px solid #e5e7eb; background:#fff; padding: 6px 10px; border-radius: 999px; }
-        .rc-editor-wrap { padding: 14px; }
-        .ck-editor__editable_inline { min-height: 68vh; }
-
-        .la-icon-btn {
-          display:inline-flex; align-items:center; justify-content:center;
-          width: 36px; height: 36px;
-          border-radius: 12px;
+        .rc-actions { display:flex; gap:10px; align-items:center; flex-wrap:nowrap; white-space:nowrap; }
+        .rc-card {
+          margin-top: 14px;
+          border-radius: 16px;
           border: 1px solid #e5e7eb;
           background: #fff;
-          cursor: pointer;
-          color: #111827;
+          overflow: hidden;
         }
-        .la-icon-btn:hover { background:#fafafa; }
-        .la-icon-btn:disabled { opacity: .55; cursor: not-allowed; }
-        .la-icon-btn.primary { border-color:#c7d2fe; }
-        .la-icon-btn.primary:hover { background:#f5f7ff; }
-        .la-icon-btn.success { border-color:#bbf7d0; }
-        .la-icon-btn.success:hover { background:#f0fdf4; }
+        .rc-meta {
+          display:flex;
+          gap:10px;
+          flex-wrap:wrap;
+          padding: 12px 14px;
+          background: #fafafa;
+          border-bottom: 1px solid #e5e7eb;
+          color:#374151;
+          font-weight: 800;
+          font-size: 12px;
+        }
+        .rc-pill {
+          display:inline-flex;
+          align-items:center;
+          gap:8px;
+          border: 1px solid #e5e7eb;
+          background:#fff;
+          padding: 6px 10px;
+          border-radius: 999px;
+        }
+        .rc-editor-wrap { padding: 14px; }
+        .ck-editor__editable_inline { min-height: 68vh; }
       `}</style>
 
       <div className="rc-head">
@@ -343,17 +311,18 @@ export default function AdminReportContent() {
           </div>
         </div>
 
+        {/* ✅ Icon actions, single row */}
         <div className="rc-actions">
-          <IconButton title="Back" onClick={() => navigate(-1)} disabled={saving}>
-            <Icon name="back" />
+          <IconButton title="Back" onClick={() => navigate(-1)} disabled={saving} kind="neutral">
+            <IBack />
           </IconButton>
 
-          <IconButton title="Refresh" onClick={load} disabled={loading || saving} tone="primary">
-            <Icon name="refresh" />
+          <IconButton title="Refresh" onClick={load} disabled={loading || saving} kind="neutral">
+            <IRefresh />
           </IconButton>
 
-          <IconButton title="Save" onClick={save} disabled={loading || saving} tone="success">
-            <Icon name="save" />
+          <IconButton title="Save" onClick={save} disabled={loading || saving} kind="ok">
+            <ISave />
           </IconButton>
         </div>
       </div>
@@ -385,9 +354,7 @@ export default function AdminReportContent() {
               editor={ClassicEditor}
               data={contentHtml}
               disabled={saving}
-              onChange={(event, editor) => {
-                setContentHtml(editor.getData());
-              }}
+              onChange={(event, editor) => setContentHtml(editor.getData())}
               config={{
                 toolbar: [
                   "heading",
@@ -430,11 +397,7 @@ export default function AdminReportContent() {
         }
         right={
           <span className="admin-footer-muted">
-            {saving
-              ? "Saving…"
-              : lastSavedAt
-              ? `Last saved: ${new Date(lastSavedAt).toLocaleString()}`
-              : "Tip: Paste from Word, then use “Remove format” if needed."}
+            {saving ? "Saving…" : lastSavedAt ? `Last saved: ${new Date(lastSavedAt).toLocaleString()}` : "Tip: Paste from Word, then use “Remove format” if needed."}
           </span>
         }
       />

@@ -4,12 +4,16 @@ import api from "../../../api/client";
 import "../../../styles/adminCrud.css";
 import AdminPageFooter from "../../../components/AdminPageFooter";
 
+/* =========================
+   Helpers
+========================= */
 function toText(v) {
   if (v == null) return "";
   if (typeof v === "string") return v;
   if (typeof v === "number" || typeof v === "boolean") return String(v);
   if (typeof v === "object") {
     if (v.message) return String(v.message);
+    if (v.error) return String(v.error);
     try {
       return JSON.stringify(v, null, 2);
     } catch {
@@ -21,6 +25,75 @@ function toText(v) {
 
 function pillYesNo(v) {
   return v ? "Yes" : "No";
+}
+
+/* =========================
+   Tiny icons (no deps)
+========================= */
+function IBack() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function IRefresh() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M21 3v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function IPlus() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+function ITrash() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M3 6h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path
+        d="M8 6V4h8v2m-1 0v14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V6h10Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IAddDoc() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path d="M14 2v6h6" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M12 11v6M9 14h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconButton({ title, onClick, disabled, kind = "neutral", children }) {
+  return (
+    <button
+      type="button"
+      className={`admin-icon-btn ${kind}`}
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={title}
+    >
+      {children}
+    </button>
+  );
 }
 
 export default function AdminProductDocuments() {
@@ -43,7 +116,7 @@ export default function AdminProductDocuments() {
   const [docId, setDocId] = useState("");
   const [sortOrder, setSortOrder] = useState(0);
 
-  // ✅ UX: filter for the document dropdown
+  // filter for dropdown
   const [docFilter, setDocFilter] = useState("");
 
   async function loadProduct() {
@@ -187,19 +260,33 @@ export default function AdminProductDocuments() {
           </p>
         </div>
 
-        <div className="admin-actions">
-          <button className="admin-btn" onClick={() => nav(-1)} disabled={busy}>
-            ← Back
-          </button>
-          <button className="admin-btn" onClick={loadAll} disabled={busy || loading}>
-            Refresh
-          </button>
+        {/* ✅ Icon actions, single row */}
+        <div className="admin-actions admin-actions-inline">
+          <IconButton title="Back" onClick={() => nav(-1)} disabled={busy} kind="neutral">
+            <IBack />
+          </IconButton>
+          <IconButton title="Refresh" onClick={loadAll} disabled={busy || loading} kind="neutral">
+            <IRefresh />
+          </IconButton>
+
+          {/* Optional: jump to Add section by focusing filter */}
+          <IconButton
+            title="Add a document"
+            onClick={() => {
+              const el = document.querySelector(".admin-docmap-filter");
+              el?.focus?.();
+            }}
+            disabled={busy || loading}
+            kind="ok"
+          >
+            <IPlus />
+          </IconButton>
         </div>
       </div>
 
       {(error || info) && <div className={`admin-alert ${error ? "error" : "ok"}`}>{error ? error : info}</div>}
 
-      {/* ✅ Add panel (COMPACT: no admin-card-fill here) */}
+      {/* Add panel */}
       <div className="admin-card admin-docmap-add admin-docmap-add-compact">
         <div className="admin-docmap-addhead">
           <div>
@@ -240,7 +327,7 @@ export default function AdminProductDocuments() {
               </div>
 
               {!!docFilter.trim() && (
-                <div className="admin-help" style={{ marginTop: 6 }}>
+                <div className="admin-help" style={{ marginTop: 6, fontSize: 12, color: "#6b7280", fontWeight: 700 }}>
                   Showing <b>{filteredAvailableDocs.length}</b> of <b>{availableDocs.length}</b>
                 </div>
               )}
@@ -260,14 +347,17 @@ export default function AdminProductDocuments() {
               />
             </div>
 
+            {/* ✅ Icon + text button, still compact */}
             <button className="admin-btn primary admin-docmap-addbtn" type="submit" disabled={busy || loading}>
-              {busy ? "Adding…" : "Add"}
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <IAddDoc /> {busy ? "Adding…" : "Add"}
+              </span>
             </button>
           </div>
         </form>
       </div>
 
-      {/* ✅ List (THIS is the one that should fill height + internally scroll) */}
+      {/* List */}
       <div className="admin-card admin-card-fill admin-docmap-list">
         <div className="admin-toolbar admin-docmap-toolbar">
           <input
@@ -279,7 +369,6 @@ export default function AdminProductDocuments() {
           <div className="admin-pill muted">{loading ? "Loading…" : `${filteredRows.length} document(s)`}</div>
         </div>
 
-        {/* ✅ NEW: internal scroll wrapper */}
         <div className="admin-docmap-tablewrap">
           <table className="admin-table admin-table-compact">
             <thead>
@@ -329,19 +418,22 @@ export default function AdminProductDocuments() {
                         defaultValue={String(so)}
                         disabled={busy}
                         onBlur={(e) => updateSort(r, e.target.value)}
-                        title="Edit and click away to save"
+                        title="Edit SortOrder then click away to save"
                       />
                     </td>
 
                     <td style={{ textAlign: "right" }}>
-                      <button
-                        className="admin-action-btn neutral small danger-outline"
-                        onClick={() => removeRow(r)}
-                        disabled={busy}
-                        title="Remove from product"
-                      >
-                        Remove
-                      </button>
+                      {/* ✅ One-row, icon-only */}
+                      <div className="admin-row-actions actions-inline no-wrap" style={{ justifyContent: "flex-end" }}>
+                        <IconButton
+                          title="Remove from product"
+                          onClick={() => removeRow(r)}
+                          disabled={busy}
+                          kind="danger"
+                        >
+                          <ITrash />
+                        </IconButton>
+                      </div>
                     </td>
                   </tr>
                 );

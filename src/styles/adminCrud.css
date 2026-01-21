@@ -1277,3 +1277,62 @@
   width: 1%;
   white-space: nowrap;
 }
+/* =========================================================
+   Icon-only action buttons (shared)
+========================================================= */
+.admin-icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  border: 1px solid rgba(148,163,184,0.35);
+  background: rgba(15,23,42,0.03);
+  color: #111827;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.04);
+}
+
+.admin-icon-btn:hover:not(:disabled) {
+  background: rgba(15,23,42,0.06);
+}
+
+.admin-icon-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.admin-icon-btn.ok {
+  border-color: rgba(34,197,94,0.25);
+  background: rgba(34,197,94,0.06);
+  color: #166534;
+}
+
+.admin-icon-btn.danger {
+  border-color: rgba(225,29,72,0.25);
+  background: rgba(225,29,72,0.06);
+  color: #b91c1c;
+}
+
+/* Header icon actions in one row */
+.admin-actions-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+/* Table action buttons: single row ALWAYS */
+.admin-row-actions.actions-inline.no-wrap {
+  flex-wrap: nowrap !important;
+  white-space: nowrap !important;
+  gap: 8px;
+}
+
+/* Actions column never expands */
+.admin-table td:last-child {
+  width: 1%;
+  white-space: nowrap;
+}
