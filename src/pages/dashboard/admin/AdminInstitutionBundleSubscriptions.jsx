@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "../../../api/client";
 import "../../../styles/adminCrud.css";
+import "../../../styles/adminUsers.css"; // ✅ branding
 import AdminPageFooter from "../../../components/AdminPageFooter";
 
 function toText(v) {
@@ -119,55 +120,51 @@ function plural(n, one, many = `${one}s`) {
   return n === 1 ? one : many;
 }
 
-function DismissibleAlert({ kind = "ok", title, message, onClose }) {
-  if (!message && !title) return null;
-  const cls = kind === "error" ? "admin-alert error" : "admin-alert ok";
-
+/* =========================
+   Tiny icons (no deps)
+========================= */
+function ISearch() {
   return (
-    <div className={cls} style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-      <div style={{ flex: 1 }}>
-        {title && <div style={{ fontWeight: 900, marginBottom: 4 }}>{title}</div>}
-        {message && <div style={{ whiteSpace: "pre-wrap" }}>{message}</div>}
-      </div>
-
-      {onClose && (
-        <button
-          className="admin-btn"
-          type="button"
-          onClick={onClose}
-          style={{ padding: "6px 10px", lineHeight: 1, height: 32 }}
-          aria-label="Dismiss"
-          title="Dismiss"
-        >
-          ✕
-        </button>
-      )}
-    </div>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M21 21l-4.3-4.3m1.3-5.4a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
-
-function PrimaryEmptyState({ title, subtitle, actionLabel, onAction, disabled }) {
+function IRefresh({ spin = false } = {}) {
   return (
-    <div
-      className="admin-card"
-      style={{
-        padding: 18,
-        background: "#fff",
-        borderRadius: 14,
-        border: "1px solid rgba(0,0,0,0.06)",
-      }}
-    >
-      <div style={{ fontWeight: 900, fontSize: 16 }}>{title}</div>
-      {subtitle && <div style={{ marginTop: 6, color: "#6b7280" }}>{subtitle}</div>}
-
-      {actionLabel && (
-        <div style={{ marginTop: 12 }}>
-          <button className="admin-btn primary" onClick={onAction} disabled={disabled}>
-            {actionLabel}
-          </button>
-        </div>
-      )}
-    </div>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className={spin ? "au-spin" : undefined}>
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M21 3v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function IPlus() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IHistory() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M3 12a9 9 0 1 0 3-6.7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M3 3v6h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 7v6l4 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function IRenew() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M20 7h-5V2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M20 2v5a9 9 0 1 1-2.64-6.36" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
   );
 }
 
@@ -177,14 +174,14 @@ function ConfirmModal({ open, title, body, confirmText = "Confirm", cancelText =
   return (
     <div className="admin-modal-overlay" onClick={busy ? undefined : onCancel}>
       <div className="admin-modal admin-modal-tight" onClick={(e) => e.stopPropagation()}>
-        <div className="admin-modal-head">
+        <div className="admin-modal-head admin-modal-head-x">
           <div>
             <h3 className="admin-modal-title">{title}</h3>
             {body ? <div className="admin-modal-subtitle">{body}</div> : null}
           </div>
 
-          <button className="admin-btn" onClick={onCancel} disabled={busy}>
-            Close
+          <button className="admin-modal-xbtn" onClick={onCancel} disabled={busy} aria-label="Close" title="Close">
+            ✕
           </button>
         </div>
 
@@ -210,8 +207,9 @@ export default function AdminInstitutionBundleSubscriptions() {
   const [busy, setBusy] = useState(false);
 
   const [q, setQ] = useState("");
-  const [error, setError] = useState("");
-  const [info, setInfo] = useState("");
+
+  // ✅ toast
+  const [toast, setToast] = useState(null); // {type:"success"|"error", text:string}
 
   const [openCreate, setOpenCreate] = useState(false);
   const [createForm, setCreateForm] = useState({ ...emptyCreateForm, startDate: todayYmd() });
@@ -220,14 +218,23 @@ export default function AdminInstitutionBundleSubscriptions() {
   const [renewForm, setRenewForm] = useState({ ...emptyRenewForm });
   const [renewTarget, setRenewTarget] = useState(null);
 
-  // Confirm renew modal (replaces window.confirm)
   const [openConfirmRenew, setOpenConfirmRenew] = useState(false);
 
-  // Audit modal
   const [openAudit, setOpenAudit] = useState(false);
   const [auditTarget, setAuditTarget] = useState(null);
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditRows, setAuditRows] = useState([]);
+
+  function showError(msg) {
+    setToast({ type: "error", text: String(msg || "Request failed.") });
+    window.clearTimeout(showError._t);
+    showError._t = window.setTimeout(() => setToast(null), 4500);
+  }
+  function showSuccess(msg) {
+    setToast({ type: "success", text: String(msg || "Done.") });
+    window.clearTimeout(showSuccess._t);
+    showSuccess._t = window.setTimeout(() => setToast(null), 3200);
+  }
 
   async function loadBundleProduct() {
     try {
@@ -252,8 +259,6 @@ export default function AdminInstitutionBundleSubscriptions() {
   }
 
   async function loadAll() {
-    setError("");
-    setInfo("");
     setLoading(true);
     try {
       const res = await api.get("/institutions/subscriptions");
@@ -268,21 +273,20 @@ export default function AdminInstitutionBundleSubscriptions() {
       setRows(onlyBundle);
     } catch (e) {
       setRows([]);
-      setError(toText(e?.response?.data || e?.message || "Failed to load subscriptions."));
+      showError(toText(e?.response?.data || e?.message || "Failed to load subscriptions."));
     } finally {
       setLoading(false);
     }
   }
 
   async function refreshEverything() {
-    setError("");
-    setInfo("");
+    setToast(null);
     setLoading(true);
     try {
       await Promise.all([loadBundleProduct(), loadInstitutions(), loadAll()]);
-      setInfo("Refreshed.");
+      showSuccess("Refreshed.");
     } catch {
-      // loadAll handles its own error, but keep UI calm
+      // loadAll handles its own error
     } finally {
       setLoading(false);
     }
@@ -326,19 +330,14 @@ export default function AdminInstitutionBundleSubscriptions() {
   }
 
   function openCreateModal() {
-    setError("");
-    setInfo("");
     setCreateForm({ ...emptyCreateForm, startDate: todayYmd() });
     setOpenCreate(true);
   }
 
   function openRenewModalFor(row) {
-    setError("");
-    setInfo("");
-
     const statusNum = parseStatus(row.status ?? row.Status);
     if (statusNum === 4) {
-      setError("This subscription is suspended. Unsuspend it before renewing.");
+      showError("This subscription is suspended. Unsuspend it before renewing.");
       return;
     }
 
@@ -349,14 +348,12 @@ export default function AdminInstitutionBundleSubscriptions() {
 
   async function createOrExtend(e) {
     e?.preventDefault?.();
-    setError("");
-    setInfo("");
 
-    if (!bundleProduct) return setError("Bundle product is not available yet. Please refresh and try again.");
-    if (!createForm.institutionId) return setError("Please select an institution.");
+    if (!bundleProduct) return showError("Bundle product is not available yet. Please refresh and try again.");
+    if (!createForm.institutionId) return showError("Please select an institution.");
 
     const months = Number(createForm.durationInMonths);
-    if (!months || months <= 0) return setError("Duration must be greater than 0.");
+    if (!months || months <= 0) return showError("Duration must be greater than 0.");
 
     const startDateIso = createForm.startDate ? `${createForm.startDate}T00:00:00Z` : null;
 
@@ -373,11 +370,11 @@ export default function AdminInstitutionBundleSubscriptions() {
       const endDate = res.data?.endDate ?? res.data?.EndDate;
       const status = res.data?.status ?? res.data?.Status;
 
-      setInfo(`Saved. ${statusLabel(status)} · Ends ${endDate ? formatPrettyDate(endDate) : "—"}`);
+      showSuccess(`Saved. ${statusLabel(status)} · Ends ${endDate ? formatPrettyDate(endDate) : "—"}`);
       closeCreateModal();
       await loadAll();
     } catch (e2) {
-      setError(toText(e2?.response?.data || e2?.message || "Could not save subscription."));
+      showError(toText(e2?.response?.data || e2?.message || "Could not save subscription."));
     } finally {
       setBusy(false);
     }
@@ -385,26 +382,22 @@ export default function AdminInstitutionBundleSubscriptions() {
 
   function beginRenewConfirm(e) {
     e?.preventDefault?.();
-    setError("");
-    setInfo("");
-    if (!renewTarget) return setError("No subscription selected.");
+    if (!renewTarget) return showError("No subscription selected.");
 
     const statusNum = parseStatus(renewTarget.status ?? renewTarget.Status);
-    if (statusNum === 4) return setError("This subscription is suspended. Unsuspend it before renewing.");
+    if (statusNum === 4) return showError("This subscription is suspended. Unsuspend it before renewing.");
 
     const months = Number(renewForm.durationInMonths);
-    if (!months || months <= 0) return setError("Duration must be greater than 0.");
+    if (!months || months <= 0) return showError("Duration must be greater than 0.");
 
     setOpenConfirmRenew(true);
   }
 
   async function confirmRenew() {
-    setError("");
-    setInfo("");
-    if (!renewTarget) return setError("No subscription selected.");
+    if (!renewTarget) return showError("No subscription selected.");
 
     const months = Number(renewForm.durationInMonths);
-    if (!months || months <= 0) return setError("Duration must be greater than 0.");
+    if (!months || months <= 0) return showError("Duration must be greater than 0.");
 
     const startDateIso = renewForm.startDate ? `${renewForm.startDate}T00:00:00Z` : null;
 
@@ -419,11 +412,11 @@ export default function AdminInstitutionBundleSubscriptions() {
       const endDate = res.data?.endDate ?? res.data?.EndDate;
       const status = res.data?.status ?? res.data?.Status;
 
-      setInfo(`Renewed. ${statusLabel(status)} · Ends ${endDate ? formatPrettyDate(endDate) : "—"}`);
+      showSuccess(`Renewed. ${statusLabel(status)} · Ends ${endDate ? formatPrettyDate(endDate) : "—"}`);
       closeRenewModal();
       await loadAll();
     } catch (e2) {
-      setError(toText(e2?.response?.data || e2?.message || "Renewal failed."));
+      showError(toText(e2?.response?.data || e2?.message || "Renewal failed."));
     } finally {
       setBusy(false);
     }
@@ -437,9 +430,6 @@ export default function AdminInstitutionBundleSubscriptions() {
   }
 
   async function openAuditFor(row) {
-    setError("");
-    setInfo("");
-
     const id = row.id ?? row.Id;
     setAuditTarget(row);
     setOpenAudit(true);
@@ -452,7 +442,7 @@ export default function AdminInstitutionBundleSubscriptions() {
       setAuditRows(Array.isArray(data) ? data : []);
     } catch (e) {
       setAuditRows([]);
-      setError(toText(e?.response?.data || e?.message || "Failed to load history."));
+      showError(toText(e?.response?.data || e?.message || "Failed to load history."));
     } finally {
       setAuditLoading(false);
     }
@@ -466,162 +456,244 @@ export default function AdminInstitutionBundleSubscriptions() {
     return `Institution: ${inst}\nDuration: ${months} ${plural(months, "month")}\nStart: ${start}`;
   }, [renewTarget, renewForm.durationInMonths, renewForm.startDate]);
 
+  const canCreate = !!bundleProduct;
+
   return (
-    <div className="admin-page admin-page-wide">
-      <div className="admin-header">
-        <div>
-          <h1 className="admin-title">Institution Bundle Subscriptions</h1>
-          <p className="admin-subtitle">
-            Manage the institution “All-Access Bundle” — create, extend, renew, and review history.
-          </p>
-        </div>
+    <div className="au-wrap">
+      {/* Toast */}
+      {toast?.text ? (
+        <div className={`toast ${toast.type === "error" ? "toast-error" : "toast-success"}`}>{toast.text}</div>
+      ) : null}
 
-        <div className="admin-actions">
-          <button className="admin-btn" onClick={refreshEverything} disabled={busy || loading}>
-            {loading ? "Refreshing…" : "Refresh"}
-          </button>
+      {/* HERO */}
+      <div className="au-hero">
+        <div className="au-titleRow">
+          <div>
+            <div className="au-kicker">LAWFRAICA • ADMIN</div>
+            <h1 className="au-title">Institution Bundle Subscriptions</h1>
+            <p className="au-subtitle">
+              Manage the institution <b>All-Access Bundle</b> — create, extend, renew, and review history.
+            </p>
+          </div>
 
-          <button
-            className="admin-btn primary compact"
-            onClick={openCreateModal}
-            disabled={busy || !bundleProduct}
-            title={!bundleProduct ? "Bundle product isn’t available yet. Refresh first." : "Create a new bundle subscription"}
-          >
-            + New
-          </button>
-        </div>
-      </div>
+          <div className="au-heroRight" style={{ gap: 10 }}>
+            <button className="au-refresh" onClick={refreshEverything} disabled={busy || loading} title="Refresh everything">
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                <IRefresh spin={loading} /> {loading ? "Refreshing…" : "Refresh"}
+              </span>
+            </button>
 
-      <DismissibleAlert
-        kind={error ? "error" : "ok"}
-        title={error ? "Something went wrong" : info ? "Done" : ""}
-        message={error || info}
-        onClose={() => {
-          setError("");
-          setInfo("");
-        }}
-      />
-
-      {!bundleProduct && (
-        <PrimaryEmptyState
-          title="Bundle product isn’t available yet"
-          subtitle={
-            "This page needs the “Institution All-Access Bundle” product to exist. If it was just created, refresh to load it."
-          }
-          actionLabel={loading ? "Refreshing…" : "Refresh now"}
-          onAction={refreshEverything}
-          disabled={busy || loading}
-        />
-      )}
-
-      <div className="admin-card admin-card-fill" style={{ marginTop: 12 }}>
-        <div className="admin-toolbar" style={{ alignItems: "center" }}>
-          <input
-            className="admin-search admin-search-wide"
-            placeholder="Search by institution or status…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <div className="admin-pill muted">{loading ? "Loading…" : `${stats.total} ${plural(stats.total, "subscription")}`}</div>
-            <div className="admin-pill ok" title="Active subscriptions">{stats.active} Active</div>
-            <div className="admin-pill ok" title="Active & within dates">{stats.validNow} Valid now</div>
-            <div className="admin-pill warn" title="Pending subscriptions">{stats.pending} Pending</div>
-            <div className="admin-pill warn" title="Suspended subscriptions">{stats.suspended} Suspended</div>
+            <button
+              className="au-refresh"
+              style={{
+                background: "linear-gradient(180deg, rgba(139, 28, 28, 0.95) 0%, rgba(161, 31, 31, 0.95) 100%)",
+                borderColor: "rgba(139, 28, 28, 0.35)",
+                opacity: canCreate ? 1 : 0.75,
+              }}
+              onClick={openCreateModal}
+              disabled={busy || !canCreate}
+              title={!canCreate ? "Bundle product isn’t available yet. Refresh first." : "Create a new bundle subscription"}
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                <IPlus /> New
+              </span>
+            </button>
           </div>
         </div>
 
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th style={{ width: "40%" }}>Institution</th>
-              <th style={{ width: "14%" }}>Status</th>
-              <th style={{ width: "16%" }}>Start</th>
-              <th style={{ width: "16%" }}>End</th>
-              <th style={{ width: "10%" }} title="Valid now = Active AND within start/end dates">
-                Valid now?
-              </th>
-              <th style={{ textAlign: "right", width: "14%" }}>Actions</th>
-            </tr>
-          </thead>
+        {/* TOPBAR */}
+        <div className="au-topbar">
+          <div className="au-search">
+            <span className="au-searchIcon" aria-hidden="true">
+              <ISearch />
+            </span>
+            <input
+              placeholder="Search by institution or status…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              disabled={loading}
+            />
+            {q ? (
+              <button className="au-clear" onClick={() => setQ("")} title="Clear">
+                Clear
+              </button>
+            ) : null}
+          </div>
 
-          <tbody>
-            {!loading && filteredRows.length === 0 && (
+          <div className="au-topbarRight">
+            <div className="au-mePill" title={bundleProduct ? BUNDLE_PRODUCT_NAME : "Bundle product not found"}>
+              <span className={`au-meDot ${bundleProduct ? "ga" : ""}`} />
+              <span className="au-meText">{bundleProduct ? "Bundle ready" : "Bundle missing"}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* KPIs */}
+        <div className="au-kpis">
+          <div className="au-kpiCard">
+            <div className="au-kpiLabel">Total</div>
+            <div className="au-kpiValue">{loading ? "…" : stats.total}</div>
+          </div>
+          <div className="au-kpiCard">
+            <div className="au-kpiLabel">Active</div>
+            <div className="au-kpiValue">{loading ? "…" : stats.active}</div>
+          </div>
+          <div className="au-kpiCard">
+            <div className="au-kpiLabel">Valid now</div>
+            <div className="au-kpiValue">{loading ? "…" : stats.validNow}</div>
+          </div>
+          <div className="au-kpiCard">
+            <div className="au-kpiLabel">Pending / Suspended</div>
+            <div className="au-kpiValue">{loading ? "…" : `${stats.pending} / ${stats.suspended}`}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* empty state */}
+      {!bundleProduct ? (
+        <div className="au-panel">
+          <div className="au-panelTop">
+            <div className="au-panelTitle">Bundle product isn’t available yet</div>
+            <div className="au-pageMeta">Required: “{BUNDLE_PRODUCT_NAME}”</div>
+          </div>
+
+          <div className="au-empty" style={{ padding: 18 }}>
+            <div style={{ fontWeight: 950, marginBottom: 8 }}>Create the bundle product first</div>
+            <div className="au-muted" style={{ maxWidth: 820 }}>
+              This page needs the “Institution All-Access Bundle” content product to exist. If it was just created, hit{" "}
+              <b>Refresh</b>.
+            </div>
+
+            <div style={{ marginTop: 14 }}>
+              <button className="au-refresh" onClick={refreshEverything} disabled={busy || loading}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                  <IRefresh spin={loading} /> {loading ? "Refreshing…" : "Refresh now"}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* PANEL */}
+      <div className="au-panel">
+        <div className="au-panelTop">
+          <div className="au-panelTitle">All-access subscriptions</div>
+          <div className="au-pageMeta">{loading ? "Loading…" : `${filteredRows.length} record(s)`}</div>
+        </div>
+
+        <div className="au-tableWrap">
+          <table className="au-table">
+            <thead>
               <tr>
-                <td colSpan={6} style={{ padding: "18px" }}>
-                  <div style={{ color: "#6b7280", fontWeight: 700 }}>No bundle subscriptions found.</div>
-                  <div style={{ color: "#6b7280", marginTop: 6 }}>
-                    Click <b>+ New</b> to create one for an institution.
-                  </div>
-                </td>
+                <th style={{ width: "40%" }}>Institution</th>
+                <th style={{ width: "14%" }}>Status</th>
+                <th style={{ width: "16%" }}>Start</th>
+                <th style={{ width: "16%" }}>End</th>
+                <th style={{ width: "10%" }} title="Valid now = Active AND within start/end dates">
+                  Valid now?
+                </th>
+                <th className="au-thRight" style={{ width: "14%" }}>
+                  Actions
+                </th>
               </tr>
-            )}
+            </thead>
 
-            {filteredRows.map((r) => {
-              const id = r.id ?? r.Id;
-              const inst = r.institutionName ?? r.InstitutionName ?? "—";
-              const statusVal = r.status ?? r.Status;
-              const start = r.startDate ?? r.StartDate;
-              const end = r.endDate ?? r.EndDate;
-
-              const validNow = isValidNow(r);
-              const statusText = statusLabel(statusVal);
-              const pillClass = statusPillClass(statusVal);
-
-              const statusNum = parseStatus(statusVal);
-              const isSuspended = statusNum === 4;
-
-              return (
-                <tr key={id}>
-                  <td style={{ fontWeight: 900 }}>{inst}</td>
-
-                  <td>
-                    <span className={`admin-pill ${pillClass}`}>{statusText}</span>
-                  </td>
-
-                  <td>{formatPrettyDate(start)}</td>
-                  <td>{formatPrettyDate(end)}</td>
-
-                  <td>
-                    <span className={`admin-pill ${validNow ? "ok" : "muted"}`}>{validNow ? "Yes" : "No"}</span>
-                  </td>
-
-                  <td>
-                    <div className="admin-row-actions" style={{ justifyContent: "flex-end", gap: 10 }}>
-                      <button
-                        className="admin-action-btn neutral small"
-                        onClick={() => openAuditFor(r)}
-                        disabled={busy}
-                        title="View changes and renewals"
-                      >
-                        History
-                      </button>
-
-                      <button
-                        className="admin-action-btn neutral small"
-                        onClick={() => openRenewModalFor(r)}
-                        disabled={busy || isSuspended}
-                        title={isSuspended ? "Unsuspend first" : "Renew subscription"}
-                      >
-                        Renew
-                      </button>
+            <tbody>
+              {!loading && filteredRows.length === 0 && (
+                <tr>
+                  <td colSpan={6}>
+                    <div className="au-empty">
+                      <div style={{ fontWeight: 950 }}>No bundle subscriptions found.</div>
+                      <div className="au-muted" style={{ marginTop: 6 }}>
+                        Click <b>New</b> to create one for an institution.
+                      </div>
                     </div>
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              )}
+
+              {filteredRows.map((r) => {
+                const id = r.id ?? r.Id;
+                const inst = r.institutionName ?? r.InstitutionName ?? "—";
+                const statusVal = r.status ?? r.Status;
+                const start = r.startDate ?? r.StartDate;
+                const end = r.endDate ?? r.EndDate;
+
+                const validNow = isValidNow(r);
+                const statusText = statusLabel(statusVal);
+                const pillClass = statusPillClass(statusVal);
+
+                const statusNum = parseStatus(statusVal);
+                const isSuspended = statusNum === 4;
+
+                return (
+                  <tr key={id}>
+                    <td>
+                      <div className="au-userCell">
+                        <span className={`au-dot ${validNow ? "on" : ""}`} />
+                        <div className="au-userMeta">
+                          <div className="au-userName">{inst}</div>
+                          <div className="au-userSub">
+                            <span className="au-muted au-mono">#{id}</span>
+                            <span className="au-sep">•</span>
+                            <span className="au-muted">{BUNDLE_PRODUCT_NAME}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td>
+                      <span className={`admin-pill ${pillClass}`}>{statusText}</span>
+                    </td>
+
+                    <td>{formatPrettyDate(start)}</td>
+                    <td>{formatPrettyDate(end)}</td>
+
+                    <td>
+                      <span className={`admin-pill ${validNow ? "ok" : "muted"}`}>{validNow ? "Yes" : "No"}</span>
+                    </td>
+
+                    <td className="au-tdRight">
+                      <div className="au-actionsRow">
+                        <button
+                          className="au-iconBtn au-iconBtn-neutral"
+                          onClick={() => openAuditFor(r)}
+                          disabled={busy}
+                          title="View changes and renewals"
+                        >
+                          <IHistory />
+                        </button>
+
+                        <button
+                          className={`au-iconBtn ${isSuspended ? "au-iconBtn-neutral" : "au-iconBtn-info"}`}
+                          onClick={() => openRenewModalFor(r)}
+                          disabled={busy || isSuspended}
+                          title={isSuspended ? "Unsuspend first" : "Renew subscription"}
+                        >
+                          <IRenew />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="au-panelBottom">
+          <span className="au-pageMeta">Suspended subscriptions must be unsuspended before renewing.</span>
+        </div>
       </div>
 
-      <AdminPageFooter right={<span className="admin-footer-muted">Suspended subscriptions must be unsuspended before renewing.</span>} />
+      <AdminPageFooter right={<span className="admin-footer-muted">Tip: leave renewal start date empty for the recommended default.</span>} />
 
       {/* CREATE MODAL */}
       {openCreate && (
         <div className="admin-modal-overlay" onClick={closeCreateModal}>
           <div className="admin-modal admin-modal-tight" onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-head">
+            <div className="admin-modal-head admin-modal-head-x">
               <div>
                 <h3 className="admin-modal-title">Create / Extend Bundle Subscription</h3>
                 <div className="admin-modal-subtitle">
@@ -629,8 +701,8 @@ export default function AdminInstitutionBundleSubscriptions() {
                 </div>
               </div>
 
-              <button className="admin-btn" onClick={closeCreateModal} disabled={busy}>
-                Close
+              <button className="admin-modal-xbtn" onClick={closeCreateModal} disabled={busy} aria-label="Close" title="Close">
+                ✕
               </button>
             </div>
 
@@ -658,7 +730,7 @@ export default function AdminInstitutionBundleSubscriptions() {
                     value={createForm.startDate}
                     onChange={(e) => setCreateForm((p) => ({ ...p, startDate: e.target.value }))}
                   />
-                  <div className="admin-help" style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>
+                  <div className="admin-help" style={{ marginTop: 6 }}>
                     Leave as today, or choose a future date to schedule activation.
                   </div>
                 </div>
@@ -695,16 +767,16 @@ export default function AdminInstitutionBundleSubscriptions() {
       {openRenew && renewTarget && (
         <div className="admin-modal-overlay" onClick={closeRenewModal}>
           <div className="admin-modal admin-modal-tight" onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-head">
+            <div className="admin-modal-head admin-modal-head-x">
               <div>
                 <h3 className="admin-modal-title">Renew Subscription</h3>
-                <div className="admin-modal-subtitle" style={{ maxWidth: 560 }}>
+                <div className="admin-modal-subtitle" style={{ maxWidth: 620 }}>
                   Renews the current bundle. If you leave the start date empty, the system will apply the normal renewal rule.
                 </div>
               </div>
 
-              <button className="admin-btn" onClick={closeRenewModal} disabled={busy}>
-                Close
+              <button className="admin-modal-xbtn" onClick={closeRenewModal} disabled={busy} aria-label="Close" title="Close">
+                ✕
               </button>
             </div>
 
@@ -712,7 +784,7 @@ export default function AdminInstitutionBundleSubscriptions() {
               <div className="admin-grid">
                 <div className="admin-field admin-span2">
                   <label>Institution</label>
-                  <div style={{ fontWeight: 900, paddingTop: 8 }}>
+                  <div style={{ fontWeight: 950, paddingTop: 8 }}>
                     {(renewTarget.institutionName ?? renewTarget.InstitutionName) || "—"}
                   </div>
                 </div>
@@ -724,7 +796,7 @@ export default function AdminInstitutionBundleSubscriptions() {
                     value={renewForm.startDate}
                     onChange={(e) => setRenewForm((p) => ({ ...p, startDate: e.target.value }))}
                   />
-                  <div className="admin-help" style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>
+                  <div className="admin-help" style={{ marginTop: 6 }}>
                     Optional. Leave empty for the recommended default.
                   </div>
                 </div>
@@ -780,7 +852,7 @@ export default function AdminInstitutionBundleSubscriptions() {
       {openAudit && auditTarget && (
         <div className="admin-modal-overlay" onClick={closeAuditModal}>
           <div className="admin-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
-            <div className="admin-modal-head">
+            <div className="admin-modal-head admin-modal-head-x">
               <div>
                 <h3 className="admin-modal-title">History</h3>
                 <div className="admin-modal-subtitle">
@@ -788,8 +860,14 @@ export default function AdminInstitutionBundleSubscriptions() {
                 </div>
               </div>
 
-              <button className="admin-btn" onClick={closeAuditModal} disabled={busy || auditLoading}>
-                Close
+              <button
+                className="admin-modal-xbtn"
+                onClick={closeAuditModal}
+                disabled={busy || auditLoading}
+                aria-label="Close"
+                title="Close"
+              >
+                ✕
               </button>
             </div>
 
@@ -831,7 +909,7 @@ export default function AdminInstitutionBundleSubscriptions() {
                       return (
                         <tr key={id} title={notes || ""}>
                           <td>{formatPrettyDateTime(when)}</td>
-                          <td style={{ fontWeight: 800 }}>{auditActionLabel(action)}</td>
+                          <td style={{ fontWeight: 900 }}>{auditActionLabel(action)}</td>
                           <td>{by == null ? "—" : String(by)}</td>
                           <td>
                             <span className={`admin-pill ${statusPillClass(oldStatus)}`}>{statusLabel(oldStatus)}</span>
