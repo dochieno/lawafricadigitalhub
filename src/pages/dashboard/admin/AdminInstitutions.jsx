@@ -2,7 +2,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../../api/client";
-import "../../../styles/adminCrud.css";
+import "../../../styles/adminCrud.css"; // ✅ keep your modal + existing admin crud utilities
+import "../../../styles/adminUsers.css"; // ✅ reuse the modern “au-*” branding used in AdminUsers
 import AdminPageFooter from "../../../components/AdminPageFooter";
 import { getAuthClaims } from "../../../auth/auth";
 
@@ -79,7 +80,6 @@ function friendlyApiError(e) {
 
 /**
  * Friendly + consistent error object for all fetches/actions
- * (includes optional technical details for debugging).
  */
 function toUiError(e, fallbackMessage = "Something went wrong.") {
   // Network / CORS / DNS: axios has no response
@@ -94,7 +94,6 @@ function toUiError(e, fallbackMessage = "Something went wrong.") {
   const status = e?.response?.status;
   const data = e?.response?.data;
 
-  // Auth
   if (status === 401) {
     return {
       title: "Session expired",
@@ -109,8 +108,6 @@ function toUiError(e, fallbackMessage = "Something went wrong.") {
       details: toText(data || "403 Forbidden"),
     };
   }
-
-  // Conflicts (e.g. duplicate domain/tax pin)
   if (status === 409) {
     return {
       title: "Already exists",
@@ -118,18 +115,13 @@ function toUiError(e, fallbackMessage = "Something went wrong.") {
       details: toText(data),
     };
   }
-
-  // Server error
   if (status >= 500) {
     return {
       title: "Server error",
-      message:
-        "The server ran into a problem while processing your request. Please try again shortly.",
+      message: "The server ran into a problem while processing your request. Please try again shortly.",
       details: toText(data || e?.message || `HTTP ${status}`),
     };
   }
-
-  // Validation / client error
   if (status === 400) {
     return {
       title: "Couldn’t save changes",
@@ -138,7 +130,6 @@ function toUiError(e, fallbackMessage = "Something went wrong.") {
     };
   }
 
-  // Everything else
   return {
     title: "Something went wrong",
     message: toText(data || e?.message || fallbackMessage),
@@ -219,17 +210,13 @@ function mapInstitutionToForm(entity) {
     institutionAccessCode: x.institutionAccessCode ?? x.InstitutionAccessCode ?? "",
     taxPin: x.taxPin ?? x.TaxPin ?? "",
     institutionType: parseInstitutionType(
-      x.institutionType ??
-        x.InstitutionType ??
-        x.institutionTypeName ??
-        x.InstitutionTypeName
+      x.institutionType ?? x.InstitutionType ?? x.institutionTypeName ?? x.InstitutionTypeName
     ),
     requiresUserApproval: x.requiresUserApproval ?? x.RequiresUserApproval ?? false,
     maxStudentSeats: (x.maxStudentSeats ?? x.MaxStudentSeats ?? "")?.toString?.() ?? "",
     maxStaffSeats: (x.maxStaffSeats ?? x.MaxStaffSeats ?? "")?.toString?.() ?? "",
     allowIndividualPurchasesWhenInstitutionInactive: toBool(
-      x.allowIndividualPurchasesWhenInstitutionInactive ??
-        x.AllowIndividualPurchasesWhenInstitutionInactive
+      x.allowIndividualPurchasesWhenInstitutionInactive ?? x.AllowIndividualPurchasesWhenInstitutionInactive
     ),
   };
 }
@@ -245,80 +232,114 @@ function isGlobalAdmin() {
 }
 
 /* =========================
-   Tiny icons (no deps)
+   Small UI pieces (reuse AdminUsers look)
 ========================= */
-function IconButton({ title, onClick, disabled, children, kind = "neutral" }) {
-  const className = ["admin-action-btn", "neutral", "small", "admin-icon-btn"].join(" ");
+function Badge({ tone = "neutral", children }) {
+  return <span className={`au-badge au-badge-${tone}`}>{children}</span>;
+}
 
+function IconBtn({ tone = "neutral", disabled, title, onClick, children }) {
   return (
     <button
       type="button"
-      className={className}
-      onClick={onClick}
+      className={`au-iconBtn au-iconBtn-${tone}`}
       disabled={disabled}
+      onClick={onClick}
       title={title}
       aria-label={title}
-      data-kind={kind}
     >
       {children}
     </button>
   );
 }
 
-function IRefresh() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M21 3v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+function Icon({ name }) {
+  switch (name) {
+    case "search":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M10.5 18a7.5 7.5 0 1 1 5.3-12.8A7.5 7.5 0 0 1 10.5 18Zm6.2-1.2L22 22"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+      );
+    case "spinner":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" className="au-spin">
+          <path
+            d="M12 2a10 10 0 1 0 10 10"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+      );
+    case "refresh":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M21 12a9 9 0 1 1-2.64-6.36" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M21 3v6h-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "plus":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
+    case "edit":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M12 20h9" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path
+            d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case "users":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
+    case "power":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M12 2v10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M6.38 6.38a9 9 0 1 0 11.24 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
+    case "copy":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M9 9h13v13H9V9z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+          <path d="M5 15H2V2h13v3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    default:
+      return null;
+  }
 }
-function IPlus() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-function IEdit() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 20h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path
-        d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-function IUsers() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-function IPower() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 2v10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M6.38 6.38a9 9 0 1 0 11.24 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-function ICopy() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M9 9h13v13H9V9z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-      <path d="M5 15H2V2h13v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+
+function typeTone(typeVal) {
+  const t = String(getInstitutionTypeLabel(typeVal) || "").toLowerCase();
+  if (t.includes("academic")) return "info";
+  if (t.includes("corporate")) return "neutral";
+  if (t.includes("government")) return "warn";
+  return "neutral";
 }
 
 /* =========================
@@ -333,9 +354,8 @@ export default function AdminInstitutions() {
 
   const [q, setQ] = useState("");
 
-  // Rich error/info
   const [uiError, setUiError] = useState(null); // {title,message,details}
-  const [info, setInfo] = useState("");
+  const [toast, setToast] = useState(null); // {type,text}
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -347,9 +367,13 @@ export default function AdminInstitutions() {
 
   const canEditPolicy = isGlobalAdmin();
 
+  function showToast(type, text) {
+    setToast({ type, text });
+    window.setTimeout(() => setToast(null), 2200);
+  }
+
   async function loadAll() {
     setUiError(null);
-    setInfo("");
     setLoading(true);
     try {
       const res = await api.get("/Institutions");
@@ -390,9 +414,15 @@ export default function AdminInstitutions() {
     });
   }, [rows, q]);
 
+  const counts = useMemo(() => {
+    const arr = Array.isArray(filtered) ? filtered : [];
+    const active = arr.filter((r) => (r.isActive ?? r.IsActive ?? false) === true).length;
+    const manual = arr.filter((r) => (r.requiresUserApproval ?? r.RequiresUserApproval ?? false) === true).length;
+    return { shown: arr.length, active, manual };
+  }, [filtered]);
+
   function openCreate() {
     setUiError(null);
-    setInfo("");
     setEditing(null);
     setForm({ ...emptyForm });
     setOpen(true);
@@ -400,7 +430,6 @@ export default function AdminInstitutions() {
 
   async function openEdit(row) {
     setUiError(null);
-    setInfo("");
     setEditing(row);
     setOpen(true);
 
@@ -413,7 +442,7 @@ export default function AdminInstitutions() {
       const data = res.data?.data ?? res.data;
       setForm({ ...emptyForm, ...mapInstitutionToForm(data) });
     } catch {
-      setInfo("Loaded basic institution data, but couldn’t fetch the full details.");
+      showToast("error", "Loaded basic record, but couldn’t fetch full details.");
     } finally {
       setModalLoading(false);
     }
@@ -454,7 +483,6 @@ export default function AdminInstitutions() {
 
   async function save() {
     setUiError(null);
-    setInfo("");
 
     if (!form.name.trim()) return setUiError({ title: "Missing information", message: "Name is required." });
     if (!form.emailDomain.trim()) return setUiError({ title: "Missing information", message: "Email domain is required." });
@@ -467,10 +495,10 @@ export default function AdminInstitutions() {
       if (editing) {
         const id = editing.id ?? editing.Id;
         await api.put(`/Institutions/${id}`, payload);
-        setInfo("Institution updated.");
+        showToast("success", "Institution updated");
       } else {
         await api.post("/Institutions", payload);
-        setInfo("Institution created. A welcome email will be sent if email sending is enabled.");
+        showToast("success", "Institution created");
       }
 
       closeModal();
@@ -487,11 +515,10 @@ export default function AdminInstitutions() {
     const isActive = row.isActive ?? row.IsActive ?? false;
 
     setUiError(null);
-    setInfo("");
     setBusy(true);
     try {
       await api.post(`/Institutions/${id}/${isActive ? "deactivate" : "activate"}`);
-      setInfo(isActive ? "Institution deactivated." : "Institution activated.");
+      showToast("success", isActive ? "Institution deactivated" : "Institution activated");
       await loadAll();
     } catch (e) {
       setUiError(toUiError(e, "Failed to update status."));
@@ -504,8 +531,7 @@ export default function AdminInstitutions() {
     setUiError(null);
     try {
       await navigator.clipboard.writeText(String(text || ""));
-      setInfo("Copied to clipboard.");
-      setTimeout(() => setInfo(""), 1500);
+      showToast("success", "Copied");
     } catch {
       setUiError({
         title: "Copy failed",
@@ -521,7 +547,6 @@ export default function AdminInstitutions() {
     const id = editing.id ?? editing.Id;
 
     setUiError(null);
-    setInfo("");
     setPolicyBusy(true);
 
     setField("allowIndividualPurchasesWhenInstitutionInactive", !!nextValue);
@@ -531,7 +556,7 @@ export default function AdminInstitutions() {
         allowIndividualPurchasesWhenInstitutionInactive: !!nextValue,
       });
 
-      setInfo("Purchase policy updated.");
+      showToast("success", "Purchase policy updated");
       await loadAll();
     } catch (e) {
       setField("allowIndividualPurchasesWhenInstitutionInactive", !nextValue);
@@ -544,50 +569,56 @@ export default function AdminInstitutions() {
   const isCreate = !editing;
 
   return (
-    <div className="admin-page admin-page-wide admin-institutions">
-      <div className="admin-header">
-        <div>
-          <h1 className="admin-title">Admin · Institutions</h1>
-          <p className="admin-subtitle">Create, activate, and manage institutions (Global Admin only).</p>
+    <div className="au-wrap">
+      {toast ? (
+        <div className={`toast ${toast.type === "success" ? "toast-success" : "toast-error"}`}>
+          {toast.text}
         </div>
+      ) : null}
 
-        {/* Compact header actions */}
-        <div className="admin-actions">
-          <IconButton title="Refresh list" onClick={loadAll} disabled={busy || loading}>
-            <IRefresh />
-          </IconButton>
+      <header className="au-hero">
+        <div className="au-heroLeft">
+          <div className="au-titleRow">
+            <div className="au-titleStack">
+              <div className="au-kicker">LawAfrica • Admin</div>
+              <h1 className="au-title">Institutions</h1>
+              <div className="au-subtitle">Create, activate, and manage institutions (Global Admin only).</div>
+            </div>
 
-          <button
-            className="admin-btn primary compact admin-btn-icon"
-            onClick={openCreate}
-            disabled={busy}
-            title="Create a new institution"
-            type="button"
-          >
-            <IPlus /> <span>New</span>
-          </button>
-        </div>
-      </div>
+            <div className="au-heroRight" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <button className="au-refresh" type="button" onClick={() => loadAll()} disabled={loading || busy}>
+                {loading ? "Refreshing…" : "Refresh"}
+              </button>
 
-      {/* Clearer alert block */}
-      {(uiError || info) && (
-        <div className={`admin-alert ${uiError ? "error" : "ok"}`}>
+              <button
+                className="au-refresh"
+                type="button"
+                onClick={openCreate}
+                disabled={busy}
+                style={{ display: "inline-flex", gap: 8, alignItems: "center" }}
+                title="Create a new institution"
+              >
+                <Icon name="plus" /> New
+              </button>
+            </div>
+          </div>
+
           {uiError ? (
-            <div style={{ display: "grid", gap: 6 }}>
-              <div style={{ fontWeight: 900 }}>{uiError.title || "Error"}</div>
+            <div className="au-error" style={{ marginTop: 12 }}>
+              <div style={{ fontWeight: 900, marginBottom: 6 }}>{uiError.title || "Error"}</div>
               <div style={{ whiteSpace: "pre-wrap" }}>{uiError.message}</div>
 
               {uiError.details && uiError.details !== uiError.message ? (
-                <details style={{ marginTop: 6 }}>
+                <details style={{ marginTop: 8 }}>
                   <summary style={{ cursor: "pointer", fontWeight: 800 }}>Show technical details</summary>
                   <pre
                     style={{
-                      marginTop: 8,
+                      marginTop: 10,
                       padding: 10,
-                      borderRadius: 10,
-                      background: "rgba(0,0,0,0.04)",
+                      borderRadius: 12,
+                      background: "rgba(0,0,0,0.06)",
                       overflow: "auto",
-                      maxHeight: 220,
+                      maxHeight: 240,
                       fontSize: 12,
                       lineHeight: 1.4,
                     }}
@@ -597,118 +628,157 @@ export default function AdminInstitutions() {
                 </details>
               ) : null}
             </div>
-          ) : (
-            info
-          )}
+          ) : null}
+
+          <div className="au-topbar" style={{ marginTop: 14 }}>
+            <div className="au-search">
+              <span className="au-searchIcon" aria-hidden="true">
+                <Icon name="search" />
+              </span>
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search by name, domain, or email…"
+                aria-label="Search institutions"
+              />
+              {q ? (
+                <button className="au-clear" type="button" onClick={() => setQ("")} aria-label="Clear search">
+                  ✕
+                </button>
+              ) : null}
+            </div>
+
+            <div className="au-topbarRight">
+              <div className="au-mePill" title="Permission gate">
+                <span className={`au-meDot ${canEditPolicy ? "ga" : ""}`} />
+                <span className="au-meText">{canEditPolicy ? "Global Admin session" : "Admin session"}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="au-kpis">
+            <div className="au-kpiCard">
+              <div className="au-kpiLabel">Shown</div>
+              <div className="au-kpiValue">{counts.shown}</div>
+            </div>
+            <div className="au-kpiCard">
+              <div className="au-kpiLabel">Active</div>
+              <div className="au-kpiValue">{counts.active}</div>
+            </div>
+            <div className="au-kpiCard">
+              <div className="au-kpiLabel">Manual approval</div>
+              <div className="au-kpiValue">{counts.manual}</div>
+            </div>
+          </div>
         </div>
-      )}
+      </header>
 
-      <div className="admin-card admin-card-fill">
-        <div className="admin-toolbar">
-          <input
-            className="admin-search admin-search-wide"
-            placeholder="Search by name, domain, or email…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-
-          <div className="admin-pill muted">{loading ? "Loading…" : `${filtered.length} institution(s)`}</div>
+      <section className="au-panel">
+        <div className="au-panelTop">
+          <div className="au-panelTitle">{loading ? "Loading…" : "Institution directory"}</div>
+          <div className="au-muted">{loading ? "—" : `${filtered.length} institution(s)`}</div>
         </div>
 
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th style={{ width: "38%" }}>Name</th>
-              <th style={{ width: "34%" }}>Official Email</th>
-              <th style={{ width: "10%" }}>Type</th>
-              <th style={{ width: "12%" }}>Approval</th>
-              <th style={{ width: "10%" }}>Status</th>
-              <th style={{ textAlign: "right", width: "16%" }}>Actions</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {!loading && filtered.length === 0 && (
+        <div className="au-tableWrap">
+          <table className="au-table au-tableModern">
+            <thead>
               <tr>
-                <td colSpan={6} style={{ color: "#6b7280", padding: "14px" }}>
-                  No institutions found.
-                </td>
+                <th>Name</th>
+                <th>Official Email</th>
+                <th>Type</th>
+                <th>Approval</th>
+                <th>Status</th>
+                <th className="au-thRight">Actions</th>
               </tr>
-            )}
+            </thead>
 
-            {filtered.map((r) => {
-              const id = r.id ?? r.Id;
-              const name = r.name ?? r.Name;
-              const email = r.officialEmail ?? r.OfficialEmail;
-
-              const typeVal =
-                r.institutionType ?? r.InstitutionType ?? r.institutionTypeName ?? r.InstitutionTypeName ?? 1;
-
-              const requires = r.requiresUserApproval ?? r.RequiresUserApproval ?? false;
-              const isActive = r.isActive ?? r.IsActive ?? false;
-
-              return (
-                <tr key={id}>
-                  <td style={{ fontWeight: 900 }}>{name}</td>
-                  <td>{email}</td>
-
-                  <td>
-                    <span className="admin-pill">{getInstitutionTypeLabel(typeVal)}</span>
-                  </td>
-
-                  <td>
-                    <span className={`admin-pill ${requires ? "warn" : "ok"}`}>
-                      {requires ? "Manual approval" : "Auto approval"}
-                    </span>
-                  </td>
-
-                  <td>
-                    <span className={`admin-pill ${isActive ? "ok" : "muted"}`}>{isActive ? "Active" : "Inactive"}</span>
-                  </td>
-
-                  <td>
-                      <div className="admin-row-actions actions-inline no-wrap">
-                      <IconButton title="Edit institution" onClick={() => openEdit(r)} disabled={busy}>
-                        <IEdit />
-                      </IconButton>
-
-                      <IconButton
-                        title="View users"
-                        onClick={() => navigate(`/dashboard/admin/institutions/${id}/users`)}
-                        disabled={busy}
-                      >
-                        <IUsers />
-                      </IconButton>
-
-                      <IconButton
-                        title={isActive ? "Deactivate institution" : "Activate institution"}
-                        onClick={() => toggleActive(r)}
-                        disabled={busy}
-                        kind={isActive ? "danger" : "ok"}
-                      >
-                        <IPower />
-                      </IconButton>
-                    </div>
+            <tbody>
+              {!loading && filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="au-empty">
+                    No institutions found for the current search.
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              ) : null}
 
-      <AdminPageFooter right={<span className="admin-footer-muted">Tip: Use “New” to create a record quickly.</span>} />
+              {filtered.map((r) => {
+                const id = r.id ?? r.Id;
+                const name = r.name ?? r.Name;
+                const email = r.officialEmail ?? r.OfficialEmail;
 
-      {/* MODAL */}
+                const typeVal =
+                  r.institutionType ?? r.InstitutionType ?? r.institutionTypeName ?? r.InstitutionTypeName ?? 1;
+
+                const requires = r.requiresUserApproval ?? r.RequiresUserApproval ?? false;
+                const isActive = r.isActive ?? r.IsActive ?? false;
+
+                const isBusyRow = busy;
+
+                return (
+                  <tr key={id}>
+                    <td style={{ fontWeight: 900 }}>{name}</td>
+                    <td className="au-mono">{email}</td>
+
+                    <td>
+                      <Badge tone={typeTone(typeVal)}>{getInstitutionTypeLabel(typeVal)}</Badge>
+                    </td>
+
+                    <td>
+                      <Badge tone={requires ? "warn" : "success"}>{requires ? "Manual approval" : "Auto approval"}</Badge>
+                    </td>
+
+                    <td>
+                      <Badge tone={isActive ? "success" : "neutral"}>{isActive ? "Active" : "Inactive"}</Badge>
+                    </td>
+
+                    <td className="au-tdRight">
+                      <div className="au-actionsRow">
+                        <IconBtn tone="neutral" disabled={isBusyRow} title="Edit institution" onClick={() => openEdit(r)}>
+                          {isBusyRow ? <Icon name="spinner" /> : <Icon name="edit" />}
+                        </IconBtn>
+
+                        <IconBtn
+                          tone="neutral"
+                          disabled={isBusyRow}
+                          title="View users"
+                          onClick={() => navigate(`/dashboard/admin/institutions/${id}/users`)}
+                        >
+                          <Icon name="users" />
+                        </IconBtn>
+
+                        <IconBtn
+                          tone={isActive ? "danger" : "success"}
+                          disabled={isBusyRow}
+                          title={isActive ? "Deactivate institution" : "Activate institution"}
+                          onClick={() => toggleActive(r)}
+                        >
+                          <Icon name="power" />
+                        </IconBtn>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="au-panelBottom">
+          <div className="au-muted">Tip: Use “New” to create a record quickly.</div>
+          <div className="au-muted">Approval controls whether users are auto-approved on join.</div>
+        </div>
+      </section>
+
+      <AdminPageFooter right={<span className="admin-footer-muted">LawAfrica • Admin Console</span>} />
+
+      {/* MODAL (kept on adminCrud.css for stability) */}
       {open && (
         <div className="admin-modal-overlay" onClick={closeModal}>
           <div className="admin-modal admin-modal-tight" onClick={(e) => e.stopPropagation()}>
             <div className="admin-modal-head admin-modal-head-x">
               <div>
                 <h3 className="admin-modal-title">{editing ? "Edit Institution" : "Create Institution"}</h3>
-                <div className="admin-modal-subtitle">
-                  {modalLoading ? "Loading full record…" : "Update institution details."}
-                </div>
+                <div className="admin-modal-subtitle">{modalLoading ? "Loading full record…" : "Update institution details."}</div>
               </div>
 
               <button
@@ -726,7 +796,6 @@ export default function AdminInstitutions() {
             <div className="admin-modal-body admin-modal-scroll">
               {modalLoading && <div className="admin-inline-loading">Fetching details…</div>}
 
-              {/* Policy section */}
               {!!editing && (
                 <div
                   style={{
@@ -739,8 +808,7 @@ export default function AdminInstitutions() {
                 >
                   <div style={{ fontWeight: 950, marginBottom: 6 }}>Access & Purchase Policy</div>
                   <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 12 }}>
-                    Controls whether institution users can purchase documents individually when the institution is inactive
-                    or subscription has expired.
+                    Controls whether institution users can purchase documents individually when the institution is inactive or subscription has expired.
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14 }}>
@@ -797,20 +865,12 @@ export default function AdminInstitutions() {
 
                 <div className="admin-field">
                   <label>Email domain *</label>
-                  <input
-                    placeholder="example.com"
-                    value={form.emailDomain}
-                    onChange={(e) => setField("emailDomain", e.target.value)}
-                  />
+                  <input placeholder="example.com" value={form.emailDomain} onChange={(e) => setField("emailDomain", e.target.value)} />
                 </div>
 
                 <div className="admin-field">
                   <label>Official email *</label>
-                  <input
-                    placeholder="info@example.com"
-                    value={form.officialEmail}
-                    onChange={(e) => setField("officialEmail", e.target.value)}
-                  />
+                  <input placeholder="info@example.com" value={form.officialEmail} onChange={(e) => setField("officialEmail", e.target.value)} />
                 </div>
 
                 <div className="admin-field">
@@ -820,10 +880,7 @@ export default function AdminInstitutions() {
 
                 <div className="admin-field">
                   <label>Alternate phone</label>
-                  <input
-                    value={form.alternatePhoneNumber}
-                    onChange={(e) => setField("alternatePhoneNumber", e.target.value)}
-                  />
+                  <input value={form.alternatePhoneNumber} onChange={(e) => setField("alternatePhoneNumber", e.target.value)} />
                 </div>
 
                 <div className="admin-field">
@@ -865,12 +922,7 @@ export default function AdminInstitutions() {
 
                 <div className="admin-field">
                   <label>Registration number (locked)</label>
-                  <input
-                    value={form.registrationNumber || (isCreate ? "Auto-generated after save" : "")}
-                    disabled
-                    readOnly
-                    style={{ opacity: 0.85 }}
-                  />
+                  <input value={form.registrationNumber || (isCreate ? "Auto-generated after save" : "")} disabled readOnly style={{ opacity: 0.85 }} />
                   <div className="admin-hint" style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
                     Generated by the system and cannot be edited.
                   </div>
@@ -886,13 +938,16 @@ export default function AdminInstitutions() {
                       style={{ opacity: 0.85, flex: 1 }}
                     />
 
-                    <IconButton
+                    <button
+                      type="button"
+                      className="au-iconBtn au-iconBtn-neutral"
                       title="Copy access code"
                       disabled={!form.institutionAccessCode}
                       onClick={() => copyToClipboard(form.institutionAccessCode)}
+                      aria-label="Copy access code"
                     >
-                      <ICopy />
-                    </IconButton>
+                      <Icon name="copy" />
+                    </button>
                   </div>
 
                   <div className="admin-hint" style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
@@ -907,10 +962,7 @@ export default function AdminInstitutions() {
 
                 <div className="admin-field">
                   <label>Institution type</label>
-                  <select
-                    value={String(parseInstitutionType(form.institutionType))}
-                    onChange={(e) => setField("institutionType", Number(e.target.value))}
-                  >
+                  <select value={String(parseInstitutionType(form.institutionType))} onChange={(e) => setField("institutionType", Number(e.target.value))}>
                     <option value={1}>Academic</option>
                     <option value={2}>Corporate</option>
                     <option value={3}>Government</option>
@@ -919,10 +971,7 @@ export default function AdminInstitutions() {
 
                 <div className="admin-field">
                   <label>Requires user approval?</label>
-                  <select
-                    value={String(form.requiresUserApproval)}
-                    onChange={(e) => setField("requiresUserApproval", e.target.value === "true")}
-                  >
+                  <select value={String(form.requiresUserApproval)} onChange={(e) => setField("requiresUserApproval", e.target.value === "true")}>
                     <option value="false">No (auto approve)</option>
                     <option value="true">Yes (manual approval)</option>
                   </select>
