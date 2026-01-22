@@ -1,17 +1,14 @@
+// src/pages/dashboard/admin/AdminPayments.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../../../api/client";
-import "../../../styles/adminCrud.css";
-import "../../../styles/invoice.css";
+import "../../../styles/adminUsers.css"; // ✅ same look as invoices
+import "../../../styles/invoice.css"; // (kept) existing pills/buttons/etc may still be used
 import AdminPageFooter from "../../../components/AdminPageFooter";
 
-function cn(...classes) {
-  return classes.filter(Boolean).join(" ");
-}
-
 function fmtDate(iso) {
-  if (!iso) return "-";
+  if (!iso) return "—";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "-";
+  if (Number.isNaN(d.getTime())) return "—";
   const dd = String(d.getDate()).padStart(2, "0");
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const yy = String(d.getFullYear()).slice(-2);
@@ -38,18 +35,79 @@ function statusTone(v) {
   return "unknown";
 }
 
-function StatusPill({ value }) {
-  const tone = statusTone(value);
-  const cls =
-    tone === "success"
-      ? "statusPill statusPill--success"
-      : tone === "failed"
-      ? "statusPill statusPill--failed"
-      : tone === "pending"
-      ? "statusPill statusPill--pending"
-      : "statusPill statusPill--unknown";
+function badgeToneFromStatus(v) {
+  const t = statusTone(v);
+  if (t === "success") return "success";
+  if (t === "failed") return "danger";
+  if (t === "pending") return "warn";
+  return "neutral";
+}
 
-  return <span className={cls}>{String(value || "Unknown")}</span>;
+function Badge({ tone = "neutral", children }) {
+  return <span className={`au-badge au-badge-${tone}`}>{children}</span>;
+}
+
+function Chip({ active, children, ...props }) {
+  return (
+    <button type="button" className={`au-chip ${active ? "active" : ""}`} {...props}>
+      {children}
+    </button>
+  );
+}
+
+function Icon({ name }) {
+  switch (name) {
+    case "spinner":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" className="au-spin">
+          <path
+            d="M12 2a10 10 0 1 0 10 10"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+      );
+    case "search":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M10.5 18a7.5 7.5 0 1 1 5.3-12.8A7.5 7.5 0 0 1 10.5 18Zm6.2-1.2L22 22"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+      );
+    case "refresh":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M21 12a9 9 0 1 1-2.64-6.36"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <path
+            d="M21 3v6h-6"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
+function clamp(n, min, max) {
+  return Math.max(min, Math.min(max, n));
 }
 
 function Pager({ page, pageSize, totalCount, loading, onPage }) {
@@ -58,23 +116,36 @@ function Pager({ page, pageSize, totalCount, loading, onPage }) {
   const canNext = !loading && page < pageCount;
 
   return (
-    <div className="pager pager--compact">
-      <div className="pagerBtns pagerBtns--compact">
-        <button className="btnSm" disabled={!canPrev} onClick={() => onPage(page - 1)} title="Previous page">
-          ‹ <span className="btnSm__text">Previous</span>
-        </button>
-
-        <div className="pagerMeta" aria-label="Page indicator">
-          <b>{page}</b> of <b>{pageCount}</b>
-        </div>
-
-        <button className="btnSm" disabled={!canNext} onClick={() => onPage(page + 1)} title="Next page">
-          <span className="btnSm__text">Next</span> ›
-        </button>
+    <div className="au-panelBottom" style={{ justifyContent: "space-between" }}>
+      <div className="au-muted">
+        Page <strong>{page}</strong> / <strong>{pageCount}</strong> • Total{" "}
+        <strong>{totalCount || 0}</strong>
       </div>
 
-      <div className="muted" style={{ fontSize: 12, opacity: 0.85 }}>
-        Total <b>{totalCount || 0}</b>
+      <div className="au-pager">
+        <button
+          type="button"
+          className="au-pageBtn"
+          onClick={() => onPage(page - 1)}
+          disabled={!canPrev}
+          title="Previous page"
+        >
+          ←
+        </button>
+
+        <div className="au-pageMeta">
+          Page <strong>{page}</strong>
+        </div>
+
+        <button
+          type="button"
+          className="au-pageBtn"
+          onClick={() => onPage(page + 1)}
+          disabled={!canNext}
+          title="Next page"
+        >
+          →
+        </button>
       </div>
     </div>
   );
@@ -231,105 +302,152 @@ export default function AdminPayments() {
     }
   }
 
+  const tableTitle = useMemo(() => {
+    if (tab === "transactions") return "Transactions";
+    if (tab === "webhooks") return "Webhooks";
+    return "Payment intents";
+  }, [tab]);
+
+  const safePage = clamp(data.page || page, 1, Math.max(1, Math.ceil((data.totalCount || 0) / (data.pageSize || pageSize))));
+
   return (
-    <div className="adminCrud paymentsPage">
-      <div className="adminCrud__header">
-        <div>
-          <h1 className="adminCrud__title">Payments</h1>
-          <p className="adminCrud__sub">View payment intents, provider transactions and webhook events.</p>
-        </div>
+    <div className="au-wrap">
+      {/* ===== HERO (same style as invoices) ===== */}
+      <header className="au-hero">
+        <div className="au-heroLeft">
+          <div className="au-titleRow">
+            <div className="au-titleStack">
+              <div className="au-kicker">LawAfrica • Admin</div>
+              <h1 className="au-title">Payments</h1>
+              <div className="au-subtitle">View payment intents, provider transactions and webhook events.</div>
+            </div>
 
-        <div className="adminCrud__actionsRow">
-          <button
-            className={cn("iconBtn", "iconBtn--neutral", "iconBtn--sm")}
-            title="Refresh"
-            aria-label="Refresh"
-            onClick={() => load(page)}
-            disabled={loading}
-          >
-            🔄
-          </button>
-        </div>
-      </div>
+            <div className="au-heroRight">
+              <button
+                className="au-refresh"
+                type="button"
+                onClick={() => load(safePage)}
+                disabled={loading}
+                title="Refresh"
+              >
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  {loading ? <Icon name="spinner" /> : <Icon name="refresh" />}
+                  Refresh
+                </span>
+              </button>
+            </div>
+          </div>
 
-      <div className="card">
-        {/* Tabs (single row + small buttons) */}
-        <div className="tabsRow tabsRow--compact" role="tablist" aria-label="Payments tabs">
-          <button
-            role="tab"
-            aria-selected={tab === "intents"}
-            className={cn("tabBtn", "tabBtn--sm", tab === "intents" && "active")}
-            onClick={() => setTab("intents")}
-            type="button"
-          >
-            Payment Intents
-          </button>
+          {err ? <div className="au-error">{String(err)}</div> : null}
 
-          <button
-            role="tab"
-            aria-selected={tab === "transactions"}
-            className={cn("tabBtn", "tabBtn--sm", tab === "transactions" && "active")}
-            onClick={() => setTab("transactions")}
-            type="button"
-          >
-            Transactions
-          </button>
+          {/* ===== Search row ===== */}
+          <div className="au-topbar">
+            <div className="au-search">
+              <span className="au-searchIcon" aria-hidden="true">
+                <Icon name="search" />
+              </span>
+              <input
+                value={qUi}
+                onChange={(e) => setQUi(e.target.value)}
+                onKeyDown={onEnterApply}
+                placeholder="Reference, txn id, invoice id…"
+                aria-label="Search payments"
+              />
+              {qUi ? (
+                <button className="au-clear" type="button" onClick={() => setQUi("")} aria-label="Clear search">
+                  ✕
+                </button>
+              ) : null}
+            </div>
 
-          <button
-            role="tab"
-            aria-selected={tab === "webhooks"}
-            className={cn("tabBtn", "tabBtn--sm", tab === "webhooks" && "active")}
-            onClick={() => setTab("webhooks")}
-            type="button"
-          >
-            Webhooks
-          </button>
-        </div>
+            <div className="au-topbarRight">
+              <button className="au-refresh" type="button" onClick={apply} disabled={loading} title="Apply filters">
+                Apply
+              </button>
+              <button className="au-refresh" type="button" onClick={clear} disabled={loading} title="Clear filters">
+                Clear
+              </button>
+            </div>
+          </div>
 
-        {/* Toolbar */}
-        <div className="paymentsToolbar">
-          {/* Row 1 */}
-          <div className="paymentsToolbarRow">
-            <div className="paymentsToolbarLeft">
-              <div className="toolbarField toolbarField--search">
-                <label>Search</label>
-                <input
-                  value={qUi}
-                  onChange={(e) => setQUi(e.target.value)}
-                  onKeyDown={onEnterApply}
-                  placeholder="Reference, txn id, invoice id…"
-                />
+          {/* ===== KPIs ===== */}
+          <div className="au-kpis">
+            <div className="au-kpiCard">
+              <div className="au-kpiLabel">Total</div>
+              <div className="au-kpiValue">{data.totalCount || 0}</div>
+            </div>
+            <div className="au-kpiCard">
+              <div className="au-kpiLabel">Success</div>
+              <div className="au-kpiValue">{pageCounts.ok}</div>
+            </div>
+            <div className="au-kpiCard">
+              <div className="au-kpiLabel">Pending</div>
+              <div className="au-kpiValue">{pageCounts.pend}</div>
+            </div>
+            <div className="au-kpiCard">
+              <div className="au-kpiLabel">Failed</div>
+              <div className="au-kpiValue">{pageCounts.bad}</div>
+            </div>
+          </div>
+
+          {/* ===== Tabs + Filters ===== */}
+          <div className="au-filters">
+            <div className="au-filterGroup">
+              <div className="au-filterLabel">View</div>
+              <div className="au-chips">
+                <Chip active={tab === "intents"} onClick={() => setTab("intents")}>
+                  Payment intents
+                </Chip>
+                <Chip active={tab === "transactions"} onClick={() => setTab("transactions")}>
+                  Transactions
+                </Chip>
+                <Chip active={tab === "webhooks"} onClick={() => setTab("webhooks")}>
+                  Webhooks
+                </Chip>
               </div>
             </div>
 
-            <div className="paymentsToolbarRight">
-              <div className="pillsRow" aria-label="Summary">
-                <span className="pill">
-                  Total <b>{data.totalCount || 0}</b>
-                </span>
-                <span className={cn("pill", pageCounts.ok ? "pill--ok" : "")}>
-                  Success <b>{pageCounts.ok}</b>
-                </span>
-                <span className={cn("pill", pageCounts.pend ? "pill--warn" : "")}>
-                  Pending <b>{pageCounts.pend}</b>
-                </span>
-                <span className={cn("pill", pageCounts.bad ? "pill--bad" : "")}>
-                  Failed <b>{pageCounts.bad}</b>
-                </span>
-              </div>
-
-              <div className="toolbarField toolbarField--compact">
-                <label>Provider</label>
-                <select value={provider} onChange={(e) => setProvider(e.target.value)}>
+            <div className="au-filterGroup">
+              <div className="au-filterLabel">Provider</div>
+              <div className="au-chips" style={{ gap: 10, flexWrap: "wrap" }}>
+                <select
+                  value={provider}
+                  onChange={(e) => setProvider(e.target.value)}
+                  aria-label="Provider"
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 14,
+                    border: "1px solid rgba(148,163,184,.35)",
+                    background: "rgba(2,6,23,.25)",
+                    color: "inherit",
+                    outline: "none",
+                    minWidth: 180,
+                  }}
+                >
                   <option value="">All</option>
                   <option value="Mpesa">Mpesa</option>
                   <option value="Paystack">Paystack</option>
                 </select>
               </div>
+            </div>
 
-              <div className="toolbarField toolbarField--compact">
-                <label>Status</label>
-                <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <div className="au-filterGroup">
+              <div className="au-filterLabel">Status</div>
+              <div className="au-chips" style={{ gap: 10, flexWrap: "wrap" }}>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  aria-label="Status"
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 14,
+                    border: "1px solid rgba(148,163,184,.35)",
+                    background: "rgba(2,6,23,.25)",
+                    color: "inherit",
+                    outline: "none",
+                    minWidth: 180,
+                  }}
+                >
                   {statusOptions.map((o) => (
                     <option key={o.value || "all"} value={o.value}>
                       {o.label}
@@ -338,76 +456,97 @@ export default function AdminPayments() {
                 </select>
               </div>
             </div>
-          </div>
 
-          {/* Row 2 */}
-          <div className="paymentsToolbarRow">
-            <div className="paymentsToolbarLeft">
-              <div className="toolbarField toolbarField--compact">
-                <label>From</label>
-                <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} onKeyDown={onEnterApply} />
-              </div>
-              <div className="toolbarField toolbarField--compact">
-                <label>To</label>
-                <input type="date" value={to} onChange={(e) => setTo(e.target.value)} onKeyDown={onEnterApply} />
-              </div>
-            </div>
-
-            <div className="paymentsToolbarRight">
-              <div className="toolbarActions">
-                <button className="btnSm btnSm--primary" onClick={apply} disabled={loading} title="Apply filters">
-                  <span className="btnSm__text">Apply</span>
-                </button>
-                <button className="btnSm" onClick={clear} disabled={loading} title="Clear filters">
-                  <span className="btnSm__text">Clear</span>
-                </button>
+            <div className="au-filterGroup">
+              <div className="au-filterLabel">Dates</div>
+              <div className="au-chips" style={{ gap: 10, flexWrap: "wrap" }}>
+                <input
+                  type="date"
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
+                  onKeyDown={onEnterApply}
+                  aria-label="From date"
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 14,
+                    border: "1px solid rgba(148,163,184,.35)",
+                    background: "rgba(2,6,23,.25)",
+                    color: "inherit",
+                    outline: "none",
+                  }}
+                />
+                <input
+                  type="date"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  onKeyDown={onEnterApply}
+                  aria-label="To date"
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 14,
+                    border: "1px solid rgba(148,163,184,.35)",
+                    background: "rgba(2,6,23,.25)",
+                    color: "inherit",
+                    outline: "none",
+                  }}
+                />
               </div>
             </div>
           </div>
         </div>
+      </header>
 
-        {err ? <div className="alert alert--danger">{String(err)}</div> : null}
-        {loading ? <div className="alert alert--info">Loading…</div> : null}
+      {/* ===== PANEL ===== */}
+      <section className="au-panel">
+        <div className="au-panelTop">
+          <div className="au-panelTitle">{loading ? "Loading…" : tableTitle}</div>
+        </div>
 
-        {/* Tables */}
-        <div className="tableWrap">
+        <div className="au-tableWrap">
+          {/* Intents */}
           {tab === "intents" ? (
-            <table className="adminTable">
+            <table className="au-table au-tableModern">
               <thead>
                 <tr>
-                  <th className="col-id">ID</th>
-                  <th className="col-provider">Provider</th>
-                  <th className="col-purpose">Purpose</th>
-                  <th className="col-ref">Reference</th>
-                  <th className="col-status">Status</th>
-                  <th className="col-date">Issued</th>
-                  <th className="col-amount num">Amount</th>
-                  <th className="col-invoice num">Invoice</th>
+                  <th>ID</th>
+                  <th>Provider</th>
+                  <th>Purpose</th>
+                  <th>Reference</th>
+                  <th>Status</th>
+                  <th>Issued</th>
+                  <th className="au-thRight">Amount</th>
+                  <th className="au-thRight">Invoice</th>
                 </tr>
               </thead>
               <tbody>
-                {(data.items || []).map((x) => (
-                  <tr key={x.id}>
-                    <td>{x.id}</td>
-                    <td>{x.provider}</td>
-                    <td className="purposeCell" title={x.purpose || ""}>
-                      {x.purpose}
-                    </td>
-                    <td className="mutedSmall refCell" title={x.providerReference || x.providerTransactionId || ""}>
-                      {x.providerReference || x.providerTransactionId || "-"}
-                    </td>
-                    <td>
-                      <StatusPill value={x.status} />
-                    </td>
-                    <td>{fmtDate(x.createdAt)}</td>
-                    <td className="num">{fmtMoney(x.amount, x.currency)}</td>
-                    <td className="num">{x.invoiceId ?? "-"}</td>
-                  </tr>
-                ))}
+                {(data.items || []).map((x) => {
+                  const tone = badgeToneFromStatus(x.status);
+                  return (
+                    <tr key={x.id}>
+                      <td className="au-mono">{x.id}</td>
+                      <td>{x.provider}</td>
+                      <td title={x.purpose || ""} style={{ maxWidth: 340 }}>
+                        <div className="au-muted" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {x.purpose || "—"}
+                        </div>
+                      </td>
+                      <td className="au-mono" title={x.providerReference || x.providerTransactionId || ""}>
+                        {x.providerReference || x.providerTransactionId || "—"}
+                      </td>
+                      <td>
+                        <Badge tone={tone}>{String(x.status || "Unknown")}</Badge>
+                      </td>
+                      <td>{fmtDate(x.createdAt)}</td>
+                      <td className="au-tdRight au-mono">{fmtMoney(x.amount, x.currency)}</td>
+                      <td className="au-tdRight au-mono">{x.invoiceId ?? "—"}</td>
+                    </tr>
+                  );
+                })}
+
                 {!loading && (data.items || []).length === 0 ? (
                   <tr>
-                    <td colSpan={8}>
-                      <div className="emptyState">No records.</div>
+                    <td colSpan={8} className="au-empty">
+                      No records.
                     </td>
                   </tr>
                 ) : null}
@@ -415,41 +554,46 @@ export default function AdminPayments() {
             </table>
           ) : null}
 
+          {/* Transactions */}
           {tab === "transactions" ? (
-            <table className="adminTable">
+            <table className="au-table au-tableModern">
               <thead>
                 <tr>
-                  <th className="col-id">ID</th>
-                  <th className="col-provider">Provider</th>
-                  <th className="col-ref">Txn ID</th>
-                  <th className="col-ref">Reference</th>
-                  <th className="col-date">Paid</th>
-                  <th className="col-amount num">Amount</th>
-                  <th className="col-provider">Channel</th>
-                  <th className="col-date">Created</th>
+                  <th>ID</th>
+                  <th>Provider</th>
+                  <th>Txn ID</th>
+                  <th>Reference</th>
+                  <th>Paid</th>
+                  <th className="au-thRight">Amount</th>
+                  <th>Channel</th>
+                  <th>Created</th>
                 </tr>
               </thead>
               <tbody>
-                {(data.items || []).map((x) => (
-                  <tr key={x.id}>
-                    <td>{x.id}</td>
-                    <td>{x.provider}</td>
-                    <td className="mutedSmall refCell" title={x.providerTransactionId || ""}>
-                      {x.providerTransactionId}
-                    </td>
-                    <td className="mutedSmall refCell" title={x.reference || ""}>
-                      {x.reference || "-"}
-                    </td>
-                    <td>{x.paidAt ? fmtDate(x.paidAt) : "-"}</td>
-                    <td className="num">{fmtMoney(x.amount, x.currency)}</td>
-                    <td>{x.channel || "-"}</td>
-                    <td>{fmtDate(x.createdAt)}</td>
-                  </tr>
-                ))}
+                {(data.items || []).map((x) => {
+                  const tone = badgeToneFromStatus(x.status);
+                  return (
+                    <tr key={x.id}>
+                      <td className="au-mono">{x.id}</td>
+                      <td>{x.provider}</td>
+                      <td className="au-mono" title={x.providerTransactionId || ""}>
+                        {x.providerTransactionId || "—"}
+                      </td>
+                      <td className="au-mono" title={x.reference || ""}>
+                        {x.reference || "—"}
+                      </td>
+                      <td>{x.paidAt ? fmtDate(x.paidAt) : "—"}</td>
+                      <td className="au-tdRight au-mono">{fmtMoney(x.amount, x.currency)}</td>
+                      <td>{x.channel || "—"}</td>
+                      <td>{fmtDate(x.createdAt)}</td>
+                    </tr>
+                  );
+                })}
+
                 {!loading && (data.items || []).length === 0 ? (
                   <tr>
-                    <td colSpan={8}>
-                      <div className="emptyState">No records.</div>
+                    <td colSpan={8} className="au-empty">
+                      No records.
                     </td>
                   </tr>
                 ) : null}
@@ -457,43 +601,53 @@ export default function AdminPayments() {
             </table>
           ) : null}
 
+          {/* Webhooks */}
           {tab === "webhooks" ? (
-            <table className="adminTable">
+            <table className="au-table au-tableModern">
               <thead>
                 <tr>
-                  <th className="col-id">ID</th>
-                  <th className="col-provider">Provider</th>
-                  <th className="col-purpose">Type</th>
-                  <th className="col-ref">Ref</th>
-                  <th className="col-date">Received</th>
-                  <th className="col-status">Processed</th>
-                  <th className="col-purpose">Error</th>
+                  <th>ID</th>
+                  <th>Provider</th>
+                  <th>Type</th>
+                  <th>Ref</th>
+                  <th>Received</th>
+                  <th>Processed</th>
+                  <th>Error</th>
                 </tr>
               </thead>
               <tbody>
-                {(data.items || []).map((x) => (
-                  <tr key={x.id}>
-                    <td>{x.id}</td>
-                    <td>{x.provider}</td>
-                    <td className="mutedSmall purposeCell" title={x.eventType || ""}>
-                      {x.eventType}
-                    </td>
-                    <td className="mutedSmall refCell" title={x.reference || ""}>
-                      {x.reference || "-"}
-                    </td>
-                    <td>{fmtDate(x.receivedAt)}</td>
-                    <td>
-                      <StatusPill value={x.processed ? "Processed" : "Unprocessed"} />
-                    </td>
-                    <td className="mutedSmall purposeCell" title={x.processingError || ""}>
-                      {x.processingError || "-"}
-                    </td>
-                  </tr>
-                ))}
+                {(data.items || []).map((x) => {
+                  const statusText = x.processed ? "Processed" : "Unprocessed";
+                  const tone = badgeToneFromStatus(statusText);
+                  return (
+                    <tr key={x.id}>
+                      <td className="au-mono">{x.id}</td>
+                      <td>{x.provider}</td>
+                      <td title={x.eventType || ""} style={{ maxWidth: 320 }}>
+                        <div className="au-muted" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {x.eventType || "—"}
+                        </div>
+                      </td>
+                      <td className="au-mono" title={x.reference || ""}>
+                        {x.reference || "—"}
+                      </td>
+                      <td>{fmtDate(x.receivedAt)}</td>
+                      <td>
+                        <Badge tone={tone}>{statusText}</Badge>
+                      </td>
+                      <td title={x.processingError || ""} style={{ maxWidth: 360 }}>
+                        <div className="au-muted" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {x.processingError || "—"}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+
                 {!loading && (data.items || []).length === 0 ? (
                   <tr>
-                    <td colSpan={7}>
-                      <div className="emptyState">No records.</div>
+                    <td colSpan={7} className="au-empty">
+                      No records.
                     </td>
                   </tr>
                 ) : null}
@@ -509,7 +663,7 @@ export default function AdminPayments() {
           loading={loading}
           onPage={(p) => load(p)}
         />
-      </div>
+      </section>
 
       <AdminPageFooter />
     </div>
