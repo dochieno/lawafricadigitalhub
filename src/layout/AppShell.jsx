@@ -180,6 +180,12 @@ export default function AppShell() {
                     >
                       Invoice Settings
                     </NavLink>
+                      <NavLink
+                        to="/dashboard/admin/finance/vat-rates"
+                        className="nav-link nav-child"
+                      >
+                        VAT Setup
+                      </NavLink>                    
                   </div>
                 )}
               </div>
