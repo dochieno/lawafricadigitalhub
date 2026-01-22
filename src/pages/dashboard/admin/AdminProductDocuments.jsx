@@ -2,7 +2,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../../../api/client";
-import "../../../styles/adminCrud.css";
+import "../../../styles/adminUsers.css"; // ✅ branded layout
+import "../../../styles/adminCrud.css";  // ✅ keep for shared legacy bits if needed
 import AdminPageFooter from "../../../components/AdminPageFooter";
 
 /* =========================
@@ -93,9 +94,16 @@ function IBack() {
     </svg>
   );
 }
-function IRefresh() {
+function IRefresh({ spin = false }) {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      className={spin ? "au-spin" : undefined}
+    >
       <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       <path d="M21 3v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
@@ -136,26 +144,23 @@ function IAddDoc() {
     </svg>
   );
 }
-
-/**
- * Match Institutions: action buttons use admin-action-btn + admin-icon-btn
- * (adminCrud.css already styles these consistently)
- */
-function IconButton({ title, onClick, disabled, children, kind = "neutral" }) {
-  const className = ["admin-action-btn", "neutral", "small", "admin-icon-btn"].join(" ");
+function ISearch() {
   return (
-    <button
-      type="button"
-      className={className}
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      aria-label={title}
-      data-kind={kind}
-    >
-      {children}
-    </button>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path d="M21 21l-4.3-4.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
   );
+}
+
+function Toast({ toast }) {
+  if (!toast) return null;
+  return <div className={`toast ${toast.type === "error" ? "toast-error" : "toast-success"}`}>{toast.msg}</div>;
 }
 
 export default function AdminProductDocuments() {
@@ -170,18 +175,24 @@ export default function AdminProductDocuments() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
+  // top search (mapped list)
   const [q, setQ] = useState("");
 
-  // ✅ Branded alert pattern (like Institutions)
-  const [uiError, setUiError] = useState(null); // {title,message,details}
-  const [info, setInfo] = useState("");
+  // toast
+  const [toast, setToast] = useState(null); // {type:"success"|"error", msg:string}
 
   // add form
   const [docId, setDocId] = useState("");
   const [sortOrder, setSortOrder] = useState(0);
 
-  // filter for dropdown
+  // filter for dropdown (available docs)
   const [docFilter, setDocFilter] = useState("");
+
+  function showToast(type, msg) {
+    setToast({ type, msg });
+    window.clearTimeout(showToast._t);
+    showToast._t = window.setTimeout(() => setToast(null), 2200);
+  }
 
   async function loadProduct() {
     try {
@@ -206,13 +217,12 @@ export default function AdminProductDocuments() {
   }
 
   async function loadAll() {
-    setUiError(null);
-    setInfo("");
     setLoading(true);
     try {
       await Promise.all([loadProduct(), loadMappings(), loadDocuments()]);
     } catch (e) {
-      setUiError(toUiError(e, "Failed to load product documents."));
+      const ui = toUiError(e, "Failed to load product documents.");
+      showToast("error", ui.message || "Failed to load product documents.");
     } finally {
       setLoading(false);
     }
@@ -246,16 +256,12 @@ export default function AdminProductDocuments() {
 
   async function addDocument(e) {
     e?.preventDefault?.();
-    setUiError(null);
-    setInfo("");
 
     const idNum = Number(docId);
-    if (!idNum) return setUiError({ title: "Missing information", message: "Please select a document." });
+    if (!idNum) return showToast("error", "Please select a document.");
 
     const so = Number(sortOrder);
-    if (Number.isNaN(so) || so < 0) {
-      return setUiError({ title: "Invalid value", message: "SortOrder must be 0 or greater." });
-    }
+    if (Number.isNaN(so) || so < 0) return showToast("error", "SortOrder must be 0 or greater.");
 
     setBusy(true);
     try {
@@ -264,13 +270,14 @@ export default function AdminProductDocuments() {
         sortOrder: so,
       });
 
-      setInfo("Document added to product.");
+      showToast("success", "Document added to product.");
       setDocId("");
       setSortOrder(0);
       setDocFilter("");
       await loadAll();
     } catch (e2) {
-      setUiError(toUiError(e2, "Failed to add document."));
+      const ui = toUiError(e2, "Failed to add document.");
+      showToast("error", ui.message || "Failed to add document.");
     } finally {
       setBusy(false);
     }
@@ -280,16 +287,15 @@ export default function AdminProductDocuments() {
     const so = Number(next);
     if (Number.isNaN(so) || so < 0) return;
 
-    setUiError(null);
-    setInfo("");
     setBusy(true);
     try {
       const id = row.id ?? row.Id;
       await api.put(`/content-products/${productId}/documents/${id}`, { sortOrder: so });
-      setInfo("Sort order updated.");
+      showToast("success", "Sort order updated.");
       await loadMappings();
     } catch (e) {
-      setUiError(toUiError(e, "Failed to update sort order."));
+      const ui = toUiError(e, "Failed to update sort order.");
+      showToast("error", ui.message || "Failed to update sort order.");
     } finally {
       setBusy(false);
     }
@@ -299,17 +305,16 @@ export default function AdminProductDocuments() {
     const title = row.documentTitle ?? row.DocumentTitle ?? "this document";
     if (!window.confirm(`Remove "${title}" from this product?`)) return;
 
-    setUiError(null);
-    setInfo("");
     setBusy(true);
     try {
       const id = row.id ?? row.Id;
       await api.delete(`/content-products/${productId}/documents/${id}`);
-      setInfo("Document removed.");
+      showToast("success", "Document removed.");
       await loadMappings();
       await loadDocuments();
     } catch (e) {
-      setUiError(toUiError(e, "Failed to remove document."));
+      const ui = toUiError(e, "Failed to remove document.");
+      showToast("error", ui.message || "Failed to remove document.");
     } finally {
       setBusy(false);
     }
@@ -318,102 +323,146 @@ export default function AdminProductDocuments() {
   const productName = product?.name ?? product?.Name ?? "—";
 
   return (
-    <div className="admin-page admin-page-wide admin-docmap">
-      <div className="admin-header">
-        <div>
-          <h1 className="admin-title">Admin · Product Documents</h1>
-          <p className="admin-subtitle">
-            Manage which legal documents belong to: <b>{productName}</b>
-          </p>
+    <div className="au-wrap">
+      <Toast toast={toast} />
+
+      {/* HERO */}
+      <div className="au-hero">
+        <div className="au-titleRow">
+          <div>
+            <div className="au-kicker">LawAfrica • Admin</div>
+            <h1 className="au-title">Product Documents</h1>
+            <div className="au-subtitle">
+              Manage which legal documents belong to: <b>{productName}</b>
+            </div>
+          </div>
+
+          <div className="au-heroRight" style={{ gap: 10 }}>
+            <button className="au-refresh" onClick={() => nav(-1)} disabled={busy}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                <IBack /> Back
+              </span>
+            </button>
+
+            <button className="au-refresh" onClick={loadAll} disabled={busy || loading}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                <IRefresh spin={loading} /> {loading ? "Refreshing…" : "Refresh"}
+              </span>
+            </button>
+          </div>
         </div>
 
-        {/* ✅ Compact icon actions (same pattern as Institutions) */}
-        <div className="admin-actions">
-          <IconButton title="Back" onClick={() => nav(-1)} disabled={busy} kind="neutral">
-            <IBack />
-          </IconButton>
+        {/* TOPBAR: search (mapped list) */}
+        <div className="au-topbar">
+          <div className="au-search">
+            <span className="au-searchIcon" aria-hidden="true">
+              <ISearch />
+            </span>
+            <input
+              placeholder="Search assigned documents by title or status…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              disabled={loading}
+            />
+            {q ? (
+              <button className="au-clear" type="button" onClick={() => setQ("")} title="Clear">
+                Clear
+              </button>
+            ) : null}
+          </div>
 
-          <IconButton title="Refresh list" onClick={loadAll} disabled={busy || loading} kind="neutral">
-            <IRefresh />
-          </IconButton>
+          <div className="au-topbarRight">
+            <button
+              className="au-refresh"
+              type="button"
+              onClick={() => {
+                const el = document.querySelector(".au-docFilterInput");
+                el?.focus?.();
+              }}
+              disabled={busy || loading}
+              title="Jump to Add section"
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                <IPlus /> Add
+              </span>
+            </button>
+          </div>
+        </div>
 
-          <button
-            className="admin-btn primary compact admin-btn-icon"
-            type="button"
-            onClick={() => {
-              const el = document.querySelector(".admin-docmap-filter");
-              el?.focus?.();
-            }}
-            disabled={busy || loading}
-            title="Add a document"
-          >
-            <IPlus /> <span>Add</span>
-          </button>
+        {/* KPIs */}
+        <div className="au-kpis">
+          <div className="au-kpiCard">
+            <div className="au-kpiLabel">Assigned</div>
+            <div className="au-kpiValue">{loading ? "…" : filteredRows.length}</div>
+          </div>
+
+          <div className="au-kpiCard">
+            <div className="au-kpiLabel">Available</div>
+            <div className="au-kpiValue">{loading ? "…" : availableDocs.length}</div>
+          </div>
+
+          <div className="au-kpiCard">
+            <div className="au-kpiLabel">Total docs</div>
+            <div className="au-kpiValue">{loading ? "…" : docs.length}</div>
+          </div>
+
+          <div className="au-kpiCard">
+            <div className="au-kpiLabel">Product ID</div>
+            <div className="au-kpiValue">
+              <span className="au-mono">{productId}</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* ✅ Clearer alert block (supports technical details) */}
-      {(uiError || info) && (
-        <div className={`admin-alert ${uiError ? "error" : "ok"}`}>
-          {uiError ? (
-            <div style={{ display: "grid", gap: 6 }}>
-              <div style={{ fontWeight: 900 }}>{uiError.title || "Error"}</div>
-              <div style={{ whiteSpace: "pre-wrap" }}>{uiError.message}</div>
-
-              {uiError.details && uiError.details !== uiError.message ? (
-                <details style={{ marginTop: 6 }}>
-                  <summary style={{ cursor: "pointer", fontWeight: 800 }}>Show technical details</summary>
-                  <pre
-                    style={{
-                      marginTop: 8,
-                      padding: 10,
-                      borderRadius: 10,
-                      background: "rgba(0,0,0,0.04)",
-                      overflow: "auto",
-                      maxHeight: 220,
-                      fontSize: 12,
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    {uiError.details}
-                  </pre>
-                </details>
-              ) : null}
-            </div>
-          ) : (
-            info
-          )}
+      {/* ADD PANEL (branded) */}
+      <div className="au-panel" style={{ marginTop: 14 }}>
+        <div className="au-panelTop">
+          <div className="au-panelTitle">Add document to product</div>
+          <div className="au-pageMeta">{loading ? "Loading…" : `${availableDocs.length} available`}</div>
         </div>
-      )}
 
-      {/* Add panel */}
-      <div className="admin-card admin-docmap-add admin-docmap-add-compact">
-        <div className="admin-docmap-addhead">
-          <div>
-            <div className="admin-docmap-addtitle">Add document to product</div>
-            <div className="admin-docmap-addsub">Tip: SortOrder controls ordering (lower = top).</div>
+        <div style={{ padding: 14 }}>
+          <div className="au-subtitle" style={{ marginTop: 0 }}>
+            Tip: <b>SortOrder</b> controls ordering (lower = top).
           </div>
 
-          <div className="admin-pill muted">{loading ? "Loading…" : `${availableDocs.length} available`}</div>
-        </div>
+          <form onSubmit={addDocument} style={{ marginTop: 12 }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1.3fr 1.7fr 0.6fr auto",
+                gap: 10,
+                alignItems: "end",
+              }}
+            >
+              <div className="au-sort" style={{ width: "100%" }}>
+                <span className="au-sortLabel">Find</span>
+                <input
+                  className="au-docFilterInput"
+                  placeholder="Type to filter documents…"
+                  value={docFilter}
+                  onChange={(e) => setDocFilter(e.target.value)}
+                  disabled={busy || loading}
+                  style={{
+                    border: "none",
+                    outline: "none",
+                    background: "transparent",
+                    fontWeight: 850,
+                    color: "var(--au-ink)",
+                    width: "100%",
+                  }}
+                />
+              </div>
 
-        <form className="admin-docmap-addrow" onSubmit={addDocument}>
-          <div className="admin-docmap-left">
-            <div className="admin-field admin-docmap-field">
-              <label>Find a document</label>
-              <input
-                className="admin-docmap-filter"
-                placeholder="Type to filter documents…"
-                value={docFilter}
-                onChange={(e) => setDocFilter(e.target.value)}
-                disabled={busy || loading}
-              />
-            </div>
-
-            <div className="admin-field admin-docmap-field">
-              <label>Select document *</label>
-              <div className="admin-docmap-selectwrap">
-                <select value={docId} onChange={(e) => setDocId(e.target.value)} disabled={busy || loading}>
+              <div className="au-sort" style={{ width: "100%" }}>
+                <span className="au-sortLabel">Document *</span>
+                <select
+                  value={docId}
+                  onChange={(e) => setDocId(e.target.value)}
+                  disabled={busy || loading}
+                  aria-label="Select document"
+                >
                   <option value="">{loading ? "Loading…" : "Select a document…"}</option>
                   {filteredAvailableDocs.map((d) => (
                     <option key={d.id ?? d.Id} value={d.id ?? d.Id}>
@@ -421,69 +470,79 @@ export default function AdminProductDocuments() {
                     </option>
                   ))}
                 </select>
-                <span className="admin-docmap-chevron" aria-hidden="true">
-                  ▾
-                </span>
               </div>
 
-              {!!docFilter.trim() && (
-                <div className="admin-help" style={{ marginTop: 6, fontSize: 12, color: "#6b7280", fontWeight: 700 }}>
-                  Showing <b>{filteredAvailableDocs.length}</b> of <b>{availableDocs.length}</b>
-                </div>
-              )}
-            </div>
-          </div>
+              <div className="au-sort" style={{ width: "100%" }}>
+                <span className="au-sortLabel">SortOrder</span>
+                <input
+                  type="number"
+                  value={String(sortOrder)}
+                  onChange={(e) => setSortOrder(e.target.value)}
+                  min={0}
+                  step={1}
+                  disabled={busy || loading}
+                  style={{
+                    border: "none",
+                    outline: "none",
+                    background: "transparent",
+                    fontWeight: 900,
+                    color: "var(--au-ink)",
+                    width: "100%",
+                  }}
+                />
+              </div>
 
-          <div className="admin-docmap-right">
-            <div className="admin-field admin-docmap-field admin-docmap-so">
-              <label>SortOrder</label>
-              <input
-                type="number"
-                value={String(sortOrder)}
-                onChange={(e) => setSortOrder(e.target.value)}
-                min={0}
-                step={1}
+              <button
+                className="au-refresh"
+                type="submit"
                 disabled={busy || loading}
-              />
+                title="Add selected document"
+              >
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                  <IAddDoc /> {busy ? "Adding…" : "Add"}
+                </span>
+              </button>
             </div>
 
-            <button className="admin-btn primary admin-docmap-addbtn" type="submit" disabled={busy || loading}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                <IAddDoc /> {busy ? "Adding…" : "Add"}
-              </span>
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* List */}
-      <div className="admin-card admin-card-fill admin-docmap-list">
-        <div className="admin-toolbar admin-docmap-toolbar">
-          <input
-            className="admin-search admin-search-wide"
-            placeholder="Search by title or status…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-          <div className="admin-pill muted">{loading ? "Loading…" : `${filteredRows.length} document(s)`}</div>
+            {!!docFilter.trim() ? (
+              <div className="au-pageMeta" style={{ marginTop: 10 }}>
+                Showing <b>{filteredAvailableDocs.length}</b> of <b>{availableDocs.length}</b>
+              </div>
+            ) : null}
+          </form>
         </div>
 
-        <div className="admin-docmap-tablewrap">
-          <table className="admin-table admin-table-compact">
+        <div className="au-panelBottom">
+          <div className="au-pageMeta">Tip: use low SortOrder for “top” documents.</div>
+          <div className="au-pageMeta">{busy ? "Working…" : ""}</div>
+        </div>
+      </div>
+
+      {/* DIRECTORY (branded table) */}
+      <div className="au-panel">
+        <div className="au-panelTop">
+          <div className="au-panelTitle">Assigned documents</div>
+          <div className="au-pageMeta">{loading ? "Loading…" : `${filteredRows.length} record(s)`}</div>
+        </div>
+
+        <div className="au-tableWrap">
+          <table className="au-table" style={{ minWidth: 980 }}>
             <thead>
               <tr>
-                <th style={{ width: "55%" }}>Document</th>
-                <th style={{ width: "12%" }}>Status</th>
-                <th style={{ width: "10%" }}>Premium?</th>
-                <th style={{ width: "13%" }}>SortOrder</th>
-                <th style={{ width: "10%", textAlign: "right" }}>Actions</th>
+                <th style={{ width: "54%" }}>Document</th>
+                <th style={{ width: "14%" }}>Status</th>
+                <th style={{ width: "12%" }}>Premium?</th>
+                <th style={{ width: "12%" }}>SortOrder</th>
+                <th className="au-thRight" style={{ width: "8%" }}>
+                  Actions
+                </th>
               </tr>
             </thead>
 
             <tbody>
               {!loading && filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={{ color: "#6b7280", padding: "12px" }}>
+                  <td colSpan={5} className="au-empty">
                     No documents assigned to this product.
                   </td>
                 </tr>
@@ -498,19 +557,32 @@ export default function AdminProductDocuments() {
 
                 return (
                   <tr key={id}>
-                    <td className="admin-docmap-title">{title}</td>
-
                     <td>
-                      <span className="admin-pill muted">{String(status)}</span>
+                      <div className="au-userCell">
+                        <span className={`au-dot ${isPremium ? "" : "on"}`} />
+                        <div className="au-userMeta">
+                          <div className="au-userName">{title}</div>
+                          <div className="au-userSub2">
+                            <span className="au-badge au-badge-neutral">
+                              <span className="au-muted">Map ID:</span> <span className="au-mono">{id}</span>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
                     </td>
 
                     <td>
-                      <span className={`admin-pill ${isPremium ? "warn" : "muted"}`}>{pillYesNo(isPremium)}</span>
+                      <span className="au-badge au-badge-neutral">{String(status)}</span>
+                    </td>
+
+                    <td>
+                      <span className={`au-badge ${isPremium ? "au-badge-warn" : "au-badge-neutral"}`}>
+                        {pillYesNo(isPremium)}
+                      </span>
                     </td>
 
                     <td>
                       <input
-                        className="admin-input-compact"
                         type="number"
                         min={0}
                         step={1}
@@ -518,19 +590,30 @@ export default function AdminProductDocuments() {
                         disabled={busy}
                         onBlur={(e) => updateSort(r, e.target.value)}
                         title="Edit SortOrder then click away to save"
+                        style={{
+                          width: 110,
+                          padding: "10px 12px",
+                          borderRadius: 14,
+                          border: "1px solid rgba(148, 163, 184, 0.35)",
+                          background: "white",
+                          fontWeight: 900,
+                          color: "var(--au-ink)",
+                          outline: "none",
+                        }}
                       />
                     </td>
 
-                    <td style={{ textAlign: "right" }}>
-                      <div className="admin-row-actions actions-inline no-wrap" style={{ justifyContent: "flex-end" }}>
-                        <IconButton
-                          title="Remove from product"
+                    <td className="au-tdRight">
+                      <div className="au-actionsRow">
+                        <button
+                          className="au-iconBtn au-iconBtn-danger"
+                          type="button"
                           onClick={() => removeRow(r)}
                           disabled={busy}
-                          kind="danger"
+                          title="Remove from product"
                         >
                           <ITrash />
-                        </IconButton>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -538,6 +621,11 @@ export default function AdminProductDocuments() {
               })}
             </tbody>
           </table>
+        </div>
+
+        <div className="au-panelBottom">
+          <div className="au-pageMeta">Tip: edit SortOrder then click away to save.</div>
+          <div className="au-pageMeta">{busy ? "Saving…" : ""}</div>
         </div>
       </div>
 
