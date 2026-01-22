@@ -229,8 +229,9 @@ export default function AdminInvoiceDetail() {
 
       {inv ? (
         <div className="invoicePage">
-          {/* ✅ Invoice summary -> single-row (and removed Invoice No.) */}
+          {/* ✅ Clean summary: full-width row + tip below. (Removed the “attachment/right note” completely.) */}
           <div className="invoiceSummary noPrint">
+            {/* Row 1: key figures end-to-end + status on the far right */}
             <div
               style={{
                 display: "flex",
@@ -238,11 +239,10 @@ export default function AdminInvoiceDetail() {
                 justifyContent: "space-between",
                 gap: 14,
                 flexWrap: "wrap",
-                padding: "10px 12px",
+                padding: "12px 14px",
               }}
             >
-              {/* Left: compact row of key-values */}
-              <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
                 <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
                   <span className="muted">Document Date</span>
                   <span className="strong">{fmtDateShort(inv.issuedAt)}</span>
@@ -269,17 +269,15 @@ export default function AdminInvoiceDetail() {
                 </div>
               </div>
 
-              {/* Right: status pill */}
-              <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span className={`pill ${isPaid ? "pill--ok" : "pill--warn"}`}>{inv.status}</span>
               </div>
             </div>
 
-            {/* Second row: Customer / Purpose / Paid At (still row-based, wraps on small screens) */}
+            {/* Row 2: customer + purpose + paid at */}
             <div
               style={{
-                marginTop: 8,
-                padding: "0 12px 10px",
+                padding: "0 14px 12px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
@@ -310,19 +308,15 @@ export default function AdminInvoiceDetail() {
               </div>
             </div>
 
+            {/* Tip below */}
             <div
               className="mutedSmall"
               style={{
                 borderTop: "1px solid #e5e7eb",
-                padding: "10px 12px",
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 12,
-                flexWrap: "wrap",
+                padding: "10px 14px",
               }}
             >
-              <div>Tip: use “Print” to download PDF from the browser print dialog.</div>
-              <div>Invoice logo is served from /storage via backend origin.</div>
+              Tip: use “Print” to download PDF from the browser print dialog.
             </div>
           </div>
 
@@ -332,12 +326,7 @@ export default function AdminInvoiceDetail() {
               <div className="invoiceHeader">
                 <div className="brandBlock">
                   {logoUrl ? (
-                    <img
-                      className="brandLogo"
-                      src={logoUrl}
-                      alt="Company logo"
-                      onError={() => setLogoBroken(true)}
-                    />
+                    <img className="brandLogo" src={logoUrl} alt="Company logo" onError={() => setLogoBroken(true)} />
                   ) : (
                     <div className="brandLogo brandLogo--placeholder">Company logo</div>
                   )}
@@ -527,12 +516,8 @@ export default function AdminInvoiceDetail() {
                     {company.bankName || company.bankAccountNumber ? (
                       <div className="payFull">
                         <div className="mutedSmall">Bank</div>
-                        <div className="strong">
-                          {[company.bankName, company.bankAccountName].filter(Boolean).join(" — ")}
-                        </div>
-                        {company.bankAccountNumber ? (
-                          <div className="mutedSmall">A/C: {company.bankAccountNumber}</div>
-                        ) : null}
+                        <div className="strong">{[company.bankName, company.bankAccountName].filter(Boolean).join(" — ")}</div>
+                        {company.bankAccountNumber ? <div className="mutedSmall">A/C: {company.bankAccountNumber}</div> : null}
                       </div>
                     ) : null}
 
