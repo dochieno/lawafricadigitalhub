@@ -1,10 +1,14 @@
 // src/pages/dashboard/admin/AdminInstitutionSubscriptions.jsx
 import { useEffect, useMemo, useState } from "react";
 import api from "../../../api/client";
-import "../../../styles/adminCrud.css";
+import "../../../styles/adminCrud.css"; // keep modals/toggles
+import "../../../styles/adminUsers.css"; // ✅ reuse the branded “au-*” system
 import AdminPageFooter from "../../../components/AdminPageFooter";
 import { isGlobalAdmin } from "../../../auth/auth";
 
+/* =========================
+   Helpers (kept)
+========================= */
 function toText(v) {
   if (v == null) return "";
   if (typeof v === "string") return v;
@@ -95,12 +99,12 @@ function statusLabel(v) {
   return String(v ?? "—");
 }
 
-function statusPillClass(v) {
+function statusTone(v) {
   const n = parseStatus(v);
-  if (n === 2) return "ok";
+  if (n === 2) return "success";
   if (n === 1) return "warn";
-  if (n === 4) return "warn";
-  return "muted";
+  if (n === 4) return "danger";
+  return "neutral";
 }
 
 function isValidNow(row) {
@@ -179,6 +183,116 @@ const emptyRenewForm = {
   startDate: "",
 };
 
+/* =========================
+   AU mini UI (match AdminUsers)
+========================= */
+function Badge({ tone = "neutral", children }) {
+  return <span className={`au-badge au-badge-${tone}`}>{children}</span>;
+}
+
+function Chip({ active, children, ...props }) {
+  return (
+    <button type="button" className={`au-chip ${active ? "active" : ""}`} {...props}>
+      {children}
+    </button>
+  );
+}
+
+function IconBtn({ tone = "neutral", disabled, title, onClick, children }) {
+  return (
+    <button
+      type="button"
+      className={`au-iconBtn au-iconBtn-${tone}`}
+      disabled={disabled}
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Icon({ name }) {
+  switch (name) {
+    case "search":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M10.5 18a7.5 7.5 0 1 1 5.3-12.8A7.5 7.5 0 0 1 10.5 18Zm6.2-1.2L22 22"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+      );
+    case "spinner":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" className="au-spin">
+          <path
+            d="M12 2a10 10 0 1 0 10 10"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+      );
+    case "refresh":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M21 12a9 9 0 1 1-2.64-6.36" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M21 3v6h-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "plus":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
+    case "history":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M3 3v6h6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M3.05 13a9 9 0 1 0 .93-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M12 7v6l4 2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "file":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+          <path d="M14 2v6h6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "repeat":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M17 1l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M3 11V9a4 4 0 0 1 4-4h14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M7 23l-4-4 4-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M21 13v2a4 4 0 0 1-4 4H3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
+    case "pause":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M6 4h4v16H6zM14 4h4v16h-4z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+        </svg>
+      );
+    case "play":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M8 5v14l11-7z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
 export default function AdminInstitutionSubscriptions() {
   const [rows, setRows] = useState([]);
   const [institutions, setInstitutions] = useState([]);
@@ -189,8 +303,11 @@ export default function AdminInstitutionSubscriptions() {
 
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+
+  // ✅ unified UX: toast + rich error box (keep your strings too)
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+  const [toast, setToast] = useState(null); // {type,text}
 
   // Create
   const [openCreate, setOpenCreate] = useState(false);
@@ -220,6 +337,11 @@ export default function AdminInstitutionSubscriptions() {
   const [reqActionNotes, setReqActionNotes] = useState("");
 
   const meIsGlobal = isGlobalAdmin();
+
+  function showToast(type, text) {
+    setToast({ type, text });
+    window.setTimeout(() => setToast(null), 2200);
+  }
 
   async function loadAll() {
     setError("");
@@ -282,7 +404,6 @@ export default function AdminInstitutionSubscriptions() {
       });
   }, [rows, q, statusFilter]);
 
-  // Summary pills (like Bundle page)
   const summary = useMemo(() => {
     const total = filtered.length;
     let active = 0;
@@ -454,13 +575,13 @@ export default function AdminInstitutionSubscriptions() {
           `/institutions/subscriptions/${id}/${isSuspend ? "suspend" : "unsuspend"}`,
           { notes: reqActionNotes || null }
         );
-        setInfo(isSuspend ? "Subscription suspended." : "Subscription updated.");
+        showToast("success", isSuspend ? "Subscription suspended" : "Subscription updated");
       } else {
         const res = await api.post(
           `/institutions/subscriptions/${id}/${isSuspend ? "request-suspend" : "request-unsuspend"}`,
           { notes: reqActionNotes || null }
         );
-        setInfo(res.data?.message || "Request submitted for approval.");
+        showToast("success", res.data?.message || "Request submitted for approval");
       }
 
       closeRequestActionModal();
@@ -499,7 +620,10 @@ export default function AdminInstitutionSubscriptions() {
       const endDate = res.data?.endDate ?? res.data?.EndDate ?? res.data?.subscription?.endDate;
       const status = res.data?.status ?? res.data?.Status;
 
-      setInfo(`Saved. Status: ${statusLabel(status)}. Ends: ${endDate ? formatPrettyDate(endDate) : "—"}`);
+      showToast(
+        "success",
+        `Saved • ${statusLabel(status)} • Ends ${endDate ? formatPrettyDate(endDate) : "—"}`
+      );
       closeCreateModal();
       await loadAll();
     } catch (e2) {
@@ -544,7 +668,10 @@ export default function AdminInstitutionSubscriptions() {
       const endDate = res.data?.endDate ?? res.data?.EndDate;
       const status = res.data?.status ?? res.data?.Status;
 
-      setInfo(`Renewed. Status: ${statusLabel(status)}. Ends: ${endDate ? formatPrettyDate(endDate) : "—"}`);
+      showToast(
+        "success",
+        `Renewed • ${statusLabel(status)} • Ends ${endDate ? formatPrettyDate(endDate) : "—"}`
+      );
       closeRenewModal();
       await loadAll();
     } catch (e2) {
@@ -563,203 +690,292 @@ export default function AdminInstitutionSubscriptions() {
   }
 
   return (
-    <div className="admin-page admin-page-wide">
-      <div className="admin-header">
-        <div>
-          <h1 className="admin-title">Institution Subscriptions</h1>
-          <p className="admin-subtitle">
-            Manage institution subscriptions — create, extend, renew, and review history.
-            {!meIsGlobal && (
-              <span style={{ marginLeft: 8, color: "#6b7280" }}>
-                Some actions require Global Admin approval.
+    <div className="au-wrap">
+      {toast ? (
+        <div className={`toast ${toast.type === "success" ? "toast-success" : "toast-error"}`}>
+          {toast.text}
+        </div>
+      ) : null}
+
+      <header className="au-hero">
+        <div className="au-heroLeft">
+          <div className="au-titleRow">
+            <div className="au-titleStack">
+              <div className="au-kicker">LawAfrica • Admin</div>
+              <h1 className="au-title">Institution Subscriptions</h1>
+              <div className="au-subtitle">
+                Manage subscriptions — create, extend, renew, and review history.
+                {!meIsGlobal ? (
+                  <span className="au-muted" style={{ marginLeft: 8 }}>
+                    Some actions require Global Admin approval.
+                  </span>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="au-heroRight">
+              <button className="au-refresh" type="button" onClick={() => loadAll()} disabled={busy || loading}>
+                {loading ? "Refreshing…" : "Refresh"}
+              </button>
+
+              <button className="au-refresh" type="button" onClick={openCreateModal} disabled={busy} style={{ marginLeft: 10 }}>
+                + New
+              </button>
+            </div>
+          </div>
+
+          {error ? <div className="au-error">{error}</div> : null}
+
+          <div className="au-topbar">
+            <div className="au-search">
+              <span className="au-searchIcon" aria-hidden="true">
+                <Icon name="search" />
               </span>
-            )}
-          </p>
-        </div>
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search by institution, product, status…"
+                aria-label="Search subscriptions"
+              />
+              {q ? (
+                <button className="au-clear" type="button" onClick={() => setQ("")} aria-label="Clear search">
+                  ✕
+                </button>
+              ) : null}
+            </div>
 
-        <div className="admin-actions">
-          <button className="admin-btn" onClick={loadAll} disabled={busy || loading}>
-            Refresh
-          </button>
-          <button className="admin-btn primary compact" onClick={openCreateModal} disabled={busy}>
-            + New
-          </button>
-        </div>
-      </div>
+            <div className="au-topbarRight" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <div className="au-filterGroup" style={{ padding: 0 }}>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  aria-label="Filter by status"
+                  style={{
+                    height: 40,
+                    borderRadius: 12,
+                    border: "1px solid rgba(0,0,0,0.12)",
+                    padding: "0 12px",
+                    background: "transparent",
+                    color: "inherit",
+                    outline: "none",
+                  }}
+                >
+                  <option value="all">All statuses</option>
+                  <option value="1">Pending</option>
+                  <option value="2">Active</option>
+                  <option value="3">Expired</option>
+                  <option value="4">Suspended</option>
+                </select>
+              </div>
 
-      {(error || info) && <div className={`admin-alert ${error ? "error" : "ok"}`}>{error ? error : info}</div>}
+              <div className="au-mePill" title="Permission gate">
+                <span className={`au-meDot ${meIsGlobal ? "ga" : ""}`} />
+                <span className="au-meText">{meIsGlobal ? "Global Admin session" : "Admin session"}</span>
+              </div>
+            </div>
+          </div>
 
-      <div className="admin-card admin-card-fill">
-        <div className="admin-toolbar" style={{ alignItems: "center" }}>
-          <input
-            className="admin-search admin-search-wide"
-            placeholder="Search by institution, product, status…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            style={{ maxWidth: 560 }}
-          />
+          <div className="au-kpis">
+            <div className="au-kpiCard">
+              <div className="au-kpiLabel">Shown</div>
+              <div className="au-kpiValue">{summary.total}</div>
+            </div>
+            <div className="au-kpiCard">
+              <div className="au-kpiLabel">Active</div>
+              <div className="au-kpiValue">{summary.active}</div>
+            </div>
+            <div className="au-kpiCard">
+              <div className="au-kpiLabel">Valid now</div>
+              <div className="au-kpiValue">{summary.validNow}</div>
+            </div>
+            <div className="au-kpiCard">
+              <div className="au-kpiLabel">Pending</div>
+              <div className="au-kpiValue">{summary.pending}</div>
+            </div>
+            <div className="au-kpiCard">
+              <div className="au-kpiLabel">Suspended</div>
+              <div className="au-kpiValue">{summary.suspended}</div>
+            </div>
+          </div>
 
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end", flex: 1 }}>
-            <span className="admin-pill muted">{summary.total} subscription{summary.total === 1 ? "" : "s"}</span>
-            <span className="admin-pill ok">{summary.active} Active</span>
-            <span className="admin-pill ok">{summary.validNow} Valid now</span>
-            <span className="admin-pill warn">{summary.pending} Pending</span>
-            <span className="admin-pill warn">{summary.suspended} Suspended</span>
-
-            <select
-              className="admin-select"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              style={{ minWidth: 180 }}
-            >
-              <option value="all">All statuses</option>
-              <option value="1">Pending</option>
-              <option value="2">Active</option>
-              <option value="3">Expired</option>
-              <option value="4">Suspended</option>
-            </select>
+          <div className="au-filters" style={{ marginTop: 12 }}>
+            <div className="au-filterGroup">
+              <div className="au-filterLabel">Status quick filters</div>
+              <div className="au-chips">
+                <Chip active={statusFilter === "all"} onClick={() => setStatusFilter("all")}>
+                  All
+                </Chip>
+                <Chip active={statusFilter === "2"} onClick={() => setStatusFilter("2")}>
+                  Active
+                </Chip>
+                <Chip active={statusFilter === "1"} onClick={() => setStatusFilter("1")}>
+                  Pending
+                </Chip>
+                <Chip active={statusFilter === "4"} onClick={() => setStatusFilter("4")}>
+                  Suspended
+                </Chip>
+                <Chip active={statusFilter === "3"} onClick={() => setStatusFilter("3")}>
+                  Expired
+                </Chip>
+              </div>
+            </div>
           </div>
         </div>
+      </header>
 
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th style={{ width: "26%" }}>Institution</th>
-              <th style={{ width: "28%" }}>Product</th>
-              <th style={{ width: "14%" }}>Status</th>
-              <th style={{ width: "16%" }}>End</th>
-              <th style={{ width: "10%" }}>Valid now?</th>
-              <th style={{ textAlign: "right", width: "16%" }}>Actions</th>
-            </tr>
-          </thead>
+      <section className="au-panel">
+        <div className="au-panelTop">
+          <div className="au-panelTitle">{loading ? "Loading…" : "Subscription directory"}</div>
+          <div className="au-muted">{loading ? "—" : `${filtered.length} record(s)`}</div>
+        </div>
 
-          <tbody>
-            {!loading && filtered.length === 0 && (
+        <div className="au-tableWrap">
+          <table className="au-table au-tableModern">
+            <thead>
               <tr>
-                <td colSpan={6} style={{ color: "#6b7280", padding: "14px" }}>
-                  No subscriptions found.
-                </td>
+                <th>Institution</th>
+                <th>Product</th>
+                <th>Status</th>
+                <th>End</th>
+                <th>Valid now?</th>
+                <th className="au-thRight">Actions</th>
               </tr>
-            )}
+            </thead>
 
-            {filtered.map((r) => {
-              const id = r.id ?? r.Id;
-              const inst = r.institutionName ?? r.InstitutionName ?? "—";
-              const prod = r.contentProductName ?? r.ContentProductName ?? "—";
-              const statusVal = r.status ?? r.Status;
-              const end = r.endDate ?? r.EndDate;
-
-              const statusText = statusLabel(statusVal);
-              const pillClass = statusPillClass(statusVal);
-              const validNow = isValidNow(r);
-
-              const statusNum = parseStatus(statusVal);
-              const isSuspended = statusNum === 4;
-
-              const pendingId = getPendingRequestId(r);
-              const pendingText = pendingLabel(r);
-              const pendingAt = getPendingRequestedAt(r);
-
-              const actionDisabled = !!pendingId || busy;
-              const pendingTitle = pendingText
-                ? `${pendingText}${pendingAt ? ` • requested ${formatPrettyDateTime(pendingAt)}` : ""}`
-                : "";
-
-              return (
-                <tr key={id}>
-                  <td style={{ fontWeight: 900 }}>
-                    {inst}
-                    {pendingText && (
-                      <div style={{ marginTop: 6 }}>
-                        <span className="admin-pill warn" title={pendingTitle}>
-                          {pendingText}
-                        </span>
-                      </div>
-                    )}
-                  </td>
-
-                  <td>{prod}</td>
-
-                  <td>
-                    <span className={`admin-pill ${pillClass}`}>{statusText}</span>
-                  </td>
-
-                  <td>{formatPrettyDate(end)}</td>
-
-                  <td>
-                    <span className={`admin-pill ${validNow ? "ok" : "muted"}`}>{validNow ? "Yes" : "No"}</span>
-                  </td>
-
-                  <td>
-                    <div className="admin-row-actions" style={{ justifyContent: "flex-end", gap: 10 }}>
-                      <button
-                        className="admin-action-btn neutral small"
-                        onClick={() => openAuditModalFor(r)}
-                        disabled={busy}
-                        title="View audit history"
-                      >
-                        Audit
-                      </button>
-
-                      <button
-                        className="admin-action-btn neutral small"
-                        onClick={() => openReqLogModalFor(r)}
-                        disabled={busy}
-                        title="View request / approval logs"
-                      >
-                        Requests
-                      </button>
-
-                      <button
-                        className="admin-action-btn neutral small"
-                        onClick={() => openRenewModalFor(r)}
-                        disabled={busy || isSuspended}
-                        title={isSuspended ? "Unsuspend first" : "Renew subscription"}
-                      >
-                        Renew
-                      </button>
-
-                      {!isSuspended ? (
-                        <button
-                          className="admin-action-btn warn small"
-                          onClick={() => suspend(r)}
-                          disabled={actionDisabled}
-                          title={
-                            pendingId
-                              ? `Disabled: ${pendingTitle}`
-                              : meIsGlobal
-                              ? "Suspend subscription"
-                              : "Request suspension (needs approval)"
-                          }
-                        >
-                          {meIsGlobal ? "Suspend" : "Request Suspend"}
-                        </button>
-                      ) : (
-                        <button
-                          className="admin-action-btn ok small"
-                          onClick={() => unsuspend(r)}
-                          disabled={actionDisabled}
-                          title={
-                            pendingId
-                              ? `Disabled: ${pendingTitle}`
-                              : meIsGlobal
-                              ? "Unsuspend subscription"
-                              : "Request unsuspension (needs approval)"
-                          }
-                        >
-                          {meIsGlobal ? "Unsuspend" : "Request Unsuspend"}
-                        </button>
-                      )}
-                    </div>
+            <tbody>
+              {!loading && filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="au-empty">
+                    No subscriptions found for the current filters.
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              ) : null}
 
-      <AdminPageFooter right={<span className="admin-footer-muted">Tip: suspended subscriptions must be unsuspended before renewing.</span>} />
+              {filtered.map((r) => {
+                const id = r.id ?? r.Id;
+                const inst = r.institutionName ?? r.InstitutionName ?? "—";
+                const prod = r.contentProductName ?? r.ContentProductName ?? "—";
+                const statusVal = r.status ?? r.Status;
+                const end = r.endDate ?? r.EndDate;
+
+                const validNow = isValidNow(r);
+
+                const statusNum = parseStatus(statusVal);
+                const isSuspended = statusNum === 4;
+
+                const pendingId = getPendingRequestId(r);
+                const pendingText = pendingLabel(r);
+                const pendingAt = getPendingRequestedAt(r);
+
+                const actionDisabled = !!pendingId || busy;
+                const pendingTitle = pendingText
+                  ? `${pendingText}${pendingAt ? ` • requested ${formatPrettyDateTime(pendingAt)}` : ""}`
+                  : "";
+
+                return (
+                  <tr key={id}>
+                    <td style={{ fontWeight: 900 }}>
+                      {inst}
+                      {pendingText ? (
+                        <div style={{ marginTop: 8 }}>
+                          <Badge tone="warn">
+                            <span title={pendingTitle}>{pendingText}</span>
+                          </Badge>
+                        </div>
+                      ) : null}
+                    </td>
+
+                    <td>{prod}</td>
+
+                    <td>
+                      <Badge tone={statusTone(statusVal)}>{statusLabel(statusVal)}</Badge>
+                    </td>
+
+                    <td>{formatPrettyDate(end)}</td>
+
+                    <td>
+                      <Badge tone={validNow ? "success" : "neutral"}>{validNow ? "Yes" : "No"}</Badge>
+                    </td>
+
+                    <td className="au-tdRight">
+                      <div className="au-actionsRow">
+                        <IconBtn tone="neutral" disabled={busy} title="View audit history" onClick={() => openAuditModalFor(r)}>
+                          {busy && auditTarget && (auditTarget.id ?? auditTarget.Id) === id && auditLoading ? (
+                            <Icon name="spinner" />
+                          ) : (
+                            <Icon name="history" />
+                          )}
+                        </IconBtn>
+
+                        <IconBtn
+                          tone="neutral"
+                          disabled={busy}
+                          title="View request / approval logs"
+                          onClick={() => openReqLogModalFor(r)}
+                        >
+                          {busy && reqLogTarget && (reqLogTarget.id ?? reqLogTarget.Id) === id && reqLogLoading ? (
+                            <Icon name="spinner" />
+                          ) : (
+                            <Icon name="file" />
+                          )}
+                        </IconBtn>
+
+                        <IconBtn
+                          tone="neutral"
+                          disabled={busy || isSuspended}
+                          title={isSuspended ? "Unsuspend first" : "Renew subscription"}
+                          onClick={() => openRenewModalFor(r)}
+                        >
+                          <Icon name="repeat" />
+                        </IconBtn>
+
+                        {!isSuspended ? (
+                          <IconBtn
+                            tone="danger"
+                            disabled={actionDisabled}
+                            title={
+                              pendingId
+                                ? `Disabled: ${pendingTitle}`
+                                : meIsGlobal
+                                ? "Suspend subscription"
+                                : "Request suspension (needs approval)"
+                            }
+                            onClick={() => suspend(r)}
+                          >
+                            <Icon name="pause" />
+                          </IconBtn>
+                        ) : (
+                          <IconBtn
+                            tone="success"
+                            disabled={actionDisabled}
+                            title={
+                              pendingId
+                                ? `Disabled: ${pendingTitle}`
+                                : meIsGlobal
+                                ? "Unsuspend subscription"
+                                : "Request unsuspension (needs approval)"
+                            }
+                            onClick={() => unsuspend(r)}
+                          >
+                            <Icon name="play" />
+                          </IconBtn>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="au-panelBottom">
+          <div className="au-muted">Suspended subscriptions must be unsuspended before renewing.</div>
+          <div className="au-muted">{meIsGlobal ? "Global Admin can apply suspend/unsuspend immediately." : "Non-Global Admin submits requests for approval."}</div>
+        </div>
+      </section>
+
+      <AdminPageFooter right={<span className="admin-footer-muted">LawAfrica • Admin Console</span>} />
 
       {/* ========================= */}
       {/* CREATE MODAL */}
@@ -767,14 +983,21 @@ export default function AdminInstitutionSubscriptions() {
       {openCreate && (
         <div className="admin-modal-overlay" onClick={closeCreateModal}>
           <div className="admin-modal admin-modal-tight" onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-head">
+            <div className="admin-modal-head admin-modal-head-x">
               <div>
                 <h3 className="admin-modal-title">Create / Extend Subscription</h3>
                 <div className="admin-modal-subtitle">Choose an institution, product, and duration.</div>
               </div>
 
-              <button className="admin-btn" onClick={closeCreateModal} disabled={busy}>
-                Close
+              <button
+                type="button"
+                className="admin-modal-xbtn"
+                onClick={closeCreateModal}
+                disabled={busy}
+                aria-label="Close"
+                title="Close"
+              >
+                ✕
               </button>
             </div>
 
@@ -817,7 +1040,7 @@ export default function AdminInstitutionSubscriptions() {
                     value={createForm.startDate}
                     onChange={(e) => setCreateForm((p) => ({ ...p, startDate: e.target.value }))}
                   />
-                  <div className="admin-help" style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>
+                  <div className="admin-help" style={{ color: "#6b7280", fontSize: 12, marginTop: 6 }}>
                     Leave as today, or choose a future date to schedule activation.
                   </div>
                 </div>
@@ -856,7 +1079,7 @@ export default function AdminInstitutionSubscriptions() {
       {openRenew && renewTarget && (
         <div className="admin-modal-overlay" onClick={closeRenewModal}>
           <div className="admin-modal admin-modal-tight" onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-head">
+            <div className="admin-modal-head admin-modal-head-x">
               <div>
                 <h3 className="admin-modal-title">Renew Subscription</h3>
                 <div className="admin-modal-subtitle">
@@ -864,8 +1087,15 @@ export default function AdminInstitutionSubscriptions() {
                 </div>
               </div>
 
-              <button className="admin-btn" onClick={closeRenewModal} disabled={busy}>
-                Close
+              <button
+                type="button"
+                className="admin-modal-xbtn"
+                onClick={closeRenewModal}
+                disabled={busy}
+                aria-label="Close"
+                title="Close"
+              >
+                ✕
               </button>
             </div>
 
@@ -886,7 +1116,7 @@ export default function AdminInstitutionSubscriptions() {
                     value={renewForm.startDate}
                     onChange={(e) => setRenewForm((p) => ({ ...p, startDate: e.target.value }))}
                   />
-                  <div className="admin-help" style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}>
+                  <div className="admin-help" style={{ color: "#6b7280", fontSize: 12, marginTop: 6 }}>
                     Leave empty to renew automatically.
                   </div>
                 </div>
@@ -925,7 +1155,7 @@ export default function AdminInstitutionSubscriptions() {
       {openAudit && auditTarget && (
         <div className="admin-modal-overlay" onClick={closeAuditModal}>
           <div className="admin-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 1100 }}>
-            <div className="admin-modal-head">
+            <div className="admin-modal-head admin-modal-head-x">
               <div>
                 <h3 className="admin-modal-title">Audit History</h3>
                 <div className="admin-modal-subtitle">
@@ -934,8 +1164,15 @@ export default function AdminInstitutionSubscriptions() {
                 </div>
               </div>
 
-              <button className="admin-btn" onClick={closeAuditModal} disabled={busy || auditLoading}>
-                Close
+              <button
+                type="button"
+                className="admin-modal-xbtn"
+                onClick={closeAuditModal}
+                disabled={busy || auditLoading}
+                aria-label="Close"
+                title="Close"
+              >
+                ✕
               </button>
             </div>
 
@@ -985,10 +1222,10 @@ export default function AdminInstitutionSubscriptions() {
                           </td>
                           <td>{userId ?? "—"}</td>
                           <td>
-                            <span className={`admin-pill ${statusPillClass(oldStatus)}`}>{statusLabel(oldStatus)}</span>
+                            <Badge tone={statusTone(oldStatus)}>{statusLabel(oldStatus)}</Badge>
                           </td>
                           <td>
-                            <span className={`admin-pill ${statusPillClass(newStatus)}`}>{statusLabel(newStatus)}</span>
+                            <Badge tone={statusTone(newStatus)}>{statusLabel(newStatus)}</Badge>
                           </td>
                           <td>{formatPrettyDate(oldEnd)}</td>
                           <td>{formatPrettyDate(newEnd)}</td>
@@ -1016,7 +1253,7 @@ export default function AdminInstitutionSubscriptions() {
       {openReqLog && reqLogTarget && (
         <div className="admin-modal-overlay" onClick={closeReqLogModal}>
           <div className="admin-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 1100 }}>
-            <div className="admin-modal-head">
+            <div className="admin-modal-head admin-modal-head-x">
               <div>
                 <h3 className="admin-modal-title">Request / Approval Logs</h3>
                 <div className="admin-modal-subtitle">
@@ -1025,8 +1262,15 @@ export default function AdminInstitutionSubscriptions() {
                 </div>
               </div>
 
-              <button className="admin-btn" onClick={closeReqLogModal} disabled={busy || reqLogLoading}>
-                Close
+              <button
+                type="button"
+                className="admin-modal-xbtn"
+                onClick={closeReqLogModal}
+                disabled={busy || reqLogLoading}
+                aria-label="Close"
+                title="Close"
+              >
+                ✕
               </button>
             </div>
 
@@ -1087,21 +1331,21 @@ export default function AdminInstitutionSubscriptions() {
                           ? "Rejected"
                           : String(status ?? "—");
 
-                      const statusClass =
+                      const statusTone2 =
                         String(statusText).toLowerCase().includes("approved")
-                          ? "ok"
+                          ? "success"
                           : String(statusText).toLowerCase().includes("rejected")
-                          ? "warn"
-                          : "muted";
+                          ? "danger"
+                          : "neutral";
 
                       return (
                         <tr key={rid}>
                           <td>{rid}</td>
                           <td>
-                            <span className="admin-pill muted">{typeText}</span>
+                            <Badge tone="neutral">{typeText}</Badge>
                           </td>
                           <td>
-                            <span className={`admin-pill ${statusClass}`}>{statusText}</span>
+                            <Badge tone={statusTone2}>{statusText}</Badge>
                           </td>
                           <td>{requestedBy}</td>
                           <td>{formatPrettyDateTime(created)}</td>
@@ -1160,7 +1404,7 @@ export default function AdminInstitutionSubscriptions() {
       {openReqAction && reqActionRow && reqActionMode && (
         <div className="admin-modal-overlay" onClick={closeRequestActionModal}>
           <div className="admin-modal admin-modal-tight" onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-head">
+            <div className="admin-modal-head admin-modal-head-x">
               <div>
                 <h3 className="admin-modal-title">
                   {meIsGlobal
@@ -1177,8 +1421,15 @@ export default function AdminInstitutionSubscriptions() {
                 </div>
               </div>
 
-              <button className="admin-btn" onClick={closeRequestActionModal} disabled={busy}>
-                Close
+              <button
+                type="button"
+                className="admin-modal-xbtn"
+                onClick={closeRequestActionModal}
+                disabled={busy}
+                aria-label="Close"
+                title="Close"
+              >
+                ✕
               </button>
             </div>
 
