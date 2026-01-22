@@ -148,6 +148,18 @@ function Icon({ name }) {
           />
         </svg>
       );
+    case "search":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M10.5 18a7.5 7.5 0 1 1 5.3-12.8A7.5 7.5 0 0 1 10.5 18Zm6.2-1.2L22 22"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+      );
     case "spinner":
       return (
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" className="au-spin">
@@ -187,6 +199,15 @@ function membershipStatusTone(st) {
   return "neutral";
 }
 
+function boolish(v) {
+  if (v === true) return true;
+  if (v === false) return false;
+  const s = String(v ?? "").toLowerCase();
+  if (s === "true" || s === "1" || s === "yes") return true;
+  if (s === "false" || s === "0" || s === "no") return false;
+  return null;
+}
+
 export default function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -210,6 +231,10 @@ export default function AdminUsers() {
 
   const [toast, setToast] = useState(null);
   const [busyId, setBusyId] = useState(null);
+
+  // ✅ Current user permissions (for Global Admin button)
+  const [me, setMe] = useState(null);
+  const [meIsGlobalAdmin, setMeIsGlobalAdmin] = useState(false);
 
   function showToast(type, text) {
     setToast({ type, text });
@@ -273,6 +298,64 @@ export default function AdminUsers() {
     }
   }
 
+  // ✅ Best-effort "who am I" lookup to gate Global Admin UI
+  useEffect(() => {
+    let ignore = false;
+
+    (async () => {
+      try {
+        const candidates = ["/auth/me", "/account/me", "/users/me", "/me", "/admin/me"];
+        let found = null;
+
+        for (const url of candidates) {
+          try {
+            const res = await api.get(url);
+            const dto = res.data?.data ?? res.data;
+            if (dto && typeof dto === "object") {
+              found = dto;
+              break;
+            }
+          } catch {
+            // try next
+          }
+        }
+
+        if (ignore) return;
+
+        setMe(found);
+
+        // Accept multiple shapes:
+        // - { isGlobalAdmin: true }
+        // - { roles: ["GlobalAdmin"] }
+        // - { role: "GlobalAdmin" }
+        // - { Role: "GlobalAdmin" }
+        const direct = boolish(found?.isGlobalAdmin ?? found?.IsGlobalAdmin);
+        const role = String(found?.role ?? found?.Role ?? "").toLowerCase();
+        const roles = Array.isArray(found?.roles ?? found?.Roles) ? (found?.roles ?? found?.Roles) : [];
+        const rolesStr = roles.map((x) => String(x).toLowerCase());
+
+        const isGA =
+          direct === true ||
+          role === "globaladmin" ||
+          role === "global_admin" ||
+          rolesStr.includes("globaladmin") ||
+          rolesStr.includes("global_admin");
+
+        setMeIsGlobalAdmin(!!isGA);
+      } catch {
+        // If we can't detect, we just hide Global Admin actions (safe default)
+        if (!ignore) {
+          setMe(null);
+          setMeIsGlobalAdmin(false);
+        }
+      }
+    })();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
   // ✅ Single effect: debounce only when q changes, immediate for others
   const paramsKey = useMemo(() => JSON.stringify(params), [params]);
 
@@ -280,9 +363,7 @@ export default function AdminUsers() {
     // Clear any pending debounce
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
 
-    const isSearchTyping = true; // we debounce always for simplicity
-    const delay = isSearchTyping ? 260 : 0;
-
+    const delay = 260;
     debounceRef.current = window.setTimeout(() => {
       loadUsers(false);
     }, delay);
@@ -415,6 +496,39 @@ export default function AdminUsers() {
     }
   }
 
+  // ✅ NEW: Promote/Demote Global Admin (only visible if you are Global Admin)
+  async function setGlobalAdmin(u, makeGlobalAdmin) {
+    if (!meIsGlobalAdmin) {
+      showToast("error", "Only a Global Admin can perform this action.");
+      return;
+    }
+
+    try {
+      setBusyId(u.id);
+
+      // Primary attempt (recommended endpoint):
+      // PUT /admin/users/{id}/global-admin { isGlobalAdmin: true|false }
+      try {
+        await api.put(`/admin/users/${u.id}/global-admin`, { isGlobalAdmin: makeGlobalAdmin });
+      } catch (e1) {
+        // Fallback: some backends use /role with "GlobalAdmin"
+        // POST /admin/users/{id}/role { newRole: "GlobalAdmin" }
+        if (e1?.response?.status === 404 || e1?.response?.status === 405) {
+          await api.post(`/admin/users/${u.id}/role`, { newRole: makeGlobalAdmin ? "GlobalAdmin" : "Admin" });
+        } else {
+          throw e1;
+        }
+      }
+
+      showToast("success", makeGlobalAdmin ? "Global Admin granted" : "Global Admin removed");
+      await loadUsers(true);
+    } catch (e) {
+      showToast("error", friendlyApiError(e) || "Request failed.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <div className="au-wrap">
       {toast ? (
@@ -423,22 +537,31 @@ export default function AdminUsers() {
         </div>
       ) : null}
 
-      <header className="au-hero au-heroTight">
+      <header className="au-hero">
         <div className="au-heroLeft">
           <div className="au-titleRow">
-            <h1 className="au-title">Users</h1>
-            <span className="au-subBadge">Admin Console</span>
-          </div>
+            <div className="au-titleStack">
+              <div className="au-kicker">LawAfrica • Admin</div>
+              <h1 className="au-title">User Management</h1>
+              <div className="au-subtitle">
+                Search, filter and manage users — approvals, roles, access controls, and security.
+              </div>
+            </div>
 
-          <div className="au-subtitle au-subtitleTight">
-            Search, filter and manage users. Actions are compact and always in a single row.
+            <div className="au-heroRight">
+              <button className="au-refresh" type="button" onClick={() => loadUsers(true)} disabled={loading}>
+                {loading ? "Refreshing…" : "Refresh"}
+              </button>
+            </div>
           </div>
 
           {err ? <div className="au-error">{err}</div> : null}
 
-          <div className="au-toolbar au-toolbarTight">
+          <div className="au-topbar">
             <div className="au-search">
-              <span className="au-searchIcon">⌕</span>
+              <span className="au-searchIcon" aria-hidden="true">
+                <Icon name="search" />
+              </span>
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
@@ -452,7 +575,7 @@ export default function AdminUsers() {
               ) : null}
             </div>
 
-            <div className="au-toolbarRight">
+            <div className="au-topbarRight">
               <div className="au-sort">
                 <label className="au-sortLabel">Sort</label>
                 <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort users">
@@ -462,37 +585,35 @@ export default function AdminUsers() {
                 </select>
               </div>
 
-              <button
-                className="au-refresh au-refreshSmall"
-                type="button"
-                onClick={() => loadUsers(true)}
-                disabled={loading}
-              >
-                Refresh
-              </button>
+              <div className="au-mePill" title="Current session (best-effort)">
+                <span className={`au-meDot ${meIsGlobalAdmin ? "ga" : ""}`} />
+                <span className="au-meText">
+                  {meIsGlobalAdmin ? "Global Admin session" : "Admin session"}
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="au-kpisInline">
-            <div className="au-kpiMini">
-              <div className="au-kpiMiniLabel">Shown</div>
-              <div className="au-kpiMiniValue">{counts.shown}</div>
+          <div className="au-kpis">
+            <div className="au-kpiCard">
+              <div className="au-kpiLabel">Shown</div>
+              <div className="au-kpiValue">{counts.shown}</div>
             </div>
-            <div className="au-kpiMini">
-              <div className="au-kpiMiniLabel">Pending</div>
-              <div className="au-kpiMiniValue">{counts.pending}</div>
+            <div className="au-kpiCard">
+              <div className="au-kpiLabel">Pending</div>
+              <div className="au-kpiValue">{counts.pending}</div>
             </div>
-            <div className="au-kpiMini">
-              <div className="au-kpiMiniLabel">Online</div>
-              <div className="au-kpiMiniValue">{counts.onlineNow}</div>
+            <div className="au-kpiCard">
+              <div className="au-kpiLabel">Online</div>
+              <div className="au-kpiValue">{counts.onlineNow}</div>
             </div>
-            <div className="au-kpiMini">
-              <div className="au-kpiMiniLabel">Locked</div>
-              <div className="au-kpiMiniValue">{counts.locked}</div>
+            <div className="au-kpiCard">
+              <div className="au-kpiLabel">Locked</div>
+              <div className="au-kpiValue">{counts.locked}</div>
             </div>
           </div>
 
-          <div className="au-filters au-filtersTight">
+          <div className="au-filters">
             <div className="au-filterGroup">
               <div className="au-filterLabel">Type</div>
               <div className="au-chips">
@@ -544,7 +665,7 @@ export default function AdminUsers() {
         </div>
       </header>
 
-      <section className="au-panel au-panelTight">
+      <section className="au-panel">
         <div className="au-panelTop">
           <div className="au-panelTitle">{loading ? "Loading…" : "User directory"}</div>
 
@@ -604,14 +725,18 @@ export default function AdminUsers() {
                 const isInstitutionUser = !!u.institutionId;
                 const hasMembership = !!u.membershipId;
 
-                const membershipPending =
-                  String(u.membershipStatus || "").toLowerCase().includes("pending");
-                const membershipApproved =
-                  String(u.membershipStatus || "").toLowerCase().includes("approved");
+                const membershipPending = String(u.membershipStatus || "").toLowerCase().includes("pending");
+                const membershipApproved = String(u.membershipStatus || "").toLowerCase().includes("approved");
 
                 const showApprove = isInstitutionUser && hasMembership && membershipPending;
                 const canToggleInstAdmin = isInstitutionUser && hasMembership && membershipApproved;
-                const showPromote = !isInstitutionUser && !u.isGlobalAdmin;
+
+                const showPromoteAdmin = !isInstitutionUser && !u.isGlobalAdmin;
+
+                // ✅ Global Admin action visibility (UI gated)
+                const canTouchGlobalAdmin = meIsGlobalAdmin && u?.id && (!me?.id || String(me.id) !== String(u.id));
+                const showMakeGlobalAdmin = canTouchGlobalAdmin && !u.isGlobalAdmin;
+                const showRemoveGlobalAdmin = canTouchGlobalAdmin && !!u.isGlobalAdmin;
 
                 return (
                   <tr key={u.id}>
@@ -640,9 +765,7 @@ export default function AdminUsers() {
 
                           {isInstitutionUser && hasMembership ? (
                             <div className="au-userSub au-userSub2">
-                              <Badge tone={membershipStatusTone(u.membershipStatus)}>
-                                {String(u.membershipStatus)}
-                              </Badge>
+                              <Badge tone={membershipStatusTone(u.membershipStatus)}>{String(u.membershipStatus)}</Badge>
                               {u.memberType ? <Badge tone="neutral">{String(u.memberType)}</Badge> : null}
                               {u.referenceNumber ? <span className="au-muted">Ref: {u.referenceNumber}</span> : null}
                             </div>
@@ -669,7 +792,7 @@ export default function AdminUsers() {
                     </td>
 
                     <td>
-                      <div className="au-lastSeen au-lastSeenTight">
+                      <div className="au-lastSeen">
                         <div className="au-lastSeenMain">{fmtDateTime(u.lastSeenAtUtc)}</div>
                         <div className="au-muted">Login: {u.lastLoginAt ? fmtDateTime(u.lastLoginAt) : "—"}</div>
                       </div>
@@ -678,12 +801,7 @@ export default function AdminUsers() {
                     <td className="au-tdRight">
                       <div className="au-actionsRow">
                         {showApprove ? (
-                          <IconBtn
-                            tone="success"
-                            disabled={isBusy}
-                            title="Approve membership"
-                            onClick={() => approveMembership(u)}
-                          >
+                          <IconBtn tone="success" disabled={isBusy} title="Approve membership" onClick={() => approveMembership(u)}>
                             {isBusy ? <Icon name="spinner" /> : <Icon name="check" />}
                           </IconBtn>
                         ) : null}
@@ -699,7 +817,30 @@ export default function AdminUsers() {
                           </IconBtn>
                         ) : null}
 
-                        {showPromote ? (
+                        {/* ✅ NEW: Global Admin grant/revoke (only visible to Global Admin session) */}
+                        {showMakeGlobalAdmin ? (
+                          <IconBtn
+                            tone="success"
+                            disabled={isBusy}
+                            title="Make Global Admin"
+                            onClick={() => setGlobalAdmin(u, true)}
+                          >
+                            {isBusy ? <Icon name="spinner" /> : <Icon name="crown" />}
+                          </IconBtn>
+                        ) : null}
+
+                        {showRemoveGlobalAdmin ? (
+                          <IconBtn
+                            tone="danger"
+                            disabled={isBusy}
+                            title="Remove Global Admin"
+                            onClick={() => setGlobalAdmin(u, false)}
+                          >
+                            {isBusy ? <Icon name="spinner" /> : <Icon name="crown" />}
+                          </IconBtn>
+                        ) : null}
+
+                        {showPromoteAdmin ? (
                           <IconBtn
                             tone={String(u.role || "").toLowerCase() === "admin" ? "neutral" : "success"}
                             disabled={isBusy}
@@ -730,12 +871,7 @@ export default function AdminUsers() {
                           <Icon name="ban" />
                         </IconBtn>
 
-                        <IconBtn
-                          tone="neutral"
-                          disabled={isBusy}
-                          title="Reset 2FA"
-                          onClick={() => reset2fa(u.id)}
-                        >
+                        <IconBtn tone="neutral" disabled={isBusy} title="Reset 2FA" onClick={() => reset2fa(u.id)}>
                           {isBusy ? <Icon name="spinner" /> : <Icon name="key" />}
                         </IconBtn>
                       </div>
@@ -747,7 +883,7 @@ export default function AdminUsers() {
           </table>
         </div>
 
-        <div className="au-panelBottom au-panelBottomTight">
+        <div className="au-panelBottom">
           <div className="au-muted">Locked blocks sign-in even if a user is Active.</div>
           <div className="au-muted">Online = last seen within 5 minutes.</div>
         </div>
