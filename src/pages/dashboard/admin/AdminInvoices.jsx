@@ -406,20 +406,11 @@ export default function AdminInvoices() {
                 <Chip active={status === "all"} onClick={() => setStatus("all")}>
                   All
                 </Chip>
-                <Chip active={status === "Draft"} onClick={() => setStatus("Draft")}>
-                  Draft
-                </Chip>
-                <Chip active={status === "Issued"} onClick={() => setStatus("Issued")}>
-                  Issued
-                </Chip>
                 <Chip active={status === "PartiallyPaid"} onClick={() => setStatus("PartiallyPaid")}>
                   PartiallyPaid
                 </Chip>
                 <Chip active={status === "Paid"} onClick={() => setStatus("Paid")}>
                   Paid
-                </Chip>
-                <Chip active={status === "Void"} onClick={() => setStatus("Void")}>
-                  Void
                 </Chip>
               </div>
             </div>
