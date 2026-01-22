@@ -24,9 +24,13 @@ function getBestApiOrigin() {
 /**
  * Build a public asset URL for Storage paths.
  *
- * Backend serves: GET /storage/{**filePath} (lowercase)
- * DB might store: Storage/Invoice/invoice-logo.png OR Invoice/invoice-logo.png OR invoice-logo.png
- * We normalize and ALWAYS request via /storage/ (Linux case-safe).
+ * Backend serves: GET /storage/{**filePath}
+ * DB may store:
+ *  - "/storage/Invoice/invoice-logo.png"   ✅ (new backend)
+ *  - "storage/Invoice/invoice-logo.png"
+ *  - "Storage/Invoice/invoice-logo.png"
+ *  - "Invoice/invoice-logo.png"
+ *  - "invoice-logo.png"
  */
 function buildAssetUrl(path) {
   if (!path) return null;
@@ -34,7 +38,15 @@ function buildAssetUrl(path) {
   const raw = String(path).trim();
   if (!raw) return null;
 
+  // Already absolute
   if (isAbsoluteHttpUrl(raw)) return raw;
+
+  const origin = getBestApiOrigin();
+
+  // ✅ If backend stores canonical URL "/storage/..."
+  if (raw.startsWith("/storage/", { 0: 0 }) || raw.toLowerCase().startsWith("/storage/")) {
+    return `${origin}${raw}`;
+  }
 
   // Normalize slashes and remove leading slash
   let clean = raw.replace(/\\/g, "/").replace(/^\/+/, "");
@@ -43,20 +55,45 @@ function buildAssetUrl(path) {
   clean = clean.replace(/^Storage\//i, "");
   clean = clean.replace(/^storage\//i, "");
 
-  const origin = getBestApiOrigin();
+  // If someone stored "Invoice/..." or filename only, it becomes "/storage/<clean>"
   return `${origin}/storage/${clean}`;
 }
 
 function Field({ label, hint, children }) {
   return (
-    <label className="field field--nice">
-      <div className="field__top">
-        <span className="field__label">{label}</span>
-        {hint ? <span className="field__hint">{hint}</span> : null}
+    <label className="field field--nice" style={{ marginBottom: 14 }}>
+      <div className="field__top" style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+        <span className="field__label" style={{ fontWeight: 800 }}>{label}</span>
+        {hint ? <span className="field__hint" style={{ opacity: 0.8 }}>{hint}</span> : null}
       </div>
       {children}
     </label>
   );
+}
+
+function inputStyle() {
+  return {
+    width: "100%",
+    padding: "11px 12px",
+    borderRadius: 14,
+    border: "1px solid rgba(148,163,184,.35)",
+    background: "rgba(2,6,23,.22)",
+    color: "inherit",
+    outline: "none",
+  };
+}
+
+function textareaStyle() {
+  return {
+    width: "100%",
+    padding: "11px 12px",
+    borderRadius: 14,
+    border: "1px solid rgba(148,163,184,.35)",
+    background: "rgba(2,6,23,.22)",
+    color: "inherit",
+    outline: "none",
+    resize: "vertical",
+  };
 }
 
 export default function AdminInvoiceSettings() {
@@ -173,7 +210,7 @@ export default function AdminInvoiceSettings() {
       <div className="adminCrud__header">
         <div>
           <h1 className="adminCrud__title">Invoice Settings</h1>
-          <p className="adminCrud__sub">These details are printed on every invoice.</p>
+          <p className="adminCrud__sub">These details appear on every invoice (print + PDF).</p>
         </div>
 
         <div className="adminCrud__actionsRow">
@@ -203,134 +240,305 @@ export default function AdminInvoiceSettings() {
       {loading ? <div className="alert alert--info">Loading settings…</div> : null}
 
       <div className="card invoiceCard">
-        <div className="settingsGrid">
-          <div className="settingsCol">
+        {/* Brand strip (UI only) */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 14,
+            padding: "14px 16px",
+            borderRadius: 16,
+            border: "1px solid rgba(148,163,184,.18)",
+            background: "linear-gradient(135deg, rgba(112,40,64,.16), rgba(2,6,23,.18))",
+            marginBottom: 14,
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: 900, letterSpacing: 0.2 }}>Brand & Payments</div>
+            <div className="mutedSmall" style={{ marginTop: 4 }}>
+              Upload your logo, set header details, and define payment instructions.
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="btnPrimary btnPrimary--sm"
+            onClick={save}
+            disabled={saving}
+            title={saving ? "Saving..." : "Save changes"}
+          >
+            💾 {saving ? "Saving..." : "Save"}
+          </button>
+        </div>
+
+        <div
+          className="settingsGrid"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(12, 1fr)",
+            gap: 16,
+          }}
+        >
+          {/* LEFT */}
+          <div
+            className="settingsCol"
+            style={{
+              gridColumn: "span 6",
+              minWidth: 0,
+            }}
+          >
             <div className="sectionHead">
               <h3 className="sectionTitle">Company</h3>
-              <div className="sectionHint">Shown on every invoice header.</div>
+              <div className="sectionHint">Printed on invoice header.</div>
             </div>
 
-            <Field label="Company Name">
-              <input value={form.companyName || ""} onChange={(e) => set("companyName", e.target.value)} />
+            <Field label="Company Name" hint="Required">
+              <input
+                style={inputStyle()}
+                value={form.companyName || ""}
+                onChange={(e) => set("companyName", e.target.value)}
+                placeholder="e.g. LawAfrica"
+              />
             </Field>
 
             <Field label="Address Line 1">
-              <input value={form.addressLine1 || ""} onChange={(e) => set("addressLine1", e.target.value)} />
+              <input
+                style={inputStyle()}
+                value={form.addressLine1 || ""}
+                onChange={(e) => set("addressLine1", e.target.value)}
+                placeholder="Street / Building"
+              />
             </Field>
 
-            <Field label="Address Line 2">
-              <input value={form.addressLine2 || ""} onChange={(e) => set("addressLine2", e.target.value)} />
+            <Field label="Address Line 2" hint="Optional">
+              <input
+                style={inputStyle()}
+                value={form.addressLine2 || ""}
+                onChange={(e) => set("addressLine2", e.target.value)}
+                placeholder="P.O. Box / Suite"
+              />
             </Field>
 
-            <div className="twoCols">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Field label="City">
-                <input value={form.city || ""} onChange={(e) => set("city", e.target.value)} />
+                <input style={inputStyle()} value={form.city || ""} onChange={(e) => set("city", e.target.value)} />
               </Field>
 
               <Field label="Country">
-                <input value={form.country || ""} onChange={(e) => set("country", e.target.value)} />
+                <input
+                  style={inputStyle()}
+                  value={form.country || ""}
+                  onChange={(e) => set("country", e.target.value)}
+                  placeholder="e.g. Kenya"
+                />
               </Field>
             </div>
 
-            <div className="twoCols">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Field label="VAT/PIN">
-                <input value={form.vatOrPin || ""} onChange={(e) => set("vatOrPin", e.target.value)} />
+                <input
+                  style={inputStyle()}
+                  value={form.vatOrPin || ""}
+                  onChange={(e) => set("vatOrPin", e.target.value)}
+                  placeholder="e.g. P051234567A"
+                />
               </Field>
 
               <Field label="Phone">
-                <input value={form.phone || ""} onChange={(e) => set("phone", e.target.value)} />
+                <input
+                  style={inputStyle()}
+                  value={form.phone || ""}
+                  onChange={(e) => set("phone", e.target.value)}
+                  placeholder="+254..."
+                />
               </Field>
             </div>
 
             <Field label="Email">
-              <input value={form.email || ""} onChange={(e) => set("email", e.target.value)} />
+              <input
+                style={inputStyle()}
+                value={form.email || ""}
+                onChange={(e) => set("email", e.target.value)}
+                placeholder="accounts@company.com"
+              />
             </Field>
 
-            <div className="sectionHead sectionHead--mt">
+            <div className="sectionHead sectionHead--mt" style={{ marginTop: 6 }}>
               <h3 className="sectionTitle">Logo</h3>
-              <div className="sectionHint">Optional (PNG/JPG/WEBP).</div>
+              <div className="sectionHint">PNG/JPG/WEBP (recommended: transparent PNG).</div>
             </div>
 
-            <div className="logoRow">
-              <div className="logoPreview">
+            <div
+              className="logoRow"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "160px 1fr",
+                gap: 12,
+                alignItems: "stretch",
+                padding: 12,
+                borderRadius: 16,
+                border: "1px solid rgba(148,163,184,.18)",
+                background: "rgba(2,6,23,.18)",
+              }}
+            >
+              <div
+                className="logoPreview"
+                style={{
+                  borderRadius: 14,
+                  border: "1px dashed rgba(148,163,184,.35)",
+                  display: "grid",
+                  placeItems: "center",
+                  overflow: "hidden",
+                  background: "rgba(2,6,23,.18)",
+                  minHeight: 96,
+                }}
+              >
                 {logoUrl ? (
                   <img
                     src={logoUrl}
                     alt="Invoice logo"
                     loading="lazy"
                     referrerPolicy="no-referrer"
+                    style={{ maxWidth: "100%", maxHeight: 84, objectFit: "contain" }}
                     onError={(e) => {
-                      // prevent your global overlay from treating this as an app crash
                       e?.stopPropagation?.();
                       setLogoBroken(true);
                     }}
                   />
                 ) : (
-                  <div className="mutedSmall">No logo</div>
+                  <div className="mutedSmall" style={{ padding: 8, textAlign: "center" }}>
+                    No logo
+                  </div>
                 )}
               </div>
 
-              <div className="logoActions">
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={(e) => uploadLogo(e.target.files?.[0])}
-                />
-                <div className="mutedSmall">Tip: use a transparent PNG for best results.</div>
+              <div className="logoActions" style={{ display: "grid", gap: 10 }}>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                  <label
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "10px 12px",
+                      borderRadius: 14,
+                      border: "1px solid rgba(148,163,184,.25)",
+                      background: "rgba(112,40,64,.16)",
+                      cursor: "pointer",
+                      fontWeight: 800,
+                    }}
+                    title="Upload logo"
+                  >
+                    ⬆️ Upload Logo
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      style={{ display: "none" }}
+                      onChange={(e) => uploadLogo(e.target.files?.[0])}
+                    />
+                  </label>
+
+                  <button
+                    type="button"
+                    className="btnGhost btnGhost--sm"
+                    onClick={() => {
+                      setLogoBroken(false);
+                      setLogoNonce((n) => n + 1);
+                    }}
+                    title="Refresh preview"
+                  >
+                    🔄 Refresh
+                  </button>
+                </div>
+
+                <div className="mutedSmall">
+                  The backend stores logoPath like <span className="au-mono">/storage/Invoice/invoice-logo.png</span>.
+                </div>
 
                 {form.logoPath ? (
-                  <div className="mutedSmall" style={{ marginTop: 6 }}>
-                    Path: <span className="mutedSmall">{form.logoPath}</span>
+                  <div className="mutedSmall">
+                    Saved path: <span className="au-mono">{form.logoPath}</span>
                   </div>
                 ) : null}
               </div>
             </div>
           </div>
 
-          <div className="settingsCol">
+          {/* RIGHT */}
+          <div
+            className="settingsCol"
+            style={{
+              gridColumn: "span 6",
+              minWidth: 0,
+            }}
+          >
             <div className="sectionHead">
               <h3 className="sectionTitle">Payment Details</h3>
               <div className="sectionHint">Printed in the payment section.</div>
             </div>
 
-            <div className="twoCols">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Field label="Paybill Number">
-                <input value={form.paybillNumber || ""} onChange={(e) => set("paybillNumber", e.target.value)} />
+                <input
+                  style={inputStyle()}
+                  value={form.paybillNumber || ""}
+                  onChange={(e) => set("paybillNumber", e.target.value)}
+                  placeholder="e.g. 123456"
+                />
               </Field>
 
               <Field label="Till Number">
-                <input value={form.tillNumber || ""} onChange={(e) => set("tillNumber", e.target.value)} />
+                <input
+                  style={inputStyle()}
+                  value={form.tillNumber || ""}
+                  onChange={(e) => set("tillNumber", e.target.value)}
+                  placeholder="e.g. 987654"
+                />
               </Field>
             </div>
 
-            <Field label="Account Reference" hint="e.g. Company name or invoice number rule">
-              <input value={form.accountReference || ""} onChange={(e) => set("accountReference", e.target.value)} />
+            <Field label="Account Reference" hint="e.g. invoice number rule">
+              <input
+                style={inputStyle()}
+                value={form.accountReference || ""}
+                onChange={(e) => set("accountReference", e.target.value)}
+                placeholder="e.g. INV-{number}"
+              />
             </Field>
 
-            <div className="sectionHead sectionHead--mt">
+            <div className="sectionHead sectionHead--mt" style={{ marginTop: 8 }}>
               <h3 className="sectionTitle">Bank</h3>
-              <div className="sectionHint">Only if you accept bank payments.</div>
+              <div className="sectionHint">Fill only if you accept bank payments.</div>
             </div>
 
             <Field label="Bank Name">
-              <input value={form.bankName || ""} onChange={(e) => set("bankName", e.target.value)} />
+              <input
+                style={inputStyle()}
+                value={form.bankName || ""}
+                onChange={(e) => set("bankName", e.target.value)}
+                placeholder="e.g. KCB"
+              />
             </Field>
 
             <Field label="Account Name">
               <input
+                style={inputStyle()}
                 value={form.bankAccountName || ""}
                 onChange={(e) => set("bankAccountName", e.target.value)}
+                placeholder="Account holder name"
               />
             </Field>
 
             <Field label="Account Number">
               <input
+                style={inputStyle()}
                 value={form.bankAccountNumber || ""}
                 onChange={(e) => set("bankAccountNumber", e.target.value)}
+                placeholder="Account number"
               />
             </Field>
 
-            <div className="sectionHead sectionHead--mt">
+            <div className="sectionHead sectionHead--mt" style={{ marginTop: 8 }}>
               <h3 className="sectionTitle">Footer Notes</h3>
               <div className="sectionHint">Printed at the bottom of the invoice.</div>
             </div>
@@ -338,15 +546,16 @@ export default function AdminInvoiceSettings() {
             <Field label="Footer Notes">
               <textarea
                 rows={5}
+                style={textareaStyle()}
                 value={form.footerNotes || ""}
                 onChange={(e) => set("footerNotes", e.target.value)}
                 placeholder="e.g. Thank you for your business. Payments are non-refundable..."
               />
             </Field>
 
-            <div className="rowActions rowActions--right">
+            <div className="rowActions rowActions--right" style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
               <button className="btnPrimary btnPrimary--sm" onClick={save} disabled={saving}>
-                💾 Save
+                💾 {saving ? "Saving..." : "Save"}
               </button>
               <Link className="btnGhost btnGhost--sm" to="/dashboard/admin/finance/invoices">
                 ⬅ Back
@@ -354,6 +563,14 @@ export default function AdminInvoiceSettings() {
             </div>
           </div>
         </div>
+
+        {/* Responsive tweak without CSS file changes */}
+        <style>{`
+          @media (max-width: 980px){
+            .settingsGrid { grid-template-columns: 1fr !important; }
+            .settingsCol { grid-column: span 12 !important; }
+          }
+        `}</style>
       </div>
 
       <AdminPageFooter />
