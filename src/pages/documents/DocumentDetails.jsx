@@ -1,3 +1,4 @@
+// src/pages/documents/DocumentDetails.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import api, { API_BASE_URL } from "../../api/client";
@@ -117,6 +118,45 @@ function extractAxiosError(e) {
   if (typeof data === "object")
     return data.detail || data.title || data.message || e?.message || "Request failed.";
   return e?.message || "Request failed.";
+}
+
+/* =========================
+   ✅ VAT helpers (NEW)
+   - Works with different DTO shapes
+   - Shows note only when VAT is configured
+========================= */
+function hasVatRate(doc, offer) {
+  const vatRateId =
+    pick(offer, ["vatRateId", "VatRateId"]) ??
+    pick(doc, ["vatRateId", "VatRateId"]) ??
+    null;
+
+  const ratePercent =
+    pick(offer, ["vatRatePercent", "VatRatePercent", "ratePercent", "RatePercent"]) ??
+    pick(doc, ["vatRatePercent", "VatRatePercent", "ratePercent", "RatePercent"]) ??
+    pick(doc, ["vatRate", "VatRate"])?.ratePercent ??
+    null;
+
+  return !!vatRateId || (typeof ratePercent === "number" && ratePercent > 0);
+}
+
+function getIsTaxInclusive(doc, offer) {
+  // Prefer publicOffer if backend returns these there, else doc
+  const v =
+    pick(offer, ["isTaxInclusive", "IsTaxInclusive"]) ??
+    pick(doc, ["isTaxInclusive", "IsTaxInclusive"]) ??
+    null;
+
+  return !!v;
+}
+
+function buildVatNote(doc, offer) {
+  if (!hasVatRate(doc, offer)) return null;
+  const inclusive = getIsTaxInclusive(doc, offer);
+
+  return inclusive
+    ? "Price shown is VAT inclusive (where applicable)."
+    : "Price shown is subject to VAT (added at checkout) where applicable.";
 }
 
 export default function DocumentDetails() {
@@ -567,6 +607,8 @@ export default function DocumentDetails() {
   const currency = offerCurrency || docCurrency || "KES";
   const price = offerPrice ?? docPrice;
 
+  const vatNote = buildVatNote(doc, publicOffer); // ✅ NEW
+
   const hasFullAccess = !!access?.hasFullAccess;
 
   const isBlocked = !!access?.isBlocked;
@@ -828,11 +870,14 @@ export default function DocumentDetails() {
                       <div className="doc-offer-title">Buy this document</div>
                       <div className="doc-offer-sub">One-time purchase • Full access on this account</div>
 
-                      {/* ✅ NEW: clearer guidance */}
+                      {/* ✅ Payment guidance */}
                       <div className="doc-offer-note" style={{ marginTop: 8 }}>
                         <b>M-PESA:</b> For Kenyan users (STK prompt to your phone).{" "}
                         <b>Paystack:</b> Pay by card or bank (Visa/Mastercard), including international payments.
                       </div>
+
+                      {/* ✅ NEW: VAT note (shows only if VAT configured) */}
+                      {vatNote ? <div className="doc-offer-note">{vatNote}</div> : null}
                     </div>
 
                     <div className="doc-offer-price">
@@ -840,7 +885,6 @@ export default function DocumentDetails() {
                     </div>
                   </div>
 
-                  {/* ✅ No “Details” button here anymore */}
                   <div className="doc-purchase-actions">
                     <button
                       className="btn btn-primary"
@@ -1008,6 +1052,8 @@ export default function DocumentDetails() {
                 />
                 <div style={{ marginTop: 8, opacity: 0.85, fontSize: 13 }}>
                   Amount: <b>{currency} {formatMoney(priceToPay())}</b>
+                  {/* ✅ NEW: VAT note also visible in modal */}
+                  {vatNote ? <div className="doc-offer-note" style={{ marginTop: 6 }}>{vatNote}</div> : null}
                 </div>
               </div>
             ) : (
@@ -1015,6 +1061,8 @@ export default function DocumentDetails() {
                 <div style={{ fontSize: 13 }}>
                   Amount: <b>{currency} {formatMoney(priceToPay())}</b>
                 </div>
+                {/* ✅ NEW: VAT note also visible in modal */}
+                {vatNote ? <div className="doc-offer-note" style={{ marginTop: 6 }}>{vatNote}</div> : null}
                 <div style={{ marginTop: 6, fontSize: 13, color: "#6b7280" }}>
                   You’ll be redirected to Paystack to complete the payment securely.
                 </div>
