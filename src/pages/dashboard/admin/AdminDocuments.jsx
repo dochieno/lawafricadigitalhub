@@ -2,21 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import api, { API_BASE_URL } from "../../../api/client";
 import "../../../styles/adminCrud.css";
-import "../../../styles/adminUsers.css"; // ✅ LawAfrica Admin Users branding
-
-/**
- * ✅ STANDARD DOCUMENTS ONLY PAGE
- * - Lists ONLY Standard (non-report) legal documents
- * - Create defaults to Kind=Standard
- * - Does NOT show Report-only fields (Kind, ContentProductId)
- *
- * 🔧 FIX: /legal-documents/admin may not return Kind/FileType
- * - We now "enrich" missing rows by calling /legal-documents/{id}
- * - Then filter out report rows reliably.
- *
- * Covers are served from /storage (NOT /api/storage)
- * API_BASE_URL is usually: https://localhost:7033/api
- */
+import "../../../styles/adminUsers.css"; // 
 
 function getServerOrigin() {
   return String(API_BASE_URL || "").replace(/\/api\/?$/i, "");
@@ -119,8 +105,6 @@ async function getVatRatesWithFallback() {
     }
   }
 
-  // best-effort: return empty list; caller can keep page working
-  // (we intentionally do not throw to avoid "network stuck" state)
   return [];
 }
 
@@ -135,21 +119,13 @@ function pickFileType(r) {
   return ft == null ? "" : String(ft);
 }
 
-/**
- * ✅ Detect report rows robustly:
- * - Kind may be "Report" or 2
- * - fileType may be "report"
- */
+
 function isReportRow(r) {
   const k = pickKind(r);
   const ft = pickFileType(r).toLowerCase();
   return k === "Report" || k === 2 || ft === "report";
 }
 
-/**
- * 🔧 Enrich missing Kind/FileType by calling /legal-documents/{id}.
- * We only do this when the admin list projection is missing those fields.
- */
 async function enrichAdminListIfNeeded(all) {
   if (!Array.isArray(all) || all.length === 0) return all;
 

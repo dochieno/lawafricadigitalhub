@@ -55,6 +55,8 @@ import AdminInvoiceDetail from "./pages/dashboard/admin/AdminInvoiceDetail";
 import AdminInvoiceSettings from "./pages/dashboard/admin/AdminInvoiceSettings";
 import AdminPayments from "./pages/dashboard/admin/AdminPayments";
 
+// ✅ NEW: VAT Rates Admin
+import AdminVATRates from "./pages/dashboard/admin/AdminVatRates";
 
 export default function App() {
   return (
@@ -168,6 +170,7 @@ export default function App() {
                 path="admin/finance/invoice-settings"
                 element={<AdminInvoiceSettings />}
               />
+              <Route path="admin/finance/vat-rates" element={<AdminVATRates />} />
               <Route path="admin/finance/payments" element={<AdminPayments />} />
             </Route>
 
