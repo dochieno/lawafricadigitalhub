@@ -199,13 +199,68 @@ function membershipStatusTone(st) {
   return "neutral";
 }
 
-function boolish(v) {
+function parseBoolClaim(v) {
   if (v === true) return true;
   if (v === false) return false;
-  const s = String(v ?? "").toLowerCase();
+  const s = String(v ?? "").toLowerCase().trim();
   if (s === "true" || s === "1" || s === "yes") return true;
   if (s === "false" || s === "0" || s === "no") return false;
-  return null;
+  return false;
+}
+
+/**
+ * ✅ Decode JWT payload without external libs.
+ * Handles base64url and returns {} on failure.
+ */
+function decodeJwtPayload(token) {
+  try {
+    if (!token || typeof token !== "string") return {};
+    const parts = token.split(".");
+    if (parts.length < 2) return {};
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+    const json = decodeURIComponent(
+      atob(padded)
+        .split("")
+        .map((c) => "%" + c.charCodeAt(0).toString(16).padStart(2, "0"))
+        .join("")
+    );
+    const obj = JSON.parse(json);
+    return obj && typeof obj === "object" ? obj : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * ✅ Try common storage keys + Authorization header.
+ * Adapt keys if your app uses different names.
+ */
+function getAccessToken() {
+  try {
+    const candidates = [
+      localStorage.getItem("token"),
+      localStorage.getItem("accessToken"),
+      localStorage.getItem("jwt"),
+      localStorage.getItem("authToken"),
+      sessionStorage.getItem("token"),
+      sessionStorage.getItem("accessToken"),
+      sessionStorage.getItem("jwt"),
+      sessionStorage.getItem("authToken"),
+    ].filter(Boolean);
+
+    if (candidates.length) return candidates[0];
+
+    const hdr = api?.defaults?.headers?.common?.Authorization || api?.defaults?.headers?.Authorization;
+    if (hdr && typeof hdr === "string") {
+      const m = hdr.match(/Bearer\s+(.+)/i);
+      return m ? m[1] : hdr;
+    }
+    return "";
+  } catch {
+    return "";
+  }
 }
 
 export default function AdminUsers() {
@@ -232,14 +287,41 @@ export default function AdminUsers() {
   const [toast, setToast] = useState(null);
   const [busyId, setBusyId] = useState(null);
 
-  // ✅ Current user permissions (for Global Admin button)
-  const [me, setMe] = useState(null);
+  // ✅ Current session claims
   const [meIsGlobalAdmin, setMeIsGlobalAdmin] = useState(false);
+  const [myUserId, setMyUserId] = useState(null);
 
   function showToast(type, text) {
     setToast({ type, text });
     window.setTimeout(() => setToast(null), 2200);
   }
+
+  // ✅ Read token claim once on mount (and whenever storage changes via focus)
+  useEffect(() => {
+    const readClaims = () => {
+      const token = getAccessToken();
+      const payload = decodeJwtPayload(token);
+
+      // Your backend sets "isGlobalAdmin" claim as "true"/"false"
+      const isGA = parseBoolClaim(payload?.isGlobalAdmin);
+
+      // userId claim exists too (string). Also support sub/nameid
+      const uid =
+        payload?.userId ??
+        payload?.["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"] ??
+        payload?.sub ??
+        null;
+
+      setMeIsGlobalAdmin(!!isGA);
+      setMyUserId(uid ? String(uid) : null);
+    };
+
+    readClaims();
+    // Refresh claims on tab focus (e.g., user logs in/out in another tab)
+    const onFocus = () => readClaims();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
 
   const totalPages = useMemo(() => {
     const t = num(data.total);
@@ -298,75 +380,15 @@ export default function AdminUsers() {
     }
   }
 
-  // ✅ Best-effort "who am I" lookup to gate Global Admin UI
-  useEffect(() => {
-    let ignore = false;
-
-    (async () => {
-      try {
-        const candidates = ["/auth/me", "/account/me", "/users/me", "/me", "/admin/me"];
-        let found = null;
-
-        for (const url of candidates) {
-          try {
-            const res = await api.get(url);
-            const dto = res.data?.data ?? res.data;
-            if (dto && typeof dto === "object") {
-              found = dto;
-              break;
-            }
-          } catch {
-            // try next
-          }
-        }
-
-        if (ignore) return;
-
-        setMe(found);
-
-        // Accept multiple shapes:
-        // - { isGlobalAdmin: true }
-        // - { roles: ["GlobalAdmin"] }
-        // - { role: "GlobalAdmin" }
-        // - { Role: "GlobalAdmin" }
-        const direct = boolish(found?.isGlobalAdmin ?? found?.IsGlobalAdmin);
-        const role = String(found?.role ?? found?.Role ?? "").toLowerCase();
-        const roles = Array.isArray(found?.roles ?? found?.Roles) ? (found?.roles ?? found?.Roles) : [];
-        const rolesStr = roles.map((x) => String(x).toLowerCase());
-
-        const isGA =
-          direct === true ||
-          role === "globaladmin" ||
-          role === "global_admin" ||
-          rolesStr.includes("globaladmin") ||
-          rolesStr.includes("global_admin");
-
-        setMeIsGlobalAdmin(!!isGA);
-      } catch {
-        // If we can't detect, we just hide Global Admin actions (safe default)
-        if (!ignore) {
-          setMe(null);
-          setMeIsGlobalAdmin(false);
-        }
-      }
-    })();
-
-    return () => {
-      ignore = true;
-    };
-  }, []);
-
-  // ✅ Single effect: debounce only when q changes, immediate for others
+  // ✅ Single effect: debounce always
   const paramsKey = useMemo(() => JSON.stringify(params), [params]);
 
   useEffect(() => {
-    // Clear any pending debounce
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
 
-    const delay = 260;
     debounceRef.current = window.setTimeout(() => {
       loadUsers(false);
-    }, delay);
+    }, 260);
 
     return () => {
       if (debounceRef.current) window.clearTimeout(debounceRef.current);
@@ -496,7 +518,7 @@ export default function AdminUsers() {
     }
   }
 
-  // ✅ NEW: Promote/Demote Global Admin (only visible if you are Global Admin)
+  // ✅ Global Admin promote/demote (UI gated by token claim)
   async function setGlobalAdmin(u, makeGlobalAdmin) {
     if (!meIsGlobalAdmin) {
       showToast("error", "Only a Global Admin can perform this action.");
@@ -506,13 +528,11 @@ export default function AdminUsers() {
     try {
       setBusyId(u.id);
 
-      // Primary attempt (recommended endpoint):
-      // PUT /admin/users/{id}/global-admin { isGlobalAdmin: true|false }
+      // Preferred endpoint
       try {
         await api.put(`/admin/users/${u.id}/global-admin`, { isGlobalAdmin: makeGlobalAdmin });
       } catch (e1) {
-        // Fallback: some backends use /role with "GlobalAdmin"
-        // POST /admin/users/{id}/role { newRole: "GlobalAdmin" }
+        // Fallback: role endpoint
         if (e1?.response?.status === 404 || e1?.response?.status === 405) {
           await api.post(`/admin/users/${u.id}/role`, { newRole: makeGlobalAdmin ? "GlobalAdmin" : "Admin" });
         } else {
@@ -585,7 +605,7 @@ export default function AdminUsers() {
                 </select>
               </div>
 
-              <div className="au-mePill" title="Current session (best-effort)">
+              <div className="au-mePill" title="Current session (from JWT claims)">
                 <span className={`au-meDot ${meIsGlobalAdmin ? "ga" : ""}`} />
                 <span className="au-meText">
                   {meIsGlobalAdmin ? "Global Admin session" : "Admin session"}
@@ -733,8 +753,10 @@ export default function AdminUsers() {
 
                 const showPromoteAdmin = !isInstitutionUser && !u.isGlobalAdmin;
 
-                // ✅ Global Admin action visibility (UI gated)
-                const canTouchGlobalAdmin = meIsGlobalAdmin && u?.id && (!me?.id || String(me.id) !== String(u.id));
+                // ✅ Global Admin action visibility (token-claim gated)
+                const isSelf = myUserId && String(u.id) === String(myUserId);
+                const canTouchGlobalAdmin = meIsGlobalAdmin && !isSelf;
+
                 const showMakeGlobalAdmin = canTouchGlobalAdmin && !u.isGlobalAdmin;
                 const showRemoveGlobalAdmin = canTouchGlobalAdmin && !!u.isGlobalAdmin;
 
@@ -817,25 +839,14 @@ export default function AdminUsers() {
                           </IconBtn>
                         ) : null}
 
-                        {/* ✅ NEW: Global Admin grant/revoke (only visible to Global Admin session) */}
                         {showMakeGlobalAdmin ? (
-                          <IconBtn
-                            tone="success"
-                            disabled={isBusy}
-                            title="Make Global Admin"
-                            onClick={() => setGlobalAdmin(u, true)}
-                          >
+                          <IconBtn tone="success" disabled={isBusy} title="Make Global Admin" onClick={() => setGlobalAdmin(u, true)}>
                             {isBusy ? <Icon name="spinner" /> : <Icon name="crown" />}
                           </IconBtn>
                         ) : null}
 
                         {showRemoveGlobalAdmin ? (
-                          <IconBtn
-                            tone="danger"
-                            disabled={isBusy}
-                            title="Remove Global Admin"
-                            onClick={() => setGlobalAdmin(u, false)}
-                          >
+                          <IconBtn tone="danger" disabled={isBusy} title="Remove Global Admin" onClick={() => setGlobalAdmin(u, false)}>
                             {isBusy ? <Icon name="spinner" /> : <Icon name="crown" />}
                           </IconBtn>
                         ) : null}
