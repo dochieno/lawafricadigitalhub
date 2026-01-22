@@ -79,9 +79,8 @@ async function postMultipartWithFallback(paths, formData) {
   throw lastErr || new Error("Upload failed.");
 }
 
-// ✅ NEW: VAT rates fetch (non-blocking, safe fallback, no infinite loops)
 async function getVatRatesWithFallback() {
-  const paths = ["/tax/vat-rates", "/vat-rates", "/VatRates"];
+  const paths = ["/admin/vat-rates"];
   let lastErr = null;
 
   for (const p of paths) {
