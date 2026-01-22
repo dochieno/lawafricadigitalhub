@@ -93,6 +93,37 @@ async function postMultipartWithFallback(paths, formData) {
   throw lastErr || new Error("Upload failed.");
 }
 
+// ✅ NEW: VAT rates fetch (non-blocking, safe fallback, no infinite loops)
+async function getVatRatesWithFallback() {
+  const paths = ["/tax/vat-rates", "/vat-rates", "/VatRates"];
+  let lastErr = null;
+
+  for (const p of paths) {
+    try {
+      const res = await api.get(p);
+      const arr = Array.isArray(res.data) ? res.data : [];
+      // normalize minimal fields we need
+      return arr
+        .map((x) => ({
+          id: x?.id ?? x?.Id,
+          code: x?.code ?? x?.Code ?? x?.name ?? x?.Name ?? null,
+          ratePercent: x?.ratePercent ?? x?.RatePercent ?? x?.rate ?? x?.Rate ?? null,
+        }))
+        .filter((x) => x.id != null);
+    } catch (e) {
+      lastErr = e;
+      const status = e?.response?.status;
+      if (status === 404 || status === 405) continue; // try next route
+      // for auth/500 etc, stop — but don't break page
+      break;
+    }
+  }
+
+  // best-effort: return empty list; caller can keep page working
+  // (we intentionally do not throw to avoid "network stuck" state)
+  return [];
+}
+
 /** ✅ Must match backend enum values EXACTLY */
 const CATEGORY_OPTIONS = ["Commentaries", "InternationalTitles", "Journals", "LawReports", "Statutes", "LLRServices"];
 
@@ -177,6 +208,10 @@ const emptyForm = {
   allowPublicPurchase: false,
   publicPrice: "",
   publicCurrency: "KES",
+
+  // ✅ NEW: VAT
+  vatRateId: "", // optional
+  isTaxInclusive: true, // default: inclusive (matches your backend logic if you prefer)
 };
 
 /* =========================
@@ -272,6 +307,9 @@ export default function AdminDocuments() {
   const [rows, setRows] = useState([]);
   const [countries, setCountries] = useState([]);
 
+  // ✅ NEW: VAT rates list
+  const [vatRates, setVatRates] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -314,7 +352,11 @@ export default function AdminDocuments() {
     setLoading(true);
 
     try {
-      const [docsRes, countriesRes] = await Promise.all([api.get("/legal-documents/admin"), api.get("/Country")]);
+      const [docsRes, countriesRes, vatRes] = await Promise.all([
+        api.get("/legal-documents/admin"),
+        api.get("/Country"),
+        getVatRatesWithFallback(), // ✅ NEW (safe)
+      ]);
 
       let all = Array.isArray(docsRes.data) ? docsRes.data : [];
 
@@ -325,6 +367,9 @@ export default function AdminDocuments() {
       setRows(all.filter((r) => !isReportRow(r)));
 
       setCountries(Array.isArray(countriesRes.data) ? countriesRes.data : []);
+
+      // ✅ NEW
+      setVatRates(Array.isArray(vatRes) ? vatRes : []);
     } catch (e) {
       setRows([]);
       showError(getApiErrorMessage(e, "Failed to load admin documents."));
@@ -423,6 +468,10 @@ export default function AdminDocuments() {
         allowPublicPurchase: !!(d.allowPublicPurchase ?? d.AllowPublicPurchase ?? false),
         publicPrice: d.publicPrice ?? d.PublicPrice ?? "",
         publicCurrency: d.publicCurrency ?? d.PublicCurrency ?? "KES",
+
+        // ✅ NEW: VAT
+        vatRateId: d.vatRateId ?? d.VatRateId ?? "",
+        isTaxInclusive: safeBool(d.isTaxInclusive ?? d.IsTaxInclusive, true),
       });
 
       // keep latest server cover path if present
@@ -472,6 +521,10 @@ export default function AdminDocuments() {
       allowPublicPurchase,
       publicPrice: allowPublicPurchase ? toDecimalOrNull(form.publicPrice) : null,
       publicCurrency: allowPublicPurchase ? (form.publicCurrency?.trim() || "KES") : "KES",
+
+      // ✅ NEW: VAT fields (safe even if backend ignores until added)
+      vatRateId: toIntOrNull(form.vatRateId),
+      isTaxInclusive: safeBool(form.isTaxInclusive, true),
     };
   }
 
@@ -499,6 +552,10 @@ export default function AdminDocuments() {
       allowPublicPurchase,
       publicPrice: allowPublicPurchase ? toDecimalOrNull(form.publicPrice) : null,
       publicCurrency: allowPublicPurchase ? (form.publicCurrency?.trim() || "KES") : "KES",
+
+      // ✅ NEW: VAT
+      vatRateId: toIntOrNull(form.vatRateId),
+      isTaxInclusive: safeBool(form.isTaxInclusive, true),
     };
   }
 
@@ -1001,6 +1058,33 @@ export default function AdminDocuments() {
                     onChange={(e) => setField("publicPrice", e.target.value)}
                     disabled={!form.isPremium || !form.allowPublicPurchase}
                   />
+                </div>
+
+                {/* ✅ NEW: VAT Code (keeps same grid/layout) */}
+                <div className="admin-field">
+                  <label>VAT Code</label>
+                  <select value={String(form.vatRateId ?? "")} onChange={(e) => setField("vatRateId", e.target.value)}>
+                    <option value="">None</option>
+                    {vatRates.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {String(v.code || `VAT-${v.id}`)}
+                        {v.ratePercent != null ? ` (${v.ratePercent}%)` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="admin-help">
+                    Optional. Used for VAT calculation on purchases + invoice printout (if configured).
+                  </div>
+                </div>
+
+                {/* ✅ NEW: Tax inclusive */}
+                <div className="admin-field">
+                  <label>Tax Inclusive?</label>
+                  <select value={String(!!form.isTaxInclusive)} onChange={(e) => setField("isTaxInclusive", e.target.value === "true")}>
+                    <option value="true">Yes (price includes VAT)</option>
+                    <option value="false">No (VAT added on top)</option>
+                  </select>
+                  <div className="admin-help">Controls how invoice totals are computed when VAT Code is set.</div>
                 </div>
               </div>
 
