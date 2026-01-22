@@ -1,10 +1,14 @@
 // src/pages/dashboard/admin/AdminInvoices.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../../api/client";
-import "../../../styles/adminCrud.css";
-import "../../../styles/invoice.css";
-import AdminPageFooter from "../../../components/AdminPageFooter";
+import "../../../styles/adminUsers.css"; // ✅ reuse same styles as AdminUsers for uniformity
+import "../../../styles/invoice.css"; // optional (kept)
+
+function num(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
 
 function fmtMoney(amount, currency = "KES") {
   const n = Number(amount || 0);
@@ -16,29 +20,175 @@ function fmtMoney(amount, currency = "KES") {
 }
 
 function fmtDate(iso) {
-  if (!iso) return "-";
+  if (!iso) return "—";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "-";
+  if (Number.isNaN(d.getTime())) return "—";
   const dd = String(d.getDate()).padStart(2, "0");
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const yy = String(d.getFullYear()).slice(-2);
   return `${dd}-${mm}-${yy}`;
 }
 
-function statusPill(status) {
-  const s = String(status || "").toLowerCase();
-  const map = {
-    draft: "pill pill--muted",
-    issued: "pill pill--info",
-    partiallypaid: "pill pill--warn",
-    paid: "pill pill--ok",
-    void: "pill pill--danger",
-  };
-  return map[s] || "pill pill--muted";
+function friendlyApiError(e) {
+  if (e?.name === "CanceledError" || e?.code === "ERR_CANCELED") return "";
+  if (!e?.response) {
+    return (
+      e?.message ||
+      "Network error. Check API base URL / CORS / server availability (no response received)."
+    );
+  }
+  const status = e?.response?.status;
+  const title = e?.response?.data?.title;
+  const detail = e?.response?.data?.detail;
+
+  if (title || detail) return `${title ?? "Request failed"}${detail ? ` — ${detail}` : ""}`;
+  if (typeof e?.response?.data === "string" && e.response.data.trim()) return e.response.data;
+
+  if (status === 401) return "You are not authorized. Please log in again.";
+  if (status === 403) return "You don’t have permission to manage invoices.";
+  if (status === 404) return "Endpoint not found. Check that the request is going to /api/admin/invoices.";
+  if (status >= 500) return "Server error while loading invoices.";
+  return "Request failed. Please try again.";
 }
 
-function clamp(n, min, max) {
-  return Math.max(min, Math.min(max, n));
+function Badge({ tone = "neutral", children }) {
+  return <span className={`au-badge au-badge-${tone}`}>{children}</span>;
+}
+
+function Chip({ active, children, ...props }) {
+  return (
+    <button type="button" className={`au-chip ${active ? "active" : ""}`} {...props}>
+      {children}
+    </button>
+  );
+}
+
+function IconBtn({ tone = "neutral", disabled, title, onClick, children }) {
+  return (
+    <button
+      type="button"
+      className={`au-iconBtn au-iconBtn-${tone}`}
+      disabled={disabled}
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Icon({ name }) {
+  switch (name) {
+    case "spinner":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" className="au-spin">
+          <path
+            d="M12 2a10 10 0 1 0 10 10"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+      );
+    case "search":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M10.5 18a7.5 7.5 0 1 1 5.3-12.8A7.5 7.5 0 0 1 10.5 18Zm6.2-1.2L22 22"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+      );
+    case "gear":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          />
+          <path
+            d="M19.4 15a7.8 7.8 0 0 0 .1-2l2-1.2-2-3.5-2.3.6a7.7 7.7 0 0 0-1.7-1l-.3-2.4H9.8l-.3 2.4a7.7 7.7 0 0 0-1.7 1l-2.3-.6-2 3.5 2 1.2a7.8 7.8 0 0 0 .1 2l-2 1.2 2 3.5 2.3-.6a7.7 7.7 0 0 0 1.7 1l.3 2.4h4.4l.3-2.4a7.7 7.7 0 0 0 1.7-1l2.3.6 2-3.5-2-1.2Z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case "refresh":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M21 12a9 9 0 1 1-2.64-6.36"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <path
+            d="M21 3v6h-6"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case "eye":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          />
+          <path
+            d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          />
+        </svg>
+      );
+    case "print":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M6 14h12v8H6v-8Z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
+function statusTone(status) {
+  const s = String(status || "").toLowerCase();
+  if (s === "paid") return "success";
+  if (s === "issued") return "info";
+  if (s === "partiallypaid" || s === "partially-paid") return "warn";
+  if (s === "void") return "danger";
+  return "neutral"; // draft / unknown
 }
 
 function normStatusKey(s) {
@@ -47,351 +197,454 @@ function normStatusKey(s) {
   return x;
 }
 
-export default function AdminInvoices() {
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
-  const [data, setData] = useState({ items: [], page: 1, pageSize: 20, totalCount: 0 });
+function clamp(n, min, max) {
+  return Math.max(min, Math.min(max, n));
+}
 
+export default function AdminInvoices() {
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+
+  const [data, setData] = useState({
+    items: [],
+    page: 1,
+    pageSize: 20,
+    totalCount: 0,
+  });
+
+  // Filters (kept same semantics)
   const [q, setQ] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState("all"); // ✅ chips like AdminUsers
   const [customer, setCustomer] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
+  const [page, setPage] = useState(1);
+  const pageSize = data.pageSize || 20;
+
   const pageCount = useMemo(() => {
-    const total = data?.totalCount || 0;
-    const size = data?.pageSize || 20;
-    return Math.max(1, Math.ceil(total / size));
-  }, [data]);
+    const total = num(data?.totalCount);
+    return Math.max(1, Math.ceil(total / num(pageSize)));
+  }, [data?.totalCount, pageSize]);
 
-  async function load(page = 1) {
-    setLoading(true);
+  const pageLabel = useMemo(() => {
+    const p = clamp(page, 1, pageCount);
+    const total = num(data?.totalCount);
+    const size = num(pageSize);
+    const start = total === 0 ? 0 : (p - 1) * size + 1;
+    const end = Math.min(p * size, total);
+    return `Showing ${start}-${end} of ${total}`;
+  }, [page, pageCount, data?.totalCount, pageSize]);
+
+  // ✅ Build params (stable)
+  const params = useMemo(() => {
+    const out = { page, pageSize };
+
+    const qq = q.trim();
+    if (qq) out.q = qq;
+
+    if (status && status !== "all") out.status = status;
+
+    const cc = customer.trim();
+    if (cc) out.customer = cc;
+
+    if (from) out.from = new Date(from).toISOString();
+    if (to) out.to = new Date(to).toISOString();
+
+    return out;
+  }, [page, pageSize, q, status, customer, from, to]);
+
+  // ✅ Prevent storms: debounce + cancel + dedupe (same as AdminUsers)
+  const abortRef = useRef(null);
+  const debounceRef = useRef(null);
+  const lastKeyRef = useRef("");
+  const lastStartedAtRef = useRef(0);
+
+  async function loadInvoices(force = false) {
+    const key = JSON.stringify(params);
+    const now = Date.now();
+    if (!force && key === lastKeyRef.current && now - lastStartedAtRef.current < 400) return;
+
+    lastKeyRef.current = key;
+    lastStartedAtRef.current = now;
+
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setErr("");
+    setLoading(true);
+
     try {
-      const params = { page, pageSize: data.pageSize };
-
-      if (q.trim()) params.q = q.trim();
-      if (status) params.status = status;
-      if (customer.trim()) params.customer = customer.trim();
-      if (from) params.from = new Date(from).toISOString();
-      if (to) params.to = new Date(to).toISOString();
-
-      const res = await api.get("/admin/invoices", { params });
+      const res = await api.get("/admin/invoices", { params, signal: controller.signal });
       setData(res.data);
     } catch (e) {
-      setErr(e?.response?.data?.message || e?.response?.data || e?.message || "Failed to load invoices.");
+      const msg = friendlyApiError(e);
+      if (msg) setErr(msg);
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => {
-    load(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const paramsKey = useMemo(() => JSON.stringify(params), [params]);
 
-  function onApplyFilters() {
-    load(1);
-  }
+  useEffect(() => {
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+
+    debounceRef.current = window.setTimeout(() => {
+      loadInvoices(false);
+    }, 260);
+
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramsKey]);
+
+  // Reset page when filters change (like AdminUsers)
+  useEffect(() => {
+    setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, status, customer, from, to]);
 
   function onClear() {
     setQ("");
-    setStatus("");
+    setStatus("all");
     setCustomer("");
     setFrom("");
     setTo("");
-    setTimeout(() => load(1), 0);
+    setTimeout(() => setPage(1), 0);
   }
 
-  const canPrev = !loading && (data.page || 1) > 1;
-  const canNext = !loading && (data.page || 1) < pageCount;
+  const items = useMemo(() => (Array.isArray(data?.items) ? data.items : []), [data?.items]);
 
-  const pageLabel = useMemo(() => {
-    const p = data?.page || 1;
-    const total = data?.totalCount || 0;
-    const size = data?.pageSize || 20;
-    const start = total === 0 ? 0 : (p - 1) * size + 1;
-    const end = Math.min(p * size, total);
-    return `Showing ${start}-${end} of ${total}`;
-  }, [data]);
-
-  function onKeyDownApply(e) {
-    if (e.key === "Enter") onApplyFilters();
-  }
-
-  // Quick summary pills (current page)
+  // KPI summary from current page (like you already had)
   const pageSummary = useMemo(() => {
-    const items = data?.items || [];
     const out = { total: items.length, paid: 0, issued: 0, partiallypaid: 0, draft: 0, void: 0 };
     for (const it of items) {
       const k = normStatusKey(it.status);
       if (k in out) out[k] += 1;
     }
     return out;
-  }, [data]);
+  }, [items]);
 
   return (
-    <div className="adminCrud">
-      <div className="adminCrud__header">
-        <div>
-          <h1 className="adminCrud__title">Invoices</h1>
-          <p className="adminCrud__sub">Search and filter invoices, then open to print/download.</p>
-        </div>
+    <div className="au-wrap">
+      {/* ===== HERO (same as AdminUsers) ===== */}
+      <header className="au-hero">
+        <div className="au-heroLeft">
+          <div className="au-titleRow">
+            <div className="au-titleStack">
+              <div className="au-kicker">LawAfrica • Admin</div>
+              <h1 className="au-title">Invoices</h1>
+              <div className="au-subtitle">
+                Search, filter and open invoices — then print/download from the invoice view.
+              </div>
+            </div>
 
-        <div className="adminCrud__actionsRow">
-          <Link
-            className="iconBtn iconBtn--sm iconBtn--neutral"
-            to="/dashboard/admin/finance/invoice-settings"
-            title="Invoice Settings"
-            aria-label="Invoice Settings"
-          >
-            ⚙️
-          </Link>
+            <div className="au-heroRight">
+              <Link
+                className="au-refresh"
+                to="/dashboard/admin/finance/invoice-settings"
+                title="Invoice Settings"
+                aria-label="Invoice Settings"
+              >
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <Icon name="gear" />
+                  Settings
+                </span>
+              </Link>
 
-          <button
-            type="button"
-            className="iconBtn iconBtn--sm iconBtn--neutral"
-            onClick={() => load(data.page || 1)}
-            title="Refresh"
-            aria-label="Refresh"
-            disabled={loading}
-          >
-            🔄
-          </button>
-        </div>
-      </div>
+              <button
+                className="au-refresh"
+                type="button"
+                onClick={() => loadInvoices(true)}
+                disabled={loading}
+                title="Refresh"
+              >
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  {loading ? <Icon name="spinner" /> : <Icon name="refresh" />}
+                  Refresh
+                </span>
+              </button>
+            </div>
+          </div>
 
-      <div className="card invoiceCard invoiceCard--fill">
-        {/* ===== Toolbar (like Institution Subscriptions) ===== */}
-        <div className="invoiceToolbar">
-          <div className="invoiceToolbar__top">
-            <div className="invoiceToolbar__left">
-              <div className="field field--compact">
-                <label>Search</label>
+          {err ? <div className="au-error">{err}</div> : null}
+
+          {/* ===== Search row (same as AdminUsers) ===== */}
+          <div className="au-topbar">
+            <div className="au-search">
+              <span className="au-searchIcon" aria-hidden="true">
+                <Icon name="search" />
+              </span>
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Invoice number, external ref, purpose…"
+                aria-label="Search invoices"
+              />
+              {q ? (
+                <button className="au-clear" type="button" onClick={() => setQ("")} aria-label="Clear search">
+                  ✕
+                </button>
+              ) : null}
+            </div>
+
+            <div className="au-topbarRight">
+              <button className="au-refresh" type="button" onClick={onClear} disabled={loading} title="Clear filters">
+                Clear
+              </button>
+            </div>
+          </div>
+
+          {/* ===== KPIs (like AdminUsers) ===== */}
+          <div className="au-kpis">
+            <div className="au-kpiCard">
+              <div className="au-kpiLabel">Shown</div>
+              <div className="au-kpiValue">{pageSummary.total}</div>
+            </div>
+            <div className="au-kpiCard">
+              <div className="au-kpiLabel">Paid</div>
+              <div className="au-kpiValue">{pageSummary.paid}</div>
+            </div>
+            <div className="au-kpiCard">
+              <div className="au-kpiLabel">Issued</div>
+              <div className="au-kpiValue">{pageSummary.issued}</div>
+            </div>
+            <div className="au-kpiCard">
+              <div className="au-kpiLabel">Partially Paid</div>
+              <div className="au-kpiValue">{pageSummary.partiallypaid}</div>
+            </div>
+          </div>
+
+          {/* ===== Filters (chips like AdminUsers) ===== */}
+          <div className="au-filters">
+            <div className="au-filterGroup">
+              <div className="au-filterLabel">Status</div>
+              <div className="au-chips">
+                <Chip active={status === "all"} onClick={() => setStatus("all")}>
+                  All
+                </Chip>
+                <Chip active={status === "Draft"} onClick={() => setStatus("Draft")}>
+                  Draft
+                </Chip>
+                <Chip active={status === "Issued"} onClick={() => setStatus("Issued")}>
+                  Issued
+                </Chip>
+                <Chip active={status === "PartiallyPaid"} onClick={() => setStatus("PartiallyPaid")}>
+                  PartiallyPaid
+                </Chip>
+                <Chip active={status === "Paid"} onClick={() => setStatus("Paid")}>
+                  Paid
+                </Chip>
+                <Chip active={status === "Void"} onClick={() => setStatus("Void")}>
+                  Void
+                </Chip>
+              </div>
+            </div>
+
+            <div className="au-filterGroup">
+              <div className="au-filterLabel">Customer</div>
+              <div className="au-chips" style={{ gap: 10, flexWrap: "wrap" }}>
                 <input
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  onKeyDown={onKeyDownApply}
-                  placeholder="Invoice number, external ref, purpose..."
+                  className="au-inlineInput"
+                  value={customer}
+                  onChange={(e) => setCustomer(e.target.value)}
+                  placeholder="Name / email fragment…"
+                  aria-label="Customer filter"
+                  style={{
+                    width: 320,
+                    maxWidth: "100%",
+                    padding: "10px 12px",
+                    borderRadius: 14,
+                    border: "1px solid rgba(148,163,184,.35)",
+                    background: "rgba(2,6,23,.25)",
+                    color: "inherit",
+                    outline: "none",
+                  }}
                 />
               </div>
             </div>
 
-            <div className="invoiceToolbar__right">
-              <span className="invPill invPill--muted" title="Current page count">
-                {pageSummary.total} on page
-              </span>
-              <span className="invPill invPill--ok">{pageSummary.paid} Paid</span>
-              <span className="invPill invPill--info">{pageSummary.issued} Issued</span>
-              <span className="invPill invPill--warn">{pageSummary.partiallypaid} PartiallyPaid</span>
-              <span className="invPill invPill--muted">{pageSummary.draft} Draft</span>
-              <span className="invPill invPill--danger">{pageSummary.void} Void</span>
-
-              <div className="field field--compact">
-                <label>Status</label>
-                <select value={status} onChange={(e) => setStatus(e.target.value)}>
-                  <option value="">All</option>
-                  <option value="Draft">Draft</option>
-                  <option value="Issued">Issued</option>
-                  <option value="PartiallyPaid">PartiallyPaid</option>
-                  <option value="Paid">Paid</option>
-                  <option value="Void">Void</option>
-                </select>
+            <div className="au-filterGroup">
+              <div className="au-filterLabel">Dates</div>
+              <div className="au-chips" style={{ gap: 10, flexWrap: "wrap" }}>
+                <input
+                  type="date"
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
+                  aria-label="From date"
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 14,
+                    border: "1px solid rgba(148,163,184,.35)",
+                    background: "rgba(2,6,23,.25)",
+                    color: "inherit",
+                    outline: "none",
+                  }}
+                />
+                <input
+                  type="date"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  aria-label="To date"
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: 14,
+                    border: "1px solid rgba(148,163,184,.35)",
+                    background: "rgba(2,6,23,.25)",
+                    color: "inherit",
+                    outline: "none",
+                  }}
+                />
               </div>
             </div>
           </div>
+        </div>
+      </header>
 
-          <div className="invoiceToolbar__bottom">
-            <div className="field field--compact">
-              <label>Customer</label>
-              <input
-                value={customer}
-                onChange={(e) => setCustomer(e.target.value)}
-                onKeyDown={onKeyDownApply}
-                placeholder="Name/email fragment..."
-              />
+      {/* ===== PANEL (same as AdminUsers) ===== */}
+      <section className="au-panel">
+        <div className="au-panelTop">
+          <div className="au-panelTitle">{loading ? "Loading…" : "Invoice directory"}</div>
+
+          <div className="au-pager">
+            <button
+              type="button"
+              className="au-pageBtn"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={loading || page <= 1}
+              title="Previous page"
+            >
+              ←
+            </button>
+
+            <div className="au-pageMeta">
+              Page <strong>{clamp(page, 1, pageCount)}</strong> / <strong>{pageCount}</strong>
             </div>
 
-            <div className="field field--compact">
-              <label>From</label>
-              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-            </div>
-
-            <div className="field field--compact">
-              <label>To</label>
-              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-            </div>
-
-            <div className="invoiceToolbar__actions">
-              <button
-                type="button"
-                className="btnSm btnSm--primary"
-                onClick={onApplyFilters}
-                disabled={loading}
-                title="Apply filters"
-                aria-label="Apply filters"
-              >
-                ✅ Apply
-              </button>
-
-              <button
-                type="button"
-                className="btnSm"
-                onClick={onClear}
-                disabled={loading}
-                title="Clear filters"
-                aria-label="Clear filters"
-              >
-                🧹 Clear
-              </button>
-            </div>
+            <button
+              type="button"
+              className="au-pageBtn"
+              onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+              disabled={loading || page >= pageCount}
+              title="Next page"
+            >
+              →
+            </button>
           </div>
         </div>
 
-        {err ? <div className="alert alert--danger">{err}</div> : null}
-        {loading ? <div className="alert alert--info">Loading invoices…</div> : null}
-
-        {/* ===== Table (full width + scroll) ===== */}
-        <div className="tableWrap tableWrap--full">
-          <table className="adminTable adminTable--stickyHead adminTable--finance">
+        <div className="au-tableWrap">
+          <table className="au-table au-tableModern">
             <thead>
               <tr>
-                <th className="colInvoice">Invoice No.</th>
-                <th className="colDate">Document Date</th>
-                <th className="colCustomer">Customer</th>
-                <th className="colStatus">Status</th>
-                <th className="colPurpose">Purpose</th>
-                <th className="num colCurrency">Currency</th>
-                <th className="num colAmount">Invoice Amount</th>
-                <th className="num colAmount">Paid Amount</th>
-                <th className="actions colActions">Actions</th>
+                <th>Invoice</th>
+                <th>Date</th>
+                <th>Customer</th>
+                <th>Status</th>
+                <th>Purpose</th>
+                <th className="au-thRight">Totals</th>
+                <th className="au-thRight">Actions</th>
               </tr>
             </thead>
 
             <tbody>
-              {(data?.items || []).map((x) => (
-                <tr key={x.id}>
-                  <td>
-                    <div className="stack">
-                      <div className="strong">{x.invoiceNumber}</div>
-                    </div>
-                  </td>
-
-                  <td>{fmtDate(x.issuedAt)}</td>
-
-                  <td>
-                    <div className="stack">
-                      <div className="strong">{x.customerName || "-"}</div>
-                      <div className="muted">{x.customerType || "-"}</div>
-                    </div>
-                  </td>
-
-                  <td>
-                    <span className={statusPill(x.status)}>{x.status}</span>
-                  </td>
-
-                  <td className="cellClamp" title={x.purpose || ""}>
-                    {x.purpose || "-"}
-                  </td>
-
-                  <td className="num">{x.currency || "KES"}</td>
-
-                  <td className="num">{fmtMoney(x.total, x.currency)}</td>
-
-                  <td className="num">{fmtMoney(x.amountPaid, x.currency)}</td>
-
-                  <td className="actions">
-                    <div className="iconRow">
-                      <Link
-                        className="iconBtn iconBtn--sm iconBtn--neutral"
-                        to={`/dashboard/admin/finance/invoices/${x.id}`}
-                        title="Open invoice"
-                        aria-label="Open invoice"
-                      >
-                        👁️
-                      </Link>
-
-                      <Link
-                        className="iconBtn iconBtn--sm iconBtn--neutral"
-                        to={`/dashboard/admin/finance/invoices/${x.id}?print=1`}
-                        title="Open & print"
-                        aria-label="Open & print"
-                      >
-                        🖨️
-                      </Link>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-
-              {!loading && (data?.items || []).length === 0 ? (
+              {!loading && items.length === 0 ? (
                 <tr>
-                  <td colSpan={9}>
-                    <div className="emptyState">No invoices found.</div>
+                  <td colSpan={7} className="au-empty">
+                    No invoices found for the current filters.
                   </td>
                 </tr>
               ) : null}
+
+              {items.map((x) => {
+                const tone = statusTone(x.status);
+                return (
+                  <tr key={x.id}>
+                    <td>
+                      <div className="au-userMeta">
+                        <div className="au-userName">
+                          <span className="au-mono">{x.invoiceNumber || `#${x.id}`}</span>
+                        </div>
+                        <div className="au-userSub">
+                          <span className="au-muted">ID:</span> <span className="au-mono">{x.id}</span>
+                          {x.currency ? (
+                            <>
+                              <span className="au-sep">•</span>
+                              <span className="au-muted">{x.currency}</span>
+                            </>
+                          ) : null}
+                        </div>
+                      </div>
+                    </td>
+
+                    <td>{fmtDate(x.issuedAt)}</td>
+
+                    <td>
+                      <div className="au-userMeta">
+                        <div className="au-userName">{x.customerName || "—"}</div>
+                        <div className="au-userSub">{x.customerType || "—"}</div>
+                      </div>
+                    </td>
+
+                    <td>
+                      <Badge tone={tone}>{String(x.status || "Draft")}</Badge>
+                    </td>
+
+                    <td title={x.purpose || ""} style={{ maxWidth: 360 }}>
+                      <div className="au-muted" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {x.purpose || "—"}
+                      </div>
+                    </td>
+
+                    <td className="au-tdRight">
+                      <div style={{ display: "grid", gap: 6, justifyItems: "end" }}>
+                        <div>
+                          <span className="au-muted">Invoice:</span>{" "}
+                          <span className="au-mono">{fmtMoney(x.total, x.currency || "KES")}</span>
+                        </div>
+                        <div>
+                          <span className="au-muted">Paid:</span>{" "}
+                          <span className="au-mono">{fmtMoney(x.amountPaid, x.currency || "KES")}</span>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="au-tdRight">
+                      <div className="au-actionsRow">
+                        <Link
+                          className="au-iconBtn au-iconBtn-neutral"
+                          to={`/dashboard/admin/finance/invoices/${x.id}`}
+                          title="Open invoice"
+                          aria-label="Open invoice"
+                        >
+                          <Icon name="eye" />
+                        </Link>
+
+                        <Link
+                          className="au-iconBtn au-iconBtn-neutral"
+                          to={`/dashboard/admin/finance/invoices/${x.id}?print=1`}
+                          title="Open & print"
+                          aria-label="Open & print"
+                        >
+                          <Icon name="print" />
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
 
-        {/* ===== Pager ===== */}
-        <div className="pager pager--compact">
-          <div className="muted">{pageLabel}</div>
-
-          <div className="pagerBtns pagerBtns--compact" role="navigation" aria-label="Invoices pagination">
-            <button
-              type="button"
-              className="btnSm"
-              disabled={!canPrev}
-              onClick={() => load(1)}
-              title="First page"
-              aria-label="First page"
-            >
-              ⏮
-            </button>
-
-            <button
-              type="button"
-              className="btnSm"
-              disabled={!canPrev}
-              onClick={() => load((data.page || 1) - 1)}
-              title="Previous page"
-              aria-label="Previous page"
-            >
-              ◀
-            </button>
-
-            <div className="pagerMeta" aria-label="Current page">
-              Page <b>{clamp(data.page || 1, 1, pageCount)}</b> of <b>{pageCount}</b>
-            </div>
-
-            <button
-              type="button"
-              className="btnSm"
-              disabled={!canNext}
-              onClick={() => load((data.page || 1) + 1)}
-              title="Next page"
-              aria-label="Next page"
-            >
-              ▶
-            </button>
-
-            <button
-              type="button"
-              className="btnSm"
-              disabled={!canNext}
-              onClick={() => load(pageCount)}
-              title="Last page"
-              aria-label="Last page"
-            >
-              ⏭
-            </button>
-          </div>
+        <div className="au-panelBottom">
+          <div className="au-muted">{pageLabel}</div>
+          <div className="au-muted">Tip: Use search + status chips for quickest filtering.</div>
         </div>
-      </div>
-
-      <AdminPageFooter />
+      </section>
     </div>
   );
 }
