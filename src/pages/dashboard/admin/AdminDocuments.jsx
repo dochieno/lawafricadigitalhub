@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import api, { API_BASE_URL } from "../../../api/client";
 import "../../../styles/adminCrud.css";
+import "../../../styles/adminUsers.css"; // ✅ LawAfrica Admin Users branding
 
 /**
  * ✅ STANDARD DOCUMENTS ONLY PAGE
@@ -181,9 +182,21 @@ const emptyForm = {
 /* =========================
    Tiny icons (no deps)
 ========================= */
-function IRefresh() {
+function ISearch() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M21 21l-4.3-4.3m1.3-5.4a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+function IRefresh({ spin = false } = {}) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className={spin ? "au-spin" : undefined}>
       <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       <path d="M21 3v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
@@ -214,27 +227,42 @@ function ICopy() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M9 9h13v13H9V9z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-      <path
-        d="M5 15H2V2h13v3"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M5 15H2V2h13v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
-function IconButton({ title, onClick, disabled, kind = "neutral", children }) {
+function Badge({ children, kind = "neutral", title }) {
+  const cls =
+    kind === "success"
+      ? "au-badge au-badge-success"
+      : kind === "warn"
+      ? "au-badge au-badge-warn"
+      : kind === "info"
+      ? "au-badge au-badge-info"
+      : kind === "danger"
+      ? "au-badge au-badge-danger"
+      : "au-badge au-badge-neutral";
+
   return (
-    <button
-      type="button"
-      className={`admin-icon-btn ${kind}`}
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      aria-label={title}
-    >
+    <span className={cls} title={title}>
+      {children}
+    </span>
+  );
+}
+
+function IconButton({ title, onClick, disabled, kind = "neutral", children }) {
+  const cls =
+    kind === "danger"
+      ? "au-iconBtn au-iconBtn-danger"
+      : kind === "info"
+      ? "au-iconBtn au-iconBtn-info"
+      : kind === "success"
+      ? "au-iconBtn au-iconBtn-success"
+      : "au-iconBtn au-iconBtn-neutral";
+
+  return (
+    <button type="button" className={cls} onClick={onClick} disabled={disabled} title={title} aria-label={title}>
       {children}
     </button>
   );
@@ -248,8 +276,9 @@ export default function AdminDocuments() {
   const [busy, setBusy] = useState(false);
 
   const [q, setQ] = useState("");
-  const [error, setError] = useState("");
-  const [info, setInfo] = useState("");
+
+  // ✅ toast (au branding)
+  const [toast, setToast] = useState(null); // {type:"success"|"error", text:string}
 
   // Modal state
   const [open, setOpen] = useState(false);
@@ -265,13 +294,23 @@ export default function AdminDocuments() {
   const ebookInputRef = useRef(null);
   const coverInputRef = useRef(null);
 
+  function showError(msg) {
+    setToast({ type: "error", text: String(msg || "Request failed.") });
+    window.clearTimeout(showError._t);
+    showError._t = window.setTimeout(() => setToast(null), 4500);
+  }
+  function showSuccess(msg) {
+    setToast({ type: "success", text: String(msg || "Done.") });
+    window.clearTimeout(showSuccess._t);
+    showSuccess._t = window.setTimeout(() => setToast(null), 3200);
+  }
+
   function setField(k, v) {
     setForm((p) => ({ ...p, [k]: v }));
   }
 
   async function loadAll() {
-    setError("");
-    setInfo("");
+    setToast(null);
     setLoading(true);
 
     try {
@@ -288,7 +327,7 @@ export default function AdminDocuments() {
       setCountries(Array.isArray(countriesRes.data) ? countriesRes.data : []);
     } catch (e) {
       setRows([]);
-      setError(getApiErrorMessage(e, "Failed to load admin documents."));
+      showError(getApiErrorMessage(e, "Failed to load admin documents."));
     } finally {
       setLoading(false);
     }
@@ -319,6 +358,22 @@ export default function AdminDocuments() {
     });
   }, [rows, q]);
 
+  const kpis = useMemo(() => {
+    const total = filtered.length;
+    let premium = 0;
+    let publicOn = 0;
+    let pagesKnown = 0;
+
+    for (const r of filtered) {
+      if (r.isPremium) premium += 1;
+      const allow = safeBool(r.allowPublicPurchase ?? r.AllowPublicPurchase, false);
+      if (r.isPremium && allow) publicOn += 1;
+      if (r.pageCount != null && r.pageCount !== "") pagesKnown += 1;
+    }
+
+    return { total, premium, publicOn, pagesKnown };
+  }, [filtered]);
+
   function resetUploadInputs() {
     setEbookFile(null);
     setCoverFile(null);
@@ -327,8 +382,6 @@ export default function AdminDocuments() {
   }
 
   function openCreate() {
-    setError("");
-    setInfo("");
     setEditing(null);
     setForm({ ...emptyForm });
     resetUploadInputs();
@@ -336,10 +389,8 @@ export default function AdminDocuments() {
   }
 
   async function openEdit(row) {
-    setError("");
-    setInfo("");
-    setEditing(row);
     resetUploadInputs();
+    setEditing(row);
     setOpen(true);
 
     try {
@@ -347,7 +398,7 @@ export default function AdminDocuments() {
       const d = res.data;
 
       if (isReportRow(d)) {
-        setInfo("This item is a Report. Please manage it from Admin → LLR Services.");
+        showError("This item is a Report. Please manage it from Admin → LLR Services.");
         setOpen(false);
         return;
       }
@@ -380,7 +431,7 @@ export default function AdminDocuments() {
         coverImagePath: d.coverImagePath ?? d.CoverImagePath ?? (p?.coverImagePath ?? row?.coverImagePath ?? null),
       }));
     } catch {
-      setInfo("Loaded partial row (details endpoint failed).");
+      showError("Loaded partial row (details endpoint failed).");
     }
   }
 
@@ -452,14 +503,11 @@ export default function AdminDocuments() {
   }
 
   async function save() {
-    setError("");
-    setInfo("");
-
-    if (!form.title.trim()) return setError("Title is required.");
-    if (!form.countryId) return setError("Country is required.");
+    if (!form.title.trim()) return showError("Title is required.");
+    if (!form.countryId) return showError("Country is required.");
 
     if (!CATEGORY_OPTIONS.includes(form.category)) {
-      return setError("Invalid category selected. Please choose a valid category.");
+      return showError("Invalid category selected. Please choose a valid category.");
     }
 
     if (!form.isPremium) {
@@ -470,15 +518,15 @@ export default function AdminDocuments() {
 
     if (form.isPremium && form.allowPublicPurchase) {
       const priceNum = Number(form.publicPrice);
-      if (!form.publicCurrency?.trim()) return setError("Currency is required when public purchase is ON.");
-      if (!Number.isFinite(priceNum) || priceNum <= 0) return setError("Price must be greater than 0.");
+      if (!form.publicCurrency?.trim()) return showError("Currency is required when public purchase is ON.");
+      if (!Number.isFinite(priceNum) || priceNum <= 0) return showError("Price must be greater than 0.");
     }
 
     setBusy(true);
     try {
       if (editing?.id) {
         await api.put(`/legal-documents/${editing.id}`, buildUpdatePayload());
-        setInfo("Document updated.");
+        showSuccess("Document updated.");
         await loadAll();
         closeModal();
         return;
@@ -489,26 +537,24 @@ export default function AdminDocuments() {
 
       if (newId) {
         setEditing({ id: newId, title: form.title, coverImagePath: null });
-        setInfo(`Document created (#${newId}). Now upload the ebook and cover below.`);
+        showSuccess(`Document created (#${newId}). Now upload the ebook and cover below.`);
         await loadAll();
       } else {
-        setInfo("Document created. Refresh the list, then edit to upload files.");
+        showSuccess("Document created. Refresh the list, then edit to upload files.");
         await loadAll();
         closeModal();
       }
     } catch (e) {
-      setError(getApiErrorMessage(e, "Save failed."));
+      showError(getApiErrorMessage(e, "Save failed."));
     } finally {
       setBusy(false);
     }
   }
 
   async function uploadEbook() {
-    if (!editing?.id) return setError("Save the document first, then upload an ebook.");
-    if (!ebookFile) return setError("Select a PDF or EPUB first.");
+    if (!editing?.id) return showError("Save the document first, then upload an ebook.");
+    if (!ebookFile) return showError("Select a PDF or EPUB first.");
 
-    setError("");
-    setInfo("");
     setUploadingEbook(true);
 
     try {
@@ -518,23 +564,21 @@ export default function AdminDocuments() {
 
       await postMultipartWithFallback([`/legal-documents/${editing.id}/upload`], fd);
 
-      setInfo("Ebook uploaded successfully.");
+      showSuccess("Ebook uploaded successfully.");
       setEbookFile(null);
       if (ebookInputRef.current) ebookInputRef.current.value = "";
       await loadAll();
     } catch (e) {
-      setError(getApiErrorMessage(e, "Ebook upload failed."));
+      showError(getApiErrorMessage(e, "Ebook upload failed."));
     } finally {
       setUploadingEbook(false);
     }
   }
 
   async function uploadCover() {
-    if (!editing?.id) return setError("Save the document first, then upload a cover.");
-    if (!coverFile) return setError("Select an image file first.");
+    if (!editing?.id) return showError("Save the document first, then upload a cover.");
+    if (!coverFile) return showError("Select an image file first.");
 
-    setError("");
-    setInfo("");
     setUploadingCover(true);
 
     try {
@@ -544,12 +588,12 @@ export default function AdminDocuments() {
 
       await postMultipartWithFallback([`/legal-documents/${editing.id}/cover`], fd);
 
-      setInfo("Cover uploaded successfully.");
+      showSuccess("Cover uploaded successfully.");
       setCoverFile(null);
       if (coverInputRef.current) coverInputRef.current.value = "";
       await loadAll();
     } catch (e) {
-      setError(getApiErrorMessage(e, "Cover upload failed."));
+      showError(getApiErrorMessage(e, "Cover upload failed."));
     } finally {
       setUploadingCover(false);
     }
@@ -558,10 +602,9 @@ export default function AdminDocuments() {
   async function copyToClipboard(text) {
     try {
       await navigator.clipboard.writeText(String(text || ""));
-      setInfo("Copied to clipboard.");
-      setTimeout(() => setInfo(""), 1200);
+      showSuccess("Copied to clipboard.");
     } catch {
-      setError("Copy failed. Please copy manually.");
+      showError("Copy failed. Please copy manually.");
     }
   }
 
@@ -580,170 +623,206 @@ export default function AdminDocuments() {
   const canClose = !(busy || uploadingCover || uploadingEbook);
 
   return (
-    <div className="admin-page admin-page-wide">
-      <style>{`
-        .admin-table-wrap { max-height: 68vh; overflow: auto; border-radius: 14px; }
-        .admin-table thead th { position: sticky; top: 0; z-index: 2; background: #fafafa; }
-        .row-zebra { background: #fafafa; }
-        .row-hover:hover td { background: #fbfbff; }
-        .num-cell { text-align: right; font-variant-numeric: tabular-nums; }
-        .price-on { font-weight: 900; }
+    <div className="au-wrap">
+      {/* Toast */}
+      {toast?.text ? (
+        <div className={`toast ${toast.type === "error" ? "toast-error" : "toast-success"}`}>{toast.text}</div>
+      ) : null}
 
-        /* modal section blocks */
-        .admin-form-section {
-          margin: 12px 0 10px;
-          padding: 12px 12px;
-          border-radius: 12px;
-          background: #f9fafb;
-          border: 1px solid #e5e7eb;
-        }
-        .admin-form-section-title { font-weight: 900; color: #111827; margin-bottom: 4px; }
-        .admin-form-section-sub { color: #6b7280; font-size: 12px; line-height: 1.35; }
+      {/* HERO */}
+      <div className="au-hero">
+        <div className="au-titleRow">
+          <div>
+            <div className="au-kicker">LAWFRAICA • ADMIN</div>
+            <h1 className="au-title">Books</h1>
+            <p className="au-subtitle">
+              This page is for <b>Standard</b> documents (PDF/EPUB). Reports are managed under <b>Admin → LLR Services</b>.
+            </p>
+          </div>
 
-        .admin-upload-box {
-          border: 1px dashed #d1d5db;
-          background: #fff;
-          border-radius: 14px;
-          padding: 12px;
-        }
-        .admin-upload-actions {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-top: 8px;
-          flex-wrap: wrap;
-        }
-        .filehint { color: #6b7280; font-weight: 700; font-size: 12px; }
-        .minihelp { color:#6b7280; font-size:12px; margin-top:6px; line-height:1.35; }
-        .minihelp.warn {
-          background:#fffbeb; border:1px solid #fcd34d; color:#92400e;
-          padding:8px 10px; border-radius:12px; margin-top:8px;
-          font-size:12px; font-weight:800;
-        }
+          <div className="au-heroRight" style={{ gap: 10 }}>
+            <button className="au-refresh" onClick={loadAll} disabled={busy || loading} title="Refresh">
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                <IRefresh spin={loading} /> Refresh
+              </span>
+            </button>
 
-        /* allow 2-col span helper without touching global css */
-        .admin-span2 { grid-column: 1 / -1; }
-      `}</style>
-
-      <div className="admin-header">
-        <div>
-          <h1 className="admin-title">Admin · Books (Standard Documents)</h1>
-          <p className="admin-subtitle">
-            This page is for Standard documents (PDF/EPUB). Reports are managed under Admin → LLR Services.
-          </p>
+            <button
+              className="au-refresh"
+              style={{
+                background: "linear-gradient(180deg, rgba(139, 28, 28, 0.95) 0%, rgba(161, 31, 31, 0.95) 100%)",
+                borderColor: "rgba(139, 28, 28, 0.35)",
+              }}
+              onClick={openCreate}
+              disabled={busy}
+              title="Create a new document"
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                <IPlus /> New
+              </span>
+            </button>
+          </div>
         </div>
 
-        {/* ✅ Icon actions + single row */}
-        <div className="admin-actions admin-actions-inline">
-          <IconButton title="Refresh list" onClick={loadAll} disabled={busy || loading}>
-            <IRefresh />
-          </IconButton>
+        {/* TOPBAR */}
+        <div className="au-topbar">
+          <div className="au-search">
+            <span className="au-searchIcon" aria-hidden="true">
+              <ISearch />
+            </span>
+            <input
+              placeholder="Search by title, status, premium, pages, currency, price…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              disabled={loading}
+            />
+            {q ? (
+              <button className="au-clear" onClick={() => setQ("")} title="Clear">
+                Clear
+              </button>
+            ) : null}
+          </div>
 
-          <button
-            className="admin-btn primary compact"
-            onClick={openCreate}
-            disabled={busy}
-            title="Create a new document"
-            style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
-          >
-            <IPlus /> New
-          </button>
+          <div className="au-topbarRight">
+            <div className="au-mePill" title="Quick stats">
+              <span className={`au-meDot ${loading ? "" : "ga"}`} />
+              <span className="au-meText">{loading ? "Loading…" : `${filtered.length} document(s)`}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* KPIs */}
+        <div className="au-kpis">
+          <div className="au-kpiCard">
+            <div className="au-kpiLabel">Shown</div>
+            <div className="au-kpiValue">{loading ? "…" : kpis.total}</div>
+          </div>
+          <div className="au-kpiCard">
+            <div className="au-kpiLabel">Premium</div>
+            <div className="au-kpiValue">{loading ? "…" : kpis.premium}</div>
+          </div>
+          <div className="au-kpiCard">
+            <div className="au-kpiLabel">Public purchase ON</div>
+            <div className="au-kpiValue">{loading ? "…" : kpis.publicOn}</div>
+          </div>
+          <div className="au-kpiCard">
+            <div className="au-kpiLabel">Page count set</div>
+            <div className="au-kpiValue">{loading ? "…" : kpis.pagesKnown}</div>
+          </div>
         </div>
       </div>
 
-      {(error || info) && <div className={`admin-alert ${error ? "error" : "ok"}`}>{error || info}</div>}
-
-      <div className="admin-card admin-card-fill">
-        <div className="admin-toolbar">
-          <input
-            className="admin-search admin-search-wide"
-            placeholder="Search by title, status, premium, pages, currency, price…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-          <div className="admin-pill muted">{loading ? "Loading…" : `${filtered.length} document(s)`}</div>
+      {/* PANEL */}
+      <div className="au-panel">
+        <div className="au-panelTop">
+          <div className="au-panelTitle">Standard documents</div>
+          <div className="au-pageMeta">{loading ? "Loading…" : `${filtered.length} record(s)`}</div>
         </div>
 
-        <div className="admin-table-wrap">
-          <table className="admin-table">
+        <div className="au-tableWrap">
+          <table className="au-table">
             <thead>
               <tr>
                 <th style={{ width: "46%" }}>Title</th>
                 <th style={{ width: "12%" }}>Status</th>
                 <th style={{ width: "10%" }}>Premium</th>
-                <th style={{ width: "8%" }} className="num-cell">
+                <th className="au-thRight" style={{ width: "8%" }}>
                   Pages
                 </th>
                 <th style={{ width: "10%" }}>Public</th>
-                <th style={{ width: "14%" }} className="num-cell">
+                <th className="au-thRight" style={{ width: "14%" }}>
                   Price
                 </th>
-                <th style={{ textAlign: "right", width: "16%" }}>Actions</th>
+                <th className="au-thRight" style={{ width: "16%" }}>
+                  Actions
+                </th>
               </tr>
             </thead>
 
             <tbody>
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ color: "#6b7280", padding: "14px" }}>
-                    No documents found.
+                  <td colSpan={7}>
+                    <div className="au-empty">No documents found.</div>
                   </td>
                 </tr>
               )}
 
-              {filtered.map((r, idx) => {
+              {filtered.map((r) => {
                 const allow = getAllow(r);
                 const currency = getCurrency(r);
                 const price = getPrice(r);
                 const isPremium = !!r.isPremium;
+                const pages = r.pageCount ?? "—";
+
+                const status = String(r.status || "—");
+                const statusLower = status.toLowerCase();
+                const statusKind = statusLower === "published" ? "success" : "neutral";
 
                 return (
-                  <tr key={r.id} className={`${idx % 2 === 1 ? "row-zebra" : ""} row-hover`}>
-                    <td style={{ fontWeight: 900 }}>{r.title}</td>
-
+                  <tr key={r.id}>
                     <td>
-                      <span className={`admin-pill ${String(r.status).toLowerCase() === "published" ? "ok" : "muted"}`}>
-                        {r.status}
-                      </span>
+                      <div className="au-userCell">
+                        <span className={`au-dot ${statusLower === "published" ? "on" : ""}`} />
+                        <div className="au-userMeta">
+                          <div className="au-userName">{r.title || "—"}</div>
+                          <div className="au-userSub">
+                            <span className="au-muted au-mono">#{r.id}</span>
+                            {r.category ? (
+                              <>
+                                <span className="au-sep">•</span>
+                                <span className="au-muted">{r.category}</span>
+                              </>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
                     </td>
 
                     <td>
-                      <span className={`admin-pill ${isPremium ? "warn" : "muted"}`}>{isPremium ? "Yes" : "No"}</span>
+                      <Badge kind={statusKind}>{status}</Badge>
                     </td>
 
-                    <td className="num-cell">{r.pageCount ?? "—"}</td>
+                    <td>
+                      <Badge kind={isPremium ? "warn" : "neutral"}>{isPremium ? "Yes" : "No"}</Badge>
+                    </td>
+
+                    <td className="au-tdRight">
+                      <span className="au-mono">{pages}</span>
+                    </td>
 
                     <td>
                       {!isPremium ? (
-                        <span className="admin-pill muted">N/A</span>
+                        <Badge>N/A</Badge>
                       ) : allow ? (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                          <span className="admin-pill ok">On</span>
-                          <span style={{ fontWeight: 800, color: "#111827" }}>{currency || "—"}</span>
+                        <span style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          <Badge kind="success">On</Badge>
+                          <span className="au-muted" style={{ fontWeight: 950 }}>
+                            {currency || "—"}
+                          </span>
                         </span>
                       ) : (
-                        <span className="admin-pill muted">Off</span>
+                        <Badge>Off</Badge>
                       )}
                     </td>
 
-                    <td className="num-cell">
+                    <td className="au-tdRight">
                       {!isPremium ? (
-                        <span className="admin-pill muted">N/A</span>
+                        <Badge>N/A</Badge>
                       ) : !allow ? (
-                        <span className="admin-pill muted">Off</span>
+                        <Badge>Off</Badge>
                       ) : price == null ? (
-                        "—"
+                        <span className="au-muted">—</span>
                       ) : (
-                        <span className="price-on">{formatMoney(price)}</span>
+                        <span style={{ fontWeight: 950 }}>{formatMoney(price)}</span>
                       )}
                     </td>
 
-                    <td style={{ textAlign: "right" }}>
-                      {/* ✅ single-row icon action */}
-                      <div className="admin-row-actions actions-inline no-wrap" style={{ justifyContent: "flex-end" }}>
-                        <IconButton title="Edit document" onClick={() => openEdit(r)} disabled={busy} kind="neutral">
+                    <td className="au-tdRight">
+                      <div className="au-actionsRow">
+                        <button className="au-iconBtn au-iconBtn-neutral" onClick={() => openEdit(r)} disabled={busy} title="Edit">
                           <IEdit />
-                        </IconButton>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -752,9 +831,14 @@ export default function AdminDocuments() {
             </tbody>
           </table>
         </div>
+
+        <div className="au-panelBottom">
+          <span className="au-pageMeta">Tip: Reports are managed under Admin → LLR Services (not here).</span>
+          <span className="au-pageMeta">Covers are served from /storage (not /api/storage).</span>
+        </div>
       </div>
 
-      {/* MODAL */}
+      {/* MODAL (kept adminCrud styles) */}
       {open && (
         <div className="admin-modal-overlay" onClick={closeModal}>
           <div className="admin-modal admin-modal-tight" onClick={(e) => e.stopPropagation()}>
@@ -766,7 +850,6 @@ export default function AdminDocuments() {
                 </div>
               </div>
 
-              {/* ✅ Always-visible X */}
               <button
                 type="button"
                 className="admin-modal-xbtn"
@@ -821,7 +904,7 @@ export default function AdminDocuments() {
                       </option>
                     ))}
                   </select>
-                  <div className="minihelp">These options match the backend enum (prevents 400 errors).</div>
+                  <div className="admin-help">These options match the backend enum (prevents 400 errors).</div>
                 </div>
 
                 <div className="admin-field">
@@ -834,7 +917,7 @@ export default function AdminDocuments() {
                     onChange={(e) => setField("pageCount", e.target.value)}
                     placeholder="e.g. 120"
                   />
-                  <div className="minihelp">Optional. Used for display and search.</div>
+                  <div className="admin-help">Optional. Used for display and search.</div>
                 </div>
 
                 <div className="admin-field">
@@ -879,7 +962,11 @@ export default function AdminDocuments() {
               <div className="admin-form-section">
                 <div className="admin-form-section-title">Pricing rules</div>
                 <div className="admin-form-section-sub">Only premium documents can be sold publicly.</div>
-                {!showPricing && <div className="minihelp warn">This document is FREE (Premium = No). Pricing is disabled and will not be saved.</div>}
+                {!showPricing ? (
+                  <div className="admin-alert warn" style={{ marginTop: 10 }}>
+                    This document is FREE (Premium = No). Pricing is disabled and will not be saved.
+                  </div>
+                ) : null}
               </div>
 
               <div className="admin-grid">
@@ -936,10 +1023,15 @@ export default function AdminDocuments() {
                     />
 
                     <div className="admin-upload-actions">
-                      <button className="admin-btn" type="button" onClick={uploadEbook} disabled={!editing || uploadingEbook || uploadingCover || busy}>
+                      <button
+                        className="admin-btn"
+                        type="button"
+                        onClick={uploadEbook}
+                        disabled={!editing || uploadingEbook || uploadingCover || busy}
+                      >
                         {uploadingEbook ? "Uploading…" : "Upload ebook"}
                       </button>
-                      <span className="filehint">{ebookFile ? ebookFile.name : "No file selected."}</span>
+                      <span className="admin-help">{ebookFile ? ebookFile.name : "No file selected."}</span>
                     </div>
                   </div>
                 </div>
@@ -957,21 +1049,27 @@ export default function AdminDocuments() {
                     />
 
                     <div className="admin-upload-actions">
-                      <button className="admin-btn" type="button" onClick={uploadCover} disabled={!editing || uploadingCover || uploadingEbook || busy}>
+                      <button
+                        className="admin-btn"
+                        type="button"
+                        onClick={uploadCover}
+                        disabled={!editing || uploadingCover || uploadingEbook || busy}
+                      >
                         {uploadingCover ? "Uploading…" : "Upload cover"}
                       </button>
-                      <span className="filehint">{coverFile ? coverFile.name : "No file selected."}</span>
+                      <span className="admin-help">{coverFile ? coverFile.name : "No file selected."}</span>
 
-                      {/* handy copy for cover url/debug */}
                       {editing?.coverImagePath ? (
-                        <IconButton
-                          title="Copy cover URL"
+                        <button
+                          type="button"
+                          className="admin-btn"
                           onClick={() => copyToClipboard(buildCoverUrl(editing.coverImagePath))}
                           disabled={!editing?.coverImagePath}
-                          kind="neutral"
+                          title="Copy cover URL"
+                          style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
                         >
-                          <ICopy />
-                        </IconButton>
+                          <ICopy /> Copy URL
+                        </button>
                       ) : null}
                     </div>
 
@@ -989,12 +1087,12 @@ export default function AdminDocuments() {
                           }}
                           onError={(e) => (e.currentTarget.style.display = "none")}
                         />
-                        <div className="filehint" style={{ maxWidth: 520 }}>
+                        <div className="admin-help" style={{ maxWidth: 520 }}>
                           Current cover is shown if available.
                         </div>
                       </div>
                     ) : (
-                      <div className="minihelp" style={{ marginTop: 8 }}>
+                      <div className="admin-help" style={{ marginTop: 8 }}>
                         No cover uploaded yet.
                       </div>
                     )}
