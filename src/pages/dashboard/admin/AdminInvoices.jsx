@@ -63,21 +63,6 @@ function Chip({ active, children, ...props }) {
   );
 }
 
-function IconBtn({ tone = "neutral", disabled, title, onClick, children }) {
-  return (
-    <button
-      type="button"
-      className={`au-iconBtn au-iconBtn-${tone}`}
-      disabled={disabled}
-      onClick={onClick}
-      title={title}
-      aria-label={title}
-    >
-      {children}
-    </button>
-  );
-}
-
 function Icon({ name }) {
   switch (name) {
     case "spinner":
@@ -169,12 +154,7 @@ function Icon({ name }) {
             strokeWidth="2"
             strokeLinejoin="round"
           />
-          <path
-            d="M6 14h12v8H6v-8Z"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          />
+          <path d="M6 14h12v8H6v-8Z" fill="none" stroke="currentColor" strokeWidth="2" />
         </svg>
       );
     default:
@@ -318,7 +298,7 @@ export default function AdminInvoices() {
 
   const items = useMemo(() => (Array.isArray(data?.items) ? data.items : []), [data?.items]);
 
-  // KPI summary from current page (like you already had)
+  // KPI summary from current page
   const pageSummary = useMemo(() => {
     const out = { total: items.length, paid: 0, issued: 0, partiallypaid: 0, draft: 0, void: 0 };
     for (const it of items) {
@@ -398,7 +378,7 @@ export default function AdminInvoices() {
             </div>
           </div>
 
-          {/* ===== KPIs (like AdminUsers) ===== */}
+          {/* ===== KPIs ===== */}
           <div className="au-kpis">
             <div className="au-kpiCard">
               <div className="au-kpiLabel">Shown</div>
@@ -418,7 +398,7 @@ export default function AdminInvoices() {
             </div>
           </div>
 
-          {/* ===== Filters (chips like AdminUsers) ===== */}
+          {/* ===== Filters ===== */}
           <div className="au-filters">
             <div className="au-filterGroup">
               <div className="au-filterLabel">Status</div>
@@ -504,7 +484,7 @@ export default function AdminInvoices() {
         </div>
       </header>
 
-      {/* ===== PANEL (same as AdminUsers) ===== */}
+      {/* ===== PANEL ===== */}
       <section className="au-panel">
         <div className="au-panelTop">
           <div className="au-panelTitle">{loading ? "Loading…" : "Invoice directory"}</div>
@@ -545,7 +525,9 @@ export default function AdminInvoices() {
                 <th>Customer</th>
                 <th>Status</th>
                 <th>Purpose</th>
-                <th className="au-thRight">Totals</th>
+                <th className="au-thRight">Currency</th>
+                <th className="au-thRight">Amount</th>
+                <th className="au-thRight">Paid</th>
                 <th className="au-thRight">Actions</th>
               </tr>
             </thead>
@@ -553,7 +535,7 @@ export default function AdminInvoices() {
             <tbody>
               {!loading && items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="au-empty">
+                  <td colSpan={9} className="au-empty">
                     No invoices found for the current filters.
                   </td>
                 </tr>
@@ -561,31 +543,32 @@ export default function AdminInvoices() {
 
               {items.map((x) => {
                 const tone = statusTone(x.status);
+                const ccy = x.currency || "KES";
+
                 return (
                   <tr key={x.id}>
+                    {/* Invoice: remove Invoice ID */}
                     <td>
                       <div className="au-userMeta">
                         <div className="au-userName">
-                          <span className="au-mono">{x.invoiceNumber || `#${x.id}`}</span>
+                          <span className="au-mono">{x.invoiceNumber || "—"}</span>
                         </div>
-                        <div className="au-userSub">
-                          <span className="au-muted">ID:</span> <span className="au-mono">{x.id}</span>
-                          {x.currency ? (
-                            <>
-                              <span className="au-sep">•</span>
-                              <span className="au-muted">{x.currency}</span>
-                            </>
-                          ) : null}
-                        </div>
+                        {x.externalInvoiceNumber ? (
+                          <div className="au-userSub">
+                            <span className="au-muted">External Ref:</span>{" "}
+                            <span className="au-mono">{x.externalInvoiceNumber}</span>
+                          </div>
+                        ) : null}
                       </div>
                     </td>
 
                     <td>{fmtDate(x.issuedAt)}</td>
 
+                    {/* Customer: do not show customerType */}
                     <td>
                       <div className="au-userMeta">
                         <div className="au-userName">{x.customerName || "—"}</div>
-                        <div className="au-userSub">{x.customerType || "—"}</div>
+                        {x.customerEmail ? <div className="au-userSub au-mono">{x.customerEmail}</div> : null}
                       </div>
                     </td>
 
@@ -594,22 +577,27 @@ export default function AdminInvoices() {
                     </td>
 
                     <td title={x.purpose || ""} style={{ maxWidth: 360 }}>
-                      <div className="au-muted" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <div
+                        className="au-muted"
+                        style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                      >
                         {x.purpose || "—"}
                       </div>
                     </td>
 
+                    {/* Currency column (own column before amount) */}
                     <td className="au-tdRight">
-                      <div style={{ display: "grid", gap: 6, justifyItems: "end" }}>
-                        <div>
-                          <span className="au-muted">Invoice:</span>{" "}
-                          <span className="au-mono">{fmtMoney(x.total, x.currency || "KES")}</span>
-                        </div>
-                        <div>
-                          <span className="au-muted">Paid:</span>{" "}
-                          <span className="au-mono">{fmtMoney(x.amountPaid, x.currency || "KES")}</span>
-                        </div>
-                      </div>
+                      <span className="au-mono">{ccy}</span>
+                    </td>
+
+                    {/* Amount column */}
+                    <td className="au-tdRight">
+                      <span className="au-mono">{fmtMoney(x.total, ccy)}</span>
+                    </td>
+
+                    {/* Paid column */}
+                    <td className="au-tdRight">
+                      <span className="au-mono">{fmtMoney(x.amountPaid, ccy)}</span>
                     </td>
 
                     <td className="au-tdRight">
