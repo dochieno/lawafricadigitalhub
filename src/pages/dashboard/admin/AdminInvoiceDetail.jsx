@@ -2,8 +2,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import api, { API_BASE_URL } from "../../../api/client";
-import "../../../styles/adminUsers.css"; // ✅ uniform Admin Console look (au-*)
-import "../../../styles/invoice.css"; // ✅ keeps print styling + invoice paper styles
+import "../../../styles/adminCrud.css";
+import "../../../styles/invoice.css";
+import AdminPageFooter from "../../../components/AdminPageFooter";
 
 function fmtMoney(amount, currency = "KES") {
   const n = Number(amount || 0);
@@ -15,16 +16,16 @@ function fmtMoney(amount, currency = "KES") {
 }
 
 function fmtDateLong(iso) {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   return d.toLocaleString();
 }
 
 function fmtDateShort(iso) {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   const dd = String(d.getDate()).padStart(2, "0");
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const yy = String(d.getFullYear()).slice(-2);
@@ -36,19 +37,24 @@ function isAbsoluteHttpUrl(u) {
 }
 
 function getBestApiOrigin() {
+  // Prefer an absolute API base (so /storage is served from backend, not Vercel static).
   const candidates = [api?.defaults?.baseURL, API_BASE_URL].filter(Boolean).map(String);
 
   const abs = candidates.find((x) => isAbsoluteHttpUrl(x));
   if (abs) return abs.replace(/\/api\/?$/i, "").replace(/\/+$/g, "");
 
+  // If both are relative (e.g. "/api"), fall back to current origin.
+  // This works in dev / same-origin deployments.
   return window.location.origin;
 }
 
 /**
  * Build a public asset URL for Storage paths.
+ *
+ * IMPORTANT:
  * - Backend serves: /storage/{**filePath} (lowercase)
  * - DB might store: Storage/... or storage/...
- * - Normalize to ALWAYS request via /storage/
+ * - We normalize and ALWAYS request via /storage/ to avoid Linux case issues (Render).
  */
 function buildAssetUrl(path) {
   if (!path) return null;
@@ -56,13 +62,19 @@ function buildAssetUrl(path) {
   const raw = String(path).trim();
   if (!raw) return null;
 
+  // Already absolute
   if (isAbsoluteHttpUrl(raw)) return raw;
 
+  // Normalize to a relative file path (strip leading slashes)
   let clean = raw.replace(/\\/g, "/").replace(/^\/+/, "");
+
+  // Remove any stored prefix (Storage/ or storage/...)
   clean = clean.replace(/^Storage\//i, "");
   clean = clean.replace(/^storage\//i, "");
 
   const origin = getBestApiOrigin();
+
+  // ALWAYS use lowercase route that matches backend mapping
   return `${origin}/storage/${clean}`;
 }
 
@@ -86,120 +98,6 @@ async function safeCopy(text) {
       return false;
     }
   }
-}
-
-function Badge({ tone = "neutral", children }) {
-  return <span className={`au-badge au-badge-${tone}`}>{children}</span>;
-}
-
-function IconBtn({ tone = "neutral", disabled, title, onClick, children }) {
-  return (
-    <button
-      type="button"
-      className={`au-iconBtn au-iconBtn-${tone}`}
-      disabled={disabled}
-      onClick={onClick}
-      title={title}
-      aria-label={title}
-    >
-      {children}
-    </button>
-  );
-}
-
-function Icon({ name }) {
-  switch (name) {
-    case "spinner":
-      return (
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" className="au-spin">
-          <path
-            d="M12 2a10 10 0 1 0 10 10"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-        </svg>
-      );
-    case "back":
-      return (
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path
-            d="M15 18l-6-6 6-6"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      );
-    case "print":
-      return (
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path
-            d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M6 14h12v8H6v-8Z"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          />
-        </svg>
-      );
-    case "copy":
-      return (
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path
-            d="M9 9h11v13H9V9Z"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          />
-          <path
-            d="M4 15H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v1"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-        </svg>
-      );
-    case "gear":
-      return (
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path
-            d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          />
-          <path
-            d="M19.4 15a7.8 7.8 0 0 0 .1-2l2-1.2-2-3.5-2.3.6a7.7 7.7 0 0 0-1.7-1l-.3-2.4H9.8l-.3 2.4a7.7 7.7 0 0 0-1.7 1l-2.3-.6-2 3.5 2 1.2a7.8 7.8 0 0 0 .1 2l-2 1.2 2 3.5 2.3-.6a7.7 7.7 0 0 0 1.7 1l.3 2.4h4.4l.3-2.4a7.7 7.7 0 0 0 1.7-1l2.3.6 2-3.5-2-1.2Z"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
-        </svg>
-      );
-    default:
-      return null;
-  }
-}
-
-function statusTone(status) {
-  const s = String(status || "").toLowerCase();
-  if (s === "paid") return "success";
-  if (s === "issued") return "info";
-  if (s === "partiallypaid" || s === "partially-paid") return "warn";
-  if (s === "void") return "danger";
-  return "neutral"; // draft/unknown
 }
 
 export default function AdminInvoiceDetail() {
@@ -226,9 +124,7 @@ export default function AdminInvoiceDetail() {
       setInv(res.data);
       setLogoBroken(false);
     } catch (e) {
-      const msg =
-        e?.response?.data?.message || e?.response?.data || e?.message || "Failed to load invoice.";
-      setErr(String(msg));
+      setErr(e?.response?.data?.message || e?.response?.data || e?.message || "Failed to load invoice.");
     } finally {
       setLoading(false);
     }
@@ -263,178 +159,173 @@ export default function AdminInvoiceDetail() {
 
   const isPaid = useMemo(() => String(inv?.status || "").toLowerCase() === "paid", [inv]);
 
+  const invNumberClass = useMemo(
+    () => `invTitleStrong invTitleStrong--sm ${isPaid ? "invPaid" : "invUnpaid"}`,
+    [isPaid]
+  );
+
+  const metaStatusClass = useMemo(() => (isPaid ? "metaStatusPaid" : "metaStatusUnpaid"), [isPaid]);
+
   const logoUrl = useMemo(() => {
     if (logoBroken) return null;
     return buildAssetUrl(company.logoPath);
   }, [company.logoPath, logoBroken]);
 
   return (
-    <div className="au-wrap">
-      {/* ===== HERO (uniform) ===== */}
-      <header className="au-hero noPrint">
-        <div className="au-heroLeft">
-          <div className="au-titleRow">
-            <div className="au-titleStack">
-              <div className="au-kicker">LawAfrica • Admin</div>
-              <h1 className="au-title">
-                Invoice{" "}
-                <span className="au-mono" style={{ fontWeight: 800 }}>
-                  {inv?.invoiceNumber || (loading ? "…" : "")}
-                </span>
-              </h1>
-              <div className="au-subtitle">
-                Print-ready preview. Use browser print to download PDF.
-              </div>
-            </div>
-
-            <div className="au-heroRight">
-              <Link
-                className="au-iconBtn au-iconBtn-neutral"
-                to="/dashboard/admin/finance/invoices"
-                title="Back to invoices"
-                aria-label="Back to invoices"
-              >
-                <Icon name="back" />
-              </Link>
-
-              <IconBtn
-                tone="neutral"
-                disabled={loading || !inv}
-                title="Print / Download PDF"
-                onClick={() => window.print()}
-              >
-                <Icon name="print" />
-              </IconBtn>
-
-              <IconBtn
-                tone={copied ? "success" : "neutral"}
-                disabled={!inv?.invoiceNumber}
-                title={copied ? "Copied!" : "Copy invoice number"}
-                onClick={copyInvoiceNumber}
-              >
-                <Icon name="copy" />
-              </IconBtn>
-
-              <Link
-                className="au-iconBtn au-iconBtn-neutral"
-                to="/dashboard/admin/finance/invoice-settings"
-                title="Invoice Settings"
-                aria-label="Invoice Settings"
-              >
-                <Icon name="gear" />
-              </Link>
-            </div>
-          </div>
-
-          {err ? <div className="au-error">{err}</div> : null}
-        </div>
-      </header>
-
-      {/* ===== SUMMARY PANEL (uniform) ===== */}
-      <section className="au-panel noPrint">
-        <div className="au-panelTop">
-          <div className="au-panelTitle">{loading ? "Loading…" : "Invoice summary"}</div>
-          {inv ? <Badge tone={statusTone(inv.status)}>{String(inv.status || "Draft")}</Badge> : null}
+    <div className="adminCrud">
+      <div className="adminCrud__header noPrint">
+        <div>
+          <h1 className="adminCrud__title">
+            Invoice <span className={invNumberClass}>{inv?.invoiceNumber || (loading ? "…" : "")}</span>
+          </h1>
+          <p className="adminCrud__sub">Print-ready preview. Use browser print to download PDF.</p>
         </div>
 
-        {loading ? (
-          <div className="au-muted" style={{ padding: "14px 18px" }}>
-            Loading invoice…
-          </div>
-        ) : null}
+        <div className="adminCrud__actionsRow">
+          <Link
+            className="iconBtn iconBtn--sm iconBtn--neutral"
+            to="/dashboard/admin/finance/invoices"
+            title="Back to invoices"
+            aria-label="Back to invoices"
+          >
+            ⬅️
+          </Link>
 
-        {inv ? (
-          <div style={{ padding: "0 18px 18px" }}>
-            {/* KPI-style summary row (matches AdminUsers feel) */}
-            <div className="au-kpisInline" style={{ marginTop: 12 }}>
-              <div className="au-kpiMini">
-                <div className="au-kpiMiniLabel">Invoice No.</div>
-                <div className="au-kpiMiniValue au-mono">{inv.invoiceNumber}</div>
-              </div>
+          <button
+            type="button"
+            className="iconBtn iconBtn--sm iconBtn--neutral"
+            onClick={() => window.print()}
+            title="Print / Download PDF"
+            aria-label="Print / Download PDF"
+            disabled={loading || !inv}
+          >
+            🖨️
+          </button>
 
-              <div className="au-kpiMini">
-                <div className="au-kpiMiniLabel">Document Date</div>
-                <div className="au-kpiMiniValue">{fmtDateShort(inv.issuedAt)}</div>
-              </div>
+          <button
+            type="button"
+            className="iconBtn iconBtn--sm iconBtn--neutral"
+            onClick={copyInvoiceNumber}
+            title={copied ? "Copied!" : "Copy invoice number"}
+            aria-label="Copy invoice number"
+            disabled={!inv?.invoiceNumber}
+          >
+            {copied ? "✅" : "📋"}
+          </button>
 
-              <div className="au-kpiMini">
-                <div className="au-kpiMiniLabel">Currency</div>
-                <div className="au-kpiMiniValue">{inv.currency || "KES"}</div>
-              </div>
-
-              <div className="au-kpiMini">
-                <div className="au-kpiMiniLabel">Total</div>
-                <div className="au-kpiMiniValue">{fmtMoney(inv.total, inv.currency)}</div>
-              </div>
-
-              <div className="au-kpiMini">
-                <div className="au-kpiMiniLabel">Paid</div>
-                <div className="au-kpiMiniValue">{fmtMoney(inv.amountPaid, inv.currency)}</div>
-              </div>
-
-              <div className="au-kpiMini">
-                <div className="au-kpiMiniLabel">Balance</div>
-                <div className="au-kpiMiniValue">{fmtMoney(balance, inv.currency)}</div>
-              </div>
-            </div>
-
-            {/* compact meta row */}
-            <div
-              style={{
-                marginTop: 14,
-                display: "grid",
-                gridTemplateColumns: "1.2fr 1fr",
-                gap: 12,
-              }}
-            >
-              <div className="au-muted" style={{ lineHeight: 1.5 }}>
-                <div style={{ marginBottom: 6 }}>
-                  <span style={{ opacity: 0.8 }}>Customer:</span>{" "}
-                  <span style={{ fontWeight: 700, opacity: 1 }}>{inv.customerName || "—"}</span>
-                </div>
-                {inv.customerEmail ? (
-                  <div>
-                    <span style={{ opacity: 0.8 }}>Email:</span>{" "}
-                    <span className="au-mono">{inv.customerEmail}</span>
-                  </div>
-                ) : null}
-                {inv.customerType ? (
-                  <div>
-                    <span style={{ opacity: 0.8 }}>Type:</span> {inv.customerType}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="au-muted" style={{ lineHeight: 1.5 }}>
-                <div style={{ marginBottom: 6 }}>
-                  <span style={{ opacity: 0.8 }}>Purpose:</span>{" "}
-                  <span style={{ fontWeight: 600 }}>{inv.purpose || "—"}</span>
-                </div>
-                {inv.externalInvoiceNumber ? (
-                  <div>
-                    <span style={{ opacity: 0.8 }}>External Ref:</span>{" "}
-                    <span className="au-mono">{inv.externalInvoiceNumber}</span>
-                  </div>
-                ) : null}
-                {inv.paidAt ? (
-                  <div>
-                    <span style={{ opacity: 0.8 }}>Paid At:</span> {fmtDateLong(inv.paidAt)}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        <div className="au-panelBottom">
-          <div className="au-muted">Tip: use “Print” to download PDF from the browser print dialog.</div>
-          <div className="au-muted">Invoice logo is served from /storage via backend origin.</div>
+          <Link
+            className="iconBtn iconBtn--sm iconBtn--neutral"
+            to="/dashboard/admin/finance/invoice-settings"
+            title="Invoice Settings"
+            aria-label="Invoice Settings"
+          >
+            ⚙️
+          </Link>
         </div>
-      </section>
+      </div>
 
-      {/* ===== PRINT AREA (keep your invoice.css untouched) ===== */}
+      {err ? <div className="alert alert--danger">{err}</div> : null}
+      {loading ? <div className="alert alert--info">Loading invoice…</div> : null}
+
       {inv ? (
         <div className="invoicePage">
+          {/* ✅ Invoice summary -> single-row (and removed Invoice No.) */}
+          <div className="invoiceSummary noPrint">
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 14,
+                flexWrap: "wrap",
+                padding: "10px 12px",
+              }}
+            >
+              {/* Left: compact row of key-values */}
+              <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+                  <span className="muted">Document Date</span>
+                  <span className="strong">{fmtDateShort(inv.issuedAt)}</span>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+                  <span className="muted">Currency</span>
+                  <span className="strong">{inv.currency || "KES"}</span>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+                  <span className="muted">Total</span>
+                  <span className="strong">{fmtMoney(inv.total, inv.currency)}</span>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+                  <span className="muted">Paid</span>
+                  <span className="strong">{fmtMoney(inv.amountPaid, inv.currency)}</span>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+                  <span className="muted">Balance</span>
+                  <span className="strong">{fmtMoney(balance, inv.currency)}</span>
+                </div>
+              </div>
+
+              {/* Right: status pill */}
+              <div>
+                <span className={`pill ${isPaid ? "pill--ok" : "pill--warn"}`}>{inv.status}</span>
+              </div>
+            </div>
+
+            {/* Second row: Customer / Purpose / Paid At (still row-based, wraps on small screens) */}
+            <div
+              style={{
+                marginTop: 8,
+                padding: "0 12px 10px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 14,
+                flexWrap: "wrap",
+              }}
+            >
+              <div className="muted" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <span style={{ opacity: 0.8 }}>Customer:</span>
+                <span style={{ fontWeight: 800, opacity: 1 }}>{inv.customerName || "—"}</span>
+                {inv.customerEmail ? (
+                  <>
+                    <span className="au-sep">•</span>
+                    <span className="au-mono">{inv.customerEmail}</span>
+                  </>
+                ) : null}
+              </div>
+
+              <div className="muted" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <span style={{ opacity: 0.8 }}>Purpose:</span>
+                <span style={{ fontWeight: 800 }}>{inv.purpose || "—"}</span>
+                {inv.paidAt ? (
+                  <>
+                    <span className="au-sep">•</span>
+                    <span>Paid At: {fmtDateLong(inv.paidAt)}</span>
+                  </>
+                ) : null}
+              </div>
+            </div>
+
+            <div
+              className="mutedSmall"
+              style={{
+                borderTop: "1px solid #e5e7eb",
+                padding: "10px 12px",
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <div>Tip: use “Print” to download PDF from the browser print dialog.</div>
+              <div>Invoice logo is served from /storage via backend origin.</div>
+            </div>
+          </div>
+
           <div className="invoicePaperWrap">
             <div className="invoicePaper invoicePaper--wide" ref={printRef}>
               {/* Header */}
@@ -481,7 +372,7 @@ export default function AdminInvoiceDetail() {
 
                     <div className="metaRow">
                       <div className="k">Status</div>
-                      <div className="v">{inv.status}</div>
+                      <div className={`v ${metaStatusClass}`}>{inv.status}</div>
                     </div>
 
                     <div className="metaRow">
@@ -491,7 +382,7 @@ export default function AdminInvoiceDetail() {
 
                     <div className="metaRow">
                       <div className="k">Due</div>
-                      <div className="v">{inv.dueAt ? fmtDateShort(inv.dueAt) : "—"}</div>
+                      <div className="v">{inv.dueAt ? fmtDateShort(inv.dueAt) : "-"}</div>
                     </div>
 
                     <div className="metaRow">
@@ -506,7 +397,7 @@ export default function AdminInvoiceDetail() {
               <div className="invoiceBillTo">
                 <div>
                   <div className="sectionLabel">Bill To</div>
-                  <div className="billName">{inv.customerName || "—"}</div>
+                  <div className="billName">{inv.customerName || "-"}</div>
 
                   <div className="billMeta">
                     {inv.customerType ? <div>{inv.customerType}</div> : null}
@@ -525,9 +416,7 @@ export default function AdminInvoiceDetail() {
                     <div className="mutedSmall">External Ref: {inv.externalInvoiceNumber}</div>
                   ) : null}
 
-                  {inv.paidAt ? (
-                    <div className="mutedSmall">Paid At: {fmtDateLong(inv.paidAt)}</div>
-                  ) : null}
+                  {inv.paidAt ? <div className="mutedSmall">Paid At: {fmtDateLong(inv.paidAt)}</div> : null}
                 </div>
               </div>
 
@@ -674,6 +563,8 @@ export default function AdminInvoiceDetail() {
           </div>
         </div>
       ) : null}
+
+      <AdminPageFooter />
     </div>
   );
 }
