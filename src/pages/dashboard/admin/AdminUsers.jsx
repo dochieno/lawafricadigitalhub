@@ -1,3 +1,4 @@
+// src/pages/dashboard/admin/AdminUsers.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../../../api/client.js";
 import "../../../styles/adminUsers.css";
@@ -508,6 +509,12 @@ export default function AdminUsers() {
   async function setSystemRole(u, newRole) {
     try {
       setBusyId(u.id);
+
+      // ✅ If demoting from Admin -> User, also remove global-admin flag (so UI never shows stale Global Admin)
+      if (String(newRole || "").toLowerCase() === "user" && u.isGlobalAdmin) {
+        await api.put(`/admin/users/${u.id}/global-admin`, { isGlobalAdmin: false });
+      }
+
       await api.post(`/admin/users/${u.id}/role`, { newRole });
       showToast("success", `Role: ${newRole}`);
       await loadUsers(true);
@@ -518,7 +525,7 @@ export default function AdminUsers() {
     }
   }
 
-  // ✅ Global Admin promote/demote (UI gated by token claim)
+  // ✅ Global Admin promote/demote (NO fallback now; backend endpoint exists)
   async function setGlobalAdmin(u, makeGlobalAdmin) {
     if (!meIsGlobalAdmin) {
       showToast("error", "Only a Global Admin can perform this action.");
@@ -527,19 +534,7 @@ export default function AdminUsers() {
 
     try {
       setBusyId(u.id);
-
-      // Preferred endpoint
-      try {
-        await api.put(`/admin/users/${u.id}/global-admin`, { isGlobalAdmin: makeGlobalAdmin });
-      } catch (e1) {
-        // Fallback: role endpoint
-        if (e1?.response?.status === 404 || e1?.response?.status === 405) {
-          await api.post(`/admin/users/${u.id}/role`, { newRole: makeGlobalAdmin ? "GlobalAdmin" : "Admin" });
-        } else {
-          throw e1;
-        }
-      }
-
+      await api.put(`/admin/users/${u.id}/global-admin`, { isGlobalAdmin: makeGlobalAdmin });
       showToast("success", makeGlobalAdmin ? "Global Admin granted" : "Global Admin removed");
       await loadUsers(true);
     } catch (e) {
@@ -823,7 +818,12 @@ export default function AdminUsers() {
                     <td className="au-tdRight">
                       <div className="au-actionsRow">
                         {showApprove ? (
-                          <IconBtn tone="success" disabled={isBusy} title="Approve membership" onClick={() => approveMembership(u)}>
+                          <IconBtn
+                            tone="success"
+                            disabled={isBusy}
+                            title="Approve membership"
+                            onClick={() => approveMembership(u)}
+                          >
                             {isBusy ? <Icon name="spinner" /> : <Icon name="check" />}
                           </IconBtn>
                         ) : null}
@@ -840,13 +840,23 @@ export default function AdminUsers() {
                         ) : null}
 
                         {showMakeGlobalAdmin ? (
-                          <IconBtn tone="success" disabled={isBusy} title="Make Global Admin" onClick={() => setGlobalAdmin(u, true)}>
+                          <IconBtn
+                            tone="success"
+                            disabled={isBusy}
+                            title="Make Global Admin"
+                            onClick={() => setGlobalAdmin(u, true)}
+                          >
                             {isBusy ? <Icon name="spinner" /> : <Icon name="crown" />}
                           </IconBtn>
                         ) : null}
 
                         {showRemoveGlobalAdmin ? (
-                          <IconBtn tone="danger" disabled={isBusy} title="Remove Global Admin" onClick={() => setGlobalAdmin(u, false)}>
+                          <IconBtn
+                            tone="danger"
+                            disabled={isBusy}
+                            title="Remove Global Admin"
+                            onClick={() => setGlobalAdmin(u, false)}
+                          >
                             {isBusy ? <Icon name="spinner" /> : <Icon name="crown" />}
                           </IconBtn>
                         ) : null}
