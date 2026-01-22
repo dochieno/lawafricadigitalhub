@@ -4,6 +4,7 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import api, { API_BASE_URL } from "../../../api/client";
 import "../../../styles/adminCrud.css";
 import "../../../styles/invoice.css";
+import "../../../styles/adminUsers.css"; // ✅ reuse AdminUsers branding tokens/classes
 import AdminPageFooter from "../../../components/AdminPageFooter";
 
 function fmtMoney(amount, currency = "KES") {
@@ -100,6 +101,117 @@ async function safeCopy(text) {
   }
 }
 
+function Icon({ name }) {
+  switch (name) {
+    case "back":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M15 18l-6-6 6-6"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case "print":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+          <path d="M6 14h12v8H6v-8Z" fill="none" stroke="currentColor" strokeWidth="2" />
+        </svg>
+      );
+    case "copy":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M9 9h11v12H9V9Z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+        </svg>
+      );
+    case "gear":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          />
+          <path
+            d="M19.4 15a7.8 7.8 0 0 0 .1-2l2-1.2-2-3.5-2.3.6a7.7 7.7 0 0 0-1.7-1l-.3-2.4H9.8l-.3 2.4a7.7 7.7 0 0 0-1.7 1l-2.3-.6-2 3.5 2 1.2a7.8 7.8 0 0 0 .1 2l-2 1.2 2 3.5 2.3-.6a7.7 7.7 0 0 0 1.7 1l.3 2.4h4.4l.3-2.4a7.7 7.7 0 0 0 1.7-1l2.3.6 2-3.5-2-1.2Z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case "check":
+      return (
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M20 6 9 17l-5-5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
+function statusTone(status) {
+  const s = String(status || "").toLowerCase();
+  if (s === "paid") return "success";
+  if (s === "issued") return "info";
+  if (s === "partiallypaid" || s === "partially-paid") return "warn";
+  if (s === "void") return "danger";
+  return "neutral";
+}
+
+function Badge({ tone = "neutral", children }) {
+  return <span className={`au-badge au-badge-${tone}`}>{children}</span>;
+}
+
+function IconBtn({ tone = "neutral", disabled, title, onClick, children }) {
+  return (
+    <button
+      type="button"
+      className={`au-iconBtn au-iconBtn-${tone}`}
+      disabled={disabled}
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function AdminInvoiceDetail() {
   const { id } = useParams();
   const location = useLocation();
@@ -171,72 +283,134 @@ export default function AdminInvoiceDetail() {
     return buildAssetUrl(company.logoPath);
   }, [company.logoPath, logoBroken]);
 
+  const invoiceStatusTone = useMemo(() => statusTone(inv?.status), [inv?.status]);
+
   return (
     <div className="adminCrud">
-      <div className="adminCrud__header noPrint">
-        <div>
-          <h1 className="adminCrud__title">
-            Invoice <span className={invNumberClass}>{inv?.invoiceNumber || (loading ? "…" : "")}</span>
-          </h1>
-          <p className="adminCrud__sub">Print-ready preview. Use browser print to download PDF.</p>
+      {/* ✅ Brand header in AdminUsers style */}
+      <header className="au-hero au-heroTight noPrint">
+        <div className="au-heroLeft">
+          <div className="au-titleRow">
+            <div className="au-titleStack">
+              <div className="au-kicker">LawAfrica • Admin</div>
+              <h1 className="au-title">
+                Invoice{" "}
+                <span className={invNumberClass}>{inv?.invoiceNumber || (loading ? "…" : "")}</span>
+              </h1>
+              <div className="au-subtitle au-subtitleTight">Print-ready preview. Use Print to download PDF.</div>
+            </div>
+
+            <div className="au-heroRight">
+              <Link
+                className="au-refresh"
+                to="/dashboard/admin/finance/invoices"
+                title="Back to invoices"
+                aria-label="Back to invoices"
+              >
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <Icon name="back" />
+                  Back
+                </span>
+              </Link>
+
+              <button
+                className="au-refresh"
+                type="button"
+                onClick={() => window.print()}
+                title="Print / Download PDF"
+                aria-label="Print / Download PDF"
+                disabled={loading || !inv}
+              >
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <Icon name="print" />
+                  Print
+                </span>
+              </button>
+
+              <button
+                className="au-refresh"
+                type="button"
+                onClick={copyInvoiceNumber}
+                title={copied ? "Copied!" : "Copy invoice number"}
+                aria-label="Copy invoice number"
+                disabled={!inv?.invoiceNumber}
+              >
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  {copied ? <Icon name="check" /> : <Icon name="copy" />}
+                  {copied ? "Copied" : "Copy #"}
+                </span>
+              </button>
+
+              <Link
+                className="au-refresh"
+                to="/dashboard/admin/finance/invoice-settings"
+                title="Invoice Settings"
+                aria-label="Invoice Settings"
+              >
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <Icon name="gear" />
+                  Settings
+                </span>
+              </Link>
+            </div>
+          </div>
+
+          {err ? <div className="au-error">{err}</div> : null}
+
+          {/* ✅ Mini KPI strip (pure UI/branding; no behavior change) */}
+          {inv ? (
+            <div className="au-kpisInline" style={{ marginTop: 12 }}>
+              <div className="au-kpiMini">
+                <div className="au-kpiMiniLabel">Status</div>
+                <div className="au-kpiMiniValue">
+                  <Badge tone={invoiceStatusTone}>{inv.status || "—"}</Badge>
+                </div>
+              </div>
+
+              <div className="au-kpiMini">
+                <div className="au-kpiMiniLabel">Issued</div>
+                <div className="au-kpiMiniValue">{fmtDateShort(inv.issuedAt)}</div>
+              </div>
+
+              <div className="au-kpiMini">
+                <div className="au-kpiMiniLabel">Total</div>
+                <div className="au-kpiMiniValue">{fmtMoney(inv.total, inv.currency)}</div>
+              </div>
+
+              <div className="au-kpiMini">
+                <div className="au-kpiMiniLabel">Paid</div>
+                <div className="au-kpiMiniValue">{fmtMoney(inv.amountPaid, inv.currency)}</div>
+              </div>
+
+              <div className="au-kpiMini">
+                <div className="au-kpiMiniLabel">Balance</div>
+                <div className="au-kpiMiniValue">{fmtMoney(balance, inv.currency)}</div>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="au-panelBottom au-panelBottomTight" style={{ marginTop: 12 }}>
+            <div className="au-muted">Tip: use “Print” to download PDF from the browser print dialog.</div>
+          </div>
         </div>
+      </header>
 
-        <div className="adminCrud__actionsRow">
-          <Link
-            className="iconBtn iconBtn--sm iconBtn--neutral"
-            to="/dashboard/admin/finance/invoices"
-            title="Back to invoices"
-            aria-label="Back to invoices"
-          >
-            ⬅️
-          </Link>
-
-          <button
-            type="button"
-            className="iconBtn iconBtn--sm iconBtn--neutral"
-            onClick={() => window.print()}
-            title="Print / Download PDF"
-            aria-label="Print / Download PDF"
-            disabled={loading || !inv}
-          >
-            🖨️
-          </button>
-
-          <button
-            type="button"
-            className="iconBtn iconBtn--sm iconBtn--neutral"
-            onClick={copyInvoiceNumber}
-            title={copied ? "Copied!" : "Copy invoice number"}
-            aria-label="Copy invoice number"
-            disabled={!inv?.invoiceNumber}
-          >
-            {copied ? "✅" : "📋"}
-          </button>
-
-          <Link
-            className="iconBtn iconBtn--sm iconBtn--neutral"
-            to="/dashboard/admin/finance/invoice-settings"
-            title="Invoice Settings"
-            aria-label="Invoice Settings"
-          >
-            ⚙️
-          </Link>
-        </div>
-      </div>
-
-      {err ? <div className="alert alert--danger">{err}</div> : null}
       {loading ? <div className="alert alert--info">Loading invoice…</div> : null}
 
       {inv ? (
         <div className="invoicePage">
-          {/* ✅ Clean summary: full-width row + tip below. (Removed the “attachment/right note” completely.) */}
           <div className="invoicePaperWrap">
             <div className="invoicePaper invoicePaper--wide" ref={printRef}>
               {/* Header */}
               <div className="invoiceHeader">
                 <div className="brandBlock">
                   {logoUrl ? (
-                    <img className="brandLogo" src={logoUrl} alt="Company logo" onError={() => setLogoBroken(true)} />
+                    <img
+                      className="brandLogo"
+                      src={logoUrl}
+                      alt="Company logo"
+                      onError={() => setLogoBroken(true)}
+                    />
                   ) : (
                     <div className="brandLogo brandLogo--placeholder">Company logo</div>
                   )}
@@ -426,8 +600,12 @@ export default function AdminInvoiceDetail() {
                     {company.bankName || company.bankAccountNumber ? (
                       <div className="payFull">
                         <div className="mutedSmall">Bank</div>
-                        <div className="strong">{[company.bankName, company.bankAccountName].filter(Boolean).join(" — ")}</div>
-                        {company.bankAccountNumber ? <div className="mutedSmall">A/C: {company.bankAccountNumber}</div> : null}
+                        <div className="strong">
+                          {[company.bankName, company.bankAccountName].filter(Boolean).join(" — ")}
+                        </div>
+                        {company.bankAccountNumber ? (
+                          <div className="mutedSmall">A/C: {company.bankAccountNumber}</div>
+                        ) : null}
                       </div>
                     ) : null}
 
