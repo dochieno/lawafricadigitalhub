@@ -1,3 +1,4 @@
+// src/pages/dashboard/admin/AdminProductDocuments.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../../../api/client";
@@ -14,6 +15,8 @@ function toText(v) {
   if (typeof v === "object") {
     if (v.message) return String(v.message);
     if (v.error) return String(v.error);
+    if (v.title) return String(v.title);
+    if (v.detail) return String(v.detail);
     try {
       return JSON.stringify(v, null, 2);
     } catch {
@@ -25,6 +28,59 @@ function toText(v) {
 
 function pillYesNo(v) {
   return v ? "Yes" : "No";
+}
+
+/**
+ * Friendly + consistent error object for all fetches/actions
+ * (includes optional technical details for debugging).
+ */
+function toUiError(e, fallbackMessage = "Something went wrong.") {
+  // Network / CORS / DNS: axios has no response
+  if (e?.request && !e?.response) {
+    return {
+      title: "Connection problem",
+      message: "We couldn’t reach the server. Check your internet connection and try again.",
+      details: toText(e?.message || "No response from server."),
+    };
+  }
+
+  const status = e?.response?.status;
+  const data = e?.response?.data;
+
+  if (status === 401) {
+    return {
+      title: "Session expired",
+      message: "Please sign in again and retry.",
+      details: toText(data || "401 Unauthorized"),
+    };
+  }
+  if (status === 403) {
+    return {
+      title: "Not allowed",
+      message: "You don’t have permission to perform this action.",
+      details: toText(data || "403 Forbidden"),
+    };
+  }
+  if (status >= 500) {
+    return {
+      title: "Server error",
+      message: "The server ran into a problem while processing your request. Please try again shortly.",
+      details: toText(data || e?.message || `HTTP ${status}`),
+    };
+  }
+
+  // Prefer backend string/object messages
+  const message =
+    (typeof data === "string" && data.trim()) ||
+    (data && typeof data === "object" && (data.message || data.error || data.title || data.detail)) ||
+    e?.message ||
+    fallbackMessage;
+
+  return {
+    title: "Something went wrong",
+    message: toText(message),
+    details: toText(data || e?.message || fallbackMessage),
+  };
 }
 
 /* =========================
@@ -81,15 +137,21 @@ function IAddDoc() {
   );
 }
 
-function IconButton({ title, onClick, disabled, kind = "neutral", children }) {
+/**
+ * Match Institutions: action buttons use admin-action-btn + admin-icon-btn
+ * (adminCrud.css already styles these consistently)
+ */
+function IconButton({ title, onClick, disabled, children, kind = "neutral" }) {
+  const className = ["admin-action-btn", "neutral", "small", "admin-icon-btn"].join(" ");
   return (
     <button
       type="button"
-      className={`admin-icon-btn ${kind}`}
+      className={className}
       onClick={onClick}
       disabled={disabled}
       title={title}
       aria-label={title}
+      data-kind={kind}
     >
       {children}
     </button>
@@ -109,7 +171,9 @@ export default function AdminProductDocuments() {
   const [busy, setBusy] = useState(false);
 
   const [q, setQ] = useState("");
-  const [error, setError] = useState("");
+
+  // ✅ Branded alert pattern (like Institutions)
+  const [uiError, setUiError] = useState(null); // {title,message,details}
   const [info, setInfo] = useState("");
 
   // add form
@@ -142,13 +206,13 @@ export default function AdminProductDocuments() {
   }
 
   async function loadAll() {
-    setError("");
+    setUiError(null);
     setInfo("");
     setLoading(true);
     try {
       await Promise.all([loadProduct(), loadMappings(), loadDocuments()]);
     } catch (e) {
-      setError(toText(e?.response?.data || e?.message || "Failed to load product documents."));
+      setUiError(toUiError(e, "Failed to load product documents."));
     } finally {
       setLoading(false);
     }
@@ -182,13 +246,16 @@ export default function AdminProductDocuments() {
 
   async function addDocument(e) {
     e?.preventDefault?.();
-    setError("");
+    setUiError(null);
     setInfo("");
 
     const idNum = Number(docId);
-    if (!idNum) return setError("Please select a document.");
+    if (!idNum) return setUiError({ title: "Missing information", message: "Please select a document." });
+
     const so = Number(sortOrder);
-    if (Number.isNaN(so) || so < 0) return setError("SortOrder must be 0 or greater.");
+    if (Number.isNaN(so) || so < 0) {
+      return setUiError({ title: "Invalid value", message: "SortOrder must be 0 or greater." });
+    }
 
     setBusy(true);
     try {
@@ -203,7 +270,7 @@ export default function AdminProductDocuments() {
       setDocFilter("");
       await loadAll();
     } catch (e2) {
-      setError(toText(e2?.response?.data || e2?.message || "Failed to add document."));
+      setUiError(toUiError(e2, "Failed to add document."));
     } finally {
       setBusy(false);
     }
@@ -213,7 +280,7 @@ export default function AdminProductDocuments() {
     const so = Number(next);
     if (Number.isNaN(so) || so < 0) return;
 
-    setError("");
+    setUiError(null);
     setInfo("");
     setBusy(true);
     try {
@@ -222,7 +289,7 @@ export default function AdminProductDocuments() {
       setInfo("Sort order updated.");
       await loadMappings();
     } catch (e) {
-      setError(toText(e?.response?.data || e?.message || "Failed to update sort order."));
+      setUiError(toUiError(e, "Failed to update sort order."));
     } finally {
       setBusy(false);
     }
@@ -232,7 +299,7 @@ export default function AdminProductDocuments() {
     const title = row.documentTitle ?? row.DocumentTitle ?? "this document";
     if (!window.confirm(`Remove "${title}" from this product?`)) return;
 
-    setError("");
+    setUiError(null);
     setInfo("");
     setBusy(true);
     try {
@@ -242,7 +309,7 @@ export default function AdminProductDocuments() {
       await loadMappings();
       await loadDocuments();
     } catch (e) {
-      setError(toText(e?.response?.data || e?.message || "Failed to remove document."));
+      setUiError(toUiError(e, "Failed to remove document."));
     } finally {
       setBusy(false);
     }
@@ -260,31 +327,64 @@ export default function AdminProductDocuments() {
           </p>
         </div>
 
-        {/* ✅ Icon actions, single row */}
-        <div className="admin-actions admin-actions-inline">
+        {/* ✅ Compact icon actions (same pattern as Institutions) */}
+        <div className="admin-actions">
           <IconButton title="Back" onClick={() => nav(-1)} disabled={busy} kind="neutral">
             <IBack />
           </IconButton>
-          <IconButton title="Refresh" onClick={loadAll} disabled={busy || loading} kind="neutral">
+
+          <IconButton title="Refresh list" onClick={loadAll} disabled={busy || loading} kind="neutral">
             <IRefresh />
           </IconButton>
 
-          {/* Optional: jump to Add section by focusing filter */}
-          <IconButton
-            title="Add a document"
+          <button
+            className="admin-btn primary compact admin-btn-icon"
+            type="button"
             onClick={() => {
               const el = document.querySelector(".admin-docmap-filter");
               el?.focus?.();
             }}
             disabled={busy || loading}
-            kind="ok"
+            title="Add a document"
           >
-            <IPlus />
-          </IconButton>
+            <IPlus /> <span>Add</span>
+          </button>
         </div>
       </div>
 
-      {(error || info) && <div className={`admin-alert ${error ? "error" : "ok"}`}>{error ? error : info}</div>}
+      {/* ✅ Clearer alert block (supports technical details) */}
+      {(uiError || info) && (
+        <div className={`admin-alert ${uiError ? "error" : "ok"}`}>
+          {uiError ? (
+            <div style={{ display: "grid", gap: 6 }}>
+              <div style={{ fontWeight: 900 }}>{uiError.title || "Error"}</div>
+              <div style={{ whiteSpace: "pre-wrap" }}>{uiError.message}</div>
+
+              {uiError.details && uiError.details !== uiError.message ? (
+                <details style={{ marginTop: 6 }}>
+                  <summary style={{ cursor: "pointer", fontWeight: 800 }}>Show technical details</summary>
+                  <pre
+                    style={{
+                      marginTop: 8,
+                      padding: 10,
+                      borderRadius: 10,
+                      background: "rgba(0,0,0,0.04)",
+                      overflow: "auto",
+                      maxHeight: 220,
+                      fontSize: 12,
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {uiError.details}
+                  </pre>
+                </details>
+              ) : null}
+            </div>
+          ) : (
+            info
+          )}
+        </div>
+      )}
 
       {/* Add panel */}
       <div className="admin-card admin-docmap-add admin-docmap-add-compact">
@@ -347,7 +447,6 @@ export default function AdminProductDocuments() {
               />
             </div>
 
-            {/* ✅ Icon + text button, still compact */}
             <button className="admin-btn primary admin-docmap-addbtn" type="submit" disabled={busy || loading}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                 <IAddDoc /> {busy ? "Adding…" : "Add"}
@@ -423,7 +522,6 @@ export default function AdminProductDocuments() {
                     </td>
 
                     <td style={{ textAlign: "right" }}>
-                      {/* ✅ One-row, icon-only */}
                       <div className="admin-row-actions actions-inline no-wrap" style={{ justifyContent: "flex-end" }}>
                         <IconButton
                           title="Remove from product"

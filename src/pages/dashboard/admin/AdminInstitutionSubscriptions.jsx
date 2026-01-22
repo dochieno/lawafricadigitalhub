@@ -785,10 +785,6 @@ export default function AdminInstitutionSubscriptions() {
               <div className="au-kpiValue">{summary.active}</div>
             </div>
             <div className="au-kpiCard">
-              <div className="au-kpiLabel">Valid now</div>
-              <div className="au-kpiValue">{summary.validNow}</div>
-            </div>
-            <div className="au-kpiCard">
               <div className="au-kpiLabel">Pending</div>
               <div className="au-kpiValue">{summary.pending}</div>
             </div>
@@ -797,29 +793,7 @@ export default function AdminInstitutionSubscriptions() {
               <div className="au-kpiValue">{summary.suspended}</div>
             </div>
           </div>
-
-          <div className="au-filters" style={{ marginTop: 12 }}>
-            <div className="au-filterGroup">
-              <div className="au-filterLabel">Status quick filters</div>
-              <div className="au-chips">
-                <Chip active={statusFilter === "all"} onClick={() => setStatusFilter("all")}>
-                  All
-                </Chip>
-                <Chip active={statusFilter === "2"} onClick={() => setStatusFilter("2")}>
-                  Active
-                </Chip>
-                <Chip active={statusFilter === "1"} onClick={() => setStatusFilter("1")}>
-                  Pending
-                </Chip>
-                <Chip active={statusFilter === "4"} onClick={() => setStatusFilter("4")}>
-                  Suspended
-                </Chip>
-                <Chip active={statusFilter === "3"} onClick={() => setStatusFilter("3")}>
-                  Expired
-                </Chip>
-              </div>
-            </div>
-          </div>
+          
         </div>
       </header>
 
