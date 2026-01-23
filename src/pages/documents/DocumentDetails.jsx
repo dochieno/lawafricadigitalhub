@@ -121,9 +121,7 @@ function extractAxiosError(e) {
 }
 
 /* =========================
-   ✅ VAT helpers (NEW)
-   - Works with different DTO shapes
-   - Shows note only when VAT is configured
+   ✅ VAT helpers
 ========================= */
 function hasVatRate(doc, offer) {
   const vatRateId =
@@ -141,7 +139,6 @@ function hasVatRate(doc, offer) {
 }
 
 function getIsTaxInclusive(doc, offer) {
-  // Prefer publicOffer if backend returns these there, else doc
   const v =
     pick(offer, ["isTaxInclusive", "IsTaxInclusive"]) ??
     pick(doc, ["isTaxInclusive", "IsTaxInclusive"]) ??
@@ -607,7 +604,7 @@ export default function DocumentDetails() {
   const currency = offerCurrency || docCurrency || "KES";
   const price = offerPrice ?? docPrice;
 
-  const vatNote = buildVatNote(doc, publicOffer); // ✅ NEW
+  const vatNote = buildVatNote(doc, publicOffer);
 
   const hasFullAccess = !!access?.hasFullAccess;
 
@@ -657,6 +654,9 @@ export default function DocumentDetails() {
 
   const canInstitutionAddPremium = isInst && doc.isPremium && hasFullAccess;
   const canAddToLibrary = hasContent && (!doc.isPremium || canInstitutionAddPremium);
+
+  // ✅ Description (only)
+  const description = String(doc?.description || "").trim();
 
   return (
     <div className="doc-detail-container">
@@ -796,6 +796,9 @@ export default function DocumentDetails() {
               {doc.countryName} • {doc.category} • Version {doc.version}
             </p>
 
+            {/* ✅ ONLY ADDITION: Description (no layout changes) */}
+            {description ? <p className="doc-desc">{description}</p> : null}
+
             <div className="doc-badge">
               {doc.isPremium ? <span className="badge premium">Premium</span> : <span className="badge free">Free</span>}
               {!hasContent && <span className="badge coming-soon">Coming soon</span>}
@@ -870,13 +873,11 @@ export default function DocumentDetails() {
                       <div className="doc-offer-title">Buy this document</div>
                       <div className="doc-offer-sub">One-time purchase • Full access on this account</div>
 
-                      {/* ✅ Payment guidance */}
                       <div className="doc-offer-note" style={{ marginTop: 8 }}>
                         <b>M-PESA:</b> For Kenyan users (STK prompt to your phone).{" "}
                         <b>Paystack:</b> Pay by card or bank (Visa/Mastercard), including international payments.
                       </div>
 
-                      {/* ✅ NEW: VAT note (shows only if VAT configured) */}
                       {vatNote ? <div className="doc-offer-note">{vatNote}</div> : null}
                     </div>
 
@@ -1004,7 +1005,7 @@ export default function DocumentDetails() {
         </div>
       )}
 
-      {/* Payment modal (same functionality, improved copy) */}
+      {/* Payment modal */}
       {showPayModal && (
         <div className="modal-overlay">
           <div className="modal">
@@ -1052,7 +1053,6 @@ export default function DocumentDetails() {
                 />
                 <div style={{ marginTop: 8, opacity: 0.85, fontSize: 13 }}>
                   Amount: <b>{currency} {formatMoney(priceToPay())}</b>
-                  {/* ✅ NEW: VAT note also visible in modal */}
                   {vatNote ? <div className="doc-offer-note" style={{ marginTop: 6 }}>{vatNote}</div> : null}
                 </div>
               </div>
@@ -1061,7 +1061,6 @@ export default function DocumentDetails() {
                 <div style={{ fontSize: 13 }}>
                   Amount: <b>{currency} {formatMoney(priceToPay())}</b>
                 </div>
-                {/* ✅ NEW: VAT note also visible in modal */}
                 {vatNote ? <div className="doc-offer-note" style={{ marginTop: 6 }}>{vatNote}</div> : null}
                 <div style={{ marginTop: 6, fontSize: 13, color: "#6b7280" }}>
                   You’ll be redirected to Paystack to complete the payment securely.

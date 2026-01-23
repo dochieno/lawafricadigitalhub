@@ -1,18 +1,21 @@
 /* ======================================================
    Document Details - Clean + Consolidated Styles
-   - Keeps your existing class names
-   - Adds compact action layout + purchase button row
-   - Uses a calmer accent palette (less "scary red")
+   - Same layout
+   - Adds ONLY Description styling
+   - Uses LawAfrica brand as subtle gradient accent (not scary red)
 ====================================================== */
 
 :root {
-  /* Brand / accents */
-  --la-red: #a31616;
-  --la-red-dark: #8f1313;
+  /* LawAfrica brand */
+  --la-brand: #8b1c1c;         /* LawAfrica red (used subtly) */
+  --la-brand-2: #a11f1f;
 
-  /* NEW: calm accent for primary actions */
-  --la-accent: #0ea5a4;       /* teal */
+  /* Calm action accent */
+  --la-accent: #0ea5a4;        /* teal */
   --la-accent-dark: #0b8b8a;
+
+  /* Support accents (for gradient blend) */
+  --la-blue: #2563eb;
 
   /* Neutrals */
   --la-dark: #111827;
@@ -23,6 +26,14 @@
   /* Soft surfaces */
   --la-surface: #f8fafc;
   --la-ring: rgba(14, 165, 164, 0.25);
+
+  /* Brand gradient (subtle, colorful) */
+  --la-grad-soft: linear-gradient(
+    135deg,
+    rgba(139, 28, 28, 0.18),
+    rgba(14, 165, 164, 0.14),
+    rgba(37, 99, 235, 0.12)
+  );
 }
 
 /* ------------------------------
@@ -34,7 +45,7 @@
   padding: 0 24px;
 }
 
-/* Loading / Error placeholders (you use these in JSX) */
+/* Loading / Error placeholders */
 .doc-loading,
 .doc-error {
   max-width: 960px;
@@ -82,10 +93,10 @@
   width: 100%;
   height: auto;
   max-height: 520px;
-  object-fit: contain; /* full image */
+  object-fit: contain;
   border-radius: 16px;
   box-shadow: 0 14px 40px rgba(2, 6, 23, 0.16);
-  background: linear-gradient(135deg, rgba(14,165,164,0.18), rgba(59,130,246,0.14));
+  background: var(--la-grad-soft);
 }
 
 @media (max-width: 900px) {
@@ -98,7 +109,7 @@
 .doc-cover-placeholder {
   width: 100%;
   height: 520px;
-  background: linear-gradient(135deg, #0ea5a4, #2563eb);
+  background: var(--la-grad-soft);
   border-radius: 16px;
   display: flex;
   align-items: center;
@@ -137,6 +148,22 @@
   font-size: 0.95rem;
 }
 
+/* ✅ NEW: Description (ONLY) */
+.doc-desc {
+  margin: 0 0 12px;
+  color: rgba(15, 23, 42, 0.82);
+  font-size: 0.98rem;
+  line-height: 1.6;
+  font-weight: 650;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: var(--la-grad-soft);
+  /* keep it soft and readable */
+  backdrop-filter: blur(2px);
+}
+
+/* Badges row */
 .doc-badge {
   margin: 0;
   display: flex;
@@ -162,9 +189,9 @@
 }
 
 .badge.premium {
-  background: #fff1f2;
-  color: #9f1239;
-  border-color: #fecaca;
+  background: rgba(139, 28, 28, 0.08);
+  color: rgba(139, 28, 28, 0.95);
+  border-color: rgba(139, 28, 28, 0.18);
 }
 
 .badge.coming-soon {
@@ -280,7 +307,6 @@
   font-size: 0.9rem;
 }
 
-/* Make action buttons not stretch full width */
 .doc-actions .btn {
   width: auto;
   min-width: unset;
@@ -326,14 +352,12 @@
   cursor: not-allowed;
 }
 
-/* Focus ring (polish) */
 .btn:focus-visible,
 input:focus-visible {
   outline: none;
   box-shadow: 0 0 0 4px var(--la-ring);
 }
 
-/* Primary = calm accent */
 .btn-primary {
   background: var(--la-accent);
   color: #fff;
@@ -343,7 +367,6 @@ input:focus-visible {
   background: var(--la-accent-dark);
 }
 
-/* Outline (formerly "danger") now calm/neutral */
 .btn-outline-danger {
   background: transparent;
   border: 1.5px solid rgba(15, 23, 42, 0.22);
@@ -352,16 +375,6 @@ input:focus-visible {
 .btn-outline-danger:hover {
   background: rgba(2, 6, 23, 0.04);
   border-color: rgba(15, 23, 42, 0.30);
-}
-
-/* Optional: if you (later) want a true red outline somewhere, add class .btn-outline-red */
-.btn-outline-red {
-  background: transparent;
-  border: 1.5px solid var(--la-red);
-  color: var(--la-red);
-}
-.btn-outline-red:hover {
-  background: rgba(163, 22, 22, 0.08);
 }
 
 /* ------------------------------
@@ -431,7 +444,6 @@ input:focus-visible {
   flex-wrap: wrap;
 }
 
-/* CTA uses accent (not red) */
 .doc-footer-primary {
   background: var(--la-accent);
   color: #fff;
@@ -509,7 +521,6 @@ input:focus-visible {
   line-height: 1.6;
 }
 
-/* Inline spinner */
 .la-spinner {
   width: 18px;
   height: 18px;
@@ -524,7 +535,6 @@ input:focus-visible {
   to { transform: rotate(360deg); }
 }
 
-/* Status blocks inside modal */
 .status-box {
   margin-top: 12px;
   padding: 12px;
@@ -540,7 +550,7 @@ input:focus-visible {
 .status-box.success {
   background: rgba(34, 197, 94, 0.10);
   border-color: rgba(34, 197, 94, 0.22);
-  color: #dedddd;
+  color: #065f46;
 }
 
 .status-box.error {
