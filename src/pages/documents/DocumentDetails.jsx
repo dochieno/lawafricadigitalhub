@@ -791,9 +791,10 @@ export default function DocumentDetails() {
         <div className="doc-detail-info">
           <div className="doc-head">
             <h1 className="doc-title">{doc.title}</h1>
-
+            
             <p className="doc-meta">
-              {doc.countryName} • {doc.category} • Version {doc.version}
+              {doc.countryName} • {doc.category}
+              {doc.author ? ` • ${doc.author}` : ""}
             </p>
 
             {/* ✅ ONLY ADDITION: Description (no layout changes) */}

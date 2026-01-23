@@ -34,6 +34,19 @@
     rgba(14, 165, 164, 0.14),
     rgba(37, 99, 235, 0.12)
   );
+    --la-gradient: linear-gradient(
+    135deg,
+    #8b1c1c 0%,
+    #a11f1f 30%,
+    #0ea5a4 100%
+  );
+
+  --la-gradient-hover: linear-gradient(
+    135deg,
+    #7a1818 0%,
+    #8f1a1a 30%,
+    #0b8b8a 100%
+  );
 }
 
 /* ------------------------------
@@ -359,12 +372,14 @@ input:focus-visible {
 }
 
 .btn-primary {
-  background: var(--la-accent);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.0);
+  background: var(--la-gradient);
+  color: #ffffff;
+  border: none;
+  font-weight: 850;
 }
+
 .btn-primary:hover {
-  background: var(--la-accent-dark);
+  background: var(--la-gradient-hover);
 }
 
 .btn-outline-danger {
