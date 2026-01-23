@@ -573,3 +573,24 @@ input:focus-visible {
   border-color: #fecaca;
   color: #7f1d1d;
 }
+/* Gradient outline button for Browse */
+.btn-outline-danger {
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  font-weight: 800;
+  color: #0f172a;
+
+  /* gradient border trick */
+  background-image:
+    linear-gradient(#fff, #fff),
+    var(--la-gradient);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+}
+
+.btn-outline-danger:hover {
+  background-image:
+    linear-gradient(#ffffff, #ffffff),
+    var(--la-gradient-hover);
+}

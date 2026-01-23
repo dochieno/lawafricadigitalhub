@@ -71,10 +71,7 @@ export default function Explore() {
   useEffect(() => {
     async function loadAll() {
       try {
-        const [docsRes, libraryRes] = await Promise.all([
-          api.get("/legal-documents"),
-          api.get("/my-library"),
-        ]);
+        const [docsRes, libraryRes] = await Promise.all([api.get("/legal-documents"), api.get("/my-library")]);
 
         // ✅ Step 1: Remove reports from Explore entirely
         const all = docsRes.data || [];
@@ -163,9 +160,7 @@ export default function Explore() {
           return s;
         });
 
-        const results = await Promise.allSettled(
-          batch.map((docId) => api.get(`/legal-documents/${docId}/access`))
-        );
+        const results = await Promise.allSettled(batch.map((docId) => api.get(`/legal-documents/${docId}/access`)));
 
         if (cancelled) return;
 
@@ -214,9 +209,7 @@ export default function Explore() {
           return s;
         });
 
-        const results = await Promise.allSettled(
-          batch.map((docId) => api.get(`/legal-documents/${docId}/availability`))
-        );
+        const results = await Promise.allSettled(batch.map((docId) => api.get(`/legal-documents/${docId}/availability`)));
 
         if (cancelled) return;
 
@@ -257,11 +250,7 @@ export default function Explore() {
       setLibraryIds((prev) => new Set(prev).add(documentId));
       showToast("Added to your library");
     } catch (err) {
-      const msg =
-        err?.response?.data?.message ||
-        err?.response?.data ||
-        err?.message ||
-        "Failed to add to library";
+      const msg = err?.response?.data?.message || err?.response?.data || err?.message || "Failed to add to library";
       showToast(String(msg), "error");
     } finally {
       setActionLoading(null);
@@ -317,11 +306,7 @@ export default function Explore() {
           />
 
           <label className="explore-checkbox">
-            <input
-              type="checkbox"
-              checked={showPremium}
-              onChange={(e) => setShowPremium(e.target.checked)}
-            />
+            <input type="checkbox" checked={showPremium} onChange={(e) => setShowPremium(e.target.checked)} />
             Show premium content
           </label>
         </div>
@@ -400,6 +385,9 @@ export default function Explore() {
                   }}
                 >
                   <div className="explore-cover">
+                    {/* 🔥 hot overlay (pure branding, no new fields) */}
+                    <div className="explore-cover-overlay" />
+
                     {coverUrl ? (
                       <img
                         src={coverUrl}
@@ -417,11 +405,7 @@ export default function Explore() {
 
                   <div className="explore-info">
                     <div className="explore-badges">
-                      {d.isPremium ? (
-                        <span className="badge premium">Premium</span>
-                      ) : (
-                        <span className="badge free">Free</span>
-                      )}
+                      {d.isPremium ? <span className="badge premium">Premium</span> : <span className="badge free">Free</span>}
 
                       {!hasContent && (
                         <span className="badge coming-soon" style={{ marginLeft: 8 }}>
@@ -444,7 +428,7 @@ export default function Explore() {
 
                     {!d.isPremium && (
                       <button
-                        className="explore-btn"
+                        className="explore-btn explore-btn-hot"
                         disabled={actionLoading === d.id || !canAddLibraryHere || availabilityLoading}
                         title={disabledReason}
                         onClick={(e) => {
@@ -457,23 +441,14 @@ export default function Explore() {
                           cursor: canAddLibraryHere ? "pointer" : "not-allowed",
                         }}
                       >
-                        {availabilityLoading
-                          ? "Checking…"
-                          : inLibrary
-                          ? "🗑️ Remove from Library"
-                          : "➕ Add to Library"}
+                        {availabilityLoading ? "Checking…" : inLibrary ? "🗑️ Remove from Library" : "➕ Add to Library"}
                       </button>
                     )}
 
                     {d.isPremium && showPremiumAsLibraryAction && (
                       <button
-                        className="explore-btn"
-                        disabled={
-                          actionLoading === d.id ||
-                          accessLoading ||
-                          availabilityLoading ||
-                          !canAddLibraryHere
-                        }
+                        className="explore-btn explore-btn-hot"
+                        disabled={actionLoading === d.id || accessLoading || availabilityLoading || !canAddLibraryHere}
                         title={disabledReason}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -485,17 +460,13 @@ export default function Explore() {
                           cursor: canAddLibraryHere ? "pointer" : "not-allowed",
                         }}
                       >
-                        {accessLoading || availabilityLoading
-                          ? "Checking…"
-                          : inLibrary
-                          ? "🗑️ Remove from Library"
-                          : "➕ Add to Library"}
+                        {accessLoading || availabilityLoading ? "Checking…" : inLibrary ? "🗑️ Remove from Library" : "➕ Add to Library"}
                       </button>
                     )}
 
                     {d.isPremium && showPublicReadNow && (
                       <button
-                        className="explore-btn explore-btn-premium"
+                        className="explore-btn explore-btn-hot"
                         disabled={!hasContent}
                         title={!hasContent ? "Coming soon" : ""}
                         onClick={(e) => {
@@ -514,13 +485,13 @@ export default function Explore() {
 
                     {d.isPremium && !showPremiumAsLibraryAction && !showPublicReadNow && (
                       <button
-                        className="explore-btn explore-btn-premium"
+                        className="explore-btn explore-btn-premium explore-btn-hotOutline"
                         onClick={(e) => {
                           e.stopPropagation();
                           navigate(`/dashboard/documents/${d.id}`);
                         }}
                       >
-                        📖 View / Preview
+                        <span>📖 View / Preview</span>
                       </button>
                     )}
                   </div>
@@ -565,11 +536,11 @@ export default function Explore() {
       <section className="explore-cta">
         <h2>Build Your Personal Legal Library</h2>
         <p>
-          Save free publications to your library and keep all your trusted legal
-          resources organized in one place for quick access anytime.
+          Save free publications to your library and keep all your trusted legal resources organized in one place for quick access
+          anytime.
         </p>
 
-        <button className="explore-cta-btn" onClick={() => navigate("/dashboard/library")}>
+        <button className="explore-cta-btn explore-cta-btn-hot" onClick={() => navigate("/dashboard/library")}>
           📚 Go to My Library
         </button>
       </section>

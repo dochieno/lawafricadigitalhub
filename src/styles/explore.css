@@ -321,3 +321,123 @@
   opacity: 0.55;
   cursor: not-allowed;
 }
+
+:root {
+
+  --la-hot-a: #7a1e1e;   /* maroon */
+  --la-hot-b: #0ea5a4;   /* teal */
+  --la-hot-c: #2563eb;   /* optional blue hint for richness */
+
+  --la-hot-grad: linear-gradient(90deg, var(--la-hot-a) 0%, var(--la-hot-b) 55%, var(--la-hot-b) 100%);
+  --la-hot-grad-2: linear-gradient(135deg, rgba(122, 30, 30, 0.95), rgba(14, 165, 164, 0.95));
+  --la-hot-ring: rgba(14, 165, 164, 0.22);
+}
+
+/* --- Card polish (hot but clean) --- */
+.explore-card {
+  position: relative;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 10px 26px rgba(2, 6, 23, 0.06);
+  transition: transform 0.12s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.explore-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(14, 165, 164, 0.22);
+  box-shadow: 0 16px 40px rgba(2, 6, 23, 0.12);
+}
+
+/* --- Cover: add “hot” gradient overlay behind/above image --- */
+.explore-cover {
+  background: var(--la-hot-grad-2); /* replaces flat fallback red */
+}
+
+/* This matches the JSX we added: <div className="explore-cover-overlay" /> */
+.explore-cover-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2; /* above image, below any text */
+  pointer-events: none;
+  background:
+    radial-gradient(600px 180px at 10% 10%, rgba(255, 255, 255, 0.26), transparent 60%),
+    linear-gradient(135deg, rgba(122, 30, 30, 0.52), rgba(14, 165, 164, 0.42));
+  mix-blend-mode: soft-light;
+}
+
+/* keep image under overlay */
+.explore-cover-img {
+  z-index: 1;
+}
+
+/* Optional: make the “LAW” placeholder feel branded too */
+.explore-cover-text {
+  z-index: 3;
+  text-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+
+/* --- Inputs: nicer focus ring (brand) --- */
+.explore-search:focus {
+  outline: none;
+  border-color: rgba(14, 165, 164, 0.65);
+  box-shadow: 0 0 0 4px var(--la-hot-ring);
+}
+
+/* --- Buttons: HOT gradient (solid) --- */
+.explore-btn-hot {
+  border: none;
+  color: #fff;
+  background: var(--la-hot-grad);
+  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.14);
+}
+
+.explore-btn-hot:hover:enabled {
+  filter: saturate(1.08) brightness(1.02);
+  transform: translateY(-1px);
+}
+
+.explore-btn-hot:active:enabled {
+  transform: translateY(0px);
+}
+
+.explore-btn-hot:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* --- Buttons: HOT gradient outline (for premium preview) --- */
+.explore-btn-hotOutline {
+  background: transparent;
+  border: 2px solid transparent;
+  color: rgba(15, 23, 42, 0.92);
+  /* gradient border trick */
+  background-image: linear-gradient(#fff, #fff), var(--la-hot-grad);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+}
+
+.explore-btn-hotOutline:hover:enabled {
+  background-image: linear-gradient(rgba(14, 165, 164, 0.08), rgba(14, 165, 164, 0.08)), var(--la-hot-grad);
+}
+
+.explore-cta-btn-hot {
+  border: none;
+  color: #fff;
+  background: var(--la-hot-grad);
+  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.14);
+}
+
+.explore-cta-btn-hot:hover {
+  filter: saturate(1.08) brightness(1.02);
+}
+
+/* --- CTA background: softer “hot” tint --- */
+.explore-cta {
+  background: linear-gradient(135deg, rgba(122, 30, 30, 0.08), rgba(14, 165, 164, 0.08), rgba(0, 0, 0, 0.02));
+}
+
+/* --- Pager buttons: subtle hot hover --- */
+.explore-pager-btn:hover:enabled {
+  border-color: rgba(14, 165, 164, 0.55);
+  box-shadow: 0 0 0 4px rgba(14, 165, 164, 0.10);
+}
