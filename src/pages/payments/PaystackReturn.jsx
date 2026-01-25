@@ -18,9 +18,10 @@ function safeText(v) {
   if (typeof v === "object" && v.message) return String(v.message);
   try {
     return JSON.stringify(v);
-  } catch {
-    return String(v);
   }
+   catch {
+if (import.meta?.env?.DEV) console.warn("clearCtx failed");
+}
 }
 
 function extractAxiosError(e) {
@@ -31,10 +32,10 @@ function extractAxiosError(e) {
   return e?.message || "Request failed.";
 }
 
-// localStorage keys for signup flow
+// localStorage key for signup flow (keep)
 const LS_REG_INTENT = "la_reg_intent_id";
 
-// ✅ paystack return context key
+// paystack return context key
 function ctxKey(ref) {
   return `la_paystack_ctx_${ref}`;
 }
@@ -42,9 +43,10 @@ function ctxKey(ref) {
 export default function PaystackReturn() {
   const nav = useNavigate();
   const query = useQuery();
-  const { state } = useLocation();
+  const location = useLocation();
+  const { state } = location;
 
-  // ✅ Paystack returns `reference` AND sometimes `trxref`
+  // Paystack returns `reference` and sometimes `trxref`
   const reference = (query.get("reference") || query.get("trxref") || "").trim();
   const fallbackDocId = state?.docId ? Number(state.docId) : null;
 
@@ -62,19 +64,20 @@ export default function PaystackReturn() {
       if (!raw) return null;
       return JSON.parse(raw);
     } catch {
-      return null;
-    }
+if (import.meta?.env?.DEV) console.warn("clearCtx failed");
+}
   }
 
   function clearCtx(ref) {
     try {
       if (!ref) return;
       localStorage.removeItem(ctxKey(ref));
-    } catch (e) {
-      if (import.meta?.env?.DEV) console.warn("clearCtx failed:", e);
+    } catch (err) {
+      if (import.meta?.env?.DEV) console.warn("clearCtx failed:", err);
     }
   }
-  // ✅ Restore token snapshot if it was lost on return
+
+  // Restore token snapshot if it was lost on return
   function restoreTokenIfMissing(ref) {
     try {
       const token = getToken?.() || null;
@@ -88,11 +91,10 @@ export default function PaystackReturn() {
       }
       return null;
     } catch {
-      return null;
-    }
+if (import.meta?.env?.DEV) console.warn("clearCtx failed");
+}
   }
 
-  // best-effort only (safe even if endpoint doesn't exist)
   async function logReturnVisit(ref) {
     try {
       if (!ref) return;
@@ -106,13 +108,21 @@ export default function PaystackReturn() {
         { __skipThrottle: true }
       );
     } catch {
-      // ignore
-    }
+if (import.meta?.env?.DEV) console.warn("clearCtx failed");
+}
   }
 
   async function fetchIntentByReference(ref) {
-    const res = await api.get(
-      `/payments/paystack/intent-by-reference/${encodeURIComponent(ref)}`,
+    const res = await api.get(`/payments/paystack/intent-by-reference/${encodeURIComponent(ref)}`, {
+      __skipThrottle: true,
+    });
+    return res.data?.data ?? res.data;
+  }
+
+  async function confirmPaystack(ref) {
+    const res = await api.post(
+      "/payments/paystack/confirm",
+      { reference: ref },
       { __skipThrottle: true }
     );
     return res.data?.data ?? res.data;
@@ -124,17 +134,6 @@ export default function PaystackReturn() {
     qs.set("provider", "paystack");
     if (ref) qs.set("reference", ref);
     nav(`/register?${qs.toString()}`, { replace: true });
-  }
-
-  function redirectToDocumentDetailsPaid(docId, intentId, ref) {
-    const qs = new URLSearchParams();
-    qs.set("paid", "1");
-    qs.set("provider", "paystack");
-    if (ref) qs.set("reference", ref);
-    if (intentId) qs.set("paymentIntentId", String(intentId));
-
-    // ✅ Details page should show confirm modal + refresh access then open reader.
-    nav(`/dashboard/documents/${docId}?${qs.toString()}`, { replace: true });
   }
 
   async function run() {
@@ -155,12 +154,12 @@ export default function PaystackReturn() {
       setMessage("Payment received ✅ Returning to registration…");
 
       clearCtx(reference);
-      await sleep(350);
+      await sleep(250);
       redirectToRegisterPaid(reference);
       return;
     }
 
-    // ✅ Authenticated purchase flow: token required for the user experience
+    // ✅ Authenticated purchase flow: token required
     const token = restoreTokenIfMissing(reference);
     if (!token) {
       setPhase("FAILED");
@@ -174,33 +173,38 @@ export default function PaystackReturn() {
       setMessage("Resolving your payment…");
       await logReturnVisit(reference);
 
-      // 1) Resolve intent & meta (docId)
+      // 1) Resolve intent/meta (docId)
       const resolved = await fetchIntentByReference(reference);
       const intentId = resolved?.paymentIntentId || resolved?.id || null;
       const meta = resolved?.meta || null;
 
       if (!intentId) throw new Error("Could not resolve payment intent from reference.");
-
       setPaymentIntentId(intentId);
 
       const ctx = readCtx(reference);
+      const docIdFromMeta = meta?.legalDocumentId ?? null;
+      const docId = docIdFromMeta ?? ctx?.docId ?? fallbackDocId ?? null;
 
-      // 2) Pick docId from best sources (intent/meta > ctx > location.state)
-      const docId = meta?.legalDocumentId ?? ctx?.docId ?? fallbackDocId ?? null;
+      // 2) ✅ CONFIRM SERVER-TO-SERVER NOW (idempotent)
+      setMessage("Confirming payment with server…");
+      const confirmed = await confirmPaystack(reference);
+
+      const confirmedDocId =
+        confirmed?.legalDocumentId ?? confirmed?.documentId ?? docId ?? null;
 
       setPhase("SUCCESS");
-      setMessage("Payment received ✅ Redirecting…");
-      await sleep(350);
+      setMessage("Payment confirmed ✅ Redirecting…");
+      await sleep(250);
 
-      // ✅ Safe to clear now
       clearCtx(reference);
 
-      if (docId) {
-        redirectToDocumentDetailsPaid(docId, intentId, reference);
+      // 3) ✅ Go straight to READER (clean URL; no paid=1 params)
+      if (confirmedDocId) {
+        nav(`/dashboard/documents/${confirmedDocId}/read`, { replace: true });
         return;
       }
 
-      // No docId means not a doc purchase; go to library
+      // no doc means not a doc purchase
       nav("/dashboard/library", { replace: true });
     } catch (e) {
       const status = e?.response?.status;
@@ -271,7 +275,7 @@ export default function PaystackReturn() {
                 color: "#065f46",
               }}
             >
-              Payment received ✅ Redirecting…
+              Payment confirmed ✅ Redirecting…
             </div>
           )}
         </div>
