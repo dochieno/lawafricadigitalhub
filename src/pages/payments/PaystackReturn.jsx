@@ -1,3 +1,4 @@
+// src/pages/payments/PaystackReturn.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../../api/client";
@@ -18,10 +19,9 @@ function safeText(v) {
   if (typeof v === "object" && v.message) return String(v.message);
   try {
     return JSON.stringify(v);
+  } catch {
+    return String(v);
   }
-   catch {
-if (import.meta?.env?.DEV) console.warn("clearCtx failed");
-}
 }
 
 function extractAxiosError(e) {
@@ -32,10 +32,10 @@ function extractAxiosError(e) {
   return e?.message || "Request failed.";
 }
 
-// localStorage key for signup flow (keep)
+// localStorage keys for signup flow
 const LS_REG_INTENT = "la_reg_intent_id";
 
-// paystack return context key
+// ✅ paystack return context key
 function ctxKey(ref) {
   return `la_paystack_ctx_${ref}`;
 }
@@ -43,10 +43,9 @@ function ctxKey(ref) {
 export default function PaystackReturn() {
   const nav = useNavigate();
   const query = useQuery();
-  const location = useLocation();
-  const { state } = location;
+  const { state } = useLocation();
 
-  // Paystack returns `reference` and sometimes `trxref`
+  // ✅ Paystack returns `reference` AND sometimes `trxref`
   const reference = (query.get("reference") || query.get("trxref") || "").trim();
   const fallbackDocId = state?.docId ? Number(state.docId) : null;
 
@@ -64,20 +63,20 @@ export default function PaystackReturn() {
       if (!raw) return null;
       return JSON.parse(raw);
     } catch {
-if (import.meta?.env?.DEV) console.warn("clearCtx failed");
-}
+      return null;
+    }
   }
 
   function clearCtx(ref) {
     try {
       if (!ref) return;
       localStorage.removeItem(ctxKey(ref));
-    } catch (err) {
-      if (import.meta?.env?.DEV) console.warn("clearCtx failed:", err);
+    } catch {
+      // ignore
     }
   }
 
-  // Restore token snapshot if it was lost on return
+  // ✅ Restore token snapshot if it was lost on return
   function restoreTokenIfMissing(ref) {
     try {
       const token = getToken?.() || null;
@@ -91,10 +90,11 @@ if (import.meta?.env?.DEV) console.warn("clearCtx failed");
       }
       return null;
     } catch {
-if (import.meta?.env?.DEV) console.warn("clearCtx failed");
-}
+      return null;
+    }
   }
 
+  // best-effort only (safe even if endpoint doesn't exist)
   async function logReturnVisit(ref) {
     try {
       if (!ref) return;
@@ -108,8 +108,8 @@ if (import.meta?.env?.DEV) console.warn("clearCtx failed");
         { __skipThrottle: true }
       );
     } catch {
-if (import.meta?.env?.DEV) console.warn("clearCtx failed");
-}
+      // ignore
+    }
   }
 
   async function fetchIntentByReference(ref) {
@@ -119,6 +119,7 @@ if (import.meta?.env?.DEV) console.warn("clearCtx failed");
     return res.data?.data ?? res.data;
   }
 
+  // ✅ Force server verification + finalize/fulfillment (avoids “works only after refresh”)
   async function confirmPaystack(ref) {
     const res = await api.post(
       "/payments/paystack/confirm",
@@ -134,6 +135,17 @@ if (import.meta?.env?.DEV) console.warn("clearCtx failed");
     qs.set("provider", "paystack");
     if (ref) qs.set("reference", ref);
     nav(`/register?${qs.toString()}`, { replace: true });
+  }
+
+  // ✅ HARD redirect so AuthProvider re-reads token immediately (no blank screen requiring manual refresh)
+  function hardGoToReader(docId, intentId, ref) {
+    const qs = new URLSearchParams();
+    qs.set("paid", "1");
+    qs.set("provider", "paystack");
+    if (ref) qs.set("reference", ref);
+    if (intentId) qs.set("paymentIntentId", String(intentId));
+
+    window.location.replace(`/dashboard/documents/${docId}/read?${qs.toString()}`);
   }
 
   async function run() {
@@ -154,12 +166,12 @@ if (import.meta?.env?.DEV) console.warn("clearCtx failed");
       setMessage("Payment received ✅ Returning to registration…");
 
       clearCtx(reference);
-      await sleep(250);
+      await sleep(350);
       redirectToRegisterPaid(reference);
       return;
     }
 
-    // ✅ Authenticated purchase flow: token required
+    // ✅ Authenticated purchase flow: token required for the user experience
     const token = restoreTokenIfMissing(reference);
     if (!token) {
       setPhase("FAILED");
@@ -173,38 +185,38 @@ if (import.meta?.env?.DEV) console.warn("clearCtx failed");
       setMessage("Resolving your payment…");
       await logReturnVisit(reference);
 
-      // 1) Resolve intent/meta (docId)
+      // 1) Resolve intent & meta (docId)
       const resolved = await fetchIntentByReference(reference);
       const intentId = resolved?.paymentIntentId || resolved?.id || null;
       const meta = resolved?.meta || null;
 
       if (!intentId) throw new Error("Could not resolve payment intent from reference.");
+
       setPaymentIntentId(intentId);
 
       const ctx = readCtx(reference);
-      const docIdFromMeta = meta?.legalDocumentId ?? null;
-      const docId = docIdFromMeta ?? ctx?.docId ?? fallbackDocId ?? null;
 
-      // 2) ✅ CONFIRM SERVER-TO-SERVER NOW (idempotent)
-      setMessage("Confirming payment with server…");
-      const confirmed = await confirmPaystack(reference);
+      // 2) Pick docId from best sources (intent/meta > ctx > location.state)
+      const docId = meta?.legalDocumentId ?? ctx?.docId ?? fallbackDocId ?? null;
 
-      const confirmedDocId =
-        confirmed?.legalDocumentId ?? confirmed?.documentId ?? docId ?? null;
+      // 3) ✅ Confirm server-side now (forces entitlement/fulfillment immediately)
+      setMessage("Confirming payment on server…");
+      await confirmPaystack(reference);
 
       setPhase("SUCCESS");
-      setMessage("Payment confirmed ✅ Redirecting…");
+      setMessage("Payment received ✅ Opening your document…");
       await sleep(250);
 
+      // ✅ Safe to clear now
       clearCtx(reference);
 
-      // 3) ✅ Go straight to READER (clean URL; no paid=1 params)
-      if (confirmedDocId) {
-        nav(`/dashboard/documents/${confirmedDocId}/read`, { replace: true });
+      if (docId) {
+        // ✅ Hard redirect to reader to avoid “blank until refresh”
+        hardGoToReader(docId, intentId, reference);
         return;
       }
 
-      // no doc means not a doc purchase
+      // No docId means not a doc purchase; go to library (hard redirect not necessary)
       nav("/dashboard/library", { replace: true });
     } catch (e) {
       const status = e?.response?.status;
@@ -275,7 +287,7 @@ if (import.meta?.env?.DEV) console.warn("clearCtx failed");
                 color: "#065f46",
               }}
             >
-              Payment confirmed ✅ Redirecting…
+              Payment received ✅ Redirecting…
             </div>
           )}
         </div>
