@@ -40,6 +40,21 @@ function getApiErrorMessage(err, fallback) {
   return fallback;
 }
 
+function IconShield() {
+  return (
+    <svg viewBox="0 0 24 24" className="tf-ico" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M12 2l8 4v6c0 5.5-3.7 9.8-8 10-4.3-.2-8-4.5-8-10V6l8-4Zm0 2.2L6 7v5c0 4.3 2.9 7.9 6 8.1 3.1-.2 6-3.8 6-8.1V7l-6-2.8Z"
+      />
+      <path
+        fill="currentColor"
+        d="M11 12.6l-1.6-1.6a1 1 0 10-1.4 1.4l2.3 2.3a1 1 0 001.4 0l4.8-4.8a1 1 0 10-1.4-1.4L11 12.6Z"
+      />
+    </svg>
+  );
+}
+
 export default function TwoFactor() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -124,12 +139,15 @@ export default function TwoFactor() {
       saveToken(token);
 
       // ✅ cleanup pending keys
-      try {
-        localStorage.removeItem(LS_LOGIN_USERNAME);
-        localStorage.removeItem(LS_2FA_USERID);
-        localStorage.removeItem(LS_2FA_TEMP_TOKEN);
-      } catch {}
-
+    try {
+      localStorage.removeItem(LS_LOGIN_USERNAME);
+      localStorage.removeItem(LS_2FA_USERID);
+      localStorage.removeItem(LS_2FA_TEMP_TOKEN);
+    } catch (err) {
+      if (import.meta.env.DEV) {
+        console.warn("2FA storage cleanup failed:", err);
+      }
+    }
       await refreshUser();
       navigate("/dashboard", { replace: true });
     } catch (err) {
@@ -145,32 +163,60 @@ export default function TwoFactor() {
     }
   }
 
-  return (
-    <div className="auth-page">
-      <div className="auth-content">
-        <div className="twofactor-card">
-          <div className="brand-header">
-            <img src="/logo.png" alt="LawAfrica Logo" className="brand-logo" />
-            <p className="brand-tagline">Know. Do. Be More.</p>
-          </div>
+  const sessionMissing = !username && !ctxUserId && !ctxTempToken;
 
-          <h2>Two-Step Verification</h2>
-          <p className="subtitle">
-            For your security, please enter the 6-digit verification code from your Google Authenticator
-            or Microsoft Authenticator app.
+  return (
+    <div className="tf-layout">
+      {/* LEFT PANEL (matches Login premium panel) */}
+      <div className="tf-info-panel">
+        <div className="tf-left-wrap">
+          <a className="tf-brand" href="/" aria-label="Go to home">
+            <img src="/logo.png" alt="LawAfrica" className="tf-brand-logo" />
+          </a>
+
+          <h1 className="tf-title">Two-Step Verification</h1>
+          <p className="tf-tagline">Extra security to protect your account.</p>
+
+          <div className="tf-what-card">
+            <div className="tf-what-title">Why you’re seeing this</div>
+
+            <div className="tf-item">
+              <span className="tf-icoWrap">
+                <IconShield />
+              </span>
+              <div className="tf-itemText">
+                <div className="tf-itemName">Account protection</div>
+                <div className="tf-itemDesc">
+                  We verify a 6-digit code from your authenticator app before granting access.
+                </div>
+              </div>
+            </div>
+
+            <div className="tf-divider" />
+            <div className="tf-trustline">Secure • Trusted • Authoritative</div>
+          </div>
+        </div>
+      </div>
+
+      {/* RIGHT PANEL */}
+      <div className="tf-form-panel">
+        <div className="tf-card">
+          <h2>Enter verification code</h2>
+          <p className="tf-subtitle">
+            Use the 6-digit code from Google Authenticator or Microsoft Authenticator.
           </p>
 
-          {/* helpful debug hint (safe) */}
-          {!username && !ctxUserId && !ctxTempToken ? (
-            <div className="error-box" style={{ marginBottom: 12 }}>
+          {sessionMissing ? (
+            <div className="tf-error">
               Session missing. Please go back to login and try again.
             </div>
           ) : null}
 
-          {error && <div className="error-box">{toText(error)}</div>}
+          {error ? <div className="tf-error">{toText(error)}</div> : null}
 
           <form onSubmit={onVerify}>
             <input
+              className="tf-input"
               type="text"
               inputMode="numeric"
               placeholder="Enter 6-digit code"
@@ -181,52 +227,26 @@ export default function TwoFactor() {
               disabled={loading}
             />
 
-            <button type="submit" disabled={loading}>
+            <button className="tf-btn" type="submit" disabled={loading}>
               {loading ? "Verifying..." : "Verify Code"}
             </button>
           </form>
 
-          <div className="footer-text">Secure • Trusted • Authoritative</div>
+          <div className="tf-footer-text">Secure • Trusted • Authoritative</div>
 
-          <div style={{ marginTop: 10, fontSize: 12, color: "#6b7280" }}>
+          <div className="tf-help">
             Having trouble?{" "}
-            <span
-              style={{ color: "#8b1c1c", fontWeight: 800, cursor: "pointer" }}
+            <button
+              type="button"
+              className="tf-linkbtn"
               onClick={() => navigate("/login", { replace: true })}
+              disabled={loading}
             >
               Back to login
-            </span>
+            </button>
           </div>
         </div>
       </div>
-
-      <footer className="auth-footer">
-        <div className="auth-footer-inner">
-          <h4 className="auth-footer-title">
-            <span className="lock-icon" aria-hidden="true">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-            </span>
-            Secure. Trusted. Authoritative.
-          </h4>
-
-          <p>
-            LawAfrica protects your legal research with industry-grade security while giving you access to
-            Africa’s most authoritative legal knowledge.
-          </p>
-        </div>
-      </footer>
     </div>
   );
 }

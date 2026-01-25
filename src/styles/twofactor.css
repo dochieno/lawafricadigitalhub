@@ -1,188 +1,504 @@
-.twofactor-page {
-  min-height: 100vh;
-  background: var(--la-bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* src/styles/twofactor.css
+   Branded to match Login (dark glow left + premium glass card)
+*/
+
+:root{
+  --la-red: #a1181e;
+  --la-red2:#702840;
+  --la-teal:#0ea5a5;
+
+  --panel-bg: #f7f8fa;
 }
 
-.twofactor-card {
-  width: 100%;
-  max-width: 520px;
-  background: var(--la-white);
-  border-radius: 16px;
-  padding: 92px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-  text-align: center;
+/* Layout */
+.tf-layout{
+  min-height:100vh;
+  display:grid;
+  grid-template-columns: 1.1fr 0.9fr;
 }
 
-.brand-header {
-  margin-bottom: 16px;
+/* LEFT PANEL (like login-info-panel) */
+.tf-info-panel{
+  color:#fff;
+  padding: 54px 56px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:
+    radial-gradient(980px 520px at 10% 10%, rgba(161,24,30,0.28), transparent 60%),
+    radial-gradient(860px 520px at 92% 20%, rgba(14,165,165,0.22), transparent 60%),
+    linear-gradient(180deg, rgba(10,14,25,0.92), rgba(7,11,20,0.98));
+  border-right: 1px solid rgba(255,255,255,0.06);
 }
 
-.brand-logo {
-  max-width: 180px;
+.tf-left-wrap{ width: min(520px, 100%); }
+
+.tf-brand{
+  display:inline-flex;
+  align-items:center;
+  text-decoration:none;
 }
 
-.brand-tagline {
-  margin-top: 4px;
-  color: var(--la-red);
-  font-weight: 600;
+.tf-brand-logo{
+  width: 140px;
+  margin-bottom: 18px;
+  opacity: 0.95;
+  filter: drop-shadow(0 12px 20px rgba(0,0,0,0.35));
 }
 
-.subtitle {
-  color: var(--la-gray);
-  margin-bottom: 20px;
+.tf-title{
+  font-size: 40px;
+  line-height: 1.05;
+  margin: 0 0 10px 0;
+  letter-spacing: -0.8px;
 }
 
-input {
-  width: 100%;
-  padding: 12px;
-  margin-bottom: 14px;
-  border-radius: 8px;
-  border: 1px solid var(--la-border);
-  font-size: 16px;
-  text-align: center;
+.tf-tagline{
+  font-size: 15px;
+  opacity: 0.9;
+  margin: 0 0 18px 0;
 }
 
-input:focus {
-  outline: none;
-  border-color: var(--la-red);
+/* Dark info card (like "What you get") */
+.tf-what-card{
+  margin-top: 14px;
+  border-radius: 22px;
+  padding: 16px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 22px 60px rgba(0,0,0,0.35);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  position: relative;
+  overflow: hidden;
 }
 
-button {
-  width: 100%;
-  padding: 12px;
-  border-radius: 8px;
-  border: none;
-  background: var(--la-red);
-  color: var(--la-white);
-  font-size: 16px;
-  cursor: pointer;
+.tf-what-card::before{
+  content:"";
+  position:absolute;
+  inset: 0 0 auto 0;
+  height: 5px;
+  background: linear-gradient(135deg, var(--la-red) 0%, var(--la-red2) 45%, var(--la-teal) 100%);
+  opacity: 0.95;
 }
 
-button:hover {
-  background: var(--la-red-hover);
-}
-
-button:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.error-box {
-  background: #fde8e8;
-  color: var(--la-red);
-  border: 1px solid #fca5a5;
-  padding: 12px;
-  border-radius: 8px;
-  margin-bottom: 14px;
-}
-
-.footer-text {
-  margin-top: 20px;
-  font-size: 13px;
-  color: var(--la-gray);
-}
-/* ================= AUTH FOOTER ================= */
-
-.auth-footer {
-  margin-top: 80px;
-  padding: 40px 16px;
-  background: linear-gradient(
-    180deg,
-    rgba(245, 245, 245, 0.7),
-    rgba(255, 255, 255, 1)
-  );
-  border-top: 1px solid #eee;
-}
-
-.auth-footer-inner {
-  max-width: 720px;
-  margin: 0 auto;
-  text-align: center;
-}
-
-.auth-footer-inner h4 {
-  font-size: 1.1rem;
-  font-weight: 700;
-  margin-bottom: 8px;
-  color: #111;
-}
-
-.auth-footer-inner p {
-  font-size: 0.95rem;
-  color: #666;
-  line-height: 1.6;
-}
-/* ================= PAGE LAYOUT ================= */
-
-.auth-page {
-  min-height: 100vh;            /* 🔑 full viewport height */
-  display: flex;
-  flex-direction: column;
-  background: #f6f6f6;
-}
-
-.auth-content {
-  flex: 1;                      /* 🔑 pushes footer down */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 16px;
-}
-
-/* ================= FOOTER ================= */
-
-/* ================= AUTH FOOTER (EXPLORE STYLE) ================= */
-
-.auth-footer {
-  padding: 48px 16px;
-  background: linear-gradient(
-    180deg,
-    rgba(248, 242, 242, 0.9),
-    rgba(255, 255, 255, 1)
-  );
-  border-top: 1px solid #eee;
-}
-
-
-.auth-footer-inner {
-  max-width: 720px;
-  margin: 0 auto;
-  text-align: center;
-}
-
-.auth-footer-inner h4 {
-  font-size: 1.1rem;
-  font-weight: 700;
-  margin-bottom: 10px;
-  color: #111;
-}
-
-.auth-footer-inner p {
-  font-size: 0.95rem;
-  color: #6b7280; /* same neutral gray as Explore */
-  line-height: 1.6;
-}
-
-.auth-footer-title {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.lock-icon {
-  color: #a11217; /* LawAfrica red */
-  display: inline-flex;
-}
-.success-box {
-  background: #e9fff3;
-  border: 1px solid #86efac;
-  color: #166534;
-  padding: 10px 12px;
-  border-radius: 10px;
-  margin-bottom: 14px;
+.tf-what-title{
+  font-weight: 950;
   font-size: 14px;
+  letter-spacing: -0.2px;
+  margin: 6px 0 10px 0;
+  color: rgba(255,255,255,0.95);
+}
+
+.tf-item{
+  display:flex;
+  gap: 12px;
+  align-items:flex-start;
+  padding: 10px 0;
+}
+
+.tf-icoWrap{
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  display:grid;
+  place-items:center;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.18);
+  flex: 0 0 auto;
+}
+
+.tf-ico{
+  width: 18px;
+  height: 18px;
+  color: rgba(255,255,255,0.82);
+}
+
+.tf-itemText{ min-width:0; }
+.tf-itemName{
+  font-weight: 950;
+  font-size: 13px;
+  color: rgba(255,255,255,0.95);
+}
+.tf-itemDesc{
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+  color: rgba(226,232,240,0.78);
+}
+
+.tf-divider{
+  height: 1px;
+  background: rgba(255,255,255,0.12);
+  margin: 10px 0 10px;
+}
+
+.tf-trustline{
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(226,232,240,0.70);
+}
+
+/* RIGHT PANEL */
+.tf-form-panel{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding: 24px;
+
+  background:
+    radial-gradient(980px 520px at 15% 10%, rgba(161,24,30,0.10), transparent 55%),
+    radial-gradient(860px 520px at 92% 12%, rgba(14,165,165,0.10), transparent 55%),
+    linear-gradient(180deg, #ffffff 0%, #f7f8fb 55%, #f3f5f9 100%);
+}
+
+/* Premium glass card (base stays unchanged) */
+.tf-card{
+  width:100%;
+  max-width: 420px;
+
+  /* ✅ Keep same main card color, but add TOP “3D cap” + brand strip as layered backgrounds */
+  background:
+    /* top brand strip (exact colors) */
+    linear-gradient(135deg, #a1181e 0%, #702840 45%, #0ea5a5 100%) top / 100% 5px no-repeat,
+    /* top glass cap shadow (3D finish) */
+    linear-gradient(
+      180deg,
+      rgba(17,24,39,0.18) 0%,
+      rgba(17,24,39,0.10) 45%,
+      rgba(17,24,39,0.04) 70%,
+      rgba(17,24,39,0.00) 100%
+    ) top / 100% 58px no-repeat,
+    /* base card color (unchanged) */
+    rgba(255,255,255,0.78);
+
+  border: 1px solid rgba(17,24,39,0.10);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+
+  padding: 40px 36px;
+  border-radius: 22px;
+  text-align:center;
+
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+
+  box-shadow:
+    0 26px 60px rgba(2,6,23,0.16),
+    0 8px 18px rgba(2,6,23,0.08);
+}
+
+/* ✅ Gradient rim border (like login card) */
+.tf-card::before{
+  content:"";
+  position:absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, var(--la-red) 0%, var(--la-red2) 45%, var(--la-teal) 100%);
+  opacity: 0.92;
+  pointer-events:none;
+  z-index: 2;
+
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+/* ✅ Under-glow band (bottom) */
+.tf-card::after{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  left: 14px;
+  right: 14px;
+  bottom: -18px;
+  height: 44px;
+  border-radius: 999px;
+
+  background: linear-gradient(
+    90deg,
+    rgba(161,24,30,0.45) 0%,
+    rgba(112,40,64,0.28) 45%,
+    rgba(14,165,165,0.45) 100%
+  );
+
+  filter: blur(18px);
+  opacity: 0.70;
+  pointer-events:none;
+}
+
+.tf-card h2{
+  font-size: 28px;
+  margin: 0 0 6px 0;
+  color:#111827;
+}
+
+.tf-subtitle{
+  font-size: 14px;
+  color:#6b7280;
+  margin: 0 0 18px 0;
+}
+
+/* Input (dark like Login) */
+.tf-input{
+  width:100%;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+
+  background: #0f1115;
+  color:#ffffff;
+
+  border: 1px solid #2a2f3a;
+  border-radius: 14px;
+
+  font-size: 16px;
+  outline:none;
+  text-align:center;
+  letter-spacing: 2px;
+
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tf-input::placeholder{ color:#9aa4b2; letter-spacing: 0; }
+.tf-input:focus{
+  border-color: rgba(14,165,165,0.65);
+  box-shadow: 0 0 0 3px rgba(14,165,165,0.18);
+}
+
+/* Button (brand gradient) */
+.tf-btn{
+  width:100%;
+  padding: 14px;
+  color:#ffffff;
+  border:none;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 900;
+  cursor:pointer;
+  background: linear-gradient(135deg, var(--la-red) 0%, var(--la-red2) 55%, var(--la-teal) 100%);
+  box-shadow: 0 14px 30px rgba(0,0,0,0.14);
+  transition: transform 0.08s ease, box-shadow .18s ease, filter .18s ease;
+}
+
+.tf-btn:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 18px 40px rgba(0,0,0,0.18);
+  filter: brightness(1.02);
+}
+.tf-btn:active{ transform: scale(0.99); }
+.tf-btn:disabled{ opacity:0.75; cursor:not-allowed; }
+
+/* Error box (glass) */
+.tf-error{
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  border: 1px solid rgba(220,38,38,0.20);
+  color: #8b1c1c;
+  padding: 10px 12px;
+  border-radius: 12px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+/* Footer text */
+.tf-footer-text{
+  margin-top: 18px;
+  font-size: 12px;
+  color:#6b7280;
+}
+
+.tf-help{
+  margin-top: 10px;
+  font-size: 12px;
+  color:#6b7280;
+}
+
+.tf-linkbtn{
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: var(--la-red2);
+  font-weight: 950;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(14,165,165,0.50);
+}
+.tf-linkbtn:disabled{
+  opacity: 0.7;
+  cursor:not-allowed;
+}
+
+/* Mobile */
+@media (max-width: 900px){
+  .tf-layout{ grid-template-columns: 1fr; }
+  .tf-info-panel{ display:none; }
+  .tf-form-panel{ padding: 18px; }
+  .tf-card{ padding: 34px 22px; border-radius: 16px; }
+  .tf-card::before{ border-radius: 16px; }
+}/* =========================
+   TwoFactorSetup extras (reuses same visual language)
+========================= */
+
+.tf-pill{
+  margin: 12px auto 14px;
+  width: fit-content;
+  display:inline-flex;
+  align-items:center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(17,24,39,0.10);
+  background: rgba(255,255,255,0.85);
+  color: rgba(17,24,39,0.78);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.tf-pill-dot{
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #f59e0b;
+  box-shadow: 0 0 0 4px rgba(245,158,11,0.15);
+}
+
+.tf-pill.is-ok .tf-pill-dot{
+  background: #10b981;
+  box-shadow: 0 0 0 4px rgba(16,185,129,0.14);
+}
+
+/* “What to do” steps card */
+.tf-steps{
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(17,24,39,0.08);
+  background: rgba(17,24,39,0.03);
+  color: rgba(15,23,42,0.92);
+}
+
+.tf-steps-title{
+  font-weight: 950;
+  margin-bottom: 8px;
+}
+
+.tf-steps-list{
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(51,65,85,0.95);
+}
+
+/* Resend row */
+.tf-resend-row{
+  margin-top: 14px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.tf-resend-text{
+  font-size: 13px;
+  color: rgba(100,116,139,0.95);
+}
+.tf-resend-sub{
+  margin-top: 2px;
+  font-size: 12px;
+  color: rgba(148,163,184,0.95);
+}
+
+/* Secondary (ghost) buttons for setup page */
+.tf-ghost{
+  border: 1px solid rgba(17,24,39,0.12);
+  background: rgba(255,255,255,0.86);
+  color: rgba(17,24,39,0.90);
+  font-weight: 950;
+  padding: 10px 12px;
+  border-radius: 14px;
+  cursor: pointer;
+  display:inline-flex;
+  align-items:center;
+  gap: 8px;
+  transition: transform .08s ease, background .18s ease, box-shadow .18s ease;
+}
+.tf-ghost:hover{
+  transform: translateY(-1px);
+  background: rgba(17,24,39,0.04);
+  box-shadow: 0 14px 26px rgba(2,6,23,0.08);
+}
+.tf-ghost:disabled{
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Setup success box */
+.tf-success{
+  margin-top: 12px;
+  margin-bottom: 10px;
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  border: 1px solid rgba(16,185,129,0.24);
+  color: #065f46;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+/* Setup warning box */
+.tf-warn{
+  margin-top: 12px;
+  background: rgba(255,255,255,0.92);
+  border: 1px solid rgba(251,146,60,0.28);
+  color: #7c2d12;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* Form label */
+.tf-label{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  font-size: 13px;
+  font-weight: 950;
+  color: rgba(15,23,42,0.92);
+  margin: 14px 0 8px;
+}
+.tf-label-hint{
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(148,163,184,0.95);
+}
+
+/* Bottom action row */
+.tf-actions{
+  margin-top: 14px;
+  display:flex;
+  gap: 10px;
+  justify-content:center;
+  flex-wrap: wrap;
 }
