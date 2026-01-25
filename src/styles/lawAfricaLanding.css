@@ -677,4 +677,108 @@
   .la1-modal-grid{ grid-template-columns: 1fr; }
   .la1-file{ flex-direction: column; }
   .la1-file-btn{ width: 100%; }
+}/* =========================
+   ✅ Spacing polish (less crowded)
+========================= */
+.la1-left{
+  gap: 14px; /* was tighter; gives breathing room */
+}
+
+/* Keep CTA row clean */
+.la1-actions{
+  margin-top: 8px; /* slightly more separation from lead */
+  gap: 12px;
+}
+
+/* ✅ Tertiary row (Publish / Institution) */
+.la1-tertiary{
+  margin-top: 2px;
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: rgba(17,24,39,0.62);
+}
+
+.la1-tertiary-link{
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font-weight: 950;
+  font-size: 13px;
+  color: rgba(17,24,39,0.78);
+  text-decoration: underline;
+  text-decoration-color: rgba(14,165,165,0.45);
+}
+
+.la1-tertiary-link:hover{
+  color: rgba(17,24,39,0.92);
+  text-decoration-color: rgba(14,165,165,0.70);
+}
+
+.la1-tertiary-sep{
+  opacity: 0.7;
+}
+
+/* ✅ Collapsible section */
+.la1-more{
+  margin-top: 6px;
+}
+
+.la1-more-toggle{
+  width: fit-content;
+  display:inline-flex;
+  align-items:center;
+  gap: 8px;
+
+  border: 1px solid rgba(17,24,39,0.10);
+  background: rgba(255,255,255,0.75);
+  border-radius: 999px;
+
+  padding: 10px 12px;
+  cursor:pointer;
+
+  font-weight: 950;
+  font-size: 13px;
+  color: rgba(17,24,39,0.82);
+
+  box-shadow: 0 10px 22px rgba(2,6,23,0.06);
+}
+
+.la1-more-toggle:hover{
+  background: rgba(255,255,255,0.90);
+}
+
+.la1-more-chevron{
+  opacity: 0.75;
+  font-weight: 900;
+}
+
+.la1-more-panel{
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+
+  padding: 12px;
+  border-radius: 16px;
+
+  background: rgba(255,255,255,0.75);
+  border: 1px solid rgba(17,24,39,0.10);
+  box-shadow: 0 14px 30px rgba(2,6,23,0.08);
+}
+
+/* Values chips now inside panel: tighten slightly */
+.la1-values-inpanel{
+  margin-top: 6px;
+}
+
+/* ✅ Extra breathing room between major blocks */
+.la1-stats{
+  margin-top: 6px;
+}
+
+/* Mobile: keep tertiary links readable */
+@media (max-width: 720px){
+  .la1-tertiary{ gap: 8px; }
 }

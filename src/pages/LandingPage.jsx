@@ -52,25 +52,6 @@ function IcPhone(props) {
   );
 }
 
-function IcMap(props) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <path
-        d="M9 18l-6 2V6l6-2 6 2 6-2v14l-6 2-6-2z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M9 4v14M15 6v14"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 function IcPaperclip(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
@@ -88,20 +69,18 @@ function IcPaperclip(props) {
 function IcX(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <path
-        d="M6 6l12 12M18 6L6 18"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
+      <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
 
 export default function LandingPage() {
   const year = useMemo(() => new Date().getFullYear(), []);
-
   const [publishOpen, setPublishOpen] = useState(false);
+
+  // ✅ NEW: collapsed mission/vision/values
+  const [aboutOpen, setAboutOpen] = useState(false);
+
   const [topic, setTopic] = useState("Publish with us");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -138,9 +117,7 @@ export default function LandingPage() {
       file?.name ? "Note: Please attach your manuscript in your email client before sending." : "",
     ].filter(Boolean);
 
-    return `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(
-      bodyLines.join("\n")
-    )}`;
+    return `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyLines.join("\n"))}`;
   }, [topic, name, email, phone, message, file]);
 
   const canSend = Boolean(email.trim()) && Boolean(message.trim());
@@ -196,7 +173,7 @@ export default function LandingPage() {
                 publish Statutes, Law Reports, Commentaries and Journals in print and digital formats.
               </p>
 
-              {/* ✅ ALL 3 BUTTONS SAME ROW */}
+              {/* ✅ CTAs: 2 primary actions only (Publish is now tertiary link below) */}
               <div className="la1-actions">
                 <Link className="la1-btn la1-btn-primary la1-btn-lg" to="/register">
                   Get started free
@@ -205,13 +182,22 @@ export default function LandingPage() {
                 <Link className="la1-btn la1-btn-ghost la1-btn-lg" to="/login">
                   Sign in
                 </Link>
+              </div>
 
+              {/* ✅ Tertiary link (less visual weight) */}
+              <div className="la1-tertiary">
+                <button type="button" className="la1-tertiary-link" onClick={() => openPublishModal("Publish with us")}>
+                  Publish with us <span aria-hidden="true">→</span>
+                </button>
+                <span className="la1-tertiary-sep" aria-hidden="true">
+                  •
+                </span>
                 <button
                   type="button"
-                  className="la1-btn la1-btn-ghost la1-btn-lg"
-                  onClick={() => openPublishModal("Publish with us")}
+                  className="la1-tertiary-link"
+                  onClick={() => openPublishModal("Institution subscription")}
                 >
-                  Publish with us
+                  Institution subscription <span aria-hidden="true">→</span>
                 </button>
               </div>
 
@@ -230,25 +216,42 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              <div className="la1-minirow">
-                <div className="la1-mini">
-                  <div className="la1-mini-title">Mission</div>
-                  <div className="la1-mini-text">To be the principal legal information provider in Africa.</div>
-                </div>
+              {/* ✅ Collapsible Mission / Vision / Values */}
+              <div className="la1-more">
+                <button
+                  type="button"
+                  className="la1-more-toggle"
+                  onClick={() => setAboutOpen((v) => !v)}
+                  aria-expanded={aboutOpen}
+                >
+                  Our mission &amp; values <span className="la1-more-chevron" aria-hidden="true">{aboutOpen ? "▾" : "▸"}</span>
+                </button>
 
-                <div className="la1-mini">
-                  <div className="la1-mini-title">Vision</div>
-                  <div className="la1-mini-text">
-                    To uplift legal research standards through up-to-date, relevant decision support information.
+                {aboutOpen && (
+                  <div className="la1-more-panel">
+                    <div className="la1-minirow">
+                      <div className="la1-mini">
+                        <div className="la1-mini-title">Mission</div>
+                        <div className="la1-mini-text">To be the principal legal information provider in Africa.</div>
+                      </div>
+
+                      <div className="la1-mini">
+                        <div className="la1-mini-title">Vision</div>
+                        <div className="la1-mini-text">
+                          To uplift legal research standards through up-to-date, relevant decision support information.
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ✅ Values chips moved INSIDE collapse (no longer always visible) */}
+                    <div className="la1-values la1-values-inpanel">
+                      <span className="la1-chip">Passion for Excellence</span>
+                      <span className="la1-chip">Customer Satisfaction</span>
+                      <span className="la1-chip">Respect &amp; Integrity</span>
+                      <span className="la1-chip">Teamwork</span>
+                    </div>
                   </div>
-                </div>
-              </div>
-
-              <div className="la1-values">
-                <span className="la1-chip">Passion for Excellence</span>
-                <span className="la1-chip">Customer Satisfaction</span>
-                <span className="la1-chip">Respect &amp; Integrity</span>
-                <span className="la1-chip">Teamwork</span>
+                )}
               </div>
             </section>
 
@@ -273,9 +276,7 @@ export default function LandingPage() {
                   </div>
                   <div>
                     <div className="la1-service-name">Law Reports</div>
-                    <div className="la1-service-desc">
-                      Reliable reporting for research and precedent-based work.
-                    </div>
+                    <div className="la1-service-desc">Reliable reporting for research and precedent-based work.</div>
                   </div>
                 </div>
 
@@ -311,9 +312,7 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              <div className="la1-note">
-                Major assignments for governments, parastatals, banks, universities and NGOs.
-              </div>
+              <div className="la1-note">Major assignments for governments, parastatals, banks, universities and NGOs.</div>
             </aside>
           </div>
         </div>
@@ -336,26 +335,26 @@ export default function LandingPage() {
                   </span>
                 </div>
 
-                    <a
-                    className="la1-foot-link"
-                    href="https://maps.app.goo.gl/f8M2336mrWCQ59wU8"
-                    target="_blank"
-                    rel="noreferrer"
-                    >
-                    <svg className="la1-ic" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path
-                        d="M12 21s7-5.2 7-11.2A7 7 0 1 0 5 9.8C5 15.8 12 21 12 21Z"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        />
-                        <path
-                        d="M12 12.2a2.4 2.4 0 1 0 0-4.8 2.4 2.4 0 0 0 0 4.8Z"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        />
-                    </svg>
-                    Find us here (Google Maps)
-                    </a>
+                <a
+                  className="la1-foot-link"
+                  href="https://maps.app.goo.gl/f8M2336mrWCQ59wU8"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <svg className="la1-ic" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M12 21s7-5.2 7-11.2A7 7 0 1 0 5 9.8C5 15.8 12 21 12 21Z"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    />
+                    <path
+                      d="M12 12.2a2.4 2.4 0 1 0 0-4.8 2.4 2.4 0 0 0 0 4.8Z"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    />
+                  </svg>
+                  Find us here (Google Maps)
+                </a>
               </div>
 
               <div className="la1-foot-block">
@@ -461,7 +460,8 @@ export default function LandingPage() {
                   <div className="la1-file-meta">
                     <div className="la1-file-name">{file ? file.name : "No file selected"}</div>
                     <div className="la1-file-hint">
-                      We’ll include the filename in the email. Please attach the file in your email client before sending.
+                      We’ll include the filename in the email. Please attach the file in your email client before
+                      sending.
                     </div>
                   </div>
 
@@ -502,7 +502,8 @@ export default function LandingPage() {
 
             {!canSend && (
               <div className="la1-modal-hint">
-                Please enter your <span className="la1-modal-key">email</span> and a <span className="la1-modal-key">message</span>.
+                Please enter your <span className="la1-modal-key">email</span> and a{" "}
+                <span className="la1-modal-key">message</span>.
               </div>
             )}
           </div>
