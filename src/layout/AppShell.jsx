@@ -101,6 +101,10 @@ export default function AppShell() {
               Law Reports
             </NavLink>
 
+            <NavLink to="/dashboard/ai-test" className="nav-link nav-child">
+              AI Summary Test
+            </NavLink>
+
             <NavLink to="/dashboard/security" className="nav-link">
               Security
             </NavLink>
