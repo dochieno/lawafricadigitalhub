@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
-import api from "../api/client"; // ✅ your existing axios client
-
+import api from "../api/client"; // your existing axios client
 
 function getApiErrorMessage(err, fallback = "Request failed.") {
   const data = err?.response?.data;
@@ -22,6 +21,17 @@ function getApiErrorMessage(err, fallback = "Request failed.") {
   return fallback;
 }
 
+function fmtDate(v) {
+  if (!v) return "—";
+  try {
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return String(v);
+    return d.toLocaleString();
+  } catch {
+    return String(v);
+  }
+}
+
 export default function AiSummaryTest() {
   const [lawReportId, setLawReportId] = useState("");
   const [type, setType] = useState("basic");
@@ -31,7 +41,8 @@ export default function AiSummaryTest() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
 
-  const canRun = useMemo(() => Number.isFinite(Number(lawReportId)) && Number(lawReportId) > 0, [lawReportId]);
+  const numericId = useMemo(() => Number(lawReportId), [lawReportId]);
+  const canRun = useMemo(() => Number.isFinite(numericId) && numericId > 0, [numericId]);
 
   async function generate() {
     if (!canRun) {
@@ -44,7 +55,7 @@ export default function AiSummaryTest() {
     setResult(null);
 
     try {
-      const res = await api.post(`/ai/law-reports/${Number(lawReportId)}/summary`, {
+      const res = await api.post(`/ai/law-reports/${numericId}/summary`, {
         type,
         forceRegenerate,
       });
@@ -68,7 +79,7 @@ export default function AiSummaryTest() {
     setResult(null);
 
     try {
-      const res = await api.get(`/ai/law-reports/${Number(lawReportId)}/summary`, {
+      const res = await api.get(`/ai/law-reports/${numericId}/summary`, {
         params: { type },
       });
 
@@ -80,11 +91,27 @@ export default function AiSummaryTest() {
     }
   }
 
+  const view = useMemo(() => {
+    if (!result) return null;
+
+    // Backend returns:
+    // POST: { lawReportId, type, summary, cached }
+    // GET:  { lawReportId, type, summary, createdAt, updatedAt }
+    return {
+      lawReportId: result.lawReportId ?? numericId,
+      type: result.type ?? type,
+      summary: result.summary ?? "",
+      cached: typeof result.cached === "boolean" ? result.cached : null,
+      createdAt: result.createdAt ?? null,
+      updatedAt: result.updatedAt ?? null,
+    };
+  }, [result, numericId, type]);
+
   return (
     <div style={{ maxWidth: 980, margin: "0 auto", padding: 18 }}>
       <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 6 }}>AI Summary Test</h2>
       <p style={{ opacity: 0.8, marginTop: 0 }}>
-        This page calls <code>/api/ai/law-reports/&#123;id&#125;/summary</code> and prints the response.
+        Calls <code>/api/ai/law-reports/&#123;id&#125;/summary</code> (GET cache / POST generate).
       </p>
 
       <div
@@ -113,6 +140,9 @@ export default function AiSummaryTest() {
               color: "inherit",
             }}
           />
+          <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
+            Tip: paste a real LawReportId from your DB (LawReports table).
+          </div>
         </div>
 
         <div>
@@ -143,7 +173,7 @@ export default function AiSummaryTest() {
           </label>
         </div>
 
-        <div style={{ display: "flex", gap: 10, gridColumn: "1 / -1" }}>
+        <div style={{ display: "flex", gap: 10, gridColumn: "1 / -1", flexWrap: "wrap" }}>
           <button
             onClick={generate}
             disabled={loading}
@@ -157,7 +187,7 @@ export default function AiSummaryTest() {
               fontWeight: 800,
             }}
           >
-            {loading ? "Working..." : "Generate summary"}
+            {loading ? "Working..." : "Generate summary (POST)"}
           </button>
 
           <button
@@ -173,7 +203,7 @@ export default function AiSummaryTest() {
               fontWeight: 800,
             }}
           >
-            Fetch cached
+            Fetch cached (GET)
           </button>
         </div>
       </div>
@@ -187,13 +217,14 @@ export default function AiSummaryTest() {
             border: "1px solid rgba(255,80,80,0.35)",
             background: "rgba(255,80,80,0.08)",
             fontWeight: 700,
+            whiteSpace: "pre-wrap",
           }}
         >
           {error}
         </div>
       ) : null}
 
-      {result ? (
+      {view ? (
         <div
           style={{
             marginTop: 14,
@@ -204,25 +235,33 @@ export default function AiSummaryTest() {
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-            <div style={{ fontSize: 13, opacity: 0.8 }}>
+            <div style={{ fontSize: 13, opacity: 0.9, display: "grid", gap: 4 }}>
               <div>
-                <b>LawReport:</b> {result.lawReportId}
+                <b>LawReport:</b> {view.lawReportId}
               </div>
               <div>
-                <b>Type:</b> {result.type}
+                <b>Type:</b> {view.type}
               </div>
-              {"cached" in result ? (
-                <div>
-                  <b>Cached:</b> {String(result.cached)}
-                </div>
-              ) : null}
+              <div>
+                <b>Cached:</b>{" "}
+                {view.cached === null ? "—" : view.cached ? "Yes (served from DB)" : "No (generated now)"}
+              </div>
+            </div>
+
+            <div style={{ fontSize: 12, opacity: 0.75, textAlign: "right" }}>
+              <div>
+                <b>Created:</b> {fmtDate(view.createdAt)}
+              </div>
+              <div>
+                <b>Updated:</b> {fmtDate(view.updatedAt)}
+              </div>
             </div>
           </div>
 
           <hr style={{ border: 0, borderTop: "1px solid rgba(255,255,255,0.10)", margin: "12px 0" }} />
 
           <pre style={{ whiteSpace: "pre-wrap", margin: 0, fontSize: 14, lineHeight: 1.5 }}>
-            {result.summary}
+            {view.summary || "— (empty summary) —"}
           </pre>
         </div>
       ) : null}
