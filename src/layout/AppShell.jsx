@@ -1,14 +1,13 @@
 // src/layout/AppShell.jsx
-import { Outlet, NavLink, useLocation } from "react-router-dom";
+import { Outlet, NavLink, useLocation, Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import UserProfileMenu from "../components/UserProfileMenu";
 import {
   canSeeApprovals,
   isAdminRole,
-  isGlobalAdmin,
   isInstitutionAdminWithInstitution,
 } from "../auth/auth";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import "../styles/appshell.css";
 
 function Chevron({ open }) {
@@ -31,27 +30,20 @@ export default function AppShell() {
     [location.pathname]
   );
 
-  // ✅ NEW: Finance section (admin-only)
   const isInFinance = useMemo(
     () => location.pathname.startsWith("/dashboard/admin/finance"),
     [location.pathname]
   );
 
+  // Manual toggles (only matter when you're NOT currently inside that section)
   const [approvalsOpen, setApprovalsOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [financeOpen, setFinanceOpen] = useState(false);
 
-  useEffect(() => {
-    if (isInApprovals) setApprovalsOpen(true);
-  }, [isInApprovals]);
-
-  useEffect(() => {
-    if (isInAdmin) setAdminOpen(true);
-  }, [isInAdmin]);
-
-  useEffect(() => {
-    if (isInFinance) setFinanceOpen(true);
-  }, [isInFinance]);
+  // ✅ Route is the source of truth for auto-open (no effects, no warnings)
+  const approvalsOpenFinal = isInApprovals ? true : approvalsOpen;
+  const adminOpenFinal = isInAdmin ? true : adminOpen;
+  const financeOpenFinal = isInFinance ? true : financeOpen;
 
   function confirmLogout() {
     setShowLogoutConfirm(true);
@@ -67,19 +59,29 @@ export default function AppShell() {
   }
 
   const meIsAdminRole = isAdminRole();
-  const meIsGlobal = isGlobalAdmin();
   const meIsInstitutionAdmin = isInstitutionAdminWithInstitution();
 
   return (
     <div className="app-container">
       {/* ================= SIDEBAR ================= */}
-      <aside className="sidebar">
+      <aside className="sidebar la-sidebar">
         <div className="sidebar-top">
-          <h2 className="logo">
-            Law<span>A</span>frica
-          </h2>
+          {/* ✅ Brand block */}
+          <Link to="/dashboard" className="la-sidebar-brand" aria-label="LawAfrica Dashboard">
+            <img
+              src="/logo.png"
+              alt="LawAfrica"
+              className="la-sidebar-logo"
+              loading="eager"
+              decoding="async"
+              draggable="false"
+            />
+            <div className="la-sidebar-wordmark">
+              Law<span className="la-a">A</span>frica
+            </div>
+          </Link>
 
-          <nav className="nav">
+          <nav className="nav la-nav">
             <NavLink to="/dashboard" end className="nav-link">
               Home
             </NavLink>
@@ -107,30 +109,25 @@ export default function AppShell() {
                   type="button"
                   className={`nav-link nav-group-toggle ${isInApprovals ? "active" : ""}`}
                   onClick={() => setApprovalsOpen((v) => !v)}
-                  aria-expanded={approvalsOpen}
+                  aria-expanded={approvalsOpenFinal}
                   aria-controls="nav-approvals"
                 >
-                  <Chevron open={approvalsOpen} />
+                  <Chevron open={approvalsOpenFinal} />
                   <span>Approvals</span>
                 </button>
 
-                {approvalsOpen && (
+                {approvalsOpenFinal && (
                   <div id="nav-approvals" className="nav-group">
                     <NavLink to="/dashboard/approvals" className="nav-link nav-child">
                       Dashboard
                     </NavLink>
 
-                    {/* ✅ Institution Admin: manage members (no new nav group) */}
                     {meIsInstitutionAdmin && (
-                      <NavLink
-                        to="/dashboard/approvals/members"
-                        className="nav-link nav-child"
-                      >
+                      <NavLink to="/dashboard/approvals/members" className="nav-link nav-child">
                         Members
                       </NavLink>
                     )}
 
-                    {/* Subscription Requests should appear for Admin role users */}
                     {meIsAdminRole && (
                       <NavLink
                         to="/dashboard/approvals/subscription-requests"
@@ -151,26 +148,20 @@ export default function AppShell() {
                   type="button"
                   className={`nav-link nav-group-toggle ${isInFinance ? "active" : ""}`}
                   onClick={() => setFinanceOpen((v) => !v)}
-                  aria-expanded={financeOpen}
+                  aria-expanded={financeOpenFinal}
                   aria-controls="nav-finance"
                 >
-                  <Chevron open={financeOpen} />
+                  <Chevron open={financeOpenFinal} />
                   <span>Finance</span>
                 </button>
 
-                {financeOpen && (
+                {financeOpenFinal && (
                   <div id="nav-finance" className="nav-group">
-                    <NavLink
-                      to="/dashboard/admin/finance/invoices"
-                      className="nav-link nav-child"
-                    >
+                    <NavLink to="/dashboard/admin/finance/invoices" className="nav-link nav-child">
                       Invoices
                     </NavLink>
 
-                    <NavLink
-                      to="/dashboard/admin/finance/payments"
-                      className="nav-link nav-child"
-                    >
+                    <NavLink to="/dashboard/admin/finance/payments" className="nav-link nav-child">
                       Payments
                     </NavLink>
 
@@ -180,12 +171,10 @@ export default function AppShell() {
                     >
                       Invoice Settings
                     </NavLink>
-                      <NavLink
-                        to="/dashboard/admin/finance/vat-rates"
-                        className="nav-link nav-child"
-                      >
-                        VAT Setup
-                      </NavLink>                    
+
+                    <NavLink to="/dashboard/admin/finance/vat-rates" className="nav-link nav-child">
+                      VAT Setup
+                    </NavLink>
                   </div>
                 )}
               </div>
@@ -198,47 +187,32 @@ export default function AppShell() {
                   type="button"
                   className={`nav-link nav-group-toggle ${isInAdmin ? "active" : ""}`}
                   onClick={() => setAdminOpen((v) => !v)}
-                  aria-expanded={adminOpen}
+                  aria-expanded={adminOpenFinal}
                   aria-controls="nav-admin"
                 >
-                  <Chevron open={adminOpen} />
+                  <Chevron open={adminOpenFinal} />
                   <span>Admin</span>
                 </button>
 
-                {adminOpen && (
+                {adminOpenFinal && (
                   <div id="nav-admin" className="nav-group">
-                    <NavLink
-                      to="/dashboard/admin/institutions"
-                      className="nav-link nav-child"
-                    >
+                    <NavLink to="/dashboard/admin/institutions" className="nav-link nav-child">
                       Institutions
                     </NavLink>
 
-                    <NavLink
-                      to="/dashboard/admin/content-products"
-                      className="nav-link nav-child"
-                    >
+                    <NavLink to="/dashboard/admin/content-products" className="nav-link nav-child">
                       Products
                     </NavLink>
 
-                    <NavLink
-                      to="/dashboard/admin/documents"
-                      className="nav-link nav-child"
-                    >
+                    <NavLink to="/dashboard/admin/documents" className="nav-link nav-child">
                       Books
                     </NavLink>
 
-                    <NavLink
-                      to="/dashboard/admin/llr-services"
-                      className="nav-link nav-child"
-                    >
+                    <NavLink to="/dashboard/admin/llr-services" className="nav-link nav-child">
                       LLR Services
                     </NavLink>
 
-                    <NavLink
-                      to="/dashboard/admin/llr-services/import"
-                      className="nav-link nav-child"
-                    >
+                    <NavLink to="/dashboard/admin/llr-services/import" className="nav-link nav-child">
                       Import Cases
                     </NavLink>
 

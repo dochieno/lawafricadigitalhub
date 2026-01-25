@@ -51,3 +51,103 @@
     --la-shadow-soft: 0 10px 22px rgba(0,0,0,0.45);
   }
 }
+/* =========================
+   LawAfrica Sidebar Branding
+========================= */
+
+:root {
+  --la-red: #a1181e;
+  --la-wine: #702840;
+  --la-ink: #0b1220;
+  --la-slate: #0f1b2d;
+  --la-slate-2: #0b1626;
+  --la-teal: #0ea5a5;
+
+  --la-grad: linear-gradient(135deg, var(--la-red) 0%, var(--la-wine) 45%, var(--la-teal) 100%);
+}
+
+.sidebar.la-sidebar {
+  background: radial-gradient(1200px 700px at -20% -10%, rgba(161, 24, 30, 0.22), transparent 55%),
+    radial-gradient(900px 600px at 120% 10%, rgba(14, 165, 165, 0.12), transparent 55%),
+    linear-gradient(180deg, var(--la-slate) 0%, var(--la-slate-2) 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.la-sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 16px 14px;
+  text-decoration: none;
+  user-select: none;
+}
+
+.la-sidebar-logo {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  image-rendering: -webkit-optimize-contrast;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.25));
+}
+
+.la-sidebar-wordmark {
+  font-weight: 900;
+  letter-spacing: 0.2px;
+  line-height: 1;
+  font-size: 18px;
+  color: #fff;
+}
+
+.la-sidebar-wordmark .la-a {
+  background: var(--la-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  padding: 0 1px;
+  text-shadow: none;
+}
+
+.nav.la-nav {
+  padding-top: 6px;
+}
+
+/* Improve nav link feel */
+.nav-link {
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 6px 10px;
+  color: rgba(255, 255, 255, 0.86);
+  transition: transform 0.12s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.nav-link:hover {
+  background: rgba(255, 255, 255, 0.06);
+  transform: translateY(-1px);
+}
+
+.nav-link.active {
+  background: linear-gradient(135deg, rgba(161, 24, 30, 0.95) 0%, rgba(112, 40, 64, 0.92) 55%, rgba(14, 165, 165, 0.35) 120%);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.18);
+  color: #fff;
+}
+
+.nav-group-toggle.active {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.nav-child {
+  margin-left: 20px;
+  margin-right: 10px;
+  border-radius: 10px;
+}
+
+/* Responsive: slightly tighter brand on narrow sidebars */
+@media (max-width: 420px) {
+  .la-sidebar-wordmark {
+    font-size: 16px;
+  }
+  .la-sidebar-logo {
+    width: 30px;
+    height: 30px;
+  }
+}
