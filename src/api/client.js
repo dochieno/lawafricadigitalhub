@@ -20,13 +20,6 @@ const api = axios.create({
 // Prevent multiple redirect loops
 let hasRedirectedOn401 = false;
 
-/**
- * ✅ Only during payment return / payment confirmation should we avoid force-logout redirects.
- * Includes:
- * - /payments/paystack/return...
- * - /dashboard/documents/:id?paid=1&provider=paystack...
- * - /dashboard/documents/:id/read?paid=1&provider=paystack...
- */
 function isInPaystackReturnOrPaidContext() {
   try {
     const p = window.location.pathname || "";

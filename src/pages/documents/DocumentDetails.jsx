@@ -50,7 +50,9 @@ function savePaystackCtx(ref, ctx) {
   try {
     if (!ref) return;
     localStorage.setItem(paystackCtxKey(ref), JSON.stringify(ctx));
-  } catch {}
+  } catch (e) {
+if (import.meta?.env?.DEV) console.warn("clearCtx failed:", e);
+}
 }
 
 function toBool(v) {
@@ -311,8 +313,7 @@ export default function DocumentDetails() {
     load();
     return () => {
       alive = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    };    
   }, [id]);
 
   // Paystack return confirmation

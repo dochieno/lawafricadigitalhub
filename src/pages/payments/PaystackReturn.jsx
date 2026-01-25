@@ -44,6 +44,7 @@ export default function PaystackReturn() {
   const query = useQuery();
   const { state } = useLocation();
 
+  // ✅ Paystack returns `reference` AND sometimes `trxref`
   const reference = (query.get("reference") || query.get("trxref") || "").trim();
   const fallbackDocId = state?.docId ? Number(state.docId) : null;
 
@@ -69,9 +70,10 @@ export default function PaystackReturn() {
     try {
       if (!ref) return;
       localStorage.removeItem(ctxKey(ref));
-    } catch {}
+    } catch (e) {
+      if (import.meta?.env?.DEV) console.warn("clearCtx failed:", e);
+    }
   }
-
   // ✅ Restore token snapshot if it was lost on return
   function restoreTokenIfMissing(ref) {
     try {
@@ -131,7 +133,7 @@ export default function PaystackReturn() {
     if (ref) qs.set("reference", ref);
     if (intentId) qs.set("paymentIntentId", String(intentId));
 
-    // ✅ IMPORTANT: Details page will do the confirm modal + refresh access then open reader.
+    // ✅ Details page should show confirm modal + refresh access then open reader.
     nav(`/dashboard/documents/${docId}?${qs.toString()}`, { replace: true });
   }
 
@@ -184,17 +186,13 @@ export default function PaystackReturn() {
       const ctx = readCtx(reference);
 
       // 2) Pick docId from best sources (intent/meta > ctx > location.state)
-      const docId =
-        meta?.legalDocumentId ??
-        ctx?.docId ??
-        fallbackDocId ??
-        null;
+      const docId = meta?.legalDocumentId ?? ctx?.docId ?? fallbackDocId ?? null;
 
       setPhase("SUCCESS");
       setMessage("Payment received ✅ Redirecting…");
       await sleep(350);
 
-      // Keep ctx around until after redirect if you want, but safe to clear now
+      // ✅ Safe to clear now
       clearCtx(reference);
 
       if (docId) {
@@ -239,7 +237,6 @@ export default function PaystackReturn() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            {/* ✅ Use shared spinner class if you added it in CSS */}
             <div
               style={{
                 width: 22,
