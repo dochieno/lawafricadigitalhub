@@ -5,14 +5,6 @@ import "../styles/userProfileMenu.css";
 
 const API_ORIGIN = "https://lawafricaapi.onrender.com";
 
-/**
- * Converts whatever backend returns into a browser-loadable absolute URL.
- * Supports:
- *  - "/storage/ProfileImages/x.jpg" ✅ canonical
- *  - "Storage/ProfileImages/x.jpg" ✅ legacy
- *  - "user_1_x.jpg" ✅ legacy
- *  - wrong slashes "\" ✅ legacy
- */
 function resolveAvatarUrl(user) {
   const raw =
     user?.profileImageUrl ||

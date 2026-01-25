@@ -12,13 +12,64 @@
 }
 
 .dashboard-header-left {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--la-dark);
+  display: flex;
+  align-items: center;
+  min-width: 180px; /* keeps space even when right side grows */
 }
 
 .dashboard-header-right {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+/* =========================
+   LawAfrica brand (logo)
+========================= */
+.la-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  border-radius: 12px;
+  padding: 6px 8px;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.la-brand:hover {
+  background: rgba(161, 24, 30, 0.06); /* subtle LawAfrica red tint */
+}
+
+.la-brand:active {
+  transform: translateY(1px);
+}
+
+.la-brand-logo {
+  height: 28px;         /* crisp + modern */
+  width: auto;
+  max-width: 220px;     /* prevent overflow */
+  display: block;
+  object-fit: contain;
+  image-rendering: -webkit-optimize-contrast; /* helps PNG look sharper */
+  transform: translateZ(0); /* reduces blur on some GPUs */
+}
+
+/* Responsive tweaks */
+@media (max-width: 640px) {
+  .dashboard-header {
+    padding: 0 14px;
+  }
+
+  .dashboard-header-left {
+    min-width: 0;
+  }
+
+  .la-brand {
+    padding: 6px;
+  }
+
+  .la-brand-logo {
+    height: 24px;
+    max-width: 160px;
+  }
 }

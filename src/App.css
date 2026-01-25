@@ -1,23 +1,56 @@
+/* =========================
+   LawAfrica base branding
+========================= */
+:root {
+  --la-red: #a1181e;
+  --la-red-dark: #7f1d1d;
+  --la-red-soft: #c43c3c;
+  --la-charcoal: #1f2933;
+  --la-gray: #6b7280;
+
+  /* Premium gradient */
+  --la-gradient: linear-gradient(
+    135deg,
+    #7f1d1d 0%,
+    #a1181e 45%,
+    #c43c3c 100%
+  );
+}
+
+/* =========================
+   Root container
+========================= */
 #root {
   max-width: 1280px;
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
+
+  /* subtle premium background */
+  background:
+    radial-gradient(
+      1200px 400px at top center,
+      rgba(161, 24, 30, 0.06),
+      transparent 60%
+    );
 }
 
+/* =========================
+   Logo treatment
+========================= */
 .logo {
   height: 6em;
   padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+  will-change: transform, filter;
+  transition: transform 300ms ease, filter 300ms ease;
 }
 
+.logo:hover {
+  transform: translateY(-2px);
+  filter: drop-shadow(0 10px 24px rgba(161, 24, 30, 0.35));
+}
+
+/* Optional: rotating accent (kept subtle & premium) */
 @keyframes logo-spin {
   from {
     transform: rotate(0deg);
@@ -29,14 +62,41 @@
 
 @media (prefers-reduced-motion: no-preference) {
   a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
+    animation: logo-spin infinite 24s linear;
   }
 }
 
+/* =========================
+   Cards
+========================= */
 .card {
   padding: 2em;
+  border-radius: 18px;
+  background: linear-gradient(
+    180deg,
+    #ffffff,
+    #fafafa
+  );
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
+/* =========================
+   Supporting text
+========================= */
 .read-the-docs {
-  color: #888;
+  color: var(--la-gray);
+  font-size: 0.9rem;
+}
+
+/* =========================
+   Accent utility (optional)
+========================= */
+.la-gradient-text {
+  background: var(--la-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-weight: 800;
 }

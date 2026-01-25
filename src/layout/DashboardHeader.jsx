@@ -5,12 +5,21 @@ import "../styles/dashboardHeader.css";
 export default function DashboardHeader() {
   const { user, logout } = useAuth();
 
-  if (!user) return null; // safety
+  if (!user) return null;
 
   return (
     <header className="dashboard-header">
       <div className="dashboard-header-left">
-        {/* Reserved for breadcrumbs / page title later */}
+        <a href="/dashboard" className="la-brand" aria-label="LawAfrica Dashboard">
+          <img
+            src="/logo.png"
+            alt="LawAfrica"
+            className="la-brand-logo"
+            loading="eager"
+            decoding="async"
+            draggable="false"
+          />
+        </a>
       </div>
 
       <div className="dashboard-header-right">
