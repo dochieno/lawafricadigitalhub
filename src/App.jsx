@@ -49,7 +49,6 @@ import LawReports from "./pages/dashboard/LawReports";
 // =====================
 // ✅ FINANCE (Admin-only)
 // =====================
-// Invoices pages (you already created these)
 import AdminInvoices from "./pages/dashboard/admin/AdminInvoices";
 import AdminInvoiceDetail from "./pages/dashboard/admin/AdminInvoiceDetail";
 import AdminInvoiceSettings from "./pages/dashboard/admin/AdminInvoiceSettings";
@@ -57,6 +56,9 @@ import AdminPayments from "./pages/dashboard/admin/AdminPayments";
 
 // ✅ NEW: VAT Rates Admin
 import AdminVATRates from "./pages/dashboard/admin/AdminVatRates";
+
+// ✅ NEW: Landing Page
+import LandingPage from "./pages/LandingPage";
 
 export default function App() {
   return (
@@ -66,6 +68,7 @@ export default function App() {
           {/* ===================== */}
           {/* PUBLIC ROUTES */}
           {/* ===================== */}
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/register" element={<Register />} />
@@ -182,7 +185,6 @@ export default function App() {
           {/* ===================== */}
           {/* REDIRECTS */}
           {/* ===================== */}
-          <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </BrowserRouter>

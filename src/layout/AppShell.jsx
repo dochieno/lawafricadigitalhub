@@ -5,10 +5,13 @@ import UserProfileMenu from "../components/UserProfileMenu";
 import {
   canSeeApprovals,
   isAdminRole,
+
   isInstitutionAdminWithInstitution,
 } from "../auth/auth";
 import { useMemo, useState } from "react";
 import "../styles/appshell.css";
+import "../styles/lawAfricaLanding.css";
+import "../styles/lawAfricaBrand.css";
 
 function Chevron({ open }) {
   return <span className={`nav-chevron ${open ? "open" : ""}`}>▸</span>;
