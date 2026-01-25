@@ -8,15 +8,10 @@ import "./index.css";
 import "./styles/lawAfricaBrand.css";
 import "react-pdf/dist/esm/Page/TextLayer.css";
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
-
 const rootEl = document.getElementById("root");
-
 console.log("[LA DEBUG] main.jsx executing", location.href);
 console.log("[LA DEBUG] root element exists:", !!rootEl);
 
-// ------------------------------
-// ✅ Ignore common resource errors (like IMG 404) so debug overlay doesn’t treat them as runtime crashes
-// ------------------------------
 function isResourceLoadErrorEvent(e) {
   const t = e?.target;
   if (!t) return false;
@@ -31,7 +26,6 @@ function isResourceLoadErrorEvent(e) {
   return false;
 }
 
-// Capture phase to see errors early, but FILTER OUT resource load errors.
 window.addEventListener(
   "error",
   (e) => {
@@ -45,18 +39,12 @@ window.addEventListener("unhandledrejection", (e) => {
   console.log("[LA DEBUG] unhandledrejection:", e?.reason || e);
 });
 
-// ✅ Mount checkpoint
 console.log("[LA DEBUG] about to mount React");
 
-// StrictMode in dev only
 const Wrapper = import.meta.env.DEV ? React.StrictMode : React.Fragment;
 
 try {
   if (!rootEl) throw new Error("Root element #root not found.");
-
-  // ✅ Clear any stale debug overlay flag (if present)
-  window.__LA_APP_MOUNTED__ = false;
-  window.__LA_APP_MOUNTED_AT__ = null;
 
   ReactDOM.createRoot(rootEl).render(
     <Wrapper>
@@ -66,21 +54,9 @@ try {
     </Wrapper>
   );
 
-  // ✅ IMPORTANT:
-  // Mark mounted on next tick so any “root empty after 4s” overlay can reliably skip.
-  queueMicrotask(() => {
-    window.__LA_APP_MOUNTED__ = true;
-    window.__LA_APP_MOUNTED_AT__ = Date.now();
-    console.log("[LA DEBUG] React mounted flag set:", window.__LA_APP_MOUNTED_AT__);
-  });
-
   console.log("[LA DEBUG] ReactDOM.render() returned");
 } catch (e) {
   console.error("[LA DEBUG] FATAL mount error:", e);
-
-  // ✅ Ensure overlays can detect it as NOT mounted
-  window.__LA_APP_MOUNTED__ = false;
-  window.__LA_APP_MOUNTED_AT__ = null;
 
   if (rootEl) {
     rootEl.innerHTML = `
