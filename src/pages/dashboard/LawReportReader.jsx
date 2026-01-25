@@ -260,7 +260,6 @@ function buildToc(blocksWithIds) {
 function looksLikeHtml(s) {
   const t = String(s || "").trim();
   if (!t) return false;
-  // If it contains a tag-like pattern, treat as HTML
   return /<\/?[a-z][\s\S]*>/i.test(t);
 }
 
@@ -275,14 +274,12 @@ function sanitizeHtmlBasic(inputHtml) {
   if (!html.trim()) return "";
 
   if (typeof window === "undefined" || typeof DOMParser === "undefined") {
-    // If somehow rendered in non-browser context, fall back to plain text
     return html.replace(/<[^>]+>/g, "");
   }
 
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, "text/html");
 
-  // Remove dangerous tags
   const removeSelectors = ["script", "style", "iframe", "object", "embed"];
   removeSelectors.forEach((sel) => doc.querySelectorAll(sel).forEach((n) => n.remove()));
 
@@ -329,7 +326,6 @@ function sanitizeHtmlBasic(inputHtml) {
       continue;
     }
 
-    // strip on* handlers + risky attrs
     [...el.attributes].forEach((attr) => {
       const name = attr.name.toLowerCase();
       const value = String(attr.value || "");
@@ -339,26 +335,21 @@ function sanitizeHtmlBasic(inputHtml) {
         return;
       }
 
-      // Only allow href/target/rel on links; otherwise remove unknown attrs
       if (el.tagName === "A") {
         if (name === "href") {
-          // block javascript: urls
           if (/^\s*javascript:/i.test(value)) el.removeAttribute("href");
           return;
         }
         if (name === "target") return;
         if (name === "rel") return;
 
-        // remove everything else
         el.removeAttribute(attr.name);
         return;
       }
 
-      // keep nothing else (keeps output consistent + clean)
       el.removeAttribute(attr.name);
     });
 
-    // normalize links to safe behavior
     if (el.tagName === "A") {
       const href = el.getAttribute("href");
       if (href) {
@@ -368,7 +359,6 @@ function sanitizeHtmlBasic(inputHtml) {
     }
   }
 
-  // remove disallowed tags but keep their text content
   for (const el of toRemove) {
     const parent = el.parentNode;
     if (!parent) continue;
@@ -414,6 +404,174 @@ function buildHtmlTocAndInjectIds(html) {
   }
 
   return { html: doc.body.innerHTML || safe, toc };
+}
+
+// ----------------------
+// AI Panel (CSS-based, no inline styles)
+// ----------------------
+function getApiErrorMessage(err, fallback = "Request failed.") {
+  const data = err?.response?.data;
+
+  if (data && typeof data === "object") {
+    if (typeof data.message === "string") return data.message;
+    if (typeof data.error === "string") return data.error;
+
+    if (data.errors && typeof data.errors === "object") {
+      const firstKey = Object.keys(data.errors)[0];
+      const first = firstKey ? data.errors[firstKey]?.[0] : null;
+      if (first) return first;
+    }
+
+    if (typeof data.detail === "string") return data.detail;
+  }
+
+  if (typeof err?.message === "string") return err.message;
+  return fallback;
+}
+
+function formatDateMaybe(d) {
+  if (!d) return "—";
+  try {
+    const dt = new Date(d);
+    if (Number.isNaN(dt.getTime())) return String(d);
+    return dt.toLocaleString();
+  } catch {
+    return String(d);
+  }
+}
+
+function LawReportAiSummaryPanel({ lawReportId }) {
+  const [type, setType] = useState("basic"); // basic | extended
+  const [forceRegenerate, setForceRegenerate] = useState(false);
+
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+
+  const canRun = useMemo(
+    () => Number.isFinite(Number(lawReportId)) && Number(lawReportId) > 0,
+    [lawReportId]
+  );
+
+  async function fetchCached() {
+    if (!canRun) return;
+
+    setLoading(true);
+    setError("");
+    try {
+      const res = await api.get(`/ai/law-reports/${Number(lawReportId)}/summary`, {
+        params: { type },
+      });
+      setResult(res.data?.data ?? res.data);
+    } catch (err) {
+      setError(getApiErrorMessage(err, "No cached summary found yet."));
+      setResult(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function generate() {
+    if (!canRun) return;
+
+    setLoading(true);
+    setError("");
+    try {
+      const res = await api.post(`/ai/law-reports/${Number(lawReportId)}/summary`, {
+        type,
+        forceRegenerate,
+      });
+      setResult(res.data?.data ?? res.data);
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Failed to generate AI summary."));
+      setResult(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <section className="lrr-ai">
+      <div className="lrr-ai-top">
+        <div className="lrr-ai-titleRow">
+          <div className="lrr-ai-title">AI Summary</div>
+          <span className="lrr-ai-badge">AI generated</span>
+        </div>
+        <div className="lrr-ai-sub">
+          Generates (and caches) a summary for this report. Always verify important details against the full text.
+        </div>
+      </div>
+
+      <div className="lrr-ai-controls">
+        <div className="lrr-ai-leftControls">
+          <label className="lrr-ai-field">
+            <span className="lrr-ai-label">Summary type</span>
+            <select className="lrr-ai-select" value={type} onChange={(e) => setType(e.target.value)} disabled={loading}>
+              <option value="basic">basic</option>
+              <option value="extended">extended</option>
+            </select>
+          </label>
+
+          <label className="lrr-ai-check">
+            <input
+              className="lrr-ai-checkbox"
+              type="checkbox"
+              checked={forceRegenerate}
+              onChange={(e) => setForceRegenerate(e.target.checked)}
+              disabled={loading}
+            />
+            <span>Force regenerate</span>
+          </label>
+        </div>
+
+        <div className="lrr-ai-actions">
+          <button type="button" className="lrr-ai-btn lrr-ai-btnPrimary" onClick={fetchCached} disabled={loading || !canRun}>
+            {loading ? "Working…" : "Get cached"}
+          </button>
+
+          <button type="button" className="lrr-ai-btn lrr-ai-btnGhost" onClick={generate} disabled={loading || !canRun}>
+            {loading ? "Working…" : "Generate"}
+          </button>
+        </div>
+      </div>
+
+      {error ? <div className="lrr-ai-error">{error}</div> : null}
+
+      {result ? (
+        <div className="lrr-ai-result">
+          <div className="lrr-ai-meta">
+            <div className="lrr-ai-metaCol">
+              <div>
+                <b>Type:</b> {result.type ?? type}
+              </div>
+              {"cached" in result ? (
+                <div>
+                  <b>Cached:</b> {String(result.cached)}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="lrr-ai-metaCol right">
+              <div>
+                <b>Created:</b> {formatDateMaybe(result.createdAt)}
+              </div>
+              <div>
+                <b>Updated:</b> {formatDateMaybe(result.updatedAt)}
+              </div>
+            </div>
+          </div>
+
+          <div className="lrr-ai-body">
+            <pre className="lrr-ai-text">{result.summary || ""}</pre>
+          </div>
+        </div>
+      ) : (
+        <div className="lrr-ai-tip">
+          Tip: Click <b>Get cached</b> first. If none exists, click <b>Generate</b>.
+        </div>
+      )}
+    </section>
+  );
 }
 
 export default function LawReportReader() {
@@ -555,7 +713,6 @@ export default function LawReportReader() {
   }, [contentIsHtml, formattedText]);
 
   const toc = useMemo(() => {
-    // Prefer HTML TOC if present; else fallback to plaintext blocks
     if (contentIsHtml) return htmlPack.toc || [];
     return buildToc(blocks);
   }, [contentIsHtml, htmlPack.toc, blocks]);
@@ -585,7 +742,7 @@ export default function LawReportReader() {
         <div className="lrr-error">
           <div className="lrr-error-title">Report unavailable</div>
           <div className="lrr-error-msg">{error || "Not found."}</div>
-          <div style={{ marginTop: 12 }}>
+          <div className="lrr-actions">
             <button className="lrr-btn" onClick={() => navigate("/dashboard/law-reports")}>
               ← Back to Law Reports
             </button>
@@ -608,7 +765,7 @@ export default function LawReportReader() {
                 : "This is a premium report. Please subscribe or sign in with an eligible account to read it."}
           </div>
 
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
+          <div className="lrr-actions lrr-actionsRow">
             <button className="lrr-btn" onClick={() => navigate("/dashboard/law-reports")}>
               ← Back
             </button>
@@ -636,7 +793,7 @@ export default function LawReportReader() {
             ← Back
           </button>
 
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div className="lrr-header-actions">
             <button
               className="lrr-pill ghost"
               onClick={() => navigate(`/dashboard/documents/${report.legalDocumentId}`)}
@@ -694,6 +851,9 @@ export default function LawReportReader() {
 
       {/* Content */}
       <main className="lrr-main">
+        {/* AI Summary (inside reader, above TOC + content) */}
+        <LawReportAiSummaryPanel lawReportId={reportId} />
+
         {/* TOC */}
         {toc.length > 0 && (
           <section className="lrr-toc">
@@ -717,12 +877,12 @@ export default function LawReportReader() {
         {!textHasContent ? (
           <div className="lrr-empty">This report has no content yet.</div>
         ) : contentIsHtml ? (
-          // ✅ HTML mode: render CKEditor output properly (sanitized)
-          <article className="lrr-article lrr-html" dangerouslySetInnerHTML={{ __html: htmlPack.html }} />
+          <article className="lrr-article lrr-html">
+            <div className="lrr-html-body" dangerouslySetInnerHTML={{ __html: htmlPack.html }} />
+          </article>
         ) : blocks.length === 0 ? (
           <div className="lrr-empty">This report has no content yet.</div>
         ) : (
-          // ✅ Plain text mode: your existing heading/list rendering
           <article className="lrr-article">
             {blocks.map((b, idx) => {
               if (b.type === "heading") {

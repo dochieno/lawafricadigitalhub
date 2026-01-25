@@ -120,7 +120,6 @@ export default function App() {
               <Route path="law-reports/:id" element={<LawReportReader />} />
 
               {/* ✅ AI Test (protected, inside AppShell) */}
-              <Route path="ai-test" element={<AiSummaryTest />} />
 
               <Route path="security" element={<SecurityDashboard />} />
 
@@ -145,6 +144,7 @@ export default function App() {
               <Route path="admin/documents" element={<AdminDocuments />} />
               <Route path="admin/llr-services" element={<AdminLLRServices />} />
               <Route path="admin/llr-services/import" element={<AdminLLRImport />} />
+              <Route path="ai-test" element={<AiSummaryTest />} />
               <Route
                 path="admin/llr-services/:legalDocumentId/content"
                 element={<AdminReportContent />}
