@@ -368,6 +368,7 @@ export default function Login() {
       {/* RIGHT PANEL */}
       <div className="login-form-panel">
         <div className="login-card">
+          <div className="login-top-accent" />
           <h2>Sign in</h2>
           <p className="subtitle">Access trusted legal publications and resources.</p>
 

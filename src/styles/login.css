@@ -193,7 +193,28 @@
     0 8px 18px rgba(2,6,23,0.08);
   overflow: hidden;
 }
+/* 🔹 Top accent bar (matches "What you get" card style) */
+.login-card::marker { content: none; } /* no-op safety */
 
+.login-card .login-top-accent{
+  position:absolute;
+  top:0;
+  left:0;
+  right:0;
+  height:6px;
+  border-top-left-radius: 22px;
+  border-top-right-radius: 22px;
+
+  background: linear-gradient(
+    135deg,
+    var(--la-red) 0%,
+    var(--la-red2) 45%,
+    var(--la-teal) 100%
+  );
+
+  opacity: 0.95;
+  pointer-events:none;
+}
 /* ✅ Premium “under-glow / shadow band” (like your screenshot) */
 .login-card::after{
   content:"";
