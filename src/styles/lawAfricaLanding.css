@@ -6,8 +6,11 @@
 */
 
 .la1{
-  height:100vh;
-  overflow:hidden;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+
+  overflow: hidden; /* keep "no scroll" requirement */
   color: rgba(17,24,39,0.92);
   background: #070b14; /* behind header/footer */
 }
@@ -93,9 +96,11 @@
    Main (white-dominant)
 ========================= */
 .la1-main{
-  height: calc(100vh - 66px - 112px); /* footer is bigger now */
+  flex: 1 1 auto;     /* takes remaining space between header & footer */
+  height: auto;       /* ✅ remove fixed calc */
   display:flex;
   align-items:stretch;
+  overflow: hidden;   /* keep the single-screen feel */
 
   background:
     radial-gradient(1200px 700px at 10% 0%, rgba(161, 24, 30, 0.14), transparent 55%),
