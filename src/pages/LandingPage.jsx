@@ -338,7 +338,7 @@ export default function LandingPage() {
 
                     <a
                     className="la1-foot-link"
-                    href="https://maps.app.goo.gl/Tup9dcD6JoKnrAZo9"
+                    href="https://maps.app.goo.gl/f8M2336mrWCQ59wU8"
                     target="_blank"
                     rel="noreferrer"
                     >
