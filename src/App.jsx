@@ -31,11 +31,13 @@ import AdminLLRServices from "./pages/dashboard/admin/AdminLLRServices";
 import InstitutionMembersAdmin from "./pages/dashboard/institution/InstitutionMembersAdmin";
 import AdminSubscriptionRequests from "./pages/dashboard/approvals/AdminSubscriptionRequests";
 import AppShell from "./layout/AppShell";
+import AiSummaryTest from "./pages/AiSummaryTest.jsx";
 
 import Explore from "./pages/dashboard/Explore";
 import Library from "./pages/dashboard/Library";
 import AdminTrials from "./pages/dashboard/admin/AdminTrials";
 import "./styles/lawAfricaBrand.css";
+
 
 // ✅ Home -> Global Admin dashboard (charts) only for Global Admin
 import GlobalAdminHomeSwitch from "./pages/dashboard/GlobalAdminHomeSwitch";
@@ -113,10 +115,14 @@ export default function App() {
             <Route path="explore" element={<Explore />} />
             <Route path="library" element={<Library />} />
 
-            {/* ✅ Law Reports */}
-            <Route path="law-reports" element={<LawReports />} />
-            <Route path="law-reports/:id" element={<LawReportReader />} />
-            <Route path="security" element={<SecurityDashboard />} />
+              {/* ✅ Law Reports */}
+              <Route path="law-reports" element={<LawReports />} />
+              <Route path="law-reports/:id" element={<LawReportReader />} />
+
+              {/* ✅ AI Test (protected, inside AppShell) */}
+              <Route path="ai-test" element={<AiSummaryTest />} />
+
+              <Route path="security" element={<SecurityDashboard />} />
 
             {/* ===================== */}
             {/* APPROVALS */}

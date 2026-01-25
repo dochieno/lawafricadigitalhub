@@ -1,8 +1,9 @@
 // src/pages/Register.jsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState,useCallback  } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import api from "../api/client.js";
 import "../styles/register.css";
+//import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 
 const SIGNUP_FEE_KES = 10;
 const PAYMENT_PURPOSE_PUBLIC_SIGNUP = "PublicSignupFee";
@@ -384,13 +385,15 @@ export default function Register() {
     });
   }
 
-  function validateField(name, value) {
+const validateField = useCallback(
+  (name, value) => {
     const raw = (value ?? "").toString();
     const v = raw;
 
     if (name === "firstName") {
       if (!v.trim()) return "First name is required.";
     }
+
     if (name === "lastName") {
       if (!v.trim()) return "Last name is required.";
     }
@@ -441,7 +444,6 @@ export default function Register() {
       }
     }
 
-    // ✅ Reference number: only validate for institution users
     if (name === "referenceNumber") {
       if (!isPublic) {
         if (!v.trim()) return "Reference number is required for institution users.";
@@ -453,8 +455,9 @@ export default function Register() {
       if (!v) return "Password is required.";
       const rules = getPasswordRules(v);
       const ok = Object.values(rules).every(Boolean);
-      if (!ok)
+      if (!ok) {
         return "Password must be at least 8 characters and include uppercase, lowercase, number, and special character.";
+      }
     }
 
     if (name === "confirmPassword") {
@@ -471,8 +474,14 @@ export default function Register() {
     }
 
     return null;
-  }
-
+  },
+  [
+    isPublic,
+    publicPayMethod,
+    selectedInstitution,
+    password,
+  ]
+);
   function validateAll() {
     const next = {};
 
@@ -530,49 +539,20 @@ export default function Register() {
     msg ? setFieldError(name, msg) : clearFieldError(name);
   }
 
-  const isFormValidForSubmit = useMemo(() => {
-    const requiredNames = ["firstName", "lastName", "username", "email", "password", "confirmPassword"];
+const isFormValidForSubmit = useMemo(() => {
+  const requiredNames = ["firstName", "lastName", "username", "email", "password", "confirmPassword"];
 
-    if (isPublic && publicPayMethod === "MPESA") requiredNames.push("phoneNumber");
-    if (!isPublic) {
-      requiredNames.push("institutionId");
-      requiredNames.push("institutionMemberType");
-      const requiredCode = selectedInstitution?.accessCodeRequired !== false;
-      if (requiredCode) requiredNames.push("institutionAccessCode");
-      requiredNames.push("referenceNumber");
-    }
+  if (isPublic && publicPayMethod === "MPESA") requiredNames.push("phoneNumber");
 
-    for (const n of requiredNames) {
-      const value =
-        n === "firstName"
-          ? firstName
-          : n === "lastName"
-          ? lastName
-          : n === "username"
-          ? username
-          : n === "email"
-          ? email
-          : n === "password"
-          ? password
-          : n === "confirmPassword"
-          ? confirmPassword
-          : n === "phoneNumber"
-          ? phoneNumber
-          : n === "institutionId"
-          ? institutionId
-          : n === "institutionMemberType"
-          ? institutionMemberType
-          : n === "institutionAccessCode"
-          ? institutionAccessCode
-          : n === "referenceNumber"
-          ? referenceNumber
-          : "";
+  if (!isPublic) {
+    requiredNames.push("institutionId");
+    requiredNames.push("institutionMemberType");
+    const requiredCode = selectedInstitution?.accessCodeRequired !== false;
+    if (requiredCode) requiredNames.push("institutionAccessCode");
+    requiredNames.push("referenceNumber");
+  }
 
-      if (validateField(n, value)) return false;
-    }
-
-    return true;
-  }, [
+  const fieldValues = {
     firstName,
     lastName,
     username,
@@ -584,11 +564,31 @@ export default function Register() {
     institutionMemberType,
     institutionAccessCode,
     referenceNumber,
-    isPublic,
-    publicPayMethod,
-    selectedInstitution,
-  ]);
+  };
 
+  for (const n of requiredNames) {
+    const value = fieldValues[n] ?? "";
+    if (validateField(n, value)) return false; // validateField returns an error => invalid
+  }
+
+  return true;
+}, [
+  firstName,
+  lastName,
+  username,
+  email,
+  password,
+  confirmPassword,
+  phoneNumber,
+  institutionId,
+  institutionMemberType,
+  institutionAccessCode,
+  referenceNumber,
+  isPublic,
+  publicPayMethod,
+  selectedInstitution,
+  validateField, // ✅ fixes eslint react-hooks/exhaustive-deps
+]);
   // -----------------------------
   // Fetch setup token
   // -----------------------------

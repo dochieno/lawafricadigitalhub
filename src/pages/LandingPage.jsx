@@ -410,8 +410,8 @@ export default function LandingPage() {
                 <div className="la1-kicker">Why LawAfrica</div>
                 <h2 className="la1-h2">Designed for speed, clarity, and trust.</h2>
                 <p className="la1-p">
-                  A clean reading experience, consistent formatting, and content you can cite confidently—built for
-                  real-world legal work and serious research.
+                  A clean reading experience, consistent formatting, and content you can cite confidently built for
+                  real world legal work and serious research.
                 </p>
               </div>
 
