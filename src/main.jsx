@@ -64,9 +64,6 @@ window.addEventListener("unhandledrejection", (e) => {
   console.log("[LA DEBUG] unhandledrejection:", e?.reason || e);
 });
 
-// ------------------------------
-// Mount React
-// ------------------------------
 console.log("[LA DEBUG] about to mount React");
 
 const Wrapper = import.meta.env.DEV ? React.StrictMode : React.Fragment;
@@ -98,16 +95,19 @@ try {
   window.__LA_APP_MOUNTED__ = false;
   window.__LA_APP_MOUNTED_AT__ = null;
 
+  // Render the error safely (no template strings)
   try {
     const msg = String(fatal?.stack || fatal?.message || fatal);
+
     if (rootEl) {
       rootEl.innerHTML =
-        '<div style="padding:16px;font-family:ui-monospace,monospace;">' +
+        '<div style="padding:16px;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">' +
         '<div style="font-weight:900;margin-bottom:6px;">LawAfrica: App failed to mount</div>' +
         '<div style="opacity:.8;margin-bottom:10px;">Check Console for: <b>[LA DEBUG] FATAL mount error</b></div>' +
         '<pre style="white-space:pre-wrap;color:#7f1d1d;margin:0;">' +
         msg.replace(/</g, "&lt;").replace(/>/g, "&gt;") +
-        "</pre></div>";
+        "</pre>" +
+        "</div>";
     }
   } catch {
     // intentionally ignored (last resort)
