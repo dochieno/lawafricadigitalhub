@@ -1,182 +1,94 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LawAfricadigitalhub</title>
+// src/main.jsx
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App.jsx";
+import { AuthProvider } from "./auth/AuthContext";
+import "./styles/theme.css";
+import "./index.css";
+import "./styles/lawAfricaBrand.css";
+import "react-pdf/dist/esm/Page/TextLayer.css";
+import "react-pdf/dist/esm/Page/AnnotationLayer.css";
 
-    <!-- Optional but recommended -->
-    <meta name="application-name" content="LawAfricadigitalhub" />
-    <meta name="apple-mobile-web-app-title" content="LawAfricadigitalhub" />
-    <meta name="theme-color" content="#8f0f18" />
-  </head>
+const rootEl = document.getElementById("root");
 
-  <body>
-    <div id="root"></div>
+console.log("[LA DEBUG] main.jsx executing", location.href);
+console.log("[LA DEBUG] root element exists:", !!rootEl);
 
-    <!-- ✅ DEBUG (safe): catches silent runtime crashes + shows on-screen overlay -->
-    <script>
-      (function () {
-        // Turn off by setting window.__LA_DEBUG__ = false in console if needed.
-        window.__LA_DEBUG__ = true;
+// ------------------------------
+// ✅ Ignore common resource errors (like IMG 404) so debug overlay doesn’t treat them as runtime crashes
+// ------------------------------
+function isResourceLoadErrorEvent(e) {
+  const t = e?.target;
+  if (!t) return false;
 
-        function ensureOverlay() {
-          let el = document.getElementById("__la_debug_overlay");
-          if (el) return el;
+  const tag = String(t.tagName || "").toUpperCase();
+  if (tag === "IMG" || tag === "SCRIPT" || tag === "LINK") return true;
 
-          el = document.createElement("div");
-          el.id = "__la_debug_overlay";
-          el.style.position = "fixed";
-          el.style.inset = "0";
-          el.style.zIndex = "999999";
-          el.style.background = "rgba(0,0,0,0.72)";
-          el.style.color = "white";
-          el.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace";
-          el.style.fontSize = "12px";
-          el.style.padding = "14px";
-          el.style.display = "none";
-          el.style.whiteSpace = "pre-wrap";
-          el.style.overflow = "auto";
+  // fallback checks
+  if (typeof t.src === "string" && t.src) return true;
+  if (typeof t.href === "string" && t.href) return true;
 
-          const header = document.createElement("div");
-          header.style.display = "flex";
-          header.style.alignItems = "center";
-          header.style.justifyContent = "space-between";
-          header.style.gap = "10px";
-          header.style.marginBottom = "10px";
+  return false;
+}
 
-          const title = document.createElement("div");
-          title.textContent = "LawAfrica Debug Overlay (runtime error detected)";
-          title.style.fontWeight = "900";
-          title.style.fontSize = "13px";
-
-          const btn = document.createElement("button");
-          btn.textContent = "Close";
-          btn.style.cursor = "pointer";
-          btn.style.background = "white";
-          btn.style.color = "#111";
-          btn.style.border = "none";
-          btn.style.borderRadius = "10px";
-          btn.style.padding = "8px 10px";
-          btn.style.fontWeight = "800";
-          btn.onclick = function () {
-            el.style.display = "none";
-          };
-
-          header.appendChild(title);
-          header.appendChild(btn);
-
-          const body = document.createElement("div");
-          body.id = "__la_debug_overlay_body";
-
-          el.appendChild(header);
-          el.appendChild(body);
-          document.body.appendChild(el);
-          return el;
-        }
-
-        function showOverlay(text) {
-          if (!window.__LA_DEBUG__) return;
-          const overlay = ensureOverlay();
-          const body = document.getElementById("__la_debug_overlay_body");
-          if (body) body.textContent = text;
-          overlay.style.display = "block";
-        }
-
-        function fmtError(prefix, err, extra) {
-          const parts = [];
-          parts.push(prefix);
-          parts.push("Time: " + new Date().toISOString());
-          parts.push("URL: " + location.href);
-
-          if (extra) parts.push("Extra: " + extra);
-
-          if (err) {
-            parts.push("Name: " + (err.name || "(no name)"));
-            parts.push("Message: " + (err.message || String(err)));
-            if (err.stack) parts.push("Stack:\n" + err.stack);
-          } else {
-            parts.push("Error: (no error object)");
-          }
-
-          return parts.join("\n");
-        }
-
-        // 1) Catch runtime JS errors
+// Capture phase to see errors early, but FILTER OUT resource load errors.
 window.addEventListener(
   "error",
-  function (e) {
-    // This catches both runtime errors AND resource load failures (script/css 404)
-    const isResourceError = e && e.target && (e.target.tagName === "SCRIPT" || e.target.tagName === "LINK");
-
-    if (isResourceError) {
-      const el = e.target;
-      const url = el.src || el.href || "(no src/href)";
-      console.error("[LA DEBUG] Resource failed to load:", el.tagName, url);
-      showOverlay(
-        [
-          "RESOURCE FAILED TO LOAD",
-          "Time: " + new Date().toISOString(),
-          "URL: " + location.href,
-          "Tag: " + el.tagName,
-          "Resource: " + url,
-          "",
-          "This usually means your built assets are being requested from a wrong path.",
-          "Fix: set Vite base:'/' and redeploy.",
-        ].join("\n")
-      );
-      return;
-    }
-
-    const err = e.error || new Error(e.message || "Unknown error");
-    console.error("[LA DEBUG] window.error:", e);
-    showOverlay(fmtError("WINDOW ERROR", err, "Source: " + (e.filename || "") + ":" + (e.lineno || "") + ":" + (e.colno || "")));
+  (e) => {
+    if (isResourceLoadErrorEvent(e)) return;
+    console.log("[LA DEBUG] window.error:", e);
   },
-  true // ✅ CAPTURE PHASE (critical)
+  true
 );
 
-        // 2) Catch unhandled promise rejections
-        window.addEventListener("unhandledrejection", function (e) {
-          console.error("[LA DEBUG] unhandledrejection:", e);
-          const reason = e.reason;
-          const err =
-            reason instanceof Error ? reason : new Error(typeof reason === "string" ? reason : JSON.stringify(reason));
-          showOverlay(fmtError("UNHANDLED PROMISE REJECTION", err));
-        });
+window.addEventListener("unhandledrejection", (e) => {
+  console.log("[LA DEBUG] unhandledrejection:", e?.reason || e);
+});
 
-        // 3) Confirm whether the app mounts
-        document.addEventListener("DOMContentLoaded", function () {
-          console.log("[LA DEBUG] DOMContentLoaded. Root exists:", !!document.getElementById("root"));
-          // If root stays empty after a few seconds, show a hint overlay (common in white screen cases)
-          setTimeout(function () {
-            const root = document.getElementById("root");
-            const isEmpty = root && root.childNodes && root.childNodes.length === 0;
-            if (window.__LA_DEBUG__ && isEmpty) {
-              showOverlay(
-                [
-                  "APP DID NOT MOUNT (root is empty after 4s)",
-                  "Time: " + new Date().toISOString(),
-                  "URL: " + location.href,
-                  "",
-                  "Most common causes:",
-                  "1) main.jsx crashed before render (check console logs above)",
-                  "2) React route chunk crashed (lazy import failure)",
-                  "3) Infinite redirect / navigation loop",
-                  "4) Build asset mismatch or cached broken deploy",
-                  "",
-                  "Next steps:",
-                  "- Open DevTools Console and look for [LA DEBUG] lines.",
-                  "- Hard refresh (Ctrl+Shift+R).",
-                  "- Check Application -> Service Workers (unregister if any)."
-                ].join("\n")
-              );
-            }
-          }, 4000);
-        });
-      })();
-    </script>
+// ✅ Mount checkpoint
+console.log("[LA DEBUG] about to mount React");
 
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>
+// StrictMode in dev only
+const Wrapper = import.meta.env.DEV ? React.StrictMode : React.Fragment;
+
+try {
+  if (!rootEl) throw new Error("Root element #root not found.");
+
+  // ✅ Clear any stale debug overlay flag (if present)
+  window.__LA_APP_MOUNTED__ = false;
+  window.__LA_APP_MOUNTED_AT__ = null;
+
+  ReactDOM.createRoot(rootEl).render(
+    <Wrapper>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </Wrapper>
+  );
+
+  // ✅ IMPORTANT:
+  // Mark mounted on next tick so any “root empty after 4s” overlay can reliably skip.
+  queueMicrotask(() => {
+    window.__LA_APP_MOUNTED__ = true;
+    window.__LA_APP_MOUNTED_AT__ = Date.now();
+    console.log("[LA DEBUG] React mounted flag set:", window.__LA_APP_MOUNTED_AT__);
+  });
+
+  console.log("[LA DEBUG] ReactDOM.render() returned");
+} catch (e) {
+  console.error("[LA DEBUG] FATAL mount error:", e);
+
+  // ✅ Ensure overlays can detect it as NOT mounted
+  window.__LA_APP_MOUNTED__ = false;
+  window.__LA_APP_MOUNTED_AT__ = null;
+
+  if (rootEl) {
+    rootEl.innerHTML = `
+      <div style="padding:16px;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
+        <div style="font-weight:900;margin-bottom:6px;">LawAfrica: App failed to mount</div>
+        <div style="opacity:.8;margin-bottom:10px;">Check Console for: <b>[LA DEBUG] FATAL mount error</b></div>
+        <div style="white-space:pre-wrap;color:#7f1d1d;">${String(e?.stack || e?.message || e)}</div>
+      </div>
+    `;
+  }
+}

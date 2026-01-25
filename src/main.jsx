@@ -54,6 +54,10 @@ const Wrapper = import.meta.env.DEV ? React.StrictMode : React.Fragment;
 try {
   if (!rootEl) throw new Error("Root element #root not found.");
 
+  // ✅ Clear any stale debug overlay flag (if present)
+  window.__LA_APP_MOUNTED__ = false;
+  window.__LA_APP_MOUNTED_AT__ = null;
+
   ReactDOM.createRoot(rootEl).render(
     <Wrapper>
       <AuthProvider>
@@ -62,9 +66,21 @@ try {
     </Wrapper>
   );
 
+  // ✅ IMPORTANT:
+  // Mark mounted on next tick so any “root empty after 4s” overlay can reliably skip.
+  queueMicrotask(() => {
+    window.__LA_APP_MOUNTED__ = true;
+    window.__LA_APP_MOUNTED_AT__ = Date.now();
+    console.log("[LA DEBUG] React mounted flag set:", window.__LA_APP_MOUNTED_AT__);
+  });
+
   console.log("[LA DEBUG] ReactDOM.render() returned");
 } catch (e) {
   console.error("[LA DEBUG] FATAL mount error:", e);
+
+  // ✅ Ensure overlays can detect it as NOT mounted
+  window.__LA_APP_MOUNTED__ = false;
+  window.__LA_APP_MOUNTED_AT__ = null;
 
   if (rootEl) {
     rootEl.innerHTML = `
