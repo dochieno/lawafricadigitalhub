@@ -500,13 +500,6 @@ const searchInputRef = useRef(null);
             <button className="lrr2Btn" onClick={() => navigate("/dashboard/law-reports")}>
               ← Back
             </button>
-            <button
-              className="lrr2Btn secondary"
-              onClick={() => navigate(`/dashboard/documents/${report.legalDocumentId}`)}
-              disabled={!report.legalDocumentId}
-            >
-              Document page
-            </button>
           </div>
         </div>
       </div>
@@ -668,41 +661,67 @@ const searchInputRef = useRef(null);
           </div>
         </section>
 
-<section className="lrr2ActionsCard">
-  <div className="lrr2ActionBtns">
-    <button
-      type="button"
-      className="lrr2Btn primary"
-      onClick={() => {
-        setView("content");
-        setContentOpen(true); // ensure visible when switching back
-      }}
-    >
-      View Case Content
-    </button>
+        <section className="lrr2ActionsCard">
+          <div className="lrr2ActionBtns">
+            <button
+              type="button"
+              className={`lrr2Btn primary ${view === "content" ? "isActive" : ""}`}
+              onClick={() => {
+                setView("content");
+                setContentOpen(true);
+              }}
+            >
+              <span className="lrr2BtnIcon" aria-hidden="true">
+                {/* eye icon */}
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" stroke="currentColor" strokeWidth="1.7"/>
+                  <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" stroke="currentColor" strokeWidth="1.7"/>
+                </svg>
+              </span>
+              View Case Content
+            </button>
 
-    {/* Toggle only makes sense for content view */}
+            <button
+              type="button"
+              className={`lrr2Btn ${view === "ai" ? "isActive" : ""}`}
+              onClick={() => setView("ai")}
+            >
+              <span className="lrr2BtnIcon" aria-hidden="true">
+                {/* sparkles icon */}
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M12 2l1.2 4.1L17 7.3l-3.8 1.2L12 12l-1.2-3.5L7 7.3l3.8-1.2L12 2z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
+                  <path d="M19 13l.8 2.6L22 16l-2.2.6L19 19l-.8-2.4L16 16l2.2-.4L19 13z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
+                  <path d="M5 14l.9 3L9 18l-3.1 1L5 22l-1-3-3-1 3-1 .9-3z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
+                </svg>
+              </span>
+              Summarize with LegalAI
+            </button>
+
             {view === "content" ? (
-              <button
-                type="button"
-                className="lrr2Btn"
-                onClick={() => setContentOpen((v) => !v)}
-                aria-expanded={contentOpen}
-              >
+              <button type="button" className="lrr2Btn ghost" onClick={() => setContentOpen((v) => !v)}>
+                <span className="lrr2BtnIcon" aria-hidden="true">
+                  {/* chevron */}
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </span>
                 {contentOpen ? "Hide Case Content" : "Show Case Content"}
               </button>
             ) : (
-              <button type="button" className="lrr2Btn" onClick={() => setView("ai")}>
-                Summarize with LegalAI
+              <button type="button" className="lrr2Btn ghost" disabled title="Coming soon">
+                <span className="lrr2BtnIcon" aria-hidden="true">
+                  {/* download */}
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M12 3v10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                    <path d="M8 11l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M5 21h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                  </svg>
+                </span>
+                Download
               </button>
             )}
-
-            <button type="button" className="lrr2Btn ghost" disabled title="Coming soon">
-              Download
-            </button>
           </div>
         </section>
-      </div>
 
       {/* Unified content area */}
         <section className="lrr2Content">

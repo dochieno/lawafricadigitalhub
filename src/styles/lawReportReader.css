@@ -846,3 +846,29 @@
     justify-content: flex-start;
   }
 }
+.lrr2BtnIcon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lrr2BtnIcon svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.lrr2Btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.lrr2Btn.isActive {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(14,165,165,0.12);
+  border-color: rgba(14,165,165,0.35);
+}
