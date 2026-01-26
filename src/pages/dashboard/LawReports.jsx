@@ -36,15 +36,21 @@ function IcCase(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
       <path
-        d="M7 7h10M7 11h10M7 15h6"
+        d="M8 7.5V6.2A2.2 2.2 0 0 1 10.2 4h3.6A2.2 2.2 0 0 1 16 6.2v1.3"
         stroke="currentColor"
         strokeWidth="1.8"
         strokeLinecap="round"
       />
       <path
-        d="M6.5 3.5h11A2.5 2.5 0 0 1 20 6v14.5A2.5 2.5 0 0 1 17.5 23h-11A2.5 2.5 0 0 1 4 20.5V6A2.5 2.5 0 0 1 6.5 3.5Z"
+        d="M6.5 7.5h11A2.5 2.5 0 0 1 20 10v8.5A2.5 2.5 0 0 1 17.5 21h-11A2.5 2.5 0 0 1 4 18.5V10A2.5 2.5 0 0 1 6.5 7.5Z"
         stroke="currentColor"
         strokeWidth="1.8"
+      />
+      <path
+        d="M9.2 12.2h5.6M9.2 15.3h4.2"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
       />
     </svg>
   );
@@ -825,9 +831,8 @@ export default function LawReports() {
           }}
         >
           <div className="lr-hero-left" style={{ minWidth: 0, maxWidth: "none" }}>
-            <div className="lr-chip">
+            <div className="lr-chip" title="LawAfrica Reports">
               <IcCase style={{ width: 18, height: 18 }} />
-              LawAfrica Reports
             </div>
             <h1 className="lr-hero-title">Law Reports</h1>
             <p className="lr-hero-sub" style={{ maxWidth: "none" }}>
