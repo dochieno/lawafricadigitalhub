@@ -342,17 +342,33 @@
   }
 }
 
-/* Meta “table” */
+/* =========================
+   Meta table: classic LLR grid style (like sample table 2)
+   Background: #f5f5dc
+========================= */
+
+.lrr2MetaCard {
+  background: #f5f5dc;                 /* ✅ beige */
+  border: 1px solid rgba(15, 23, 42, 0.55);
+  border-radius: 0;                    /* ✅ square corners like table */
+  box-shadow: none;                    /* ✅ remove card look */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 .lrr2MetaTable {
   display: grid;
+  font-family: "Times New Roman", Times, serif;  /* ✅ classic font */
+  font-size: 13px;
+  color: #111;
 }
 
 .lrr2Row {
   display: grid;
-  grid-template-columns: 120px 1fr;
-  gap: 10px;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  grid-template-columns: 110px 1fr;    /* ✅ left key column */
+  gap: 0;                               /* ✅ no gap like a table */
+  padding: 0;                           /* ✅ table cells handle padding */
+  border-bottom: 1px solid rgba(15, 23, 42, 0.45);
 }
 
 .lrr2Row:last-child {
@@ -360,29 +376,34 @@
 }
 
 .lrr2Key {
-  font-weight: 950;
+  background: #f5f5dc;                 /* ✅ same beige */
+  border: 0;
+  border-right: 1px solid rgba(15, 23, 42, 0.45); /* ✅ vertical grid line */
+  border-radius: 0;
+  padding: 6px 8px;                    /* ✅ table cell padding */
+  width: auto;
+  font-weight: 700;
   font-size: 12px;
-  color: rgba(15, 23, 42, 0.86);
-  background: rgba(245, 158, 11, 0.12); /* subtle “label cell” vibe */
-  border: 1px solid rgba(245, 158, 11, 0.18);
-  border-radius: 10px;
-  padding: 6px 8px;
-  align-self: start;
-  width: fit-content;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #111;
 }
 
 .lrr2Val {
-  font-weight: 850;
-  color: rgba(15, 23, 42, 0.88);
-  line-height: 1.45;
+  padding: 6px 8px;                    /* ✅ table cell padding */
+  font-weight: 600;                    /* ✅ slightly bold like sample */
+  line-height: 1.25;
+  color: #111;
 }
 
+/* Optional: meta note row at the bottom */
 .lrr2MetaNote {
-  padding: 10px 12px;
+  background: #f5f5dc;
+  border-top: 1px solid rgba(15, 23, 42, 0.45);
+  padding: 6px 8px;
+  font-family: "Times New Roman", Times, serif;
   font-size: 12px;
-  font-weight: 850;
-  color: rgba(15, 23, 42, 0.62);
-  border-top: 1px dashed rgba(15, 23, 42, 0.14);
+  color: #333;
 }
 
 /* Actions */
