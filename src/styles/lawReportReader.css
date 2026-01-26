@@ -719,6 +719,44 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
+/* ===== AI formatted output ===== */
+.lrrAiRich {
+  display: grid;
+  gap: 10px;
+}
+
+.lrrAiH {
+  font-weight: 950;
+  color: rgba(15, 23, 42, 0.95);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.lrrAiHVal {
+  font-weight: 850;
+  color: rgba(15, 23, 42, 0.86);
+}
+
+.lrrAiP {
+  margin: 0;
+  line-height: 1.75;
+  font-size: 14px;
+  color: rgba(15, 23, 42, 0.92);
+}
+
+.lrrAiUl {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.lrrAiLi {
+  line-height: 1.65;
+  font-size: 14px;
+  color: rgba(15, 23, 42, 0.92);
+}
+
 .lrrAiTip {
   margin-top: 10px;
   font-size: 12px;
