@@ -393,6 +393,7 @@
   padding: 6px 8px;                    /* ✅ table cell padding */
   font-weight: 600;                    /* ✅ slightly bold like sample */
   line-height: 1.25;
+  background: #ffffff;
   color: #111;
 }
 
@@ -1043,4 +1044,43 @@
   height: 1px;
   margin-top: 10px;
   background: rgba(15, 23, 42, 0.12);
+}/* =========================
+   Case Content Formatting
+   (replaces the old <pre> block look)
+========================= */
+.lrr2CaseFmt {
+  font-family: ui-serif, Georgia, "Times New Roman", Times, serif;
+  font-size: 16px;
+  line-height: 1.75;
+  color: rgba(15, 23, 42, 0.95);
+  padding: 2px 2px;
+  text-align: justify;
+  text-justify: inter-word;
+  hyphens: auto;
+}
+
+.lrr2CaseP {
+  margin: 0 0 12px 0;
+  white-space: normal; /* important: don't behave like <pre> */
+}
+
+.lrr2CaseH {
+  margin: 16px 0 10px 0;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 900;
+  color: rgba(15, 23, 42, 0.9);
+}
+
+/* Optional: if your lrr2Collapse has tight padding, make it comfy */
+.lrr2Collapse.open {
+  padding: 14px 16px;
+}
+
+/* Optional: keep long citations/URLs from breaking layout */
+.lrr2CaseFmt,
+.lrr2CaseP {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
