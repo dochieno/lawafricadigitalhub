@@ -327,11 +327,11 @@
   overflow: hidden;
 }
 /* Sticky right actions */
+/* Sticky right actions */
 .lrr2ActionsCard {
   position: sticky;
   top: 16px; /* stays under browser top */
   align-self: start; /* important in CSS grid */
-  .lrr2ActionsCard { top: 22px; }
 }
 
 /* On smaller screens, disable sticky (it feels weird stacked) */
@@ -423,7 +423,22 @@
 }
 
 .lrr2Btn.ghost {
-  opacity: 0.75;
+  background: rgba(255, 255, 255, 0.70);
+  color: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  box-shadow: 0 10px 18px rgba(2, 6, 23, 0.06);
+  opacity: 1;
+  cursor: pointer;
+}
+
+.lrr2Btn.ghost:hover {
+  transform: translateY(-1px);
+  border-color: rgba(161, 24, 30, 0.22);
+  box-shadow: 0 14px 26px rgba(2, 6, 23, 0.10);
+}
+
+.lrr2Btn:disabled {
+  opacity: 0.60;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;

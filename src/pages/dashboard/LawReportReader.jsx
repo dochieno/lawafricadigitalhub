@@ -516,9 +516,9 @@ const searchInputRef = useRef(null);
         <div className="lrr2HeaderTop">
           <div className="lrr2Brand">Law Africa Law Reports</div>
 
-          <div className="lrr2HeaderRight">
+            <div className="lrr2HeaderRight">
             <button className="lrr2LinkBtn" onClick={() => navigate("/dashboard/law-reports")}>
-              ← Back
+            ← Back
             </button>
 
             <button
@@ -536,6 +536,7 @@ const searchInputRef = useRef(null);
 
           <div className="lrr2SearchBox" ref={searchBoxRef}>
             <input
+              ref={searchInputRef}
               className="lrr2SearchInput"
               placeholder="Type parties, citation, year, court…"
               value={q}
@@ -740,5 +741,6 @@ const searchInputRef = useRef(null);
           )}
         </section>
     </div>
+  </div>
   );
 }
