@@ -302,7 +302,7 @@
 
 .lrr2TitleKicker {
   font-weight: 950;
-  color: rgba(161, 24, 30, 0.92);
+  color: #cc6600;
 }
 
 /* =========================
@@ -533,9 +533,11 @@
 }
 
 .lrrAiTitle {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 950;
-  color: rgba(15, 23, 42, 0.95);
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: rgba(15, 23, 42, 0.78);
 }
 
 .lrrAiBadge {
@@ -747,8 +749,7 @@
 .lrrAiUl {
   margin: 0;
   padding-left: 18px;
-  display: grid;
-  gap: 8px;
+  display: block;
 }
 
 .lrrAiLi {
@@ -763,7 +764,9 @@
   color: rgba(15, 23, 42, 0.66);
   font-weight: 850;
 }
-
+.lrrAiBlock.isKeyPoints + .lrrAiUl {
+  margin-top: 6px;
+}
 /* =========================
    Responsive
 ========================= */
@@ -969,14 +972,16 @@
   font-weight: 850;
   color: rgba(15, 23, 42, 0.78);
 }/* Make bullets indented like the sample */
+/* Make bullets look like normal law-report bullets (tight but readable) */
 .lrrAiUl {
-  margin: 10px 0 14px;
-  padding-left: 36px; /* ✅ stronger indent */
+  margin: 8px 0 12px;
+  padding-left: 28px; /* keep indent but not too deep */
+  display: block;     /* ✅ IMPORTANT: remove grid spacing behavior */
 }
 
 .lrrAiLi {
-  margin: 10px 0;
-  line-height: 1.65;
+  margin: 4px 0;      /* ✅ normal spacing */
+  line-height: 1.55;
 }
 
 /* Bold "Key Points:" heading */
@@ -989,4 +994,32 @@
 /* Optional: indent the key points section slightly */
 .lrrAiBlock.isKeyPoints {
   margin-left: 6px;
+}/* =========================
+   AI Headnote (Digest + Court)
+   Print-quality law report style
+========================= */
+.lrrAiHeadnote {
+  margin-top: 6px;
+}
+
+.lrrAiHeadnoteTitle {
+  font-family: ui-serif, Georgia, "Times New Roman", Times, serif;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: rgba(15, 23, 42, 0.96);
+}
+
+.lrrAiHeadnoteMeta {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 850;
+  color: rgba(15, 23, 42, 0.72);
+}
+
+.lrrAiHeadnoteRule {
+  height: 1px;
+  margin-top: 10px;
+  background: rgba(15, 23, 42, 0.12);
 }

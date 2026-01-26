@@ -223,13 +223,10 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel }) {
       <span className="lrrAiBadge">AI generated</span>
     </div>
 
-    <div className="lrrAiDigestTop">
-      <div className="lrrAiDigestLine">
-        <b>Digest:</b> {digestTitle || "—"}
-      </div>
-      <div className="lrrAiDigestLine">
-        <b>Court:</b> {courtLabel || "—"}
-      </div>
+    <div className="lrrAiHeadnote">
+      <div className="lrrAiHeadnoteTitle">{digestTitle || "—"}</div>
+      <div className="lrrAiHeadnoteMeta">{courtLabel || "—"}</div>
+      <div className="lrrAiHeadnoteRule" />
     </div>
 
     <div className="lrrAiSub">
