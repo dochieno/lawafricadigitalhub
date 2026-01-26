@@ -520,14 +520,6 @@ const searchInputRef = useRef(null);
             <button className="lrr2LinkBtn" onClick={() => navigate("/dashboard/law-reports")}>
             ← Back
             </button>
-
-            <button
-              className="lrr2LinkBtn"
-              onClick={() => navigate(`/dashboard/documents/${report.legalDocumentId}`)}
-              disabled={!report.legalDocumentId}
-            >
-              Document page
-            </button>
           </div>
         </div>
 
@@ -538,7 +530,7 @@ const searchInputRef = useRef(null);
             <input
               ref={searchInputRef}
               className="lrr2SearchInput"
-              placeholder="Type parties, citation, year, court…"
+              placeholder="Search parties, citation, court, year, or words inside the case…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
               onFocus={() => {
@@ -558,17 +550,17 @@ const searchInputRef = useRef(null);
               <div className="lrr2SearchDropdown">
                 {searchErr ? <div className="lrr2SearchErr">{searchErr}</div> : null}
 
-{searchResults.map((r, idx) => {
-  const rid = Number(r?.id);
-  const rtitle = r?.parties || r?.title || `Report #${rid || idx + 1}`;
+        {searchResults.map((r, idx) => {
+          const rid = Number(r?.id);
+          const rtitle = r?.parties || r?.title || `Report #${rid || idx + 1}`;
 
-  // Left meta line (citation / report no)
-  const leftMeta = r?.citation || r?.reportNumber || "";
+          // Left meta line (citation / report no)
+          const leftMeta = r?.citation || r?.reportNumber || "";
 
-  // Right-side compact meta
-  const year = r?.year ? String(r.year) : "";
-  const court = r?.courtTypeLabel || r?.court || "";
-  const decision = r?.decisionTypeLabel || "";
+          // Right-side compact meta
+          const year = r?.year ? String(r.year) : "";
+          const court = r?.courtTypeLabel || r?.court || "";
+          const decision = r?.decisionTypeLabel || "";
 
         return (
           <button
@@ -601,146 +593,217 @@ const searchInputRef = useRef(null);
       </header>
 
       {/* Big title line */}
-      <div className="lrr2TitleLine">
-        <span className="lrr2TitleKicker">LLR No. {llrNo}:</span> {title}
+<div className="lrr2TitleLine">
+<span className="lrr2TitleKicker">LLR No. {llrNo}:</span> {title}
+</div>
+
+{/* Two columns: meta table + actions (ONLY these two cards live inside this grid) */}
+<div className="lrr2TopGrid">
+  <section className="lrr2MetaCard">
+    <div className="lrr2MetaTable">
+      <div className="lrr2Row">
+        <div className="lrr2Key">LLRNO</div>
+        <div className="lrr2Val">{llrNo}</div>
       </div>
 
-      {/* Two columns: meta table + actions */}
-      <div className="lrr2TopGrid">
-        <section className="lrr2MetaCard">
-          <div className="lrr2MetaTable">
-            <div className="lrr2Row">
-              <div className="lrr2Key">LLRNO</div>
-              <div className="lrr2Val">{llrNo}</div>
-            </div>
-            {report.caseNumber ? (
-              <div className="lrr2Row">
-                <div className="lrr2Key">CASENO</div>
-                <div className="lrr2Val">{report.caseNumber}</div>
-              </div>
-            ) : null}
-            {report.court ? (
-              <div className="lrr2Row">
-                <div className="lrr2Key">COURT</div>
-                <div className="lrr2Val">{report.court}</div>
-              </div>
-            ) : null}
-            {report.country ? (
-              <div className="lrr2Row">
-                <div className="lrr2Key">COUNTRY</div>
-                <div className="lrr2Val">{report.country}</div>
-              </div>
-            ) : null}
-            {report.town || report.townPostCode ? (
-              <div className="lrr2Row">
-                <div className="lrr2Key">TOWN</div>
-                <div className="lrr2Val">{report.town || report.townPostCode}</div>
-              </div>
-            ) : null}
-            {report.decisionTypeLabel ? (
-              <div className="lrr2Row">
-                <div className="lrr2Key">DECISION</div>
-                <div className="lrr2Val">{report.decisionTypeLabel}</div>
-              </div>
-            ) : null}
-            {report.judges ? (
-              <div className="lrr2Row">
-                <div className="lrr2Key">JUDGE</div>
-                <div className="lrr2Val">{report.judges}</div>
-              </div>
-            ) : null}
-            {report.decisionDate ? (
-              <div className="lrr2Row">
-                <div className="lrr2Key">DATE</div>
-                <div className="lrr2Val">{formatDate(report.decisionDate)}</div>
-              </div>
-            ) : null}
+      {report.caseNumber ? (
+        <div className="lrr2Row">
+          <div className="lrr2Key">CASENO</div>
+          <div className="lrr2Val">{report.caseNumber}</div>
+        </div>
+      ) : null}
 
-            {isAdmin ? <div className="lrr2MetaNote">admin access</div> : null}
-            {!isAdmin && accessLoading ? <div className="lrr2MetaNote">checking access…</div> : null}
-            {!isAdmin && availabilityLoading ? <div className="lrr2MetaNote">checking availability…</div> : null}
-          </div>
-        </section>
+      {report.court ? (
+        <div className="lrr2Row">
+          <div className="lrr2Key">COURT</div>
+          <div className="lrr2Val">{report.court}</div>
+        </div>
+      ) : null}
 
-        <section className="lrr2ActionsCard">
-          <div className="lrr2ActionBtns">
-            <button
-              type="button"
-              className={`lrr2Btn primary ${view === "content" ? "isActive" : ""}`}
-              onClick={() => {
-                setView("content");
-                setContentOpen(true);
-              }}
-            >
-              <span className="lrr2BtnIcon" aria-hidden="true">
-                {/* eye icon */}
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" stroke="currentColor" strokeWidth="1.7"/>
-                  <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" stroke="currentColor" strokeWidth="1.7"/>
-                </svg>
-              </span>
-              View Case Content
-            </button>
+      {report.country ? (
+        <div className="lrr2Row">
+          <div className="lrr2Key">COUNTRY</div>
+          <div className="lrr2Val">{report.country}</div>
+        </div>
+      ) : null}
 
-            <button
-              type="button"
-              className={`lrr2Btn ${view === "ai" ? "isActive" : ""}`}
-              onClick={() => setView("ai")}
-            >
-              <span className="lrr2BtnIcon" aria-hidden="true">
-                {/* sparkles icon */}
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M12 2l1.2 4.1L17 7.3l-3.8 1.2L12 12l-1.2-3.5L7 7.3l3.8-1.2L12 2z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
-                  <path d="M19 13l.8 2.6L22 16l-2.2.6L19 19l-.8-2.4L16 16l2.2-.4L19 13z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
-                  <path d="M5 14l.9 3L9 18l-3.1 1L5 22l-1-3-3-1 3-1 .9-3z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
-                </svg>
-              </span>
-              Summarize with LegalAI
-            </button>
+      {report.town || report.townPostCode ? (
+        <div className="lrr2Row">
+          <div className="lrr2Key">TOWN</div>
+          <div className="lrr2Val">{report.town || report.townPostCode}</div>
+        </div>
+      ) : null}
 
-            {view === "content" ? (
-              <button type="button" className="lrr2Btn ghost" onClick={() => setContentOpen((v) => !v)}>
-                <span className="lrr2BtnIcon" aria-hidden="true">
-                  {/* chevron */}
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </span>
-                {contentOpen ? "Hide Case Content" : "Show Case Content"}
-              </button>
-            ) : (
-              <button type="button" className="lrr2Btn ghost" disabled title="Coming soon">
-                <span className="lrr2BtnIcon" aria-hidden="true">
-                  {/* download */}
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d="M12 3v10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-                    <path d="M8 11l4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M5 21h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-                  </svg>
-                </span>
-                Download
-              </button>
-            )}
-          </div>
-        </section>
+      {report.decisionTypeLabel ? (
+        <div className="lrr2Row">
+          <div className="lrr2Key">DECISION</div>
+          <div className="lrr2Val">{report.decisionTypeLabel}</div>
+        </div>
+      ) : null}
 
-      {/* Unified content area */}
-        <section className="lrr2Content">
-          {view === "ai" ? (
-            <LawReportAiSummaryPanel lawReportId={reportId} />
-          ) : !textHasContent ? (
-            <div className="lrr2Empty">This report has no content yet.</div>
-          ) : (
-            <article className="lrr2Article">
-              <div className="lrr2ArticleTitle">Case File / Transcript</div>
+      {report.judges ? (
+        <div className="lrr2Row">
+          <div className="lrr2Key">JUDGE</div>
+          <div className="lrr2Val">{report.judges}</div>
+        </div>
+      ) : null}
 
-              <div className={`lrr2Collapse ${contentOpen ? "open" : "closed"}`}>
-                <pre className="lrr2Raw">{rawContent}</pre>
-              </div>
-            </article>
-          )}
-        </section>
+      {report.decisionDate ? (
+        <div className="lrr2Row">
+          <div className="lrr2Key">DATE</div>
+          <div className="lrr2Val">{formatDate(report.decisionDate)}</div>
+        </div>
+      ) : null}
+
+      {isAdmin ? <div className="lrr2MetaNote">admin access</div> : null}
+      {!isAdmin && accessLoading ? <div className="lrr2MetaNote">checking access…</div> : null}
+      {!isAdmin && availabilityLoading ? <div className="lrr2MetaNote">checking availability…</div> : null}
     </div>
-  </div>
-  );
+  </section>
+  
+  <section className="lrr2ActionsCard">
+    <div className="lrr2ActionBtns">
+      {view === "content" ? (
+        <>
+          {/* Primary action in CONTENT view */}
+          <button
+            type="button"
+            className="lrr2Btn primary isActive"
+            onClick={() => {
+              setView("content");
+              setContentOpen(true);
+            }}
+          >
+            <span className="lrr2BtnIcon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                />
+                <path
+                  d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                />
+              </svg>
+            </span>
+            View Case Content
+          </button>
+
+          {/* Switch to AI */}
+          <button
+            type="button"
+            className="lrr2Btn"
+            onClick={() => {
+              setView("ai");
+              setContentOpen(false);
+            }}
+          >
+            <span className="lrr2BtnIcon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M12 2l1.2 4.1L17 7.3l-3.8 1.2L12 12l-1.2-3.5L7 7.3l3.8-1.2L12 2z"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M19 13l.8 2.6L22 16l-2.2.6L19 19l-.8-2.4L16 16l2.2-.4L19 13z"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M5 14l.9 3L9 18l-3.1 1L5 22l-1-3-3-1 3-1 .9-3z"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </span>
+            Summarize with LegalAI
+          </button>
+
+          {/* Collapse toggle ONLY in content view */}
+          <button
+            type="button"
+            className="lrr2Btn"
+            onClick={() => setContentOpen((v) => !v)}
+          >
+            <span className="lrr2BtnIcon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M6 9l6 6 6-6"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </span>
+            {contentOpen ? "Hide Case Content" : "Show Case Content"}
+          </button>
+        </>
+      ) : (
+        <>
+          {/* Primary action in AI view: go back to content */}
+          <button
+            type="button"
+            className="lrr2Btn primary isActive"
+            onClick={() => {
+              setView("content");
+              setContentOpen(true);
+            }}
+          >
+            <span className="lrr2BtnIcon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" stroke="currentColor" strokeWidth="1.7"/>
+                <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" stroke="currentColor" strokeWidth="1.7"/>
+              </svg>
+            </span>
+            Back to Case Content
+          </button>
+
+          {/* Optional: keep "Download" only in AI view */}
+          <button type="button" className="lrr2Btn" disabled title="Coming soon">
+            <span className="lrr2BtnIcon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M12 3v10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                <path
+                  d="M8 11l4 4 4-4"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path d="M5 21h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            </span>
+            Download AI Report
+          </button>
+        </>
+      )}
+    </div>
+  </section>
+</div>
+
+{/* Unified content area (THIS MUST be OUTSIDE lrr2TopGrid) */}
+<section className="lrr2Content">
+  {view === "ai" ? (
+    <LawReportAiSummaryPanel lawReportId={reportId} />
+  ) : !textHasContent ? (
+    <div className="lrr2Empty">This report has no content yet.</div>
+  ) : (
+    <article className="lrr2Article">
+      <div className="lrr2ArticleTitle">Case File / Transcript</div>
+
+      <div className={`lrr2Collapse ${contentOpen ? "open" : "closed"}`}>
+        <pre className="lrr2Raw">{rawContent}</pre>
+      </div>
+    </article>
+  )}
+</section>
+</div>
+);
 }
