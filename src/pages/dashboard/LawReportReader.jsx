@@ -290,35 +290,78 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
+const didAutoGenRef = useRef(false);
+
 
   const canRun = useMemo(
     () => Number.isFinite(Number(lawReportId)) && Number(lawReportId) > 0,
     [lawReportId]
   );
 
-  useEffect(() => {
-    if (!canRun) return;
-    fetchCached();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canRun, type, lawReportId]);
+  function isCacheMiss(err) {
+    return err?.response?.status === 404;
+  }
 
-  async function fetchCached() {
-    if (!canRun) return;
+  async function generateSummary({ force = false } = {}) {
+  const res = await api.post(
+    `/ai/law-reports/${Number(lawReportId)}/summary`,
+    { type, forceRegenerate: force }
+  );
+  return res.data?.data ?? res.data;
+}
 
+useEffect(() => {
+  if (!canRun) return;
+
+  // reset "auto-generate once" guard each time report/type changes
+  didAutoGenRef.current = false;
+
+  let cancelled = false;
+
+  (async () => {
     setLoading(true);
     setError("");
     try {
+      // 1) Try cached first (GET)
       const res = await api.get(`/ai/law-reports/${Number(lawReportId)}/summary`, {
         params: { type },
       });
+
+      if (cancelled) return;
       setResult(res.data?.data ?? res.data);
+      setError("");
     } catch (err) {
-      setError(getApiErrorMessage(err, "No cached summary found yet."));
-      setResult(null);
+      if (cancelled) return;
+
+      // 2) If cache miss (404), auto-generate ONCE (POST), then show it
+      if (isCacheMiss(err) && !didAutoGenRef.current) {
+        didAutoGenRef.current = true;
+        try {
+          const generated = await generateSummary({ force: false });
+          if (cancelled) return;
+          setResult(generated);
+          setError("");
+        } catch (genErr) {
+          if (cancelled) return;
+          setResult(null);
+          setError(getApiErrorMessage(genErr, "Failed to generate AI summary."));
+        }
+      } else {
+        // 3) Other errors (401/403/500/etc.)
+        setResult(null);
+        setError(getApiErrorMessage(err, "No cached summary found yet."));
+      }
     } finally {
-      setLoading(false);
+      // ✅ Always clear loading (even on early returns before)
+      if (!cancelled) setLoading(false);
     }
-  }
+  })();
+
+  return () => {
+    cancelled = true;
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [canRun, type, lawReportId]);
 
   return (
     <section className="lrrAi">
