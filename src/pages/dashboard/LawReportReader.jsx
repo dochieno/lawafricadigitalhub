@@ -17,10 +17,6 @@ function isPublicUser() {
   return String(userType).toLowerCase() === "public" && (!inst || inst <= 0);
 }
 
-/**
- * Robust global admin detection.
- * Adjust role names here to match your backend roles exactly.
- */
 function isGlobalAdminUser() {
   const c = getAuthClaims();
 
@@ -240,6 +236,8 @@ export default function LawReportReader() {
   const isInst = isInstitutionUser();
   const isPublic = isPublicUser();
   const isAdmin = isGlobalAdminUser();
+  // Transcript toggle
+  const [contentOpen, setContentOpen] = useState(true);
 
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -262,6 +260,42 @@ export default function LawReportReader() {
   const [searchResults, setSearchResults] = useState([]);
   const [openResults, setOpenResults] = useState(false);
   const searchAbortRef = useRef({ cancelled: false });
+
+  // Search dropdown close helpers
+const searchBoxRef = useRef(null);
+const searchInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!openResults) return;
+
+    function onKeyDown(e) {
+      if (e.key === "Escape") {
+        setOpenResults(false);
+        // optional: clear error/results or keep them
+        // setSearchErr("");
+        // setSearchResults([]);
+        // setQ("");
+        searchInputRef.current?.blur?.();
+      }
+    }
+
+    function onPointerDown(e) {
+      const el = searchBoxRef.current;
+      if (!el) return;
+      if (!el.contains(e.target)) {
+        setOpenResults(false);
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    // pointerdown catches mouse + touch
+    document.addEventListener("pointerdown", onPointerDown);
+
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [openResults]);
 
   // Load report
   useEffect(() => {
@@ -507,7 +541,7 @@ export default function LawReportReader() {
         <div className="lrr2SearchRow">
           <div className="lrr2SearchLabel">Case Search</div>
 
-          <div className="lrr2SearchBox">
+          <div className="lrr2SearchBox" ref={searchBoxRef}>
             <input
               className="lrr2SearchInput"
               placeholder="Type parties, citation, year, court…"
@@ -530,22 +564,38 @@ export default function LawReportReader() {
               <div className="lrr2SearchDropdown">
                 {searchErr ? <div className="lrr2SearchErr">{searchErr}</div> : null}
 
-                {searchResults.map((r, idx) => {
-                    const rid = Number(r?.id);
-                    const rtitle = r?.parties || r?.title || `Report #${rid || idx + 1}`;
-                    const rcite = r?.citation || r?.reportNumber || "";
-                                      return (
-                    <button
-                      type="button"
-                      key={rid || idx}
-                      className="lrr2SearchItem"
-                      onClick={() => pickReport(r)}
-                    >
-                      <div className="lrr2SearchItemTitle">{rtitle}</div>
-                      <div className="lrr2SearchItemMeta">{rcite}</div>
-                    </button>
-                  );
-                })}
+{searchResults.map((r, idx) => {
+  const rid = Number(r?.id);
+  const rtitle = r?.parties || r?.title || `Report #${rid || idx + 1}`;
+
+  // Left meta line (citation / report no)
+  const leftMeta = r?.citation || r?.reportNumber || "";
+
+  // Right-side compact meta
+  const year = r?.year ? String(r.year) : "";
+  const court = r?.courtTypeLabel || r?.court || "";
+  const decision = r?.decisionTypeLabel || "";
+
+        return (
+          <button
+            type="button"
+            key={rid || idx}
+            className="lrr2SearchItem"
+            onClick={() => pickReport(r)}
+          >
+            <div className="lrr2SearchItemLeft">
+              <div className="lrr2SearchItemTitle">{rtitle}</div>
+              {leftMeta ? <div className="lrr2SearchItemMeta">{leftMeta}</div> : null}
+            </div>
+
+            <div className="lrr2SearchItemRight">
+              {year ? <span className="lrr2Tag">{year}</span> : null}
+              {court ? <span className="lrr2Tag">{court}</span> : null}
+              {decision ? <span className="lrr2Tag soft">{decision}</span> : null}
+            </div>
+          </button>
+        );
+      })}
               </div>
             ) : null}
           </div>
@@ -618,15 +668,34 @@ export default function LawReportReader() {
           </div>
         </section>
 
-        <section className="lrr2ActionsCard">
-          <div className="lrr2ActionBtns">
-            <button type="button" className="lrr2Btn primary" onClick={() => setView("content")}>
-              View Case Content
-            </button>
+<section className="lrr2ActionsCard">
+  <div className="lrr2ActionBtns">
+    <button
+      type="button"
+      className="lrr2Btn primary"
+      onClick={() => {
+        setView("content");
+        setContentOpen(true); // ensure visible when switching back
+      }}
+    >
+      View Case Content
+    </button>
 
-            <button type="button" className="lrr2Btn" onClick={() => setView("ai")}>
-              Summarize with LegalAI
-            </button>
+    {/* Toggle only makes sense for content view */}
+            {view === "content" ? (
+              <button
+                type="button"
+                className="lrr2Btn"
+                onClick={() => setContentOpen((v) => !v)}
+                aria-expanded={contentOpen}
+              >
+                {contentOpen ? "Hide Case Content" : "Show Case Content"}
+              </button>
+            ) : (
+              <button type="button" className="lrr2Btn" onClick={() => setView("ai")}>
+                Summarize with LegalAI
+              </button>
+            )}
 
             <button type="button" className="lrr2Btn ghost" disabled title="Coming soon">
               Download
@@ -636,18 +705,21 @@ export default function LawReportReader() {
       </div>
 
       {/* Unified content area */}
-      <section className="lrr2Content">
-        {view === "ai" ? (
-          <LawReportAiSummaryPanel lawReportId={reportId} />
-        ) : !textHasContent ? (
-          <div className="lrr2Empty">This report has no content yet.</div>
-        ) : (
-          <article className="lrr2Article">
-            <div className="lrr2ArticleTitle">Case File / Transcript</div>
-            <pre className="lrr2Raw">{rawContent}</pre>
-          </article>
-        )}
-      </section>
+        <section className="lrr2Content">
+          {view === "ai" ? (
+            <LawReportAiSummaryPanel lawReportId={reportId} />
+          ) : !textHasContent ? (
+            <div className="lrr2Empty">This report has no content yet.</div>
+          ) : (
+            <article className="lrr2Article">
+              <div className="lrr2ArticleTitle">Case File / Transcript</div>
+
+              <div className={`lrr2Collapse ${contentOpen ? "open" : "closed"}`}>
+                <pre className="lrr2Raw">{rawContent}</pre>
+              </div>
+            </article>
+          )}
+        </section>
     </div>
   );
 }

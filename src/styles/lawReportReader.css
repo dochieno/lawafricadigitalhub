@@ -326,6 +326,21 @@
   -webkit-backdrop-filter: blur(12px);
   overflow: hidden;
 }
+/* Sticky right actions */
+.lrr2ActionsCard {
+  position: sticky;
+  top: 16px; /* stays under browser top */
+  align-self: start; /* important in CSS grid */
+  .lrr2ActionsCard { top: 22px; }
+}
+
+/* On smaller screens, disable sticky (it feels weird stacked) */
+@media (max-width: 900px) {
+  .lrr2ActionsCard {
+    position: static;
+    top: auto;
+  }
+}
 
 /* Meta “table” */
 .lrr2MetaTable {
@@ -737,5 +752,97 @@
 
   .lrrAiMetaCol.right {
     text-align: left;
+  }
+}/* =========================
+   Collapsible transcript
+========================= */
+.lrr2Collapse {
+  overflow: hidden;
+  transition: max-height 220ms ease, opacity 220ms ease;
+  will-change: max-height, opacity;
+}
+
+.lrr2Collapse.open {
+  max-height: 100000px; /* big enough for long reports */
+  opacity: 1;
+}
+
+.lrr2Collapse.closed {
+  max-height: 0;
+  opacity: 0.2;
+}
+
+/* =========================
+   Search dropdown item layout
+========================= */
+.lrr2SearchItem {
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 12px;
+  padding: 10px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lrr2SearchItem:hover {
+  border-color: rgba(161, 24, 30, 0.22);
+  box-shadow: 0 10px 18px rgba(2, 6, 23, 0.08);
+  transform: translateY(-1px);
+}
+
+.lrr2SearchItemLeft {
+  min-width: 0;
+  flex: 1;
+}
+
+.lrr2SearchItemTitle {
+  font-weight: 950;
+  color: rgba(15, 23, 42, 0.92);
+  line-height: 1.25;
+}
+
+.lrr2SearchItemMeta {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 850;
+  color: rgba(15, 23, 42, 0.62);
+}
+
+.lrr2SearchItemRight {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+  max-width: 46%;
+}
+
+.lrr2Tag {
+  font-size: 11px;
+  font-weight: 950;
+  padding: 6px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(161, 24, 30, 0.18);
+  background: rgba(161, 24, 30, 0.08);
+  color: rgba(15, 23, 42, 0.88);
+  line-height: 1;
+}
+
+.lrr2Tag.soft {
+  border-color: rgba(15, 23, 42, 0.10);
+  background: rgba(15, 23, 42, 0.04);
+}
+
+@media (max-width: 700px) {
+  .lrr2SearchItem {
+    flex-direction: column;
+  }
+  .lrr2SearchItemRight {
+    max-width: 100%;
+    justify-content: flex-start;
   }
 }
