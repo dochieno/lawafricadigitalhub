@@ -855,7 +855,8 @@ const isFormValidForSubmit = useMemo(() => {
   useEffect(() => {
     const qs = new URLSearchParams(location.search);
     const paid = (qs.get("paid") || "").trim();
-    if (paid !== "1") return;
+    const reference = (qs.get("reference") || "").trim();
+    if (paid !== "1" && !reference) return;
 
     const storedIntent = localStorage.getItem(LS_REG_INTENT);
     if (!storedIntent) return;

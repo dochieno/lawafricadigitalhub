@@ -15,6 +15,125 @@ import {
 import { useDebounce } from "../../utils/useDebounce";
 import "../../styles/lawReports.css";
 
+/* -----------------------------
+   Tiny Icons (inline SVG)
+------------------------------ */
+function IcArrowLeft(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M14.5 6.5L9 12l5.5 5.5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+function IcArrowRight(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M9.5 6.5L15 12l-5.5 5.5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+function IcCalendar(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M7 3v3M17 3v3"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M4.5 9h15"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M6.5 6h11A2.5 2.5 0 0 1 20 8.5v11A2.5 2.5 0 0 1 17.5 22h-11A2.5 2.5 0 0 1 4 19.5v-11A2.5 2.5 0 0 1 6.5 6Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+function IcGavel(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M14.5 6.5l3 3M13 8l3-3 3 3-3 3-3-3Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M3 21l7-7"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M9 15l3 3"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M10.5 13.5l5.5-5.5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+function IcPin(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M12 22s7-6.2 7-12a7 7 0 10-14 0c0 5.8 7 12 7 12z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M12 13.2a3.2 3.2 0 110-6.4 3.2 3.2 0 010 6.4z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+function IcUser(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M12 12a4.2 4.2 0 1 0-4.2-4.2A4.2 4.2 0 0 0 12 12Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M4.5 21a7.5 7.5 0 0 1 15 0"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/* -----------------------------
+   Helpers
+------------------------------ */
 function isInstitutionUser() {
   const c = getAuthClaims();
   return !!(c?.institutionId && c.institutionId > 0);
@@ -43,6 +162,13 @@ function cleanPreview(text) {
   const t = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
   if (!t) return "";
   return t.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function truncateText(text, max = 100) {
+  const s = String(text || "").replace(/\s+/g, " ").trim();
+  if (!s) return "";
+  if (s.length <= max) return s;
+  return s.slice(0, max - 1).trimEnd() + "…";
 }
 
 // Fallback decision labels (used only if /law-reports/decision-types doesn't exist yet)
@@ -113,9 +239,9 @@ export default function LawReports() {
 
   const [sortBy, setSortBy] = useState("year_desc");
 
-  // Pagination (server mode)
+  // Pagination (both modes now)
   const [page, setPage] = useState(1);
-  const pageSize = 18;
+  const pageSize = 9; // ✅ 3 columns × 3 rows
 
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -141,7 +267,6 @@ export default function LawReports() {
     let cancelled = false;
 
     async function loadOptions() {
-      // Case types: [{ value, label, count }]
       try {
         const res = await api.get("/law-reports/case-types");
         const arr = Array.isArray(res.data) ? res.data : [];
@@ -150,7 +275,6 @@ export default function LawReports() {
         // ignore
       }
 
-      // Decision types (optional endpoint)
       try {
         const res = await api.get("/law-reports/decision-types");
         const arr = Array.isArray(res.data) ? res.data : [];
@@ -210,7 +334,6 @@ export default function LawReports() {
             courtType: courtType || undefined,
             townOrPostCode: townOrPostCode || undefined,
 
-            // ✅ send INT values (recommended)
             caseType: caseType || undefined,
             decisionType: decisionType || undefined,
 
@@ -370,7 +493,7 @@ export default function LawReports() {
     return match?.label || "";
   }, [decisionType, decisionOptions]);
 
-  const visibleClient = useMemo(() => {
+  const visibleClientAll = useMemo(() => {
     if (mode !== "client") return mergedReports;
 
     const query = normalize(debouncedQ);
@@ -452,7 +575,26 @@ export default function LawReports() {
     sortBy,
   ]);
 
-  const visible = mode === "client" ? visibleClient : reports;
+  const visibleAll = mode === "client" ? visibleClientAll : reports;
+
+  // ------------------------------------------------------------
+  // ✅ Pagination for BOTH modes
+  // ------------------------------------------------------------
+  const totalPages = useMemo(() => {
+    if (mode === "server") return Math.max(1, Math.ceil((total || 0) / pageSize));
+    return Math.max(1, Math.ceil((visibleAll?.length || 0) / pageSize));
+  }, [mode, total, pageSize, visibleAll]);
+
+  useEffect(() => {
+    // Keep page in bounds when filters shrink results
+    setPage((p) => Math.min(Math.max(1, p), totalPages));
+  }, [totalPages]);
+
+  const visible = useMemo(() => {
+    if (mode === "server") return visibleAll; // already paged by backend
+    const start = (page - 1) * pageSize;
+    return (visibleAll || []).slice(start, start + pageSize);
+  }, [mode, visibleAll, page, pageSize]);
 
   // ------------------------------------------------------------
   // ✅ IMPORTANT FIX: availability/access require LegalDocumentId
@@ -522,9 +664,7 @@ export default function LawReports() {
     let cancelled = false;
 
     async function fetchAvailabilityForVisibleReports() {
-      const docIds = (visible || [])
-        .map((d) => getDocIdForRow(d))
-        .filter(Boolean);
+      const docIds = (visible || []).map((d) => getDocIdForRow(d)).filter(Boolean);
 
       const missing = docIds.filter((docId) => availabilityMap[docId] == null);
       if (missing.length === 0) return;
@@ -570,11 +710,6 @@ export default function LawReports() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, mode]);
-
-  const totalPages = useMemo(() => {
-    if (mode === "server") return Math.max(1, Math.ceil((total || 0) / pageSize));
-    return 1;
-  }, [mode, total, pageSize]);
 
   // ------------------------------------------------------------
   // Dropdown option lists (render value=INT string)
@@ -630,9 +765,26 @@ export default function LawReports() {
 
   function getExcerptForRow(r) {
     if (mode === "server") {
-      return cleanPreview(r?.previewText || "");
+      return truncateText(cleanPreview(r?.previewText || ""), 100);
     }
-    return makeReportExcerpt(r, 260);
+    return truncateText(makeReportExcerpt(r, 260), 100);
+  }
+
+  function setPageToFirst() {
+    setPage(1);
+  }
+
+  function buildTags(meta) {
+    const list = [];
+    if (meta.reportNumber) list.push(meta.reportNumber);
+    if (meta.year) list.push(String(meta.year));
+    if (meta.decisionType) list.push(meta.decisionType);
+    if (meta.caseType) list.push(meta.caseType);
+    if (meta.courtType) list.push(meta.courtType);
+    if (meta.town) list.push(meta.town);
+    if (!meta.town && meta.postCode) list.push(meta.postCode);
+    if (meta.citation) list.push(meta.citation);
+    return list;
   }
 
   return (
@@ -644,10 +796,6 @@ export default function LawReports() {
       )}
 
       <div className="lr-hero">
-        {/* ✅ HERO LAYOUT FIX:
-            - use CSS grid so left stretches and right stays one-row
-            - no changes to CSS required (safe inline styles)
-        */}
         <div
           className="lr-hero-inner"
           style={{
@@ -657,25 +805,12 @@ export default function LawReports() {
             gap: 14,
           }}
         >
-          <div
-            className="lr-hero-left"
-            style={{
-              minWidth: 0,
-              maxWidth: "none",
-            }}
-          >
+          <div className="lr-hero-left" style={{ minWidth: 0, maxWidth: "none" }}>
             <div className="lr-chip">LawAfrica Reports</div>
             <h1 className="lr-hero-title">Law Reports</h1>
-            <p
-              className="lr-hero-sub"
-              style={{
-                maxWidth: "none",
-              }}
-            >
-              Access authoritative judicial decisions that set legal precedent.
-              Discover how courts interpret and apply the law, filter cases by
-              key criteria, and preview concise excerpts to quickly identify
-              relevant judgments before diving deeper.
+            <p className="lr-hero-sub" style={{ maxWidth: "none" }}>
+              Access authoritative judicial decisions that set legal precedent. Filter by key
+              criteria and preview short excerpts to quickly identify relevant judgments.
             </p>
           </div>
 
@@ -725,7 +860,7 @@ export default function LawReports() {
                   value={q}
                   onChange={(e) => {
                     setQ(e.target.value);
-                    if (mode === "server") setPage(1);
+                    setPageToFirst();
                   }}
                   placeholder="Report no, parties, citation, year, court, town/post code…"
                 />
@@ -750,9 +885,9 @@ export default function LawReports() {
                       value={reportNumber}
                       onChange={(e) => {
                         setReportNumber(e.target.value);
-                        if (mode === "server") setPage(1);
+                        setPageToFirst();
                       }}
-                      placeholder="e.g. CAR353…"
+                      placeholder="e.g. HCK027…"
                     />
                   </div>
 
@@ -763,7 +898,7 @@ export default function LawReports() {
                       value={parties}
                       onChange={(e) => {
                         setParties(e.target.value);
-                        if (mode === "server") setPage(1);
+                        setPageToFirst();
                       }}
                       placeholder="e.g. Mwabonje v Sarova…"
                     />
@@ -776,7 +911,7 @@ export default function LawReports() {
                       value={citation}
                       onChange={(e) => {
                         setCitation(e.target.value);
-                        if (mode === "server") setPage(1);
+                        setPageToFirst();
                       }}
                       placeholder="e.g. [2016] LLR (HCK)…"
                     />
@@ -792,7 +927,7 @@ export default function LawReports() {
                     value={year}
                     onChange={(e) => {
                       setYear(e.target.value.replace(/[^\d]/g, "").slice(0, 4));
-                      if (mode === "server") setPage(1);
+                      setPageToFirst();
                     }}
                     placeholder="e.g. 2016"
                   />
@@ -805,7 +940,7 @@ export default function LawReports() {
                     value={sortBy}
                     onChange={(e) => {
                       setSortBy(e.target.value);
-                      if (mode === "server") setPage(1);
+                      setPageToFirst();
                     }}
                   >
                     <option value="year_desc">Year (new → old)</option>
@@ -817,7 +952,7 @@ export default function LawReports() {
                 </div>
               </div>
 
-              {/* ✅ Decision */}
+              {/* Decision */}
               <div className="lr-field">
                 <div className="lr-label">Decision</div>
                 <select
@@ -825,7 +960,7 @@ export default function LawReports() {
                   value={decisionType}
                   onChange={(e) => {
                     setDecisionType(e.target.value);
-                    if (mode === "server") setPage(1);
+                    setPageToFirst();
                   }}
                 >
                   <option value="">All</option>
@@ -838,7 +973,7 @@ export default function LawReports() {
                 </select>
               </div>
 
-              {/* ✅ Case Type */}
+              {/* Case Type */}
               <div className="lr-field">
                 <div className="lr-label">Case Type</div>
                 <select
@@ -846,7 +981,7 @@ export default function LawReports() {
                   value={caseType}
                   onChange={(e) => {
                     setCaseType(e.target.value);
-                    if (mode === "server") setPage(1);
+                    setPageToFirst();
                   }}
                 >
                   <option value="">All</option>
@@ -866,9 +1001,9 @@ export default function LawReports() {
                   value={courtType}
                   onChange={(e) => {
                     setCourtType(e.target.value);
-                    if (mode === "server") setPage(1);
+                    setPageToFirst();
                   }}
-                  placeholder="e.g. Employment & Labour Relations Court"
+                  placeholder="e.g. High Court / ELRC"
                 />
               </div>
 
@@ -879,7 +1014,7 @@ export default function LawReports() {
                   value={townOrPostCode}
                   onChange={(e) => {
                     setTownOrPostCode(e.target.value);
-                    if (mode === "server") setPage(1);
+                    setPageToFirst();
                   }}
                   placeholder="e.g. Mombasa / 00100"
                 />
@@ -889,10 +1024,7 @@ export default function LawReports() {
                 <button className="lr-btn secondary" onClick={resetFilters}>
                   Clear
                 </button>
-                <button
-                  className="lr-btn"
-                  onClick={() => showToast("Tip: try Decision + Case Type + Year")}
-                >
+                <button className="lr-btn" onClick={() => showToast("Tip: try Decision + Case Type + Year")}>
                   Tip
                 </button>
               </div>
@@ -904,13 +1036,14 @@ export default function LawReports() {
                 <div className="lr-count">
                   {mode === "server" ? (
                     <>
-                      Showing <strong>{reports.length}</strong> of{" "}
-                      <strong>{total}</strong> report{total === 1 ? "" : "s"} • Page{" "}
-                      <strong>{page}</strong>/{totalPages}
+                      Showing <strong>{reports.length}</strong> of <strong>{total}</strong> report
+                      {total === 1 ? "" : "s"} • Page <strong>{page}</strong>/{totalPages}
                     </>
                   ) : (
                     <>
-                      Showing <strong>{visible.length}</strong> report{visible.length === 1 ? "" : "s"}
+                      Showing <strong>{visibleAll.length}</strong> report
+                      {visibleAll.length === 1 ? "" : "s"} • Page{" "}
+                      <strong>{page}</strong>/{totalPages}
                       {detailsLoadingIds.size > 0 ? (
                         <span className="lr-soft"> • loading details…</span>
                       ) : null}
@@ -918,32 +1051,34 @@ export default function LawReports() {
                   )}
                 </div>
 
-                {mode === "server" && (
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      className="lr-card-btn"
-                      disabled={page <= 1}
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    >
-                      ← Prev
-                    </button>
-                    <button
-                      className="lr-card-btn"
-                      disabled={page >= totalPages}
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    >
-                      Next →
-                    </button>
-                  </div>
-                )}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    className="lr-card-btn"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    title="Previous page"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+                  >
+                    <IcArrowLeft style={{ width: 18, height: 18 }} />
+                    Prev
+                  </button>
+                  <button
+                    className="lr-card-btn"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    title="Next page"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+                  >
+                    Next
+                    <IcArrowRight style={{ width: 18, height: 18 }} />
+                  </button>
+                </div>
               </div>
 
               {visible.length === 0 ? (
                 <div className="lr-empty">
                   <strong>No matching reports</strong>
-                  <div style={{ marginTop: 6 }}>
-                    Try clearing filters or changing your search terms.
-                  </div>
+                  <div style={{ marginTop: 6 }}>Try clearing filters or changing your search terms.</div>
                 </div>
               ) : (
                 <div className="lr-cards">
@@ -963,11 +1098,10 @@ export default function LawReports() {
                       mode === "server"
                         ? !!cleanPreview(r?.previewText || "").trim()
                         : availabilityMap[docId] == null
-                          ? true
-                          : !!availabilityMap[docId];
+                        ? true
+                        : !!availabilityMap[docId];
 
                     const hasContent = inferredHasContent;
-
                     const isPremiumRow = !!r.isPremium;
                     const showIncluded =
                       isPremiumRow && (isInst || isPublic) && !accessLoading && hasFullAccess;
@@ -976,6 +1110,11 @@ export default function LawReports() {
 
                     // ✅ Reader expects LawReportId in both modes
                     const detailsId = r.id;
+
+                    const tags = buildTags(meta);
+                    const maxTags = 5;
+                    const shown = tags.slice(0, maxTags);
+                    const remaining = Math.max(0, tags.length - shown.length);
 
                     return (
                       <article
@@ -1006,32 +1145,57 @@ export default function LawReports() {
                           </div>
                         </div>
 
+                        {/* compact tags */}
                         <div className="lr-tags">
-                          {meta.reportNumber ? <span className="lr-tag">{meta.reportNumber}</span> : null}
-                          {meta.year ? <span className="lr-tag">{meta.year}</span> : null}
-                          {meta.decisionType ? <span className="lr-tag">{meta.decisionType}</span> : null}
-                          {meta.caseType ? <span className="lr-tag">{meta.caseType}</span> : null}
-                          {meta.courtType ? <span className="lr-tag">{meta.courtType}</span> : null}
-                          {meta.town ? <span className="lr-tag">{meta.town}</span> : null}
-                          {!meta.town && meta.postCode ? <span className="lr-tag">{meta.postCode}</span> : null}
-                          {meta.citation ? <span className="lr-tag">{meta.citation}</span> : null}
+                          {shown.map((t, idx) => (
+                            <span key={`${r.id}-t-${idx}`} className="lr-tag">
+                              {t}
+                            </span>
+                          ))}
+                          {remaining > 0 ? (
+                            <span className="lr-tag" title={tags.slice(maxTags).join(" • ")}>
+                              +{remaining}
+                            </span>
+                          ) : null}
                         </div>
 
+                        {/* mini meta line with icons */}
                         {mode === "client" ? (
                           (() => {
                             const mh = makeReportMiniHeader(r);
                             return mh ? <div className="lr-mini">{mh}</div> : null;
                           })()
-                        ) : meta.judges ? (
-                          <div className="lr-mini">
-                            {meta.judgmentDate ? `Date: ${meta.judgmentDate}` : ""}
-                            {meta.judges
-                              ? meta.judgmentDate
-                                ? ` • Judges: ${meta.judges}`
-                                : `Judges: ${meta.judges}`
-                              : ""}
+                        ) : (
+                          <div className="lr-mini" style={{ display: "grid", gap: 6 }}>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+                              {meta.judgmentDate ? (
+                                <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                                  <IcCalendar style={{ width: 14, height: 14, opacity: 0.9 }} />
+                                  {meta.judgmentDate}
+                                </span>
+                              ) : null}
+                              {meta.courtType ? (
+                                <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                                  <IcGavel style={{ width: 14, height: 14, opacity: 0.9 }} />
+                                  {meta.courtType}
+                                </span>
+                              ) : null}
+                              {meta.town || meta.postCode ? (
+                                <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                                  <IcPin style={{ width: 14, height: 14, opacity: 0.9 }} />
+                                  {meta.town || meta.postCode}
+                                </span>
+                              ) : null}
+                            </div>
+
+                            {meta.judges ? (
+                              <div style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                                <IcUser style={{ width: 14, height: 14, opacity: 0.9 }} />
+                                {meta.judges}
+                              </div>
+                            ) : null}
                           </div>
-                        ) : null}
+                        )}
 
                         <div className="lr-excerpt">
                           {excerpt || "Preview will appear here once the report content is available."}
@@ -1067,14 +1231,16 @@ export default function LawReports() {
                 </div>
               )}
 
-              {mode === "server" && totalPages > 1 && (
+              {totalPages > 1 && (
                 <div className="lr-pager">
                   <button
                     className="lr-card-btn"
                     disabled={page <= 1}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
                   >
-                    ← Prev
+                    <IcArrowLeft style={{ width: 18, height: 18 }} />
+                    Prev
                   </button>
                   <div className="lr-soft">
                     Page <strong>{page}</strong> of <strong>{totalPages}</strong>
@@ -1083,8 +1249,9 @@ export default function LawReports() {
                     className="lr-card-btn"
                     disabled={page >= totalPages}
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
                   >
-                    Next →
+                    Next <IcArrowRight style={{ width: 18, height: 18 }} />
                   </button>
                 </div>
               )}
