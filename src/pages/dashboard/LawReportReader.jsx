@@ -1,5 +1,5 @@
 // src/pages/dashboard/LawReportReader.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../../api/client";
 import { getAuthClaims } from "../../auth/auth";
@@ -52,37 +52,8 @@ function isGlobalAdminUser() {
 }
 
 // ----------------------
-// Formatting helpers
+// Helpers
 // ----------------------
-const HEADING_SET = new Set([
-  "INTRODUCTION",
-  "BACKGROUND",
-  "FACTS",
-  "HELD",
-  "HOLDING",
-  "ISSUES",
-  "ISSUE",
-  "ANALYSIS",
-  "REASONS",
-  "JUDGMENT",
-  "RULING",
-  "DECISION",
-  "ORDER",
-  "ORDERS",
-  "DISPOSITION",
-  "CONCLUSION",
-  "SUMMARY",
-  "DISSENT",
-  "CONCURRING",
-  "APPEAL",
-  "APPLICATION",
-  "SUBMISSIONS",
-]);
-
-function normalizeText(s) {
-  return String(s || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-}
-
 function formatDate(d) {
   if (!d) return "";
   const dt = new Date(d);
@@ -90,325 +61,6 @@ function formatDate(d) {
   return dt.toISOString().slice(0, 10);
 }
 
-function looksLikeHeading(line) {
-  const t = String(line || "").trim();
-  if (!t) return false;
-
-  const clean = t.replace(/[:.\-–—]+$/g, "").trim();
-  const upper = clean.toUpperCase();
-
-  const words = upper.split(/\s+/).filter(Boolean);
-  if (words.length === 0) return false;
-  if (words.length > 6) return false;
-
-  const alpha = clean.replace(/[^A-Za-z]/g, "");
-  const isAllCaps = alpha.length > 0 && alpha === alpha.toUpperCase();
-  if (!isAllCaps) return false;
-
-  return HEADING_SET.has(upper) || upper.length <= 24;
-}
-
-function slugify(s) {
-  return String(s || "")
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 60);
-}
-
-/**
- * Plain-text reflow to improve readability without changing meaning.
- */
-function reflowForReader(raw) {
-  let t = normalizeText(raw);
-
-  t = t.replace(/[ \t]+/g, " ");
-
-  for (const h of HEADING_SET) {
-    const re = new RegExp(`(^|\\n)\\s*(${h})\\s+`, "g");
-    t = t.replace(re, `$1$2\n\n`);
-  }
-
-  t = t.replace(/\bOrders\s+Reasons\b/g, "Orders\nReasons");
-  t = t.replace(/(^|\n)(Orders|Reasons|Held|HELD|ORDERS|REASONS)\b/g, "$1$2\n");
-  t = t.replace(/\n{3,}/g, "\n\n").trim();
-
-  return t;
-}
-
-function parseListLine(line) {
-  const s = String(line || "");
-
-  let m = s.match(/^\s*(\(?\d+\)?[.)\]])\s+(.*)$/);
-  if (m) return { kind: "ol", marker: m[1], text: (m[2] || "").trim(), olType: "1" };
-
-  m = s.match(/^\s*([a-zA-Z][.)\]])\s+(.*)$/);
-  if (m) {
-    const letter = String(m[1] || "").replace(/[^a-zA-Z]/g, "");
-    const isUpper = letter && letter === letter.toUpperCase();
-    return {
-      kind: "ol",
-      marker: m[1],
-      text: (m[2] || "").trim(),
-      olType: isUpper ? "A" : "a",
-    };
-  }
-
-  m = s.match(/^\s*([-•])\s+(.*)$/);
-  if (m) return { kind: "ul", marker: m[1], text: (m[2] || "").trim() };
-
-  return null;
-}
-
-function splitIntoBlocksWithListsAndHeadings(content) {
-  const text = normalizeText(content);
-  if (!text.trim()) return [];
-
-  const paras = text.split(/\n{2,}/g);
-  const blocks = [];
-
-  let pendingList = null;
-
-  function flushList() {
-    if (pendingList && pendingList.items.length > 0) blocks.push(pendingList);
-    pendingList = null;
-  }
-
-  for (const p of paras) {
-    const raw = p.replace(/\n{3,}/g, "\n\n").trim();
-    if (!raw) continue;
-
-    const lines = raw.split("\n").map((x) => x.trimEnd());
-    const firstLine = (lines.find((x) => x.trim()) || "").trim();
-
-    if (firstLine && looksLikeHeading(firstLine)) {
-      flushList();
-      blocks.push({ type: "heading", text: firstLine.trim() });
-
-      const restLines = lines.slice(lines.indexOf(firstLine) + 1).join("\n").trim();
-      if (restLines) blocks.push({ type: "para", text: restLines });
-      continue;
-    }
-
-    const listCandidates = lines
-      .map((ln) => ({ ln, parsed: parseListLine(ln) }))
-      .filter((x) => !!x.parsed);
-
-    const isMostlyList =
-      listCandidates.length > 0 && listCandidates.length >= Math.max(2, Math.ceil(lines.length * 0.5));
-
-    if (isMostlyList) {
-      for (const { ln, parsed } of lines.map((ln) => ({ ln, parsed: parseListLine(ln) }))) {
-        if (!parsed) {
-          if (pendingList && pendingList.items.length > 0 && ln.trim()) {
-            const last = pendingList.items[pendingList.items.length - 1];
-            last.text = `${last.text}\n${ln.trim()}`;
-          }
-          continue;
-        }
-
-        const isOrdered = parsed.kind === "ol";
-        const olType = parsed.olType || "1";
-
-        if (
-          !pendingList ||
-          pendingList.type !== "list" ||
-          pendingList.ordered !== isOrdered ||
-          (isOrdered && pendingList.olType !== olType)
-        ) {
-          flushList();
-          pendingList = { type: "list", ordered: isOrdered, olType, items: [] };
-        }
-
-        pendingList.items.push({ text: parsed.text });
-      }
-      flushList();
-      continue;
-    }
-
-    flushList();
-    blocks.push({ type: "para", text: raw });
-  }
-
-  flushList();
-  return blocks;
-}
-
-function assignHeadingIds(blocks) {
-  const seen = new Map();
-  return blocks.map((b) => {
-    if (b.type !== "heading") return b;
-    const base = slugify(b.text) || "section";
-    const n = (seen.get(base) || 0) + 1;
-    seen.set(base, n);
-    const id = n === 1 ? base : `${base}-${n}`;
-    return { ...b, id };
-  });
-}
-
-function buildToc(blocksWithIds) {
-  return (blocksWithIds || [])
-    .filter((b) => b.type === "heading" && b.id)
-    .map((b) => ({ id: b.id, text: b.text }));
-}
-
-// ----------------------
-// HTML-aware rendering (CKEditor output)
-// ----------------------
-function looksLikeHtml(s) {
-  const t = String(s || "").trim();
-  if (!t) return false;
-  return /<\/?[a-z][\s\S]*>/i.test(t);
-}
-
-/**
- * Very small sanitizer:
- * - removes script/style/iframe/object/embed
- * - strips event handlers (on*)
- * - keeps safe tags + safe attributes for links
- */
-function sanitizeHtmlBasic(inputHtml) {
-  const html = String(inputHtml || "");
-  if (!html.trim()) return "";
-
-  if (typeof window === "undefined" || typeof DOMParser === "undefined") {
-    return html.replace(/<[^>]+>/g, "");
-  }
-
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, "text/html");
-
-  const removeSelectors = ["script", "style", "iframe", "object", "embed"];
-  removeSelectors.forEach((sel) => doc.querySelectorAll(sel).forEach((n) => n.remove()));
-
-  const allowedTags = new Set([
-    "P",
-    "BR",
-    "STRONG",
-    "B",
-    "EM",
-    "I",
-    "U",
-    "S",
-    "A",
-    "UL",
-    "OL",
-    "LI",
-    "H1",
-    "H2",
-    "H3",
-    "H4",
-    "H5",
-    "H6",
-    "BLOCKQUOTE",
-    "HR",
-    "TABLE",
-    "THEAD",
-    "TBODY",
-    "TR",
-    "TH",
-    "TD",
-    "CODE",
-    "PRE",
-    "SPAN",
-    "DIV",
-  ]);
-
-  const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT);
-  const toRemove = [];
-
-  while (walker.nextNode()) {
-    const el = walker.currentNode;
-    if (!allowedTags.has(el.tagName)) {
-      toRemove.push(el);
-      continue;
-    }
-
-    [...el.attributes].forEach((attr) => {
-      const name = attr.name.toLowerCase();
-      const value = String(attr.value || "");
-
-      if (name.startsWith("on")) {
-        el.removeAttribute(attr.name);
-        return;
-      }
-
-      if (el.tagName === "A") {
-        if (name === "href") {
-          if (/^\s*javascript:/i.test(value)) el.removeAttribute("href");
-          return;
-        }
-        if (name === "target") return;
-        if (name === "rel") return;
-
-        el.removeAttribute(attr.name);
-        return;
-      }
-
-      el.removeAttribute(attr.name);
-    });
-
-    if (el.tagName === "A") {
-      const href = el.getAttribute("href");
-      if (href) {
-        el.setAttribute("target", "_blank");
-        el.setAttribute("rel", "noreferrer noopener");
-      }
-    }
-  }
-
-  for (const el of toRemove) {
-    const parent = el.parentNode;
-    if (!parent) continue;
-    while (el.firstChild) parent.insertBefore(el.firstChild, el);
-    el.remove();
-  }
-
-  return doc.body.innerHTML || "";
-}
-
-/**
- * Build TOC from actual HTML headings (h1-h6). Inject ids if missing.
- */
-function buildHtmlTocAndInjectIds(html) {
-  const safe = sanitizeHtmlBasic(html);
-  if (!safe.trim()) return { html: "", toc: [] };
-
-  if (typeof window === "undefined" || typeof DOMParser === "undefined") {
-    return { html: safe, toc: [] };
-  }
-
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(safe, "text/html");
-
-  const headings = [...doc.body.querySelectorAll("h1,h2,h3,h4,h5,h6")];
-  const toc = [];
-  const seen = new Map();
-
-  for (const h of headings) {
-    const text = (h.textContent || "").trim();
-    if (!text) continue;
-
-    let id = h.getAttribute("id");
-    if (!id) {
-      const base = slugify(text) || "section";
-      const n = (seen.get(base) || 0) + 1;
-      seen.set(base, n);
-      id = n === 1 ? base : `${base}-${n}`;
-      h.setAttribute("id", id);
-    }
-
-    toc.push({ id, text });
-  }
-
-  return { html: doc.body.innerHTML || safe, toc };
-}
-
-// ----------------------
-// AI Panel (CSS-based, no inline styles)
-// ----------------------
 function getApiErrorMessage(err, fallback = "Request failed.") {
   const data = err?.response?.data;
 
@@ -429,6 +81,9 @@ function getApiErrorMessage(err, fallback = "Request failed.") {
   return fallback;
 }
 
+// ----------------------
+// AI Summary Panel (same API endpoints as your current code)
+// ----------------------
 function formatDateMaybe(d) {
   if (!d) return "—";
   try {
@@ -491,30 +146,30 @@ function LawReportAiSummaryPanel({ lawReportId }) {
   }
 
   return (
-    <section className="lrr-ai">
-      <div className="lrr-ai-top">
-        <div className="lrr-ai-titleRow">
-          <div className="lrr-ai-title">AI Summary</div>
-          <span className="lrr-ai-badge">AI generated</span>
+    <section className="lrrAi">
+      <div className="lrrAiTop">
+        <div className="lrrAiTitleRow">
+          <div className="lrrAiTitle">LegalAI Summary</div>
+          <span className="lrrAiBadge">AI generated</span>
         </div>
-        <div className="lrr-ai-sub">
+        <div className="lrrAiSub">
           Generates (and caches) a summary for this report. Always verify important details against the full text.
         </div>
       </div>
 
-      <div className="lrr-ai-controls">
-        <div className="lrr-ai-leftControls">
-          <label className="lrr-ai-field">
-            <span className="lrr-ai-label">Summary type</span>
-            <select className="lrr-ai-select" value={type} onChange={(e) => setType(e.target.value)} disabled={loading}>
+      <div className="lrrAiControls">
+        <div className="lrrAiLeftControls">
+          <label className="lrrAiField">
+            <span className="lrrAiLabel">Summary type</span>
+            <select className="lrrAiSelect" value={type} onChange={(e) => setType(e.target.value)} disabled={loading}>
               <option value="basic">basic</option>
               <option value="extended">extended</option>
             </select>
           </label>
 
-          <label className="lrr-ai-check">
+          <label className="lrrAiCheck">
             <input
-              className="lrr-ai-checkbox"
+              className="lrrAiCheckbox"
               type="checkbox"
               checked={forceRegenerate}
               onChange={(e) => setForceRegenerate(e.target.checked)}
@@ -524,23 +179,23 @@ function LawReportAiSummaryPanel({ lawReportId }) {
           </label>
         </div>
 
-        <div className="lrr-ai-actions">
-          <button type="button" className="lrr-ai-btn lrr-ai-btnPrimary" onClick={fetchCached} disabled={loading || !canRun}>
+        <div className="lrrAiActions">
+          <button type="button" className="lrrAiBtn lrrAiBtnPrimary" onClick={fetchCached} disabled={loading || !canRun}>
             {loading ? "Working…" : "Get cached"}
           </button>
 
-          <button type="button" className="lrr-ai-btn lrr-ai-btnGhost" onClick={generate} disabled={loading || !canRun}>
+          <button type="button" className="lrrAiBtn lrrAiBtnGhost" onClick={generate} disabled={loading || !canRun}>
             {loading ? "Working…" : "Generate"}
           </button>
         </div>
       </div>
 
-      {error ? <div className="lrr-ai-error">{error}</div> : null}
+      {error ? <div className="lrrAiError">{error}</div> : null}
 
       {result ? (
-        <div className="lrr-ai-result">
-          <div className="lrr-ai-meta">
-            <div className="lrr-ai-metaCol">
+        <div className="lrrAiResult">
+          <div className="lrrAiMeta">
+            <div className="lrrAiMetaCol">
               <div>
                 <b>Type:</b> {result.type ?? type}
               </div>
@@ -551,7 +206,7 @@ function LawReportAiSummaryPanel({ lawReportId }) {
               ) : null}
             </div>
 
-            <div className="lrr-ai-metaCol right">
+            <div className="lrrAiMetaCol right">
               <div>
                 <b>Created:</b> {formatDateMaybe(result.createdAt)}
               </div>
@@ -561,12 +216,12 @@ function LawReportAiSummaryPanel({ lawReportId }) {
             </div>
           </div>
 
-          <div className="lrr-ai-body">
-            <pre className="lrr-ai-text">{result.summary || ""}</pre>
+          <div className="lrrAiBody">
+            <pre className="lrrAiText">{result.summary || ""}</pre>
           </div>
         </div>
       ) : (
-        <div className="lrr-ai-tip">
+        <div className="lrrAiTip">
           Tip: Click <b>Get cached</b> first. If none exists, click <b>Generate</b>.
         </div>
       )}
@@ -574,6 +229,9 @@ function LawReportAiSummaryPanel({ lawReportId }) {
   );
 }
 
+// ----------------------
+// Reader
+// ----------------------
 export default function LawReportReader() {
   const { id } = useParams();
   const reportId = Number(id);
@@ -594,8 +252,16 @@ export default function LawReportReader() {
   const [access, setAccess] = useState(null);
   const [accessLoading, setAccessLoading] = useState(false);
 
-  // TOC UX
-  const [tocOpen, setTocOpen] = useState(true);
+  // UI state: "content" or "ai"
+  const [view, setView] = useState("content");
+
+  // Search
+  const [q, setQ] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searchErr, setSearchErr] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [openResults, setOpenResults] = useState(false);
+  const searchAbortRef = useRef({ cancelled: false });
 
   // Load report
   useEffect(() => {
@@ -635,7 +301,7 @@ export default function LawReportReader() {
     async function check() {
       if (!report?.legalDocumentId) return;
 
-      // ✅ Global admin bypass: do not block admin with availability/access checks
+      // ✅ Global admin bypass
       if (isAdmin) {
         if (!cancelled) {
           setHasContent(true);
@@ -688,62 +354,93 @@ export default function LawReportReader() {
     };
   }, [report, isInst, isPublic, isAdmin]);
 
-  // ----------------------
-  // Formatting pipeline (ALWAYS RUN HOOKS HERE — avoids React #310)
-  // ----------------------
   const rawContent = useMemo(() => String(report?.contentText || ""), [report?.contentText]);
-  const contentIsHtml = useMemo(() => looksLikeHtml(rawContent), [rawContent]);
-
-  // HTML mode: sanitize + build TOC from real headings (if any)
-  const htmlPack = useMemo(() => {
-    if (!contentIsHtml) return { html: "", toc: [] };
-    return buildHtmlTocAndInjectIds(rawContent);
-  }, [contentIsHtml, rawContent]);
-
-  // Plain-text mode: reflow + blocks + TOC
-  const formattedText = useMemo(() => {
-    if (contentIsHtml) return "";
-    return reflowForReader(rawContent);
-  }, [contentIsHtml, rawContent]);
-
-  const blocks = useMemo(() => {
-    if (contentIsHtml) return [];
-    const rawBlocks = splitIntoBlocksWithListsAndHeadings(formattedText);
-    return assignHeadingIds(rawBlocks);
-  }, [contentIsHtml, formattedText]);
-
-  const toc = useMemo(() => {
-    if (contentIsHtml) return htmlPack.toc || [];
-    return buildToc(blocks);
-  }, [contentIsHtml, htmlPack.toc, blocks]);
-
-  const hasFullAccess = !!access?.hasFullAccess;
   const textHasContent = !!rawContent.trim();
+  const hasFullAccess = !!access?.hasFullAccess;
 
   const canRead =
     !!report &&
     (isAdmin ||
       ((hasContent || textHasContent) && (!report.isPremium || hasFullAccess || (!isInst && !isPublic))));
 
+// ----------------------
+// Search (debounced) — uses your controller: GET /api/law-reports/search
+// ----------------------
+    useEffect(() => {
+      const abortState = searchAbortRef.current; // ✅ capture once
+      abortState.cancelled = false;
+
+      const term = String(q || "").trim();
+      if (term.length < 2) {
+        setSearchErr("");
+        setSearchResults([]);
+        setOpenResults(false);
+        return () => {
+          abortState.cancelled = true;
+        };
+      }
+
+      const t = setTimeout(async () => {
+        try {
+          setSearching(true);
+          setSearchErr("");
+
+          const res = await api.get(`/law-reports/search`, {
+            params: { q: term, page: 1, pageSize: 8 },
+          });
+
+          if (abortState.cancelled) return;
+
+          const payload = res.data?.data ?? res.data;
+          const items = Array.isArray(payload?.items) ? payload.items : [];
+
+          setSearchResults(items);
+          setOpenResults(true);
+        } catch (e) {
+          if (!abortState.cancelled) {
+            setSearchErr(getApiErrorMessage(e, "Search failed."));
+            setSearchResults([]);
+            setOpenResults(true);
+          }
+        } finally {
+          if (!abortState.cancelled) setSearching(false);
+        }
+      }, 280);
+
+      return () => {
+        abortState.cancelled = true;
+        clearTimeout(t);
+      };
+    }, [q]);
+
+  function pickReport(r) {
+    const rid = Number(r?.id || r?.lawReportId);
+    if (!rid) return;
+    setOpenResults(false);
+    setQ("");
+    setSearchResults([]);
+    navigate(`/dashboard/law-reports/${rid}`);
+  }
+
   // ----------------------
-  // Returns (AFTER hooks)
+  // Returns
   // ----------------------
   if (loading) {
     return (
-      <div className="lrr-wrap">
-        <div className="lrr-loading">Loading report…</div>
+      <div className="lrr2Wrap">
+        <div className="lrr2Loading">Loading report…</div>
       </div>
     );
   }
 
   if (error || !report) {
     return (
-      <div className="lrr-wrap">
-        <div className="lrr-error">
-          <div className="lrr-error-title">Report unavailable</div>
-          <div className="lrr-error-msg">{error || "Not found."}</div>
-          <div className="lrr-actions">
-            <button className="lrr-btn" onClick={() => navigate("/dashboard/law-reports")}>
+      <div className="lrr2Wrap">
+        <div className="lrr2Error">
+          <div className="lrr2ErrorTitle">Report unavailable</div>
+          <div className="lrr2ErrorMsg">{error || "Not found."}</div>
+          <div className="lrr2TopActions">
+            <button className="lrr2Btn" onClick={() => navigate("/dashboard/law-reports")}>
               ← Back to Law Reports
             </button>
           </div>
@@ -754,10 +451,10 @@ export default function LawReportReader() {
 
   if (!canRead) {
     return (
-      <div className="lrr-wrap">
-        <div className="lrr-error">
-          <div className="lrr-error-title">Access required</div>
-          <div className="lrr-error-msg">
+      <div className="lrr2Wrap">
+        <div className="lrr2Error">
+          <div className="lrr2ErrorTitle">Access required</div>
+          <div className="lrr2ErrorMsg">
             {availabilityLoading
               ? "Checking availability…"
               : !hasContent && !textHasContent
@@ -765,16 +462,16 @@ export default function LawReportReader() {
                 : "This is a premium report. Please subscribe or sign in with an eligible account to read it."}
           </div>
 
-          <div className="lrr-actions lrr-actionsRow">
-            <button className="lrr-btn" onClick={() => navigate("/dashboard/law-reports")}>
+          <div className="lrr2TopActions">
+            <button className="lrr2Btn" onClick={() => navigate("/dashboard/law-reports")}>
               ← Back
             </button>
             <button
-              className="lrr-btn secondary"
+              className="lrr2Btn secondary"
               onClick={() => navigate(`/dashboard/documents/${report.legalDocumentId}`)}
               disabled={!report.legalDocumentId}
             >
-              Go to Document Page
+              Document page
             </button>
           </div>
         </div>
@@ -783,149 +480,174 @@ export default function LawReportReader() {
   }
 
   const title = report.parties || report.title || "Law Report";
+  const llrNo = report.reportNumber || report.llrNo || report.llrNumber || String(reportId);
 
   return (
-    <div className="lrr-wrap">
-      {/* Sticky meta header */}
-      <header className="lrr-header">
-        <div className="lrr-header-top">
-          <button className="lrr-pill" onClick={() => navigate("/dashboard/law-reports")}>
-            ← Back
-          </button>
+    <div className="lrr2Wrap">
+      {/* Top header + search */}
+      <header className="lrr2Header">
+        <div className="lrr2HeaderTop">
+          <div className="lrr2Brand">Law Africa Law Reports</div>
 
-          <div className="lrr-header-actions">
+          <div className="lrr2HeaderRight">
+            <button className="lrr2LinkBtn" onClick={() => navigate("/dashboard/law-reports")}>
+              ← Back
+            </button>
+
             <button
-              className="lrr-pill ghost"
+              className="lrr2LinkBtn"
               onClick={() => navigate(`/dashboard/documents/${report.legalDocumentId}`)}
               disabled={!report.legalDocumentId}
             >
               Document page
             </button>
-
-            <button className="lrr-pill ghost" disabled title="Coming soon" onClick={() => {}}>
-              Download (soon)
-            </button>
           </div>
         </div>
 
-        <div className="lrr-title">{title}</div>
+        <div className="lrr2SearchRow">
+          <div className="lrr2SearchLabel">Case Search</div>
 
-        <div className="lrr-meta">
-          {report.reportNumber ? <span className="lrr-chip">{report.reportNumber}</span> : null}
-          {report.citation ? <span className="lrr-chip">{report.citation}</span> : null}
-          {report.year ? <span className="lrr-chip">{report.year}</span> : null}
-          {report.decisionTypeLabel ? <span className="lrr-chip">{report.decisionTypeLabel}</span> : null}
-          {report.caseTypeLabel ? <span className="lrr-chip">{report.caseTypeLabel}</span> : null}
-          {report.courtTypeLabel ? <span className="lrr-chip">{report.courtTypeLabel}</span> : null}
-          {report.town ? <span className="lrr-chip">{report.town}</span> : null}
-          {!report.town && report.townPostCode ? <span className="lrr-chip">{report.townPostCode}</span> : null}
-        </div>
+          <div className="lrr2SearchBox">
+            <input
+              className="lrr2SearchInput"
+              placeholder="Type parties, citation, year, court…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onFocus={() => {
+                if (searchResults.length || searchErr) setOpenResults(true);
+              }}
+            />
+            <button
+              type="button"
+              className="lrr2SearchBtn"
+              onClick={() => setOpenResults((v) => !v)}
+              title="Show results"
+            >
+              {searching ? "Searching…" : "Search"}
+            </button>
 
-        <div className="lrr-submeta">
-          {report.decisionDate ? (
-            <div>
-              <strong>Date:</strong> {formatDate(report.decisionDate)}
-            </div>
-          ) : null}
-          {report.judges ? (
-            <div>
-              <strong>Judges:</strong> {report.judges}
-            </div>
-          ) : null}
-          {report.court ? (
-            <div>
-              <strong>Court:</strong> {report.court}
-            </div>
-          ) : null}
-          {report.caseNumber ? (
-            <div>
-              <strong>Case No:</strong> {report.caseNumber}
-            </div>
-          ) : null}
+            {openResults && (searchErr || searchResults.length > 0) ? (
+              <div className="lrr2SearchDropdown">
+                {searchErr ? <div className="lrr2SearchErr">{searchErr}</div> : null}
 
-          {isAdmin ? <div className="lrr-soft">admin access</div> : null}
-          {!isAdmin && accessLoading ? <div className="lrr-soft">checking access…</div> : null}
-          {!isAdmin && availabilityLoading ? <div className="lrr-soft">checking availability…</div> : null}
+                {searchResults.map((r, idx) => {
+                    const rid = Number(r?.id);
+                    const rtitle = r?.parties || r?.title || `Report #${rid || idx + 1}`;
+                    const rcite = r?.citation || r?.reportNumber || "";
+                                      return (
+                    <button
+                      type="button"
+                      key={rid || idx}
+                      className="lrr2SearchItem"
+                      onClick={() => pickReport(r)}
+                    >
+                      <div className="lrr2SearchItemTitle">{rtitle}</div>
+                      <div className="lrr2SearchItemMeta">{rcite}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="lrr2SearchHint">
+            Usage: To find cases, type in search terms in the textbox above e.g. distressed tenant
+          </div>
         </div>
       </header>
 
-      {/* Content */}
-      <main className="lrr-main">
-        {/* AI Summary (inside reader, above TOC + content) */}
-        <LawReportAiSummaryPanel lawReportId={reportId} />
+      {/* Big title line */}
+      <div className="lrr2TitleLine">
+        <span className="lrr2TitleKicker">LLR No. {llrNo}:</span> {title}
+      </div>
 
-        {/* TOC */}
-        {toc.length > 0 && (
-          <section className="lrr-toc">
-            <button className="lrr-toc-toggle" onClick={() => setTocOpen((v) => !v)}>
-              <span>On this page</span>
-              <span className="lrr-toc-toggle-icon">{tocOpen ? "–" : "+"}</span>
+      {/* Two columns: meta table + actions */}
+      <div className="lrr2TopGrid">
+        <section className="lrr2MetaCard">
+          <div className="lrr2MetaTable">
+            <div className="lrr2Row">
+              <div className="lrr2Key">LLRNO</div>
+              <div className="lrr2Val">{llrNo}</div>
+            </div>
+            {report.caseNumber ? (
+              <div className="lrr2Row">
+                <div className="lrr2Key">CASENO</div>
+                <div className="lrr2Val">{report.caseNumber}</div>
+              </div>
+            ) : null}
+            {report.court ? (
+              <div className="lrr2Row">
+                <div className="lrr2Key">COURT</div>
+                <div className="lrr2Val">{report.court}</div>
+              </div>
+            ) : null}
+            {report.country ? (
+              <div className="lrr2Row">
+                <div className="lrr2Key">COUNTRY</div>
+                <div className="lrr2Val">{report.country}</div>
+              </div>
+            ) : null}
+            {report.town || report.townPostCode ? (
+              <div className="lrr2Row">
+                <div className="lrr2Key">TOWN</div>
+                <div className="lrr2Val">{report.town || report.townPostCode}</div>
+              </div>
+            ) : null}
+            {report.decisionTypeLabel ? (
+              <div className="lrr2Row">
+                <div className="lrr2Key">DECISION</div>
+                <div className="lrr2Val">{report.decisionTypeLabel}</div>
+              </div>
+            ) : null}
+            {report.judges ? (
+              <div className="lrr2Row">
+                <div className="lrr2Key">JUDGE</div>
+                <div className="lrr2Val">{report.judges}</div>
+              </div>
+            ) : null}
+            {report.decisionDate ? (
+              <div className="lrr2Row">
+                <div className="lrr2Key">DATE</div>
+                <div className="lrr2Val">{formatDate(report.decisionDate)}</div>
+              </div>
+            ) : null}
+
+            {isAdmin ? <div className="lrr2MetaNote">admin access</div> : null}
+            {!isAdmin && accessLoading ? <div className="lrr2MetaNote">checking access…</div> : null}
+            {!isAdmin && availabilityLoading ? <div className="lrr2MetaNote">checking availability…</div> : null}
+          </div>
+        </section>
+
+        <section className="lrr2ActionsCard">
+          <div className="lrr2ActionBtns">
+            <button type="button" className="lrr2Btn primary" onClick={() => setView("content")}>
+              View Case Content
             </button>
 
-            {tocOpen && (
-              <div className="lrr-toc-body">
-                {toc.map((t) => (
-                  <a key={t.id} className="lrr-toc-link" href={`#${t.id}`}>
-                    {t.text}
-                  </a>
-                ))}
-              </div>
-            )}
-          </section>
-        )}
+            <button type="button" className="lrr2Btn" onClick={() => setView("ai")}>
+              Summarize with LegalAI
+            </button>
 
-        {!textHasContent ? (
-          <div className="lrr-empty">This report has no content yet.</div>
-        ) : contentIsHtml ? (
-          <article className="lrr-article lrr-html">
-            <div className="lrr-html-body" dangerouslySetInnerHTML={{ __html: htmlPack.html }} />
-          </article>
-        ) : blocks.length === 0 ? (
-          <div className="lrr-empty">This report has no content yet.</div>
+            <button type="button" className="lrr2Btn ghost" disabled title="Coming soon">
+              Download
+            </button>
+          </div>
+        </section>
+      </div>
+
+      {/* Unified content area */}
+      <section className="lrr2Content">
+        {view === "ai" ? (
+          <LawReportAiSummaryPanel lawReportId={reportId} />
+        ) : !textHasContent ? (
+          <div className="lrr2Empty">This report has no content yet.</div>
         ) : (
-          <article className="lrr-article">
-            {blocks.map((b, idx) => {
-              if (b.type === "heading") {
-                return (
-                  <h2 key={idx} id={b.id} className="lrr-h2">
-                    {b.text}
-                  </h2>
-                );
-              }
-
-              if (b.type === "list") {
-                if (b.ordered) {
-                  return (
-                    <ol key={idx} className="lrr-ol" type={b.olType || "1"}>
-                      {(b.items || []).map((it, i) => (
-                        <li key={i} className="lrr-li">
-                          <span className="lrr-li-text">{it.text}</span>
-                        </li>
-                      ))}
-                    </ol>
-                  );
-                }
-
-                return (
-                  <ul key={idx} className="lrr-ul">
-                    {(b.items || []).map((it, i) => (
-                      <li key={i} className="lrr-li">
-                        <span className="lrr-li-text">{it.text}</span>
-                      </li>
-                    ))}
-                  </ul>
-                );
-              }
-
-              return (
-                <p key={idx} className="lrr-p">
-                  {b.text}
-                </p>
-              );
-            })}
+          <article className="lrr2Article">
+            <div className="lrr2ArticleTitle">Case File / Transcript</div>
+            <pre className="lrr2Raw">{rawContent}</pre>
           </article>
         )}
-      </main>
+      </section>
     </div>
   );
 }
