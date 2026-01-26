@@ -1224,7 +1224,7 @@ export default function LawReports() {
                           </div>
                         )}
 
-                        <div className="lr-excerpt">
+                        <div className="lr-excerpt" data-full={excerpt}>
                           {excerpt || "Preview will appear here once the report content is available."}
                         </div>
 

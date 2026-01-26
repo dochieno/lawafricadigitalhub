@@ -44,12 +44,22 @@
   margin: 0 auto 18px auto;
   padding: 18px 18px;
   border-radius: var(--la-radius);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  background:
-    radial-gradient(900px 240px at 0% 0%, rgba(179, 32, 32, 0.20), transparent 60%),
-    radial-gradient(900px 240px at 100% 0%, rgba(139, 28, 28, 0.18), transparent 62%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: var(--la-shadow-sm);
+
+  /* ✅ Image background with premium dark overlay */
+  background:
+    linear-gradient(
+      90deg,
+      rgba(9, 14, 26, 0.88) 0%,
+      rgba(9, 14, 26, 0.72) 45%,
+      rgba(9, 14, 26, 0.55) 100%
+    ),
+    url("/images/law-reports-hero.jpg");
+
+  background-size: cover;
+  background-position: center right;
+  background-repeat: no-repeat;
 }
 
 .lr-hero-inner {
@@ -502,4 +512,39 @@
   transform: translateY(-3px);
   border-color: rgba(179, 32, 32, 0.28);
   box-shadow: 0 18px 46px rgba(2, 6, 23, 0.14);
+}
+/* --- Hover preview tooltip --- */
+.lr-card2 {
+  position: relative;
+}
+
+.lr-excerpt::after {
+  content: attr(data-full);
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 56px; /* sits above Read More button */
+  z-index: 10;
+
+  padding: 12px 14px;
+  border-radius: 12px;
+
+  background: rgba(15, 23, 42, 0.96);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.45;
+
+  box-shadow: 0 20px 50px rgba(2, 6, 23, 0.35);
+
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+/* Show on hover */
+.lr-card2:hover .lr-excerpt::after {
+  opacity: 1;
+  transform: translateY(0);
 }
