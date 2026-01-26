@@ -31,6 +31,25 @@ function IcArrowLeft(props) {
     </svg>
   );
 }
+
+function IcCase(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M7 7h10M7 11h10M7 15h6"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M6.5 3.5h11A2.5 2.5 0 0 1 20 6v14.5A2.5 2.5 0 0 1 17.5 23h-11A2.5 2.5 0 0 1 4 20.5V6A2.5 2.5 0 0 1 6.5 3.5Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
 function IcArrowRight(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
@@ -379,7 +398,7 @@ export default function LawReports() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [
     mode,
     debouncedQ,
@@ -806,7 +825,10 @@ export default function LawReports() {
           }}
         >
           <div className="lr-hero-left" style={{ minWidth: 0, maxWidth: "none" }}>
-            <div className="lr-chip">LawAfrica Reports</div>
+            <div className="lr-chip">
+              <IcCase style={{ width: 18, height: 18 }} />
+              LawAfrica Reports
+            </div>
             <h1 className="lr-hero-title">Law Reports</h1>
             <p className="lr-hero-sub" style={{ maxWidth: "none" }}>
               Access authoritative judicial decisions that set legal precedent. Filter by key
