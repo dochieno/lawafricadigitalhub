@@ -47,19 +47,71 @@
   border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: var(--la-shadow-sm);
 
-  /* ✅ Image background with premium dark overlay */
+  /* ✅ Clear image + controlled overlays */
   background:
+    /* Left-side text protection (stronger) */
     linear-gradient(
       90deg,
-      rgba(9, 14, 26, 0.88) 0%,
-      rgba(9, 14, 26, 0.72) 45%,
-      rgba(9, 14, 26, 0.55) 100%
+      rgba(9, 14, 26, 0.82) 0%,
+      rgba(9, 14, 26, 0.55) 35%,
+      rgba(9, 14, 26, 0.25) 60%,
+      rgba(9, 14, 26, 0.12) 100%
     ),
+
+    /* Very soft vignette for cohesion */
+    radial-gradient(
+      120% 100% at 100% 0%,
+      rgba(9, 14, 26, 0.18),
+      transparent 55%
+    ),
+
+    /* Image */
     url("/images/law-reports-hero.jpg");
 
   background-size: cover;
   background-position: center right;
   background-repeat: no-repeat;
+  background-blend-mode: normal, normal, multiply;
+  filter: contrast(1.05) saturate(1.05);
+}
+
+/* --- LawAfrica watermark overlay --- */
+.lr-hero {
+  position: relative;
+  overflow: hidden;
+}
+
+.lr-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+
+  /* LawAfrica watermark */
+  background-image: url("/images/lawafrica-watermark.svg");
+  background-repeat: no-repeat;
+  background-position: right 32px bottom 28px;
+  background-size: 220px auto;
+
+  opacity: 0.06; /* 👈 faint & premium */
+  filter: grayscale(100%) contrast(1.1);
+}
+.lr-hero > * {
+  position: relative;
+  z-index: 2;
+}
+@media (max-width: 640px) {
+  .lr-hero {
+    background-position: center;
+    background:
+      linear-gradient(
+        180deg,
+        rgba(9, 14, 26, 0.88),
+        rgba(9, 14, 26, 0.75)
+      ),
+      url("/images/law-reports-hero.jpg");
+  }
 }
 
 .lr-hero-inner {
