@@ -97,8 +97,8 @@ function AiSummaryRichText({ text }) {
     .split("\n");
 
   // Detect headings like "Digest:", "Court:", "Issue:", "Summary:", "Held:", "Key Point:"
-  const isHeadingLine = (s) =>
-    /^(digest|court|issue|summary|held|key point)\s*:/i.test(s.trim());
+const isHeadingLine = (s) =>
+  /^(digest|court|issue|summary|held|key points?|keypoint|key-point)\s*:/i.test(s.trim());
 
   // Detect bullets: "-", "•", "*", "–"
   const isBulletLine = (s) => /^\s*[-•*–]\s+/.test(s);
@@ -121,14 +121,14 @@ function AiSummaryRichText({ text }) {
       const [label, ...rest] = s.split(":");
       const value = rest.join(":").trim();
 
-      blocks.push(
-        <div className="lrrAiBlock" key={`h-${i}`}>
-          <div className="lrrAiH">
-            {label.trim()}:
-            {value ? <span className="lrrAiHVal"> {value}</span> : null}
-          </div>
+    blocks.push(
+      <div className="lrrAiBlock" key={`h-${i}`}>
+        <div className="lrrAiH">
+          {label.trim()}:
+          {value ? <span className="lrrAiHVal"> {value}</span> : null}
         </div>
-      );
+      </div>
+    );
       i += 1;
       continue;
     }
@@ -176,7 +176,9 @@ function AiSummaryRichText({ text }) {
   return <div className="lrrAiRich">{blocks}</div>;
 }
 
-function LawReportAiSummaryPanel({ lawReportId }) {
+
+
+function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel }) {
   const [type] = useState("basic"); // keep as default for API param
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -192,6 +194,8 @@ function LawReportAiSummaryPanel({ lawReportId }) {
     fetchCached();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canRun, type, lawReportId]);
+
+  
 
   async function fetchCached() {
     if (!canRun) return;
@@ -217,6 +221,15 @@ function LawReportAiSummaryPanel({ lawReportId }) {
     <div className="lrrAiTitleRow">
       <div className="lrrAiTitle">LegalAI Summary</div>
       <span className="lrrAiBadge">AI generated</span>
+    </div>
+
+    <div className="lrrAiDigestTop">
+      <div className="lrrAiDigestLine">
+        <b>Digest:</b> {digestTitle || "—"}
+      </div>
+      <div className="lrrAiDigestLine">
+        <b>Court:</b> {courtLabel || "—"}
+      </div>
     </div>
 
     <div className="lrrAiSub">
@@ -838,7 +851,11 @@ const searchInputRef = useRef(null);
 {/* Unified content area (THIS MUST be OUTSIDE lrr2TopGrid) */}
 <section className="lrr2Content">
   {view === "ai" ? (
-    <LawReportAiSummaryPanel lawReportId={reportId} />
+    <LawReportAiSummaryPanel
+      lawReportId={reportId}
+      digestTitle={title} // parties/title you already computed
+      courtLabel={report?.court || ""} // from report
+      />
   ) : !textHasContent ? (
     <div className="lrr2Empty">This report has no content yet.</div>
   ) : (
