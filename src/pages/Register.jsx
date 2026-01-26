@@ -1,24 +1,57 @@
-// src/pages/Register.jsx
-import { useEffect, useMemo, useRef, useState,useCallback  } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/client.js";
 import "../styles/register.css";
-//import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 
 const SIGNUP_FEE_KES = 10;
 const PAYMENT_PURPOSE_PUBLIC_SIGNUP = "PublicSignupFee";
-
 const USER_TYPES = [
-  { value: "Public", label: "Individual (Public)", sub: "Pay once, access free content and your purchases" },
-  { value: "Institution", label: "Institution User", sub: "Use your institution email & access code" },
+  {
+    value: "Public",
+    label: "Individual (Public)",
+    sub: "Pay once, access free content and your purchases",
+    icon: "👤",
+  },
+  {
+    value: "Institution",
+    label: "Institution User",
+    sub: "Use your institution email & access code",
+    icon: "🏛️",
+  },
 ];
-
+const PUBLIC_PAY_METHODS = [
+  { value: "MPESA", label: "Mpesa", sub: "Kenya-only (STK prompt)", icon: "📱" },
+  { value: "PAYSTACK", label: "Paystack", sub: "Card/bank/international", icon: "💳" },
+];
 const INSTITUTION_MEMBER_TYPES = [
   { value: "Student", label: "Student", sub: "Learner / enrollee" },
   { value: "Staff", label: "Staff", sub: "Employee / lecturer" },
 ];
 
 const USERNAME_REGEX = /^[A-Za-z]+(\.[A-Za-z]+)*$/;
+
+const AUTH_BENEFITS = [
+  {
+    title: "Statutes",
+    desc: "Consolidated, updated and indexed legal materials.",
+    icon: "⟡",
+  },
+  {
+    title: "Law Reports",
+    desc: "Reliable reporting for research and precedent-based work.",
+    icon: "📄",
+  },
+  {
+    title: "Commentaries",
+    desc: "Expert analysis for deeper understanding.",
+    icon: "💬",
+  },
+  {
+    title: "Journals",
+    desc: "Scholarly insights for academics and practitioners.",
+    icon: "📚",
+  },
+];
 
 function getPasswordRules(pwd) {
   const v = String(pwd || "");
@@ -107,6 +140,7 @@ const LS_REG_COUNTRY = "la_reg_country";
 
 const LS_RESUME_TOKEN = "la_resume_token";
 const LS_RESUME_EMAIL = "la_resume_email";
+const LS_REG_NEXTACTION = "la_reg_next_action";
 
 export default function Register() {
   const nav = useNavigate();
@@ -301,6 +335,20 @@ export default function Register() {
     }
   }, [isPublic]);
 
+  useEffect(() => {
+  if (intentId) return;
+  const storedIntent = localStorage.getItem(LS_REG_INTENT);
+  if (!storedIntent) return;
+
+  const parsed = Number(storedIntent);
+  if (!Number.isFinite(parsed) || parsed <= 0) return;
+
+  // Restore intent into state
+  setIntentId(parsed);
+  const storedNext = localStorage.getItem("la_reg_next_action");
+  if (storedNext) setNextAction(storedNext);
+}, [intentId]);
+
   // -----------------------------
   // ✅ Detect old/local resume data (existing behavior)
   // -----------------------------
@@ -313,6 +361,8 @@ export default function Register() {
       setResumePayMethod(null);
       return;
     }
+
+    
 
     const parsed = Number(storedIntent);
     if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -624,8 +674,26 @@ const isFormValidForSubmit = useMemo(() => {
   // API helpers
   // -----------------------------
   async function createRegistrationIntentIfNeeded() {
-    if (intentId && nextAction) return { intentId, nextAction };
+      if (intentId) {
+        // If nextAction is missing (e.g., refresh), try to recover via status
+        if (!nextAction) {
+          try {
+            const res = await api.get(`/registration/intent/${intentId}/status`);
+            const data = res.data?.data ?? res.data;
 
+            const recovered = data?.nextAction || data?.NextAction || null;
+            if (recovered) {
+              setNextAction(recovered);
+              localStorage.setItem(LS_REG_NEXTACTION, String(recovered));
+              return { intentId, nextAction: recovered };
+            }
+          } catch {
+            // If status call fails, fall through and create a fresh intent (rare)
+          }
+        } else {
+          return { intentId, nextAction };
+        }
+      }
     const payload = {
       email: email.trim(),
       username: username.trim(),
@@ -649,6 +717,8 @@ const isFormValidForSubmit = useMemo(() => {
 
     setIntentId(data.registrationIntentId);
     setNextAction(data.nextAction);
+    localStorage.setItem(LS_REG_INTENT, String(data.registrationIntentId));
+    localStorage.setItem(LS_REG_NEXTACTION, String(data.nextAction || ""));
 
     return { intentId: data.registrationIntentId, nextAction: data.nextAction };
   }
@@ -730,6 +800,7 @@ const isFormValidForSubmit = useMemo(() => {
         localStorage.removeItem(LS_REG_PAYMETHOD);
         localStorage.removeItem(LS_REG_PHONE);
         localStorage.removeItem(LS_REG_COUNTRY);
+        localStorage.removeItem(LS_REG_NEXTACTION);
 
         nav("/twofactor-setup", {
           replace: true,
@@ -990,19 +1061,11 @@ const isFormValidForSubmit = useMemo(() => {
       setResumeLoading(false);
     }
   }
-
-  // -----------------------------
-  // ✅ Step 3 buttons: Continue with Mpesa / Paystack (using resumed intent)
   // -----------------------------
   function getPendingIntentId(p) {
     if (!p) return null;
 
-    // From GET /registration/resume/pending:
-    // { hasPending, registrationIntentId, status, expiresAt, nextAction }
     const id1 = p.registrationIntentId;
-
-    // From verify-otp DTO:
-    // { HasPending, RegistrationIntentId, ... }
     const id2 = p.RegistrationIntentId;
 
     // From nested shapes if any:
@@ -1115,10 +1178,6 @@ const isFormValidForSubmit = useMemo(() => {
       setResumeContinueLoading(false);
     }
   }
-
-  // -----------------------------
-  // Actions
-  // -----------------------------
   async function onCreateAccount(e) {
     e.preventDefault();
     setError("");
@@ -1273,9 +1332,9 @@ const isFormValidForSubmit = useMemo(() => {
     localStorage.removeItem(LS_REG_PAYMETHOD);
     localStorage.removeItem(LS_REG_PHONE);
     localStorage.removeItem(LS_REG_COUNTRY);
-
+    localStorage.removeItem(LS_REG_NEXTACTION);
     localStorage.removeItem(LS_RESUME_TOKEN);
-    localStorage.removeItem(LS_RESUME_EMAIL);
+    localStorage.removeItem(LS_RESUME_EMAIL);    
 
     setResumeToken("");
     setResumePending(null);
@@ -1286,120 +1345,112 @@ const isFormValidForSubmit = useMemo(() => {
     // keep existing form values as-is (existing behavior); do not reset unless you already had that elsewhere
   }
 
-  // -----------------------------
-  // UI helpers
-  // -----------------------------
-  function FieldError({ name }) {
-    const msg = fieldErrors?.[name];
-    if (!msg || !touched?.[name]) return null;
-    return <div style={{ marginTop: 6, fontSize: 12, color: "#b91c1c" }}>{msg}</div>;
-  }
-
-  function inputStyle(name) {
-    if (touched?.[name] && fieldErrors?.[name]) {
-      return { borderColor: "#ef4444", outlineColor: "#ef4444" };
-    }
-    if (touched?.[name] && !fieldErrors?.[name]) {
-      return { borderColor: "#22c55e", outlineColor: "#22c55e" };
-    }
-    return undefined;
-  }
-
-  function PillChoice({ items, value, onChange, disabled, tone = "default" }) {
-    const accent = tone === "payment" ? "#0f766e" : "#8b1c1c";
-    const activeBg = tone === "payment" ? "#ecfeff" : "#fff1f2";
-
+    function AuthLeftPanel() {
     return (
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {items.map((t) => {
-          const active = value === t.value;
-          return (
-            <button
-              key={t.value}
-              type="button"
-              disabled={disabled}
-              onClick={() => onChange(t.value)}
-              style={{
-                padding: "12px 14px",
-                borderRadius: 16,
-                border: active ? `2px solid ${accent}` : "1px solid #e5e7eb",
-                background: active ? activeBg : "white",
-                color: "#111827",
-                fontWeight: 900,
-                cursor: disabled ? "not-allowed" : "pointer",
-                flex: "1 1 240px",
-                textAlign: "left",
-                boxShadow: active ? "0 10px 22px rgba(0,0,0,0.06)" : "none",
-              }}
-            >
-              <div style={{ fontSize: 14 }}>{t.label}</div>
-              {t.sub && (
-                <div style={{ marginTop: 4, fontSize: 12, color: "#6b7280", fontWeight: 650, lineHeight: 1.3 }}>
-                  {t.sub}
+      <div className="auth-left-inner">
+        <img src="/logo.png" alt="LawAfrica" className="auth-brand" />
+
+        <h1 className="auth-left-title">Digital Platform</h1>
+        <p className="auth-left-subtitle">Trusted legal knowledge. Anywhere. Anytime.</p>
+
+        <div className="auth-benefits-card">
+          <div className="auth-benefits-title">What you get</div>
+
+          <div className="auth-benefits-list">
+            {AUTH_BENEFITS.map((b) => (
+              <div key={b.title} className="auth-benefit">
+                <div className="auth-benefit-ic">{b.icon}</div>
+                <div className="auth-benefit-txt">
+                  <div className="auth-benefit-name">{b.title}</div>
+                  <div className="auth-benefit-desc">{b.desc}</div>
                 </div>
-              )}
-            </button>
-          );
-        })}
+              </div>
+            ))}
+          </div>
+
+          <div className="auth-benefits-foot">
+            Used by courts, law firms, universities, and public institutions.
+          </div>
+        </div>
       </div>
     );
   }
 
+  // -----------------------------
+  // UI helpers (NO inline styles)
+  // -----------------------------
+  function FieldError({ name }) {
+    const msg = fieldErrors?.[name];
+    if (!msg || !touched?.[name]) return null;
+    return <div className="auth-field-error">{msg}</div>;
+  }
+
+  function inputClass(name, base = "") {
+    const hasTouched = !!touched?.[name];
+    const hasErr = !!fieldErrors?.[name];
+
+    const cls = [base].filter(Boolean);
+
+    if (hasTouched && hasErr) cls.push("la-input-err");
+    if (hasTouched && !hasErr) cls.push("la-input-ok");
+
+    return cls.join(" ");
+  }
+
   function Alert({ kind, children }) {
     if (!children) return null;
-
     const isErr = kind === "error";
-    const bg = isErr ? "#fef2f2" : "#ecfdf5";
-    const border = isErr ? "#fecaca" : "#a7f3d0";
-    const color = isErr ? "#991b1b" : "#065f46";
-    const icon = isErr ? "⚠️" : "✅";
-
     return (
-      <div
-        className={isErr ? "error-box" : "success-box"}
-        style={{
-          background: bg,
-          border: `1px solid ${border}`,
-          color,
-          padding: "12px 12px",
-          borderRadius: 12,
-          whiteSpace: "pre-wrap",
-          display: "flex",
-          gap: 10,
-          alignItems: "flex-start",
-          marginBottom: 12,
-        }}
-      >
-        <div style={{ fontSize: 16, lineHeight: 1 }}>{icon}</div>
-        <div style={{ flex: 1 }}>{children}</div>
+      <div className={`auth-alert ${isErr ? "error" : "ok"}`}>
+        <div className="auth-alert-icon" aria-hidden="true">
+          {isErr ? "⚠️" : "✅"}
+        </div>
+        <div className="auth-alert-body">{children}</div>
       </div>
     );
   }
 
   function StepPill({ text }) {
-    return (
-      <span
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          padding: "6px 10px",
-          borderRadius: 999,
-          fontSize: 12,
-          fontWeight: 800,
-          background: "#f3f4f6",
-          color: "#374151",
-        }}
-      >
-        {text}
-      </span>
-    );
+    return <span className="ra-step-pill">{text}</span>;
   }
+
+function PillChoice({ items, value, onChange, disabled, tone = "default" }) {
+  return (
+    <div className={`pill-grid tone-${tone}`}>
+      {items.map((t) => {
+        const active = value === t.value;
+        return (
+          <button
+            key={t.value}
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(t.value)}
+            className={["pill-btn", active ? "is-active" : ""].join(" ")}
+          >
+            <div className="pill-top">
+              {t.icon && (
+                <div className="pill-ic" aria-hidden="true">
+                  {t.icon}
+                </div>
+              )}
+              <div className="pill-title">{t.label}</div>
+            </div>
+
+            {t.sub && <div className="pill-sub">{t.sub}</div>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
   function RuleItem({ ok, label }) {
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: ok ? "#065f46" : "#6b7280" }}>
-        <span aria-hidden="true">{ok ? "✅" : "❌"}</span>
-        <span>{label}</span>
+      <div className={`rule-item ${ok ? "ok" : "bad"}`}>
+        <span className="rule-dot" aria-hidden="true">
+          {ok ? "✓" : "×"}
+        </span>
+        <span className="rule-text">{label}</span>
       </div>
     );
   }
@@ -1415,427 +1466,274 @@ const isFormValidForSubmit = useMemo(() => {
     }
   }
 
-  // -----------------------------
-  // SUCCESS SCREEN (unchanged)
-  // -----------------------------
   if (registrationComplete) {
     return (
-      <div className="register-layout">
-        <div className="register-info-panel" style={{ flex: "0 0 40%" }}>
-          <img src="/logo.png" alt="LawAfrica" className="register-brand-logo" />
-          <h1>Account created ✅</h1>
-          <p className="register-tagline">Next step: complete 2FA setup.</p>
+      <div className="auth-shell">
+        <aside className="auth-left">
+          <AuthLeftPanel />
+        </aside>
 
-          <ul className="register-benefits">
-            <li>✔ Check your email for the 2FA setup QR/setup instructions</li>
-            <li>✔ Add LawAfrica to your Authenticator app</li>
-            <li>✔ Verify using setup token + 6-digit code</li>
-          </ul>
-        </div>
-
-        <div className="register-form-panel" style={{ flex: "1 1 60%" }}>
-          <div className="register-card">
-            <h2>Proceed to 2FA setup</h2>
-            <p className="subtitle">{successMessage || "Your account is ready. Continue to set up 2FA."}</p>
+        <main className="auth-right">
+          <section className="auth-card">
+            <h2 className="auth-title">Account created ✅</h2>
+            <p className="auth-subtitle">{successMessage || "Next step: complete 2FA setup."}</p>
 
             <Alert kind="error">{error ? toText(error) : ""}</Alert>
             <Alert kind="ok">{info ? toText(info) : ""}</Alert>
 
-            <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div className="auth-actions-row">
               <button
                 type="button"
+                className="auth-btn auth-btn-primary"
                 onClick={() =>
                   nav("/twofactor-setup", {
                     replace: true,
                     state: { username: username.trim(), password, setupToken: postRegisterSetupToken },
                   })
                 }
-                style={{
-                  width: "auto",
-                  padding: "10px 14px",
-                  background: "#8b1c1c",
-                  color: "white",
-                  borderRadius: 12,
-                }}
               >
                 Continue to 2FA setup →
               </button>
 
-              <button
-                type="button"
-                onClick={() => nav("/login")}
-                style={{
-                  width: "auto",
-                  padding: "10px 14px",
-                  background: "#111827",
-                  color: "white",
-                  borderRadius: 12,
-                }}
-              >
+              <button type="button" className="auth-btn auth-btn-dark" onClick={() => nav("/login")}>
                 Go to login
               </button>
 
-              <button
-                type="button"
-                onClick={startOver}
-                style={{
-                  width: "auto",
-                  padding: "10px 14px",
-                  background: "#6b7280",
-                  color: "white",
-                  borderRadius: 12,
-                }}
-              >
+              <button type="button" className="auth-btn auth-btn-muted" onClick={startOver}>
                 Start over
               </button>
             </div>
 
             {(intentId || nextAction) && (
-              <div style={{ marginTop: 14, fontSize: 12, color: "#6b7280" }}>
+              <div className="auth-debug">
                 Intent: {intentId ? `#${intentId}` : "—"} | Next: {nextAction || "—"}
               </div>
             )}
-          </div>
-        </div>
+          </section>
+        </main>
       </div>
     );
   }
 
-  // -----------------------------
-  // MAIN REGISTER
-  // -----------------------------
   const resumeHasPending = getPendingHasPending(resumePending);
   const resumeRegId = getPendingIntentId(resumePending);
 
-  return (
-    <div className="register-layout">
-      <div className="register-info-panel" style={{ flex: "0 0 40%" }}>
-        <img src="/logo.png" alt="LawAfrica" className="register-brand-logo" />
-        <h1>Create your LawAfrica account</h1>
+return (
+  <div className="auth-shell">
+    <aside className="auth-left">
+      <AuthLeftPanel />
+    </aside>
 
-        {isPublic ? (
-          <p className="register-tagline">
-            <strong>Public signup fee applies (KES {SIGNUP_FEE_KES}).</strong>
-            <br />
-            Choose <strong>Mpesa</strong> (Kenya) or <strong>Paystack</strong> (card/bank/international).
-          </p>
-        ) : (
-          <p className="register-tagline">
-            Use your institution email and complete signup securely.
-            <br />
-            <strong>Institution access code is required for security.</strong>
-          </p>
+    <main className="auth-right">
+      <section className="auth-card">
+        <h2 className="auth-title">Create account</h2>
+
+        {/* Existing (old/local resume): unchanged */}
+        {resumeAvailable && !waitingPayment && !intentId && (
+          <div className="ra-resume-warn">
+            <div className="ra-resume-warn-title">You have an unfinished registration.</div>
+
+            <div className="ra-resume-warn-text">
+              Intent #{resumeIntentId} {resumePayMethod ? `• Method: ${resumePayMethod}` : ""}. You can resume and complete
+              payment now.
+            </div>
+
+            <div className="ra-actions">
+              <button type="button" onClick={resumeRegistration} className="ra-btn ra-btn-dark">
+                Resume registration
+              </button>
+
+              <button type="button" onClick={startOver} className="ra-btn ra-btn-gray">
+                Discard and start new
+              </button>
+            </div>
+          </div>
         )}
 
-        <ul className="register-benefits">
-          <li>✔ Secure signup via registration intent</li>
-          <li>✔ 2FA setup after account creation</li>
-          <li>✔ Institution memberships can be managed by your admin</li>
-        </ul>
-      </div>
-
-      <div className="register-form-panel" style={{ flex: "1 1 60%" }}>
-        <div className="register-card" style={{ borderRadius: 18 }}>
-          <h2>Sign up</h2>
-
-          {/* Existing (old/local resume): unchanged */}
-          {resumeAvailable && !waitingPayment && !intentId && (
-            <div
-              style={{
-                marginBottom: 12,
-                padding: "12px 12px",
-                borderRadius: 14,
-                border: "1px solid #fde68a",
-                background: "#fffbeb",
-                color: "#92400e",
-              }}
-            >
-              <div style={{ fontWeight: 900 }}>You have an unfinished registration.</div>
-              <div style={{ marginTop: 6, fontSize: 13, lineHeight: 1.35 }}>
-                Intent #{resumeIntentId} {resumePayMethod ? `• Method: ${resumePayMethod}` : ""}. You can resume and
-                complete payment now.
-              </div>
-              <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  onClick={resumeRegistration}
-                  style={{ width: "auto", padding: "10px 14px", borderRadius: 12, background: "#92400e", color: "white" }}
-                >
-                  Resume registration
-                </button>
-                <button
-                  type="button"
-                  onClick={startOver}
-                  style={{ width: "auto", padding: "10px 14px", borderRadius: 12, background: "#6b7280", color: "white" }}
-                >
-                  Discard and start new
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Resume on any device/browser via Email + OTP */}
-          {!waitingPayment && !intentId && (
-            <div
-              style={{
-                marginBottom: 12,
-                borderRadius: 16,
-                border: "1px solid #e5e7eb",
-                background: "linear-gradient(180deg, #ffffff 0%, #fafafa 100%)",
-                padding: 12,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                <div>
-                  <div style={{ fontWeight: 950, color: "#111827" }}>Resume signup with Email + Code</div>
-                  <div style={{ marginTop: 4, fontSize: 13, color: "#6b7280", lineHeight: 1.35 }}>
-                    Use this if you switched browser/device, cleared storage, or didn’t finish payment.
-                  </div>
+        {/* Resume on any device/browser via Email + OTP */}
+        {!waitingPayment && !intentId && (
+          <div className="ra-panel">
+            <div className="ra-resume-head">
+              <div>
+                <div className="ra-resume-head-title">Resume signup with Email + Code</div>
+                <div className="ra-resume-head-sub">
+                  Use this if you switched browser/device, cleared storage, or didn’t finish payment.
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setResumeOtpOpen((s) => !s);
-                    setResumeError("");
-                    setResumeInfo("");
-                    if (!resumeEmail && email) setResumeEmail(String(email).trim());
-                  }}
-                  style={{
-                    width: "auto",
-                    padding: "10px 12px",
-                    borderRadius: 12,
-                    background: resumeOtpOpen ? "#111827" : "#8b1c1c",
-                    color: "white",
-                    fontWeight: 900,
-                  }}
-                >
-                  {resumeOtpOpen ? "Close" : "Resume"}
-                </button>
               </div>
 
-              {resumeOtpOpen && (
-                <div style={{ marginTop: 12 }}>
-                  <Alert kind="error">{resumeError ? toText(resumeError) : ""}</Alert>
-                  <Alert kind="ok">{resumeInfo ? toText(resumeInfo) : ""}</Alert>
+              <button
+                type="button"
+                className={`ra-btn ${resumeOtpOpen ? "ra-btn-dark" : "ra-btn-red"}`}
+                onClick={() => {
+                  setResumeOtpOpen((s) => !s);
+                  setResumeError("");
+                  setResumeInfo("");
+                  if (!resumeEmail && email) setResumeEmail(String(email).trim());
+                }}
+              >
+                {resumeOtpOpen ? "Close" : "Resume"}
+              </button>
+            </div>
 
-                  <div style={{ display: "grid", gap: 10 }}>
-                    <div>
-                      <label className="field-label">Email used during signup</label>
-                      <input
-                        value={resumeEmail}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setResumeEmail(v);
-                          setResumeError("");
-                        }}
-                        placeholder="e.g. name@example.com"
-                        disabled={resumeLoading || resumeContinueLoading}
-                      />
-                      <div style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>
-                        We’ll send a 6-digit code if an unfinished registration exists for this email.
-                      </div>
-                    </div>
+            {resumeOtpOpen && (
+                <div className="ra-stack ra-mt-12">
+                <Alert kind="error">{resumeError ? toText(resumeError) : ""}</Alert>
+                <Alert kind="ok">{resumeInfo ? toText(resumeInfo) : ""}</Alert>
 
-                    {/* Request OTP */}
-                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                      <button
-                        type="button"
-                        onClick={requestResumeOtp}
-                        disabled={resumeLoading || resumeContinueLoading || resumeCooldown > 0}
-                        style={{
-                          width: "auto",
-                          padding: "10px 14px",
-                          borderRadius: 12,
-                          background: resumeCooldown > 0 ? "#9ca3af" : "#0f766e",
-                          color: "white",
-                          fontWeight: 950,
-                        }}
-                      >
-                        {resumeLoading ? "Sending..." : resumeOtpSent ? "Resend code" : "Send code"}
-                        {resumeCooldown > 0 ? ` (${resumeCooldown}s)` : ""}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={resetResumeOtpUi}
-                        disabled={resumeLoading || resumeContinueLoading}
-                        style={{
-                          width: "auto",
-                          padding: "10px 14px",
-                          borderRadius: 12,
-                          background: "#6b7280",
-                          color: "white",
-                          fontWeight: 900,
-                        }}
-                      >
-                        Reset
-                      </button>
-
-                      {resumeOtpSent && (
-                        <div style={{ alignSelf: "center", fontSize: 12, color: "#6b7280" }}>
-                          Code expires in <strong>{resumeExpires > 0 ? `${Math.ceil(resumeExpires / 60)} min` : "—"}</strong>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Enter + Verify OTP */}
-                    <div
-                      style={{
-                        padding: 12,
-                        borderRadius: 14,
-                        border: "1px solid #e5e7eb",
-                        background: "#ffffff",
+                <div className="ra-stack">
+                  <div>
+                    <label className="field-label">Email used during signup</label>
+                    <input
+                      className={inputClass("resumeEmail")}
+                      value={resumeEmail}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setResumeEmail(v);
+                        setResumeError("");
                       }}
-                    >
-                      <label className="field-label">6-digit code</label>
-                      <input
-                        value={resumeCode}
-                        onChange={(e) => {
-                          const v = String(e.target.value || "").replace(/\D/g, "").slice(0, 6);
-                          setResumeCode(v);
-                          setResumeError("");
-                        }}
-                        inputMode="numeric"
-                        placeholder="123456"
-                        disabled={resumeLoading || resumeContinueLoading || !resumeOtpSent}
-                        style={{
-                          textAlign: "center",
-                          letterSpacing: "6px",
-                          fontWeight: 950,
-                          fontSize: 18,
-                        }}
-                      />
-
-                      <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                        <button
-                          type="button"
-                          onClick={verifyResumeOtp}
-                          disabled={
-                            resumeLoading || resumeContinueLoading || !resumeOtpSent || !/^\d{6}$/.test(String(resumeCode))
-                          }
-                          style={{
-                            width: "auto",
-                            padding: "10px 14px",
-                            borderRadius: 12,
-                            background: "#111827",
-                            color: "white",
-                            fontWeight: 950,
-                          }}
-                        >
-                          {resumeLoading ? "Verifying..." : "Verify code"}
-                        </button>
-
-                        {resumeVerified && (
-                          <span style={{ fontSize: 13, color: "#065f46", fontWeight: 900 }}>Verified ✅ (Step 1)</span>
-                        )}
-                      </div>
-
-                      {/* Step 2 */}
-                      <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                        <button
-                          type="button"
-                          onClick={fetchResumePending}
-                          disabled={resumeLoading || resumeContinueLoading || !String(resumeToken || "").trim()}
-                          style={{
-                            width: "auto",
-                            padding: "10px 14px",
-                            borderRadius: 12,
-                            background: "#8b1c1c",
-                            color: "white",
-                            fontWeight: 950,
-                          }}
-                        >
-                          Load pending registration (Step 2)
-                        </button>
-                      </div>
-
-                      {/* Pending details + Step 3 buttons */}
-                      {resumePending && (
-                        <div
-                          style={{
-                            marginTop: 12,
-                            padding: 12,
-                            borderRadius: 14,
-                            border: "1px solid #dbeafe",
-                            background: "#eff6ff",
-                            color: "#1e3a8a",
-                          }}
-                        >
-                          <div style={{ fontWeight: 950, marginBottom: 6 }}>Pending registration</div>
-
-                          {(() => {
-                            if (!resumeHasPending) {
-                              return <div style={{ fontSize: 13 }}>No pending registration found for this email.</div>;
-                            }
-
-                            const status = resumePending?.status ?? resumePending?.Status ?? null;
-                            const next = resumePending?.nextAction ?? resumePending?.NextAction ?? null;
-                            const exp = resumePending?.expiresAt ?? resumePending?.ExpiresAt ?? null;
-
-                            return (
-                              <div style={{ display: "grid", gap: 6, fontSize: 13 }}>
-                                <div>
-                                  <strong>Intent:</strong> #{resumeRegId ?? "—"}
-                                </div>
-                                <div>
-                                  <strong>Status:</strong> {status ?? "—"}
-                                </div>
-                                <div>
-                                  <strong>Next action:</strong> {next ?? "—"}
-                                </div>
-                                <div>
-                                  <strong>Expires:</strong> {exp ? formatDateMaybe(exp) : "—"}
-                                </div>
-
-                                <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                                  <button
-                                    type="button"
-                                    onClick={continueResumeWithMpesa}
-                                    disabled={resumeContinueLoading}
-                                    style={{
-                                      width: "auto",
-                                      padding: "10px 14px",
-                                      borderRadius: 12,
-                                      background: "#0f766e",
-                                      color: "white",
-                                      fontWeight: 950,
-                                    }}
-                                  >
-                                    {resumeContinueLoading ? "Working..." : "Continue with Mpesa"}
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={continueResumeWithPaystack}
-                                    disabled={resumeContinueLoading}
-                                    style={{
-                                      width: "auto",
-                                      padding: "10px 14px",
-                                      borderRadius: 12,
-                                      background: "#111827",
-                                      color: "white",
-                                      fontWeight: 950,
-                                    }}
-                                  >
-                                    {resumeContinueLoading ? "Working..." : "Continue with Paystack"}
-                                  </button>
-                                </div>
-
-                                <div style={{ marginTop: 6, fontSize: 12, color: "#1f2937" }}>
-                                  Mpesa will send an STK prompt. Paystack will redirect you to checkout.
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      )}
+                      placeholder="e.g. name@example.com"
+                      disabled={resumeLoading || resumeContinueLoading}
+                    />
+                    <div className="ra-help">
+                      We’ll send a 6-digit code if an unfinished registration exists for this email.
                     </div>
                   </div>
+
+                  <div className="ra-actions">
+                    <button
+                      type="button"
+                      className={`ra-btn ${resumeCooldown > 0 ? "ra-btn-gray" : "ra-btn-teal"}`}
+                      onClick={requestResumeOtp}
+                      disabled={resumeLoading || resumeContinueLoading || resumeCooldown > 0}
+                    >
+                      {resumeLoading ? "Sending..." : resumeOtpSent ? "Resend code" : "Send code"}
+                      {resumeCooldown > 0 ? ` (${resumeCooldown}s)` : ""}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="ra-btn ra-btn-gray"
+                      onClick={resetResumeOtpUi}
+                      disabled={resumeLoading || resumeContinueLoading}
+                    >
+                      Reset
+                    </button>
+
+                    {resumeOtpSent && (
+                      <div className="ra-help ra-self-center">
+                        Code expires in <strong>{resumeExpires > 0 ? `${Math.ceil(resumeExpires / 60)} min` : "—"}</strong>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="ra-code-box">
+                    <label className="field-label">6-digit code</label>
+                    <input
+                      className={`ra-code-input ${inputClass("resumeCode")}`}
+                      value={resumeCode}
+                      onChange={(e) => {
+                        const v = String(e.target.value || "").replace(/\D/g, "").slice(0, 6);
+                        setResumeCode(v);
+                        setResumeError("");
+                      }}
+                      inputMode="numeric"
+                      placeholder="123456"
+                      disabled={resumeLoading || resumeContinueLoading || !resumeOtpSent}
+                    />
+
+                    <div className="ra-actions ra-items-center">
+                      <button
+                        type="button"
+                        className="ra-btn ra-btn-dark"
+                        onClick={verifyResumeOtp}
+                        disabled={
+                          resumeLoading ||
+                          resumeContinueLoading ||
+                          !resumeOtpSent ||
+                          !/^\d{6}$/.test(String(resumeCode))
+                        }
+                      >
+                        {resumeLoading ? "Verifying..." : "Verify code"}
+                      </button>
+
+                      {resumeVerified && (
+                          <span className="ra-verified">Verified ✅ (Step 1)</span>
+                      )}
+                    </div>
+
+                    <div className="ra-actions">
+                      <button
+                        type="button"
+                        className="ra-btn ra-btn-red"
+                        onClick={fetchResumePending}
+                        disabled={resumeLoading || resumeContinueLoading || !String(resumeToken || "").trim()}
+                      >
+                        Load pending registration (Step 2)
+                      </button>
+                    </div>
+
+                    {resumePending && (
+                      <div className="ra-pending">
+                        <div className="ra-pending-title">Pending registration</div>
+
+                        {(() => {
+                          if (!resumeHasPending) {
+                            return <div className="ra-text-13">No pending registration found for this email.</div>;
+                          }
+
+                          const status = resumePending?.status ?? resumePending?.Status ?? null;
+                          const next = resumePending?.nextAction ?? resumePending?.NextAction ?? null;
+                          const exp = resumePending?.expiresAt ?? resumePending?.ExpiresAt ?? null;
+
+                          return (
+                            <div className="ra-pending-grid">
+                              <div>
+                                <strong>Intent:</strong> #{resumeRegId ?? "—"}
+                              </div>
+                              <div>
+                                <strong>Status:</strong> {status ?? "—"}
+                              </div>
+                              <div>
+                                <strong>Next action:</strong> {next ?? "—"}
+                              </div>
+                              <div>
+                                <strong>Expires:</strong> {exp ? formatDateMaybe(exp) : "—"}
+                              </div>
+
+                              <div className="ra-actions">
+                                <button
+                                  type="button"
+                                  className="ra-btn ra-btn-teal"
+                                  onClick={continueResumeWithMpesa}
+                                  disabled={resumeContinueLoading}
+                                >
+                                  {resumeContinueLoading ? "Working..." : "Continue with Mpesa"}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="ra-btn ra-btn-dark"
+                                  onClick={continueResumeWithPaystack}
+                                  disabled={resumeContinueLoading}
+                                >
+                                  {resumeContinueLoading ? "Working..." : "Continue with Paystack"}
+                                </button>
+                              </div>
+
+                              <div className="ra-pending-note">
+                                Mpesa will send an STK prompt. Paystack will redirect you to checkout.
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
+        )}
 
           <p className="subtitle">
             {isPublic
@@ -1845,34 +1743,24 @@ const isFormValidForSubmit = useMemo(() => {
 
           <Alert kind="error">{error ? toText(error) : ""}</Alert>
           <Alert kind="ok">{info ? toText(info) : ""}</Alert>
-
           {isPublic && (
-            <div
-              style={{
-                marginBottom: 14,
-                background: "#f0f9ff",
-                border: "1px solid #bae6fd",
-                color: "#0c4a6e",
-                padding: "12px 12px",
-                borderRadius: 16,
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                <div style={{ fontWeight: 950 }}>
-                  Signup fee: <span style={{ color: "#0f766e" }}>KES {SIGNUP_FEE_KES}</span>
+            <div className="ra-fee">
+              <div className="ra-fee-row">
+                <div className="ra-fee-amount">
+                  Signup fee: <span className="ra-fee-accent">KES {SIGNUP_FEE_KES}</span>
                 </div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <div className="ra-fee-steps">
                   <StepPill text="1) Create intent" />
                   <StepPill text="2) Pay" />
                   <StepPill text="3) Auto-confirm" />
                 </div>
               </div>
 
-              <div style={{ marginTop: 6, fontSize: 13, color: "#075985" }}>
+              <div className="ra-fee-desc">
                 {publicPayMethod === "MPESA" ? (
                   <>
-                    We’ll send an <b>Mpesa STK push</b>. If you don’t receive it or you can’t pay now, you can resend or
-                    resume later.
+                    We’ll send an <b>Mpesa STK push</b>. If you don’t receive it or you can’t pay now, you can resend or resume
+                    later.
                   </>
                 ) : (
                   <>
@@ -1884,8 +1772,12 @@ const isFormValidForSubmit = useMemo(() => {
           )}
 
           <form onSubmit={onCreateAccount}>
-            <label className="field-label">Account Type</label>
-            <div style={{ marginBottom: 14 }}>
+            <div className="auth-section-head">
+              <label className="field-label">Account Type</label>
+              <div className="auth-section-line" />
+            </div>
+
+            <div className="ra-mb-14">
               <PillChoice
                 items={USER_TYPES}
                 value={userType}
@@ -1895,23 +1787,25 @@ const isFormValidForSubmit = useMemo(() => {
                   setInfo("");
                 }}
                 disabled={waitingPayment}
+                tone="account"
               />
             </div>
-
+            
             {isPublic && (
               <>
-                <label className="field-label">Payment Method</label>
-                <div style={{ marginBottom: 14 }}>
-                  <PillChoice
-                    tone="payment"
-                    items={[
-                      { value: "MPESA", label: "Mpesa", sub: "Kenya-only (STK prompt)" },
-                      { value: "PAYSTACK", label: "Paystack", sub: "Card/bank/international" },
-                    ]}
-                    value={publicPayMethod}
-                    onChange={setPublicPayMethod}
-                    disabled={lockForm}
-                  />
+                <div className="auth-section-head">
+                  <label className="field-label">Payment Method</label>
+                  <div className="auth-section-line" />
+                </div>
+
+                <div className="ra-mb-14">
+                <PillChoice
+                  tone="payment"
+                  items={PUBLIC_PAY_METHODS}
+                  value={publicPayMethod}
+                  onChange={setPublicPayMethod}
+                  disabled={lockForm}
+                />
                 </div>
               </>
             )}
@@ -1919,27 +1813,28 @@ const isFormValidForSubmit = useMemo(() => {
             <div className="grid-2">
               <div>
                 <label className="field-label">First Name</label>
-                <input
-                  value={firstName}
-                  onChange={(e) => {
-                    setFirstName(e.target.value);
-                    liveValidate("firstName", e.target.value);
-                  }}
-                  onBlur={(e) => {
-                    markTouched("firstName");
-                    const msg = validateField("firstName", e.target.value);
-                    msg ? setFieldError("firstName", msg) : clearFieldError("firstName");
-                  }}
-                  disabled={lockForm}
-                  style={inputStyle("firstName")}
-                  aria-invalid={!!(touched.firstName && fieldErrors.firstName)}
-                />
+              <input
+                className={inputClass("firstName")}
+                value={firstName}
+                onChange={(e) => {
+                  setFirstName(e.target.value);
+                  liveValidate("firstName", e.target.value);
+                }}
+                onBlur={(e) => {
+                  markTouched("firstName");
+                  const msg = validateField("firstName", e.target.value);
+                  msg ? setFieldError("firstName", msg) : clearFieldError("firstName");
+                }}
+                disabled={lockForm}
+                aria-invalid={!!(touched.firstName && fieldErrors.firstName)}
+              />
                 <FieldError name="firstName" />
               </div>
 
               <div>
                 <label className="field-label">Last Name</label>
                 <input
+                  className={inputClass("lastName")}
                   value={lastName}
                   onChange={(e) => {
                     setLastName(e.target.value);
@@ -1951,7 +1846,6 @@ const isFormValidForSubmit = useMemo(() => {
                     msg ? setFieldError("lastName", msg) : clearFieldError("lastName");
                   }}
                   disabled={lockForm}
-                  style={inputStyle("lastName")}
                   aria-invalid={!!(touched.lastName && fieldErrors.lastName)}
                 />
                 <FieldError name="lastName" />
@@ -1959,24 +1853,24 @@ const isFormValidForSubmit = useMemo(() => {
             </div>
 
             <label className="field-label">Username</label>
-            <input
-              value={username}
-              onChange={(e) => {
-                setUsername(e.target.value);
-                liveValidate("username", e.target.value);
-              }}
-              onBlur={(e) => {
-                markTouched("username");
-                const trimmed = e.target.value.trim();
-                if (trimmed !== e.target.value) setUsername(trimmed);
-                const msg = validateField("username", trimmed);
-                msg ? setFieldError("username", msg) : clearFieldError("username");
-              }}
-              disabled={lockForm}
-              style={inputStyle("username")}
-              placeholder="e.g. d.ochieno"
-              aria-invalid={!!(touched.username && fieldErrors.username)}
-            />
+              <input
+                className={inputClass("username")}
+                value={username}
+                onChange={(e) => {
+                  setUsername(e.target.value);
+                  liveValidate("username", e.target.value);
+                }}
+                onBlur={(e) => {
+                  markTouched("username");
+                  const trimmed = e.target.value.trim();
+                  if (trimmed !== e.target.value) setUsername(trimmed);
+                  const msg = validateField("username", trimmed);
+                  msg ? setFieldError("username", msg) : clearFieldError("username");
+                }}
+                disabled={lockForm}
+                placeholder="e.g. d.ochieno"
+                aria-invalid={!!(touched.username && fieldErrors.username)}
+              />
             <div style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>
               Letters only. Dots allowed between letter groups (e.g. <code>d.ochieno</code>). No numbers/spaces, no
               leading/trailing dots, no consecutive dots.
@@ -1985,6 +1879,7 @@ const isFormValidForSubmit = useMemo(() => {
 
             <label className="field-label">Email</label>
             <input
+              className={inputClass("email")}
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value);
@@ -1996,7 +1891,6 @@ const isFormValidForSubmit = useMemo(() => {
                 msg ? setFieldError("email", msg) : clearFieldError("email");
               }}
               disabled={lockForm}
-              style={inputStyle("email")}
               aria-invalid={!!(touched.email && fieldErrors.email)}
             />
             <FieldError name="email" />
@@ -2013,6 +1907,7 @@ const isFormValidForSubmit = useMemo(() => {
                   Phone {isPublic ? (publicPayMethod === "MPESA" ? "(required for Mpesa)" : "(optional)") : "(optional)"}
                 </label>
                 <input
+                  className={inputClass("phoneNumber")}
                   value={phoneNumber}
                   onChange={(e) => {
                     setPhoneNumber(e.target.value);
@@ -2024,7 +1919,6 @@ const isFormValidForSubmit = useMemo(() => {
                     msg ? setFieldError("phoneNumber", msg) : clearFieldError("phoneNumber");
                   }}
                   disabled={lockForm && !(waitingPayment && publicPayMethod === "MPESA")}
-                  style={inputStyle("phoneNumber")}
                   placeholder={isPublic && publicPayMethod === "MPESA" ? "e.g. 2547XXXXXXXX or 07XXXXXXXX" : "Optional"}
                   aria-invalid={!!(touched.phoneNumber && fieldErrors.phoneNumber)}
                 />
@@ -2065,25 +1959,22 @@ const isFormValidForSubmit = useMemo(() => {
                     Could not load institutions. Please refresh the page.
                   </div>
                 ) : (
-                  <select
-                    value={institutionId}
-                    onChange={(e) => {
-                      setInstitutionId(e.target.value);
-                      liveValidate("institutionId", e.target.value);
-                      clearFieldError("institutionId");
-                      clearFieldError("institutionAccessCode");
-                      clearFieldError("referenceNumber");
-                      clearFieldError("email");
-                    }}
-                    onBlur={(e) => {
-                      markTouched("institutionId");
-                      const msg = validateField("institutionId", e.target.value);
-                      msg ? setFieldError("institutionId", msg) : clearFieldError("institutionId");
-                    }}
-                    disabled={lockForm}
-                    style={inputStyle("institutionId")}
-                    aria-invalid={!!(touched.institutionId && fieldErrors.institutionId)}
-                  >
+                    <select
+                      className={inputClass("institutionId")}
+                      value={institutionId}
+                      onChange={(e) => {
+                        setInstitutionId(e.target.value);
+                        liveValidate("institutionId", e.target.value);
+                        clearFieldError("institutionId");
+                      }}
+                      onBlur={(e) => {
+                        markTouched("institutionId");
+                        const msg = validateField("institutionId", e.target.value);
+                        msg ? setFieldError("institutionId", msg) : clearFieldError("institutionId");
+                      }}
+                      disabled={lockForm}
+                      aria-invalid={!!(touched.institutionId && fieldErrors.institutionId)}
+                    >
                     <option value="">Select institution</option>
                     {institutions
                       .filter((i) => i.isActive !== false)
@@ -2117,22 +2008,22 @@ const isFormValidForSubmit = useMemo(() => {
                 <div className="grid-2" style={{ marginTop: 10 }}>
                   <div>
                     <label className="field-label">Reference Number (required)</label>
-                    <input
-                      value={referenceNumber}
-                      onChange={(e) => {
-                        setReferenceNumber(e.target.value);
-                        liveValidate("referenceNumber", e.target.value);
-                      }}
-                      onBlur={(e) => {
-                        markTouched("referenceNumber");
-                        const msg = validateField("referenceNumber", e.target.value);
-                        msg ? setFieldError("referenceNumber", msg) : clearFieldError("referenceNumber");
-                      }}
-                      disabled={lockForm}
-                      style={inputStyle("referenceNumber")}
-                      placeholder="e.g. Student/Staff number"
-                      aria-invalid={!!(touched.referenceNumber && fieldErrors.referenceNumber)}
-                    />
+                  <input
+                    className={inputClass("referenceNumber")}
+                    value={referenceNumber}
+                    onChange={(e) => {
+                      setReferenceNumber(e.target.value);
+                      liveValidate("referenceNumber", e.target.value);
+                    }}
+                    onBlur={(e) => {
+                      markTouched("referenceNumber");
+                      const msg = validateField("referenceNumber", e.target.value);
+                      msg ? setFieldError("referenceNumber", msg) : clearFieldError("referenceNumber");
+                    }}
+                    disabled={lockForm}
+                    placeholder="e.g. Student/Staff number"
+                    aria-invalid={!!(touched.referenceNumber && fieldErrors.referenceNumber)}
+                  />
                     <div style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>
                       Required for institution registrations (Student/Staff). Public users won’t see or use this field.
                     </div>
@@ -2144,6 +2035,7 @@ const isFormValidForSubmit = useMemo(() => {
                       <>
                         <label className="field-label">Institution Access Code (required)</label>
                         <input
+                          className={inputClass("institutionAccessCode")}
                           value={institutionAccessCode}
                           onChange={(e) => {
                             setInstitutionAccessCode(e.target.value);
@@ -2155,7 +2047,6 @@ const isFormValidForSubmit = useMemo(() => {
                             msg ? setFieldError("institutionAccessCode", msg) : clearFieldError("institutionAccessCode");
                           }}
                           disabled={lockForm}
-                          style={inputStyle("institutionAccessCode")}
                           placeholder="Enter access code provided by your institution"
                           aria-invalid={!!(touched.institutionAccessCode && fieldErrors.institutionAccessCode)}
                         />
@@ -2182,6 +2073,7 @@ const isFormValidForSubmit = useMemo(() => {
               <div>
                 <label className="field-label">Password</label>
                 <input
+                  className={inputClass("password")}
                   type="password"
                   value={password}
                   onChange={(e) => {
@@ -2199,49 +2091,38 @@ const isFormValidForSubmit = useMemo(() => {
                     msg ? setFieldError("password", msg) : clearFieldError("password");
                   }}
                   disabled={lockForm}
-                  style={inputStyle("password")}
                   aria-invalid={!!(touched.password && fieldErrors.password)}
                 />
 
-                <div
-                  style={{
-                    marginTop: 10,
-                    padding: "10px 12px",
-                    borderRadius: 14,
-                    border: "1px solid #e5e7eb",
-                    background: "#fafafa",
-                    display: "grid",
-                    gap: 6,
-                  }}
-                >
-                  <RuleItem ok={passwordRules.min8} label="At least 8 characters" />
-                  <RuleItem ok={passwordRules.hasUpper} label="Contains an uppercase letter (A–Z)" />
-                  <RuleItem ok={passwordRules.hasLower} label="Contains a lowercase letter (a–z)" />
-                  <RuleItem ok={passwordRules.hasNumber} label="Contains a number (0–9)" />
-                  <RuleItem ok={passwordRules.hasSpecial} label="Contains a special character (e.g. !@#)" />
-                </div>
+              <div className="rules-grid">
+                <RuleItem ok={passwordRules.min8} label="8+ chars" />
+                <RuleItem ok={passwordRules.hasUpper} label="Uppercase" />
+                <RuleItem ok={passwordRules.hasLower} label="Lowercase" />
+                <RuleItem ok={passwordRules.hasNumber} label="Number" />
+                <RuleItem ok={passwordRules.hasSpecial} label="Special" />
+              </div>
 
                 <FieldError name="password" />
               </div>
 
               <div>
                 <label className="field-label">Confirm Password</label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => {
-                    setConfirmPassword(e.target.value);
-                    liveValidate("confirmPassword", e.target.value);
-                  }}
-                  onBlur={(e) => {
-                    markTouched("confirmPassword");
-                    const msg = validateField("confirmPassword", e.target.value);
-                    msg ? setFieldError("confirmPassword", msg) : clearFieldError("confirmPassword");
-                  }}
-                  disabled={lockForm}
-                  style={inputStyle("confirmPassword")}
-                  aria-invalid={!!(touched.confirmPassword && fieldErrors.confirmPassword)}
-                />
+                  <input
+                    className={inputClass("confirmPassword")}
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => {
+                      setConfirmPassword(e.target.value);
+                      liveValidate("confirmPassword", e.target.value);
+                    }}
+                    onBlur={(e) => {
+                      markTouched("confirmPassword");
+                      const msg = validateField("confirmPassword", e.target.value);
+                      msg ? setFieldError("confirmPassword", msg) : clearFieldError("confirmPassword");
+                    }}
+                    disabled={lockForm}
+                    aria-invalid={!!(touched.confirmPassword && fieldErrors.confirmPassword)}
+                  />
                 <FieldError name="confirmPassword" />
               </div>
             </div>
@@ -2397,8 +2278,8 @@ const isFormValidForSubmit = useMemo(() => {
               Intent: {intentId ? `#${intentId}` : "—"} | Next: {nextAction || "—"}
             </div>
           )}
-        </div>
-      </div>
-    </div>
-  );
+      </section>
+    </main>
+  </div>
+);
 }

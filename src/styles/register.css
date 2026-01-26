@@ -1,296 +1,627 @@
-/* src/styles/register.css */
+/* src/styles/register.css
+   LawAfrica Register — Phase 1 (CSS-only blocks, no inline styles)
+   - Matches Login screen palette (red + plum + teal on dark glass)
+   - Adds reusable classes for resume banners/OTP/pending/waiting boxes
+   - Keeps Screen-1 layout (two-column auth shell; compact card)
+*/
 
-/* =========================================================
-   Layout
-   ========================================================= */
-.register-layout {
-  min-height: 100vh;
-  display: flex;
-  background: #f3f4f6; /* subtle app background */
+/* ---------------------------------------
+   Brand variables (same vibe as Login)
+---------------------------------------- */
+:root {
+  --la-red: #a1181e;
+  --la-red2: #702840;
+  --la-teal: #0ea5a5;
+
+  --la-dark: #070b14;
+  --la-dark2: #0a0e19;
+
+  --panel-bg: #f7f8fa;
+  --border: rgba(17, 24, 39, 0.12);
+
+  --radius: 18px;
+  --radius-lg: 22px;
+  --shadow: 0 26px 60px rgba(2, 6, 23, 0.16), 0 8px 18px rgba(2, 6, 23, 0.08);
 }
 
-/* ✅ LEFT PANEL (make it smaller than right) */
-.register-info-panel {
-  flex: 0 0 40%;
-  min-width: 320px;
-  padding: 48px 48px;
+/* ---------------------------------------
+   Shell Layout
+---------------------------------------- */
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+
+  /* left dark + right light (like login) */
+  background: linear-gradient(
+    90deg,
+    rgba(7, 11, 20, 1) 0%,
+    rgba(7, 11, 20, 1) 55%,
+    #f8fafc 55%,
+    #f8fafc 100%
+  );
+}
+
+/* LEFT PANEL */
+.auth-left {
+  padding: 54px 56px;
   color: #fff;
-  background: radial-gradient(
-      circle at 20% 20%,
-      rgba(255, 255, 255, 0.12),
-      rgba(255, 255, 255, 0) 55%
-    ),
-    linear-gradient(135deg, #4b5563 0%, #8b1c1c 70%);
   display: flex;
-  flex-direction: column;
+  align-items: center;
   justify-content: center;
+
+  background:
+    radial-gradient(980px 520px at 10% 10%, rgba(161, 24, 30, 0.28), transparent 60%),
+    radial-gradient(860px 520px at 92% 20%, rgba(14, 165, 165, 0.22), transparent 60%),
+    linear-gradient(180deg, rgba(10, 14, 25, 0.92), rgba(7, 11, 20, 0.98));
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.auth-left-inner {
+  width: min(520px, 100%);
+}
+
+.auth-brand {
+  width: 140px;
+  margin-bottom: 18px;
+  opacity: 0.95;
+  filter: drop-shadow(0 12px 20px rgba(0, 0, 0, 0.35));
+}
+
+.auth-left-title {
+  font-size: 44px;
+  line-height: 1.05;
+  margin: 0 0 10px 0;
+  letter-spacing: -0.8px;
+  font-weight: 950;
+}
+
+.auth-left-subtitle {
+  font-size: 15px;
+  opacity: 0.9;
+  margin: 0 0 18px 0;
+}
+
+/* Benefits card (dark glass + brand bar like Login) */
+.auth-benefits-card {
+  margin-top: 14px;
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   position: relative;
   overflow: hidden;
 }
 
-/* subtle texture */
-.register-info-panel::after {
+.auth-benefits-card::before {
   content: "";
   position: absolute;
-  inset: -120px -120px auto auto;
-  width: 320px;
-  height: 320px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0));
-  transform: rotate(12deg);
-  pointer-events: none;
+  inset: 0 0 auto 0;
+  height: 5px;
+  background: linear-gradient(135deg, var(--la-red) 0%, var(--la-red2) 45%, var(--la-teal) 100%);
+  opacity: 0.95;
 }
 
-/* ✅ RIGHT PANEL (make it larger than left) */
-.register-form-panel {
-  flex: 1 1 60%;
-  padding: 48px 24px;
+.auth-benefits-title {
+  font-weight: 950;
+  font-size: 14px;
+  letter-spacing: -0.2px;
+  margin: 6px 0 10px 0;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.auth-benefits-list {
+  display: grid;
+  gap: 12px;
+}
+
+.auth-benefit {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 8px 0;
+}
+
+.auth-benefit-ic {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+  flex: 0 0 auto;
+  font-size: 16px;
+}
+
+.auth-benefit-name {
+  font-weight: 950;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.auth-benefit-desc {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+  color: rgba(226, 232, 240, 0.78);
+}
+
+.auth-benefits-foot {
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(226, 232, 240, 0.7);
+}
+
+/* RIGHT PANEL */
+.auth-right {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 24px;
+
+  background:
+    radial-gradient(980px 520px at 15% 10%, rgba(161, 24, 30, 0.10), transparent 55%),
+    radial-gradient(860px 520px at 92% 12%, rgba(14, 165, 165, 0.10), transparent 55%),
+    linear-gradient(180deg, #ffffff 0%, #f7f8fb 55%, #f3f5f9 100%);
 }
 
-/* =========================================================
-   Card
-   ========================================================= */
-.register-card {
+/* ---------------------------------------
+   Card (glass + rim + underglow)
+---------------------------------------- */
+.auth-card {
   width: 100%;
-  max-width: 640px;
-  background: #ffffff;
-  border-radius: 18px;
+  max-width: 520px; /* slightly wider than 420 to keep Screen-1 layout compact but not cramped */
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(17, 24, 39, 0.10);
+  border-radius: var(--radius-lg);
   padding: 28px;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
-  border: 1px solid rgba(229, 231, 235, 0.9);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
 }
 
-.register-brand-logo {
-  width: 160px;
-  margin-bottom: 18px;
+/* top accent bar */
+.auth-card::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: linear-gradient(135deg, var(--la-red) 0%, var(--la-red2) 45%, var(--la-teal) 100%);
   opacity: 0.95;
-  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.18));
+  pointer-events: none;
 }
 
-.register-tagline {
-  margin-top: 10px;
-  line-height: 1.5;
-  opacity: 0.95;
+/* gradient rim */
+.auth-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--la-red) 0%, var(--la-red2) 45%, var(--la-teal) 100%);
+  opacity: 0.92;
+  pointer-events: none;
+
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
 }
 
-.register-benefits {
-  margin-top: 18px;
-  padding-left: 18px;
-  line-height: 1.9;
-  opacity: 0.95;
-}
-
-.register-benefits li {
-  margin: 4px 0;
-}
-
-/* =========================================================
-   Headings / text
-   ========================================================= */
-.register-card h2 {
-  margin: 0 0 6px 0;
-  font-size: 24px;
+/* Titles inside auth card */
+.auth-title {
+  margin: 6px 0 6px 0; /* keep space below top accent */
+  font-size: 30px;
+  font-weight: 950;
   color: #111827;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.2px;
 }
 
-.register-card .subtitle {
-  margin: 0 0 18px 0;
+.subtitle,
+.auth-subtitle {
+  margin: 0 0 14px 0;
   font-size: 14px;
   color: #6b7280;
-  line-height: 1.45;
 }
 
-/* =========================================================
-   Form elements
-   ========================================================= */
-.field-label {
-  display: block;
-  font-size: 12px;
-  font-weight: 800;
-  color: #374151;
-  margin: 12px 0 6px;
-  letter-spacing: 0.01em;
+/* ---------------------------------------
+   Phase 1: Replace inline blocks with classes
+---------------------------------------- */
+
+/* Generic “panel” for sections inside card */
+.ra-panel {
+  border-radius: 16px;
+  border: 1px solid rgba(17, 24, 39, 0.10);
+  background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+  padding: 12px;
+  margin-bottom: 12px;
 }
 
-.register-card input,
-.register-card select,
-.register-card textarea {
-  width: 100%;
-  height: 44px;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  padding: 10px 12px;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.06s ease;
-  background: #fff;
-  color: #111827;
-}
-
-.register-card textarea {
-  height: auto;
-  min-height: 90px;
-  resize: vertical;
-}
-
-.register-card input::placeholder,
-.register-card textarea::placeholder {
-  color: #9ca3af;
-}
-
-/* Default focus */
-.register-card input:focus,
-.register-card select:focus,
-.register-card textarea:focus {
-  border-color: #8b1c1c;
-  box-shadow: 0 0 0 4px rgba(139, 28, 28, 0.12);
-}
-
-/* Better keyboard focus */
-.register-card input:focus-visible,
-.register-card select:focus-visible,
-.register-card textarea:focus-visible {
-  outline: none;
-}
-
-/* Disabled */
-.register-card input:disabled,
-.register-card select:disabled,
-.register-card textarea:disabled {
-  background: #f9fafb;
-  color: #6b7280;
-  cursor: not-allowed;
-}
-
-/* ✅ NEW: Valid/invalid states for live validation */
-.input-invalid {
-  border-color: #ef4444 !important;
-  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.12) !important;
-}
-
-.input-valid {
-  border-color: #22c55e !important;
-  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.12) !important;
-}
-
-/* ✅ NEW: Inline helper + error text */
-.field-help {
-  margin-top: 6px;
-  font-size: 12px;
-  color: #6b7280;
-  line-height: 1.35;
-}
-
-.field-error {
-  margin-top: 6px;
-  font-size: 12px;
-  color: #b91c1c;
-  line-height: 1.35;
-}
-
-/* ✅ NEW: Password checklist */
-.password-checklist {
-  margin-top: 10px;
-  padding: 10px 12px;
+/* Resume banners (old/local resume) */
+.ra-resume-warn {
   border-radius: 14px;
-  border: 1px solid #e5e7eb;
-  background: #fafafa;
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.ra-resume-warn-title {
+  font-weight: 950;
+  color: #7c2d12;
+}
+
+.ra-resume-warn-text {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: #92400e;
+}
+
+.ra-actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Resume OTP header row */
+.ra-resume-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ra-resume-head-title {
+  font-weight: 950;
+  color: #111827;
+}
+
+.ra-resume-head-sub {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.35;
+}
+
+/* OTP inner spacing */
+.ra-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.ra-help {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* OTP code box */
+.ra-code-box {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(17, 24, 39, 0.10);
+  background: #ffffff;
+}
+
+.ra-code-input {
+  text-align: center;
+  letter-spacing: 6px;
+  font-weight: 950;
+  font-size: 18px;
+}
+
+/* Pending details box */
+.ra-pending {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.ra-pending-title {
+  font-weight: 950;
+  margin-bottom: 6px;
+}
+
+.ra-pending-grid {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.ra-pending-note {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #1f2937;
+}
+
+/* Signup fee info box */
+.ra-fee {
+  margin-bottom: 14px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  color: #0c4a6e;
+  padding: 12px;
+  border-radius: 16px;
+}
+
+.ra-fee-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ra-fee-amount {
+  font-weight: 950;
+}
+
+.ra-fee-amount b,
+.ra-fee-amount strong {
+  color: #0f766e;
+}
+
+.ra-fee-steps {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ra-fee-desc {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #075985;
+}
+
+/* Waiting-for-payment box */
+.ra-wait {
+  margin-top: 12px;
+  background: #ecfeff;
+  border: 1px solid #a5f3fc;
+  color: #0e7490;
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.ra-wait-title {
+  font-weight: 950;
+  margin-bottom: 6px;
+}
+
+.ra-wait-body {
+  font-size: 13px;
+  color: #155e75;
   display: grid;
   gap: 6px;
 }
 
-.rule-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.ra-wait-meta {
+  margin-top: 8px;
   font-size: 12px;
-  color: #6b7280;
+  color: #155e75;
 }
 
-.rule-item.ok {
-  color: #065f46;
+.ra-wait-note {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #155e75;
 }
 
-.rule-item .icon {
-  width: 18px;
+/* Step pill */
+.ra-step-pill {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 850;
+  background: #f3f4f6;
+  color: #374151;
 }
 
-/* Two-column grid for paired fields */
+/* ---------------------------------------
+   Form Elements (shared)
+---------------------------------------- */
+
+.field-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 850;
+  color: #374151;
+  margin: 12px 0 6px;
+}
+
+/* Base inputs */
+input,
+select,
+textarea {
+  width: 100%;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+  background: #ffffff;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: rgba(14, 165, 165, 0.65);
+  box-shadow: 0 0 0 4px rgba(14, 165, 165, 0.12);
+}
+
+input:disabled,
+select:disabled {
+  background: #f9fafb;
+  cursor: not-allowed;
+}
+
+/* Validation classes (used by inputClass(...)) */
+.la-input-ok {
+  border-color: rgba(34, 197, 94, 0.75) !important;
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.10) !important;
+}
+
+.la-input-err {
+  border-color: rgba(239, 68, 68, 0.85) !important;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.10) !important;
+}
+
+/* Field error */
+.field-error {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #b91c1c;
+}
+
+/* ---------------------------------------
+   Grid / Utilities
+---------------------------------------- */
 .grid-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
 
-/* Divider + section title */
 .divider {
   height: 1px;
-  background: linear-gradient(to right, rgba(229, 231, 235, 0), rgba(229, 231, 235, 1), rgba(229, 231, 235, 0));
+  background: linear-gradient(
+    to right,
+    rgba(229, 231, 235, 0),
+    rgba(229, 231, 235, 1),
+    rgba(229, 231, 235, 0)
+  );
   margin: 18px 0;
 }
 
 .section-title {
-  margin: 0 0 8px 0;
+  margin: 0 0 6px 0;
   font-size: 14px;
-  font-weight: 900;
+  font-weight: 950;
   color: #111827;
 }
 
-/* =========================================================
+/* ---------------------------------------
    Buttons
-   ========================================================= */
-.register-card button {
-  border-radius: 12px;
-  transition: transform 0.06s ease, opacity 0.15s ease, box-shadow 0.15s ease;
-}
-
-.register-card button[type="submit"] {
-  width: 100%;
-  margin-top: 18px;
-  height: 46px;
-  border-radius: 12px;
-  border: none;
-  background: linear-gradient(135deg, #8b1c1c 0%, #b91c1c 70%);
-  color: #ffffff;
+---------------------------------------- */
+button {
+  border-radius: 14px;
   font-weight: 900;
-  font-size: 15px;
   cursor: pointer;
-  box-shadow: 0 12px 24px rgba(139, 28, 28, 0.18);
+  border: none;
 }
 
-.register-card button[type="submit"]:hover {
-  box-shadow: 0 16px 30px rgba(139, 28, 28, 0.22);
+/* submit */
+button[type="submit"] {
+  width: 100%;
+  height: 46px;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--la-red) 0%, var(--la-red2) 55%, var(--la-teal) 100%);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.14);
+  transition: transform 0.08s ease, box-shadow .18s ease, filter .18s ease;
 }
 
-.register-card button[type="submit"]:active {
-  transform: translateY(1px);
+button[type="submit"]:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+  filter: brightness(1.02);
 }
 
-.register-card button[type="submit"]:disabled {
-  opacity: 0.7;
+button[type="submit"]:active {
+  transform: scale(0.99);
+}
+
+button[type="submit"]:disabled {
+  opacity: 0.75;
   cursor: not-allowed;
-  box-shadow: none;
 }
 
-/* Make secondary buttons (the ones in the success screen) match better */
-.register-card button[type="button"] {
-  border: 1px solid #e5e7eb;
-  background: #ffffff;
-  color: #111827;
-  font-weight: 800;
+/* small buttons for actions inside card */
+.ra-btn {
+  width: auto !important;
+  padding: 10px 14px;
+  border-radius: 12px;
+  color: #fff;
+  font-weight: 950;
 }
 
-.register-card button[type="button"]:hover {
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.06);
+.ra-btn-red {
+  background: #8b1c1c;
 }
 
-/* Footer */
+.ra-btn-dark {
+  background: #111827;
+}
+
+.ra-btn-teal {
+  background: #0f766e;
+}
+
+.ra-btn-gray {
+  background: #6b7280;
+}
+
+.ra-btn:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+/* ---------------------------------------
+   Alerts (reuse)
+---------------------------------------- */
+.error-box {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  padding: 12px;
+  border-radius: 14px;
+  font-size: 13px;
+  margin-bottom: 12px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  white-space: pre-wrap;
+}
+
+.success-box {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #abefc6;
+  color: #067647;
+  padding: 12px;
+  border-radius: 14px;
+  font-size: 13px;
+  margin-bottom: 12px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  white-space: pre-wrap;
+}
+
+/* ---------------------------------------
+   Footer / Links
+---------------------------------------- */
 .register-footer {
   margin-top: 14px;
   font-size: 13px;
@@ -299,61 +630,83 @@
 }
 
 .linkish {
-  color: #8b1c1c;
-  font-weight: 900;
+  color: var(--la-red2);
+  font-weight: 950;
   cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(14, 165, 165, 0.45);
 }
 
 .linkish:hover {
-  text-decoration: underline;
+  text-decoration-color: rgba(14, 165, 165, 0.75);
 }
 
-/* =========================================================
-   Alerts / boxes
-   ========================================================= */
-.error-box {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #991b1b;
-  padding: 12px 12px;
-  border-radius: 14px;
-  font-size: 13px;
-  margin-bottom: 12px;
+/* Debug line */
+.auth-debug {
+  margin-top: 14px;
+  font-size: 12px;
+  color: #6b7280;
 }
 
-.success-box {
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
-  color: #065f46;
-  padding: 12px 12px;
-  border-radius: 14px;
-  font-size: 13px;
-  margin-bottom: 12px;
+/* ---------------------------------------
+   Legacy Register styles (kept for safety)
+---------------------------------------- */
+.register-layout {
+  min-height: 100vh;
+  display: flex;
+  background: #f3f4f6;
 }
 
-/* =========================================================
+.register-info-panel {
+  flex: 0 0 40%;
+  min-width: 320px;
+  padding: 48px;
+  color: #fff;
+  background: linear-gradient(135deg, #4b5563 0%, #8b1c1c 70%);
+}
+
+.register-form-panel {
+  flex: 1 1 60%;
+  padding: 48px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.register-card {
+  width: 100%;
+  max-width: 640px;
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 28px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
+}
+
+/* ---------------------------------------
    Responsive
-   ========================================================= */
+---------------------------------------- */
 @media (max-width: 980px) {
-  .register-layout {
-    flex-direction: column;
+  .auth-shell {
+    grid-template-columns: 1fr;
+    background: var(--la-dark);
   }
 
-  .register-info-panel {
-    flex: none;
-    width: 100%;
-    min-width: 0;
-    padding: 36px 22px;
+  .auth-left {
+    display: none; /* match login behavior on mobile */
   }
 
-  .register-form-panel {
-    flex: none;
-    width: 100%;
-    padding: 28px 18px;
+  .auth-right {
+    padding: 18px;
   }
 
-  .register-card {
-    max-width: 720px;
+  .auth-card {
+    max-width: 520px;
+    padding: 24px;
+    border-radius: 16px;
+  }
+
+  .auth-card::before {
+    border-radius: 16px;
   }
 }
 
@@ -362,12 +715,411 @@
     grid-template-columns: 1fr;
   }
 
-  .register-card {
+  .auth-card {
     padding: 22px;
-    border-radius: 16px;
   }
+}
+/* ---------------------------------------
+   Phase 1b: Remove remaining inline styles
+---------------------------------------- */
 
-  .register-brand-logo {
-    width: 140px;
+/* spacing helpers for Resume section */
+.ra-mt-12 {
+  margin-top: 12px;
+}
+
+/* inline align helpers */
+.ra-self-center {
+  align-self: center;
+}
+
+.ra-items-center {
+  align-items: center;
+}
+
+/* text helpers */
+.ra-verified {
+  font-size: 13px;
+  color: #065f46;
+  font-weight: 900;
+}
+
+.ra-text-13 {
+  font-size: 13px;
+}/* ---------------------------------------
+   Pills (Account Type / Payment Method)
+---------------------------------------- */
+.pill-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.pill-btn {
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(17, 24, 39, 0.10);
+  box-shadow: 0 12px 26px rgba(2, 6, 23, 0.06);
+  transition: transform 0.08s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  cursor: pointer;
+}
+
+.pill-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 34px rgba(2, 6, 23, 0.08);
+}
+
+.pill-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.pill-title {
+  font-weight: 950;
+  font-size: 16px;
+  color: #0f172a;
+  letter-spacing: -0.2px;
+}
+
+.pill-sub {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+/* Active tones */
+.pill-grid.tone-account .pill-btn.is-active {
+  border-color: rgba(161, 24, 30, 0.9);
+  box-shadow: 0 16px 34px rgba(161, 24, 30, 0.10);
+  background: rgba(161, 24, 30, 0.06);
+}
+
+.pill-grid.tone-payment .pill-btn.is-active {
+  border-color: rgba(14, 165, 165, 0.95);
+  box-shadow: 0 16px 34px rgba(14, 165, 165, 0.12);
+  background: rgba(14, 165, 165, 0.08);
+}
+
+/* ---------------------------------------
+   Remove remaining inline styles helpers
+---------------------------------------- */
+.auth-alert {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(17, 24, 39, 0.10);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.auth-alert.error {
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.auth-alert.ok {
+  border-color: #abefc6;
+  color: #067647;
+}
+
+.auth-alert-icon {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  margin-top: 1px;
+}
+
+.auth-alert-body {
+  flex: 1;
+  white-space: pre-wrap;
+}
+
+.ra-mb-14 {
+  margin-bottom: 14px;
+}
+
+.ra-fee-accent {
+  color: #0f766e;
+  font-weight: 950;
+}
+
+/* Mobile: stack pills */
+@media (max-width: 560px) {
+  .pill-grid {
+    grid-template-columns: 1fr;
   }
+}
+/* ---------------------------------------
+   Phase 2 Polish (visual refinement)
+---------------------------------------- */
+
+/* Make card feel lighter + sharper */
+.auth-card {
+  box-shadow: 0 28px 70px rgba(2, 6, 23, 0.16), 0 10px 24px rgba(2, 6, 23, 0.08);
+}
+
+/* Better vertical rhythm */
+.field-label {
+  margin: 14px 0 7px;
+}
+
+/* Fee box polish */
+.ra-fee {
+  padding: 14px;
+  border-radius: 18px;
+}
+
+.ra-fee-row {
+  align-items: center;
+}
+
+.ra-fee-steps .ra-step-pill {
+  background: rgba(17, 24, 39, 0.05);
+  border: 1px solid rgba(17, 24, 39, 0.08);
+}
+
+/* Pills feel premium */
+.pill-btn {
+  position: relative;
+  overflow: hidden;
+  padding: 16px 16px;
+  border-radius: 20px;
+}
+
+.pill-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(600px 120px at 20% 0%, rgba(161, 24, 30, 0.08), transparent 55%);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  pointer-events: none;
+}
+
+.pill-grid.tone-payment .pill-btn::before {
+  background: radial-gradient(600px 120px at 20% 0%, rgba(14, 165, 165, 0.10), transparent 55%);
+}
+
+.pill-btn:hover::before {
+  opacity: 1;
+}
+
+.pill-title {
+  font-size: 15px;
+}
+
+.pill-sub {
+  font-size: 12.5px;
+}
+
+/* Stronger active state */
+.pill-btn.is-active {
+  transform: translateY(-1px);
+}
+
+.pill-grid.tone-account .pill-btn.is-active {
+  border-width: 2px;
+}
+
+.pill-grid.tone-payment .pill-btn.is-active {
+  border-width: 2px;
+}
+
+/* Section title row (optional if you add JSX below) */
+.auth-section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 8px;
+}
+
+.auth-section-head .field-label {
+  margin: 0;
+}
+
+.auth-section-line {
+  height: 1px;
+  flex: 1;
+  background: linear-gradient(
+    to right,
+    rgba(17, 24, 39, 0.10),
+    rgba(17, 24, 39, 0.03)
+  );
+}
+
+/* Field errors soften */
+.auth-field-error,
+.field-error {
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(185, 28, 28, 0.92);
+}
+/* -------- Pills with icons -------- */
+.pill-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.pill-btn {
+  text-align: left;
+  padding: 14px 14px;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid rgba(17, 24, 39, 0.10);
+  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.06);
+  transition: transform 0.08s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.pill-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.08);
+}
+
+.pill-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pill-ic {
+  width: 36px;
+  height: 36px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: rgba(17, 24, 39, 0.04);
+  border: 1px solid rgba(17, 24, 39, 0.07);
+  font-size: 16px;
+  flex: 0 0 auto;
+}
+
+.pill-title {
+  font-weight: 950;
+  font-size: 14px;
+  color: #111827;
+}
+
+.pill-sub {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.25;
+}
+
+/* Active states by tone */
+.pill-grid.tone-account .pill-btn.is-active {
+  border: 2px solid rgba(161, 24, 30, 0.55);
+  box-shadow: 0 18px 40px rgba(161, 24, 30, 0.12);
+}
+
+.pill-grid.tone-payment .pill-btn.is-active {
+  border: 2px solid rgba(14, 165, 165, 0.55);
+  box-shadow: 0 18px 40px rgba(14, 165, 165, 0.12);
+}
+
+/* -------- Password rules: compact + no “stretch” -------- */
+.rules-grid {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(17, 24, 39, 0.10);
+  background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* keeps it compact */
+  gap: 8px 10px;
+}
+
+.rule-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.15;
+  color: #374151;
+  font-weight: 800;
+}
+
+.rule-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-weight: 950;
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  background: rgba(17, 24, 39, 0.04);
+}
+
+.rule-item.bad .rule-dot {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.rule-item.ok .rule-dot {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.10);
+}
+
+@media (max-width: 560px) {
+  .pill-grid {
+    grid-template-columns: 1fr;
+  }
+  .rules-grid {
+    grid-template-columns: 1fr; /* avoid squish on tiny screens */
+  }
+}
+.divider {
+  margin: 12px 0; /* was 18px 0 */
+}
+
+.field-label {
+  margin: 10px 0 6px; /* was 12px 0 6px */
+}
+
+.pwd-rules {
+  margin-top: 10px;
+  margin-bottom: 12px; /* key fix */
+}
+
+.auth-card form button[type="submit"] {
+  margin-top: 10px; /* key fix */
+}
+/* ---------------------------------------
+   Sticky left panel (desktop only)
+---------------------------------------- */
+.auth-left {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  overflow: hidden; /* prevents accidental scrollbars */
+}
+.auth-left::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 1px;
+  height: 100%;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(255,255,255,0.08),
+    transparent
+  );
 }
