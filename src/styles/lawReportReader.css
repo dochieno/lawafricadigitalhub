@@ -821,6 +821,21 @@ color: var(--reader-ink, rgba(15, 23, 42, 0.92));
   max-height: 0;
   opacity: 0.2;
 }
+.lrr2CaseFmt{
+  max-width: 78ch;
+  margin: 0 auto;
+  font-size: 15px;
+  line-height: 1.85;
+}
+
+.lrr2CaseP:first-of-type::first-letter{
+  float: left;
+  font-size: 2.6em;
+  line-height: 1;
+  padding-right: 8px;
+  font-weight: 950;
+  color: rgba(161,24,30,.85);
+}
 
 /* =========================
    Search dropdown item layout
@@ -1325,3 +1340,33 @@ color: var(--reader-ink, rgba(15, 23, 42, 0.92));
     justify-content: flex-start;
   }
 }
+.lrr2Progress{
+  max-width: 1000px;
+  margin: 10px auto 0;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--reader-surface) 70%, transparent);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.lrr2ProgressBar{
+  height: 100%;
+  transform-origin: left;
+  transform: scaleX(0);
+  background: linear-gradient(90deg, rgba(161,24,30,.9), rgba(14,165,165,.75));
+}
+.lrr2ToTop{
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--reader-surface);
+  color: var(--reader-ink);
+  cursor: pointer;
+  font-weight: 950;
+  box-shadow: 0 14px 30px rgba(2,6,23,.14);
+}
+.lrr2ToTop:hover{ transform: translateY(-1px); }

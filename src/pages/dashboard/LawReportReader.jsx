@@ -468,6 +468,8 @@ export default function LawReportReader() {
   const [readingTheme, setReadingTheme] = useState("paper"); // paper | sepia | dark
   const [serif, setSerif] = useState(true);
 
+  
+
   // Search
   const [q, setQ] = useState("");
   const [searching, setSearching] = useState(false);
@@ -479,6 +481,24 @@ export default function LawReportReader() {
   // Search dropdown close helpers
   const searchBoxRef = useRef(null);
   const searchInputRef = useRef(null);
+
+  // Reading progress
+const [progress, setProgress] = useState(0);
+
+useEffect(() => {
+  function onScroll() {
+    const el = document.documentElement;
+    const scrollTop = el.scrollTop || document.body.scrollTop;
+    const scrollHeight = el.scrollHeight || document.body.scrollHeight;
+    const clientHeight = el.clientHeight || window.innerHeight;
+    const max = Math.max(1, scrollHeight - clientHeight);
+    setProgress(Math.min(1, Math.max(0, scrollTop / max)));
+  }
+
+  onScroll();
+  window.addEventListener("scroll", onScroll, { passive: true });
+  return () => window.removeEventListener("scroll", onScroll);
+}, []);
 
   useEffect(() => {
     if (!openResults) return;
@@ -805,6 +825,18 @@ export default function LawReportReader() {
           </div>
         </div>
       </header>
+      <div className="lrr2Progress" aria-hidden="true">
+  <div className="lrr2ProgressBar" style={{ transform: `scaleX(${progress})` }} />
+</div>
+
+    <button
+      type="button"
+      className="lrr2ToTop"
+      onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+      title="Back to top"
+    >
+      ↑
+    </button>
 
       {/* Big title line */}
 
@@ -895,6 +927,26 @@ export default function LawReportReader() {
               {formatDate(report.decisionDate)}
             </button>
           ) : null}
+
+          <button
+          type="button"
+          className="lrr2MetaChip"
+          title="Copy title"
+          onClick={() => navigator.clipboard?.writeText(`${title}`)}
+        >
+          Copy title
+        </button>
+
+        {report?.citation ? (
+          <button
+            type="button"
+            className="lrr2MetaChip"
+            title="Copy citation"
+            onClick={() => navigator.clipboard?.writeText(String(report.citation))}
+          >
+            Copy citation
+          </button>
+        ) : null}
 
           {/* subtle status hints */}
 
