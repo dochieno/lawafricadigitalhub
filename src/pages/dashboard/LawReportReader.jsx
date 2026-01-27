@@ -5,6 +5,7 @@ import api from "../../api/client";
 import { getAuthClaims } from "../../auth/auth";
 import "../../styles/lawReportReader.css";
 
+
 function isInstitutionUser() {
   const c = getAuthClaims();
   return !!(c?.institutionId && c?.institutionId > 0);
@@ -462,6 +463,10 @@ export default function LawReportReader() {
 
   // UI state: "content" or "ai"
   const [view, setView] = useState("content");
+
+  const [fontScale, setFontScale] = useState(1); // 0.9 - 1.2
+  const [readingTheme, setReadingTheme] = useState("paper"); // paper | sepia | dark
+  const [serif, setSerif] = useState(true);
 
   // Search
   const [q, setQ] = useState("");
@@ -1029,8 +1034,56 @@ export default function LawReportReader() {
       ) : (
         <article className="lrr2Article">
           <div className="lrr2ArticleTitle">Case File / Transcript</div>
+           
+           <div className="lrr2ReaderBar">
+  <div className="lrr2ReaderGroup">
+    <span style={{ fontWeight: 900, fontSize: 12 }}>Text size</span>
+    <button
+      className="lrr2ReaderBtn"
+      onClick={() => setFontScale((v) => Math.max(0.9, Number((v - 0.05).toFixed(2))))}
+    >
+      A−
+    </button>
+    <button
+      className="lrr2ReaderBtn"
+      onClick={() => setFontScale((v) => Math.min(1.2, Number((v + 0.05).toFixed(2))))}
+    >
+      A+
+    </button>
+  </div>
 
-          <div className={`lrr2Collapse ${contentOpen ? "open" : "closed"}`}>
+          <div className="lrr2ReaderGroup">
+            <span style={{ fontWeight: 900, fontSize: 12 }}>Theme</span>
+            {["paper", "sepia", "dark"].map((t) => (
+              <button
+                key={t}
+                className={`lrr2ReaderBtn ${readingTheme === t ? "isOn" : ""}`}
+                onClick={() => setReadingTheme(t)}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+
+          <div className="lrr2ReaderGroup">
+            <button
+              className={`lrr2ReaderBtn ${serif ? "isOn" : ""}`}
+              onClick={() => setSerif((v) => !v)}
+            >
+              Serif
+            </button>
+          </div>
+        </div>
+
+          <div
+            className={`lrr2Collapse ${contentOpen ? "open" : "closed"} lrr2Theme-${readingTheme}`}
+            style={{
+              fontSize: `${fontScale}em`,
+              fontFamily: serif
+                ? 'ui-serif, Georgia, "Times New Roman", Times, serif'
+                : 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+            }}
+          >
             {isProbablyHtml(rawContent) ? (
               <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: rawContent }} />
             ) : (
