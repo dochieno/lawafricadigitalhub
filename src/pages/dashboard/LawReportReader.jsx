@@ -209,10 +209,10 @@ function AiSummaryRichText({ text }) {
     .split("\n");
 
   // Detect headings like "Digest:", "Court:", "Issue:", "Summary:", "Held:", "Key Point:"
-  const isHeadingLine = (s) =>
-    /^(digest|court|issue|summary|held|key points?|keypoint|key-point)\s*:/i.test(
-      s.trim()
-    );
+const isHeadingLine = (s) =>
+  /^(digest|court|facts|issue|issues|summary|held|holding\/decision|holding|reasoning|key points?|key takeaways?)\s*:/i.test(
+    s.trim()
+  );
 
   // Detect bullets: "-", "•", "*", "–"
   const isBulletLine = (s) => /^\s*[-•*–]\s+/.test(s);
@@ -243,7 +243,7 @@ if (isHeadingLine(s)) {
   // ✅ track section for the NEXT blocks (bullets/paragraphs)
   currentSection = labelTrim.toLowerCase();
 
-  const isKeyPoints = /^key points?\s*$/i.test(labelTrim);
+const isKeyPoints = /^(key points?|key takeaways?)$/i.test(labelTrim);
 
   // Key Points handled elsewhere (collapsible wrapping next bullet list)
   if (isKeyPoints) {
