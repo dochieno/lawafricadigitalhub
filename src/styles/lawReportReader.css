@@ -21,6 +21,74 @@
   color: var(--reader-ink, rgba(17,24,39,0.92));
   padding: 18px 16px 56px;
 }
+/* =========================
+   Reader themes (FIX dark mode)
+   Driven by: <div className="lrr2Wrap" data-theme="...">
+========================= */
+.lrr2Wrap[data-theme="paper"]{
+  --reader-bg: #f7f8fb;
+  --reader-ink: rgba(15, 23, 42, 0.92);
+  --reader-surface: rgba(255, 255, 255, 0.78);
+  --border: rgba(15, 23, 42, 0.12);
+  --border2: rgba(15, 23, 42, 0.16);
+  --muted: rgba(17, 24, 39, 0.68);
+}
+
+.lrr2Wrap[data-theme="sepia"]{
+  --reader-bg: #f3eee6;
+  --reader-ink: rgba(20, 18, 14, 0.92);
+  --reader-surface: rgba(255, 248, 235, 0.82);
+  --border: rgba(62, 41, 25, 0.16);
+  --border2: rgba(62, 41, 25, 0.20);
+  --muted: rgba(62, 41, 25, 0.62);
+}
+
+.lrr2Wrap[data-theme="dark"]{
+  --reader-bg: #0b1220;
+  --reader-ink: rgba(226, 232, 240, 0.92);
+  --reader-surface: rgba(15, 23, 42, 0.72);
+  --border: rgba(148, 163, 184, 0.18);
+  --border2: rgba(148, 163, 184, 0.24);
+  --muted: rgba(148, 163, 184, 0.72);
+}
+
+/* Make core cards + dropdowns inherit theme surfaces */
+.lrr2Wrap .lrr2Header,
+.lrr2Wrap .lrr2MetaCard,
+.lrr2Wrap .lrr2ActionsCard,
+.lrr2Wrap .lrr2Article,
+.lrr2Wrap .lrrAi{
+  background: var(--reader-surface);
+  color: var(--reader-ink);
+  border-color: var(--border);
+}
+
+
+.lrr2Wrap .lrr2SearchDropdown{
+  background: var(--reader-surface);
+  border-color: var(--border);
+  color: var(--reader-ink);
+}
+
+.lrr2Wrap .lrr2SearchInput{
+  background: color-mix(in srgb, var(--reader-surface) 88%, transparent);
+  color: var(--reader-ink);
+  border-color: var(--border);
+}
+
+.lrr2Wrap .lrr2SearchHint,
+.lrr2Wrap .lrr2ErrorMsg,
+.lrr2Wrap .lrrAiSub,
+.lrr2Wrap .lrrAiMeta{
+  color: var(--muted);
+}
+
+/* Dark-mode: make the "Search" button not vanish into the background */
+.lrr2Wrap[data-theme="dark"] .lrr2SearchBtn{
+  background: rgba(226, 232, 240, 0.14);
+  color: rgba(226, 232, 240, 0.92);
+  border-color: rgba(148, 163, 184, 0.22);
+}
 
 /* =========================
    Loading / Error
@@ -275,18 +343,6 @@ color: var(--reader-ink, rgba(15, 23, 42, 0.92));
   color: rgba(15, 23, 42, 0.68);
 }
 
-/* =========================
-   Title line (LLR No... :)
-========================= */
-.lrr2TitleLine {
-  max-width: 980px;
-  margin: 16px auto 0;
-  font-size: 20px;
-  font-weight: 950;
-  letter-spacing: -0.02em;
-  color: rgba(161, 24, 30, 0.92);
-}
-
 .lrr2TitleKicker {
   font-weight: 950;
   color: #cc6600;
@@ -297,7 +353,7 @@ color: var(--reader-ink, rgba(15, 23, 42, 0.92));
 ========================= */
 .lrr2TopGrid {
   max-width: 980px;
-  margin: 14px auto 0;
+  margin: 10px auto 0;
   display: grid;
   grid-template-columns: 1.15fr 0.85fr;
   gap: 14px;
@@ -727,10 +783,6 @@ color: var(--reader-ink, rgba(15, 23, 42, 0.92));
     font-size: 18px;
   }
 
-  .lrr2TitleLine {
-    font-size: 16px;
-  }
-
   .lrr2SearchInput {
     min-width: 0;
     width: 100%;
@@ -1007,16 +1059,9 @@ color: var(--reader-ink, rgba(15, 23, 42, 0.92));
 
 /* 1) Increase working width (less wrapping = less crowded) */
 .lrr2Header,
-.lrr2TitleLine,
 .lrr2TopGrid,
 .lrr2Content {
   max-width: 1000px; /* was 980 */
-}
-
-/* 2) Give the page more breathing room between major blocks */
-.lrr2TitleLine {
-  margin: 22px auto 0;
-  line-height: 1.25;
 }
 
 .lrr2TopGrid {
@@ -1104,7 +1149,6 @@ color: var(--reader-ink, rgba(15, 23, 42, 0.92));
 /* 10) On small screens: keep everything stacked cleanly */
 @media (max-width: 900px) {
   .lrr2Header,
-  .lrr2TitleLine,
   .lrr2TopGrid,
   .lrr2Content {
     max-width: 980px; /* fallback */

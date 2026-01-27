@@ -807,9 +807,6 @@ export default function LawReportReader() {
       </header>
 
       {/* Big title line */}
-      <div className="lrr2TitleLine">
-        <span className="lrr2TitleKicker">LLR No. {llrNo}:</span>&nbsp;{title}
-      </div>
 
       {/* Two columns: meta table + actions (ONLY these two cards live inside this grid) */}
       <div className="lrr2TopGrid">
