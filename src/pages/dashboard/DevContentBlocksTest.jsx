@@ -1,23 +1,12 @@
-// src/pages/dev/DevContentBlocksTest.jsx
 import { useMemo, useState } from "react";
 import api from "../../api/client";
 import "../../styles/devContentBlocksTest.css";
 
 /**
- * Dev-only tester for normalized blocks JSON.
- *
- * Supports BOTH possible backend shapes:
- *
- * A) REST style:
- *   GET  /api/law-reports/{id}/content/json?forceBuild=true
- *   GET  /api/law-reports/{id}/content/json/status
- *
- * B) Query style:
- *   GET  /api/law-reports/content/json?lawReportId={id}&forceBuild=true
- *   GET  /api/law-reports/content/json/status?lawReportId={id}
- *
- * And your confirmed controller:
- *   POST /api/law-reports/{id}/content/build?force=true
+ * Uses ONLY your REST-style routes:
+ *  POST /api/law-reports/{id}/content/build?force=true
+ *  GET  /api/law-reports/{id}/content/json?forceBuild=true
+ *  GET  /api/law-reports/{id}/content/json/status
  */
 
 function toErrMsg(e, fallback = "Request failed.") {
@@ -33,24 +22,11 @@ function toErrMsg(e, fallback = "Request failed.") {
 function safeJsonParse(maybeStringOrObj) {
   if (maybeStringOrObj == null) return null;
   if (typeof maybeStringOrObj !== "string") return maybeStringOrObj;
-
   try {
     return JSON.parse(maybeStringOrObj);
   } catch {
     return null;
   }
-}
-
-async function firstOk(fns) {
-  let lastErr = null;
-  for (const fn of fns) {
-    try {
-      return await fn();
-    } catch (e) {
-      lastErr = e;
-    }
-  }
-  throw lastErr || new Error("All attempts failed.");
 }
 
 export default function DevContentBlocksTest() {
@@ -67,47 +43,24 @@ export default function DevContentBlocksTest() {
     return Array.isArray(arr) ? arr : [];
   }, [json]);
 
-  // ---------- Endpoints ----------
-
   async function build(id) {
-    // POST /api/law-reports/{id}/content/build?force=true
     const res = await api.post(`/law-reports/${id}/content/build`, null, {
       params: { force: true },
     });
     return res.data ?? null;
   }
 
-  async function getJsonRest(id) {
-    // GET /api/law-reports/{id}/content/json?forceBuild=true
+  async function getJson(id) {
     const res = await api.get(`/law-reports/${id}/content/json`, {
       params: { forceBuild },
     });
     return safeJsonParse(res.data);
   }
 
-  async function getJsonQuery(id) {
-    // GET /api/law-reports/content/json?lawReportId=...&forceBuild=true
-    const res = await api.get(`/law-reports/content/json`, {
-      params: { lawReportId: id, forceBuild },
-    });
-    return safeJsonParse(res.data);
-  }
-
-  async function getStatusRest(id) {
-    // GET /api/law-reports/{id}/content/json/status
+  async function getStatus(id) {
     const res = await api.get(`/law-reports/${id}/content/json/status`);
     return res.data ?? null;
   }
-
-  async function getStatusQuery(id) {
-    // GET /api/law-reports/content/json/status?lawReportId=...
-    const res = await api.get(`/law-reports/content/json/status`, {
-      params: { lawReportId: id },
-    });
-    return res.data ?? null;
-  }
-
-  // ---------- UI Action ----------
 
   async function run() {
     const id = Number(lawReportId);
@@ -125,18 +78,15 @@ export default function DevContentBlocksTest() {
     setStatus(null);
 
     try {
-      // If forceBuild is checked: build first (your confirmed POST endpoint)
       if (forceBuild) {
         await build(id);
       }
 
-      // Fetch JSON: try REST style, then query style
-      const data = await firstOk([() => getJsonRest(id), () => getJsonQuery(id)]);
+      const data = await getJson(id);
       setJson(data ?? null);
 
-      // Fetch status: try REST style, then query style (optional)
       try {
-        const st = await firstOk([() => getStatusRest(id), () => getStatusQuery(id)]);
+        const st = await getStatus(id);
         setStatus(st ?? null);
       } catch {
         setStatus(null);
@@ -161,7 +111,7 @@ export default function DevContentBlocksTest() {
             <input
               value={lawReportId}
               onChange={(e) => setLawReportId(e.target.value)}
-              placeholder="e.g. 2"
+              placeholder="e.g. 3"
               className="dcbInput"
               inputMode="numeric"
             />
@@ -198,7 +148,6 @@ export default function DevContentBlocksTest() {
       </header>
 
       <div className="dcbGrid">
-        {/* Rendered preview */}
         <section className="dcbCard">
           <div className="dcbCardTitle">Rendered Preview</div>
 
@@ -212,29 +161,9 @@ export default function DevContentBlocksTest() {
 
                 if (!text && !b?.data) return null;
 
-                if (type === "title") {
-                  return (
-                    <h1 key={idx} className="lexTitle">
-                      {text}
-                    </h1>
-                  );
-                }
-
-                if (type === "metaline") {
-                  return (
-                    <div key={idx} className="lexMeta">
-                      {text}
-                    </div>
-                  );
-                }
-
-                if (type === "heading") {
-                  return (
-                    <div key={idx} className="lexHeading">
-                      {text}
-                    </div>
-                  );
-                }
+                if (type === "title") return <h1 key={idx} className="lexTitle">{text}</h1>;
+                if (type === "metaline") return <div key={idx} className="lexMeta">{text}</div>;
+                if (type === "heading") return <div key={idx} className="lexHeading">{text}</div>;
 
                 if (type === "listitem") {
                   const marker = b?.data?.marker ? String(b.data.marker) : "";
@@ -248,17 +177,12 @@ export default function DevContentBlocksTest() {
                   );
                 }
 
-                return (
-                  <p key={idx} className="lexP">
-                    {text}
-                  </p>
-                );
+                return <p key={idx} className="lexP">{text}</p>;
               })}
             </article>
           )}
         </section>
 
-        {/* Raw JSON */}
         <section className="dcbCard">
           <div className="dcbCardTitle">Raw JSON (debug)</div>
 
