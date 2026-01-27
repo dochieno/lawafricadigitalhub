@@ -1068,6 +1068,76 @@ color: var(--reader-ink, rgba(15, 23, 42, 0.92));
   margin: 4px 0;      /* ✅ normal spacing */
   line-height: 1.55;
 }
+
+/* =========================
+   AI Upgrade prompt (Basic -> Extended)
+========================= */
+.lrrAiUpgrade{
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--reader-surface) 86%, transparent);
+  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.06);
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.lrrAiUpgrade.isExtended{
+  background: rgba(14,165,165,0.08);
+  border-color: rgba(14,165,165,0.25);
+}
+
+.lrrAiUpgradeText{
+  font-size: 13px;
+  font-weight: 850;
+  color: color-mix(in srgb, var(--reader-ink) 90%, transparent);
+  line-height: 1.45;
+}
+
+.lrrAiUpgradeBtn{
+  border: none;
+  cursor: pointer;
+  font-weight: 950;
+  font-size: 12px;
+
+  padding: 10px 14px;
+  border-radius: 999px;
+
+  color: #fff;
+  background: linear-gradient(135deg, rgba(161,24,30,0.92), rgba(112,40,64,0.86), rgba(14,165,165,0.78));
+  box-shadow: 0 14px 30px rgba(161, 24, 30, 0.16);
+  transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
+}
+
+.lrrAiUpgradeBtn:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 18px 36px rgba(161, 24, 30, 0.20);
+  filter: brightness(1.02);
+}
+
+.lrrAiUpgradeBtn.ghost{
+  background: rgba(255,255,255,0.82);
+  color: var(--reader-ink);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 18px rgba(2, 6, 23, 0.06);
+}
+
+.lrrAiUpgradeBtn.ghost:hover{
+  border-color: rgba(14,165,165,0.30);
+  box-shadow: 0 14px 26px rgba(2, 6, 23, 0.10);
+}
+
+.lrrAiUpgradeBtn:disabled{
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
 /* =========================
    Key Points (collapsible + numbered cards)
    Driven by: <ul class="lrrAiUl isKeyPointsCards">
@@ -1094,6 +1164,51 @@ color: var(--reader-ink, rgba(15, 23, 42, 0.92));
   gap: 6px;
   flex-wrap: wrap;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+/* =========================
+   Premium chevron (CSS only)
+   for Key Points accordion
+========================= */
+
+/* Make room for chevron on the right */
+.lrrKpSummary{
+  position: relative;
+  padding-right: 40px; /* space for chevron */
+}
+
+/* Chevron icon (closed = pointing right) */
+.lrrKpSummary::after{
+  content: "";
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+
+  border-right: 2.5px solid currentColor;
+  border-bottom: 2.5px solid currentColor;
+
+  transform: translateY(-50%) rotate(-45deg);
+  transform-origin: center;
+
+  opacity: 0.55;
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+
+/* Open state = chevron points down */
+.lrrKp[open] > .lrrKpSummary::after{
+  transform: translateY(-50%) rotate(45deg);
+  opacity: 0.85;
+}
+
+/* Hover polish */
+.lrrKpSummary:hover::after{
+  opacity: 0.9;
+}
+
+/* Optional: subtle color emphasis on hover */
+.lrrKpSummary:hover{
+  color: color-mix(in srgb, var(--reader-ink) 92%, var(--la-teal));
 }
 
 /* Hide default disclosure triangle (we’ll keep native behavior though) */

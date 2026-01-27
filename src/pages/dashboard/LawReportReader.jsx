@@ -329,7 +329,7 @@ if (isHeadingLine(s)) {
 }
 
 function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel }) {
-  const [type] = useState("basic"); // keep as default for API param
+const [type, setType] = useState("basic"); // basic | extended
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
@@ -426,7 +426,7 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* Subtle status line instead of buttons */}
+      {/* Subtle status line */}
       <div className="lrrAiStatus">
         {loading ? (
           <span>Preparing summary…</span>
@@ -459,6 +459,41 @@ useEffect(() => {
               </div>
             </div>
           </div>
+
+          {/* ✅ Upgrade prompt: Basic -> Extended (user-triggered) */}
+          {String(result.type ?? type).toLowerCase() === "basic" ? (
+            <div className="lrrAiUpgrade">
+              <div className="lrrAiUpgradeText">
+                Need more depth? Generate an <b>Extended</b> analysis (more detailed; will be token-gated later).
+              </div>
+
+              <button
+                type="button"
+                className="lrrAiUpgradeBtn"
+                disabled={loading}
+                onClick={() => setType("extended")}
+                title="Generate extended summary"
+              >
+                Generate Extended
+              </button>
+            </div>
+          ) : (
+            <div className="lrrAiUpgrade isExtended">
+              <div className="lrrAiUpgradeText">
+                You’re viewing the <b>Extended</b> analysis.
+              </div>
+
+              <button
+                type="button"
+                className="lrrAiUpgradeBtn ghost"
+                disabled={loading}
+                onClick={() => setType("basic")}
+                title="Back to basic summary"
+              >
+                Back to Basic
+              </button>
+            </div>
+          )}
 
           <div className="lrrAiBody">
             <AiSummaryRichText text={result.summary || ""} />
