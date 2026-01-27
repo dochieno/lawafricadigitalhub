@@ -3,10 +3,13 @@ import api from "../../api/client";
 import "../../styles/devContentBlocksTest.css";
 
 /**
- * Uses ONLY your REST-style routes:
+ * Existing routes:
  *  POST /api/law-reports/{id}/content/build?force=true
  *  GET  /api/law-reports/{id}/content/json?forceBuild=true
  *  GET  /api/law-reports/{id}/content/json/status
+ *
+ * New AI formatter route:
+ *  POST /api/law-reports/{id}/ai-format   body: { force, maxInputChars }
  */
 
 function toErrMsg(e, fallback = "Request failed.") {
@@ -33,6 +36,10 @@ export default function DevContentBlocksTest() {
   const [lawReportId, setLawReportId] = useState("");
   const [forceBuild, setForceBuild] = useState(true);
 
+  // ✅ NEW
+  const [useAiFormatter, setUseAiFormatter] = useState(false);
+  const [aiMaxInputChars, setAiMaxInputChars] = useState(20000);
+
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [json, setJson] = useState(null);
@@ -46,6 +53,15 @@ export default function DevContentBlocksTest() {
   async function build(id) {
     const res = await api.post(`/law-reports/${id}/content/build`, null, {
       params: { force: true },
+    });
+    return res.data ?? null;
+  }
+
+  // ✅ NEW
+  async function aiFormat(id) {
+    const res = await api.post(`/law-reports/${id}/ai-format`, {
+      force: true,
+      maxInputChars: Number(aiMaxInputChars) || 20000,
     });
     return res.data ?? null;
   }
@@ -78,7 +94,10 @@ export default function DevContentBlocksTest() {
     setStatus(null);
 
     try {
-      if (forceBuild) {
+      // ✅ If AI is enabled, build via AI formatter first
+      if (useAiFormatter) {
+        await aiFormat(id);
+      } else if (forceBuild) {
         await build(id);
       }
 
@@ -122,9 +141,33 @@ export default function DevContentBlocksTest() {
               type="checkbox"
               checked={forceBuild}
               onChange={(e) => setForceBuild(e.target.checked)}
+              disabled={useAiFormatter}
             />
             Force build (POST /build first)
           </label>
+
+          {/* ✅ NEW */}
+          <label className="dcbCheck">
+            <input
+              type="checkbox"
+              checked={useAiFormatter}
+              onChange={(e) => setUseAiFormatter(e.target.checked)}
+            />
+            Use AI formatter (POST /ai-format)
+          </label>
+
+          {/* ✅ NEW */}
+          {useAiFormatter ? (
+            <label className="dcbField" style={{ minWidth: 180 }}>
+              <span>AI max input chars</span>
+              <input
+                value={String(aiMaxInputChars)}
+                onChange={(e) => setAiMaxInputChars(e.target.value)}
+                className="dcbInput"
+                inputMode="numeric"
+              />
+            </label>
+          ) : null}
 
           <button className="dcbBtn" onClick={run} disabled={loading}>
             {loading ? "Loading…" : "Fetch & Render"}
@@ -161,9 +204,24 @@ export default function DevContentBlocksTest() {
 
                 if (!text && !b?.data) return null;
 
-                if (type === "title") return <h1 key={idx} className="lexTitle">{text}</h1>;
-                if (type === "metaline") return <div key={idx} className="lexMeta">{text}</div>;
-                if (type === "heading") return <div key={idx} className="lexHeading">{text}</div>;
+                if (type === "title")
+                  return (
+                    <h1 key={idx} className="lexTitle">
+                      {text}
+                    </h1>
+                  );
+                if (type === "metaline")
+                  return (
+                    <div key={idx} className="lexMeta">
+                      {text}
+                    </div>
+                  );
+                if (type === "heading")
+                  return (
+                    <div key={idx} className="lexHeading">
+                      {text}
+                    </div>
+                  );
 
                 if (type === "listitem") {
                   const marker = b?.data?.marker ? String(b.data.marker) : "";
@@ -171,13 +229,19 @@ export default function DevContentBlocksTest() {
 
                   return (
                     <div key={idx} className="lexLi">
-                      {marker ? <span className="lexLiMarker">{marker}</span> : null}
+                      {marker ? (
+                        <span className="lexLiMarker">{marker}</span>
+                      ) : null}
                       <span className="lexLiText">{t}</span>
                     </div>
                   );
                 }
 
-                return <p key={idx} className="lexP">{text}</p>;
+                return (
+                  <p key={idx} className="lexP">
+                    {text}
+                  </p>
+                );
               })}
             </article>
           )}
