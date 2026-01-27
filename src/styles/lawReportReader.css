@@ -750,6 +750,86 @@ color: var(--reader-ink, rgba(15, 23, 42, 0.92));
   display: block;
 }
 
+/* =========================
+   Premium section styling using data-section
+========================= */
+
+/* Give any section list a “panel” look */
+.lrrAiUl[data-section]{
+  padding: 12px 14px;
+  margin: 10px 0 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--reader-surface) 88%, transparent);
+  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.06);
+
+  /* keep bullets readable */
+  padding-left: 30px;
+}
+
+/* More breathing room between bullets inside panels */
+.lrrAiUl[data-section] .lrrAiLi{
+  margin: 7px 0;
+  line-height: 1.65;
+}
+
+/* Section accents (left border) */
+.lrrAiUl[data-section="facts"]{
+  border-left: 4px solid rgba(14,165,165,0.55);
+}
+.lrrAiUl[data-section="issues"]{
+  border-left: 4px solid rgba(161,24,30,0.55);
+}
+.lrrAiUl[data-section="reasoning"],
+.lrrAiUl[data-section="analysis"]{
+  border-left: 4px solid rgba(112,40,64,0.55);
+}
+.lrrAiUl[data-section="holding/decision"],
+.lrrAiUl[data-section="holding"],
+.lrrAiUl[data-section="decision"]{
+  border-left: 4px solid rgba(161,24,30,0.75);
+  background: rgba(161,24,30,0.06);
+}
+
+/* Make the heading line look like a section header */
+.lrrAiBlock{
+  margin-top: 8px;
+}
+
+.lrrAiH{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--reader-surface) 92%, transparent);
+
+  font-size: 12px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+
+/* Optional: tiny “dot” before headings for premium feel */
+.lrrAiH::before{
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(161,24,30,.85), rgba(14,165,165,.75));
+  opacity: .9;
+}
+
+/* Ensure Key Points card grid still wins */
+.lrrAiUl.isKeyPointsCards{
+  padding-left: 12px; /* override panel indent */
+  border-left: none;
+  background: transparent;
+  box-shadow: none;
+  border: none;
+}
+
 .lrrAiLi {
   line-height: 1.65;
   font-size: 14px;
@@ -1697,3 +1777,173 @@ color: var(--reader-ink, rgba(15, 23, 42, 0.92));
   box-shadow: 0 14px 30px rgba(2,6,23,.14);
 }
 .lrr2ToTop:hover{ transform: translateY(-1px); }
+.lrrAiTitleBlock{
+  margin-top: 8px;
+  padding: 12px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--reader-surface) 92%, transparent);
+  box-shadow: 0 10px 22px rgba(2,6,23,0.06);
+}
+
+.lrrAiTitleKicker{
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.lrrAiTitleMain{
+  margin-top: 6px;
+  font-family: ui-serif, Georgia, "Times New Roman", Times, serif;
+  font-size: 18px;
+  font-weight: 950;
+  line-height: 1.25;
+}
+/* =========================
+   LegalAI Summary — Premium Styling
+========================= */
+
+.lrrAiTitleBlock{
+  margin: 10px 0 14px;
+  padding: 12px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--reader-surface) 92%, transparent);
+  box-shadow: 0 10px 22px rgba(2,6,23,0.06);
+}
+
+.lrrAiTitleKicker{
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.lrrAiTitleMain{
+  margin-top: 6px;
+  font-family: ui-serif, Georgia, "Times New Roman", Times, serif;
+  font-size: 18px;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+/* Heading pill */
+.lrrAiBlock{ margin-top: 10px; }
+
+.lrrAiH{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--reader-surface) 92%, transparent);
+  font-size: 12px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+
+.lrrAiH::before{
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(161,24,30,.85), rgba(14,165,165,.75));
+  opacity: .9;
+}
+
+/* Premium panels for bullet lists */
+.lrrAiUl[data-section]{
+  padding: 12px 14px;
+  margin: 10px 0 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--reader-surface) 88%, transparent);
+  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.06);
+  padding-left: 30px;
+}
+
+.lrrAiUl[data-section] .lrrAiLi{
+  margin: 7px 0;
+  line-height: 1.65;
+}
+
+/* Premium panels for paragraphs too */
+.lrrAiP[data-section]{
+  margin: 10px 0 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--reader-surface) 90%, transparent);
+  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.05);
+  line-height: 1.75;
+}
+
+/* Section accents */
+.lrrAiUl[data-section="facts"],
+.lrrAiP[data-section="facts"]{
+  border-left: 4px solid rgba(14,165,165,0.55);
+}
+
+.lrrAiUl[data-section="issues"],
+.lrrAiP[data-section="issues"]{
+  border-left: 4px solid rgba(161,24,30,0.55);
+}
+
+.lrrAiUl[data-section="reasoning"],
+.lrrAiP[data-section="reasoning"],
+.lrrAiUl[data-section="analysis"],
+.lrrAiP[data-section="analysis"]{
+  border-left: 4px solid rgba(112,40,64,0.55);
+}
+
+.lrrAiUl[data-section="holding-decision"],
+.lrrAiP[data-section="holding-decision"],
+.lrrAiUl[data-section="holding"],
+.lrrAiP[data-section="holding"],
+.lrrAiUl[data-section="decision"],
+.lrrAiP[data-section="decision"]{
+  border-left: 4px solid rgba(161,24,30,0.75);
+  background: rgba(161,24,30,0.06);
+}
+
+/* Key Points / Key Takeaways cards should keep their grid styling */
+.lrrAiUl.isKeyPointsCards{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(240px, 1fr));
+  gap: 10px;
+  padding: 0;
+  margin: 10px 0 14px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+@media (max-width: 860px){
+  .lrrAiUl.isKeyPointsCards{ grid-template-columns: 1fr; }
+}
+
+.lrrAiUl.isKeyPointsCards .lrrAiLi{
+  list-style: none;
+  margin: 0;
+  padding: 12px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--reader-surface) 92%, transparent);
+  box-shadow: 0 10px 22px rgba(2,6,23,0.06);
+  position: relative;
+}
+
+.lrrAiUl.isKeyPointsCards .lrrAiLi::before{
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(161,24,30,0.75);
+  position: absolute;
+  left: 10px;
+  top: 16px;
+}

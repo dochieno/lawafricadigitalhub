@@ -208,25 +208,33 @@ function AiSummaryRichText({ text }) {
     .replace(/\r\n/g, "\n")
     .split("\n");
 
-  // Detect headings like "Digest:", "Court:", "Issue:", "Summary:", "Held:", "Key Point:"
-const isHeadingLine = (s) =>
-  /^(digest|court|facts|issue|issues|summary|held|holding\/decision|holding|reasoning|key points?|key takeaways?)\s*:/i.test(
-    s.trim()
-  );
+  // Detect headings like "Title:", "Facts:", "Issues:", "Holding/Decision:", etc
+  const isHeadingLine = (s) =>
+    /^(title|digest|court|facts|issue|issues|summary|held|holding\/decision|holding|decision|reasoning|analysis|key points?|key takeaways?|takeaways)\s*:/i.test(
+      String(s || "").trim()
+    );
 
   // Detect bullets: "-", "•", "*", "–"
-  const isBulletLine = (s) => /^\s*[-•*–]\s+/.test(s);
-    let currentSection = null;
+  const isBulletLine = (s) => /^\s*[-•*–]\s+/.test(String(s || ""));
 
-    const blocks = [];
-    let i = 0;
+  // Normalize section key for styling
+  function normalizeSectionKey(labelTrim) {
+    const raw = String(labelTrim || "").trim().toLowerCase();
+    // "holding/decision" -> "holding-decision"
+    return raw.replace(/\s*\/\s*/g, "-").replace(/\s+/g, "-");
+  }
 
-    // If we see a "Key Points:" heading, we wait and wrap the next bullet list into a <details>.
-    let pendingKeyPoints = null;
+  let currentSection = null;
+  const blocks = [];
+  let i = 0;
+
+  // If we see a "Key Points:" / "Key Takeaways:" heading,
+  // wrap the next bullet list into a <details> with cards.
+  let pendingKeyPoints = null;
 
   while (i < lines.length) {
     const raw = lines[i];
-    const s = raw.trim();
+    const s = String(raw || "").trim();
 
     // Skip extra blank lines
     if (!s) {
@@ -235,107 +243,113 @@ const isHeadingLine = (s) =>
     }
 
     // Heading line
-if (isHeadingLine(s)) {
-  const [label, ...rest] = s.split(":");
-  const labelTrim = label.trim();
-  const value = rest.join(":").trim();
+    if (isHeadingLine(s)) {
+      const [label, ...rest] = s.split(":");
+      const labelTrim = label.trim();
+      const value = rest.join(":").trim();
 
-  // ✅ track section for the NEXT blocks (bullets/paragraphs)
-  currentSection = labelTrim.toLowerCase();
+      const sectionKey = normalizeSectionKey(labelTrim);
+      currentSection = sectionKey;
 
-const isKeyPoints = /^(key points?|key takeaways?)$/i.test(labelTrim);
+      const isTitle = /^title$/i.test(labelTrim);
+      const isKeyPoints = /^(key points?|key takeaways?|takeaways)$/i.test(labelTrim);
 
-  // Key Points handled elsewhere (collapsible wrapping next bullet list)
-  if (isKeyPoints) {
-    pendingKeyPoints = { label: labelTrim, value };
-    i += 1;
-    continue;
-  }
+      // Title block (premium)
+      if (isTitle) {
+        blocks.push(
+          <div className="lrrAiTitleBlock" key={`t-${i}`}>
+            <div className="lrrAiTitleKicker">Title</div>
+            <div className="lrrAiTitleMain">{value || "—"}</div>
+          </div>
+        );
+        i += 1;
+        continue;
+      }
 
-  blocks.push(
-    <div className="lrrAiBlock" key={`h-${i}`}>
-      <div className="lrrAiH">
-        {labelTrim}:
-        {value ? <span className="lrrAiHVal"> {value}</span> : null}
-      </div>
-    </div>
-  );
+      // Key Points handled separately (wrap next bullets)
+      if (isKeyPoints) {
+        pendingKeyPoints = { label: labelTrim, value, sectionKey: "key-points" };
+        i += 1;
+        continue;
+      }
 
-  i += 1;
-  continue;
-}
+      // Normal heading pill
+      blocks.push(
+        <div className="lrrAiBlock" key={`h-${i}`} data-section={sectionKey}>
+          <div className="lrrAiH">
+            {labelTrim}:
+            {value ? <span className="lrrAiHVal"> {value}</span> : null}
+          </div>
+        </div>
+      );
 
-// Bullet list
-if (isBulletLine(raw)) {
-  const items = [];
-  while (i < lines.length && isBulletLine(lines[i])) {
-    const itemText = lines[i].replace(/^\s*[-•*–]\s+/, "").trim();
-    if (itemText) items.push(itemText);
-    i += 1;
-  }
+      i += 1;
+      continue;
+    }
 
-  // ✅ If the previous heading was "Key Points:", wrap as a collapsible details + numbered cards
-  if (pendingKeyPoints) {
-    const kp = pendingKeyPoints;
-    pendingKeyPoints = null;
+    // Bullet list
+    if (isBulletLine(raw)) {
+      const items = [];
+      while (i < lines.length && isBulletLine(lines[i])) {
+        const itemText = String(lines[i]).replace(/^\s*[-•*–]\s+/, "").trim();
+        if (itemText) items.push(itemText);
+        i += 1;
+      }
 
-    blocks.push(
-      <details className="lrrKp" open key={`kp-${i}`}>
-        <summary className="lrrKpSummary">
-          <span className="lrrKpTitle">{kp.label}:</span>
-          {kp.value ? <span className="lrrKpVal"> {kp.value}</span> : null}
-          <span className="lrrKpHint"> (click to collapse)</span>
-        </summary>
+      // If previous heading was "Key Takeaways/Key Points", wrap as collapsible cards
+      if (pendingKeyPoints) {
+        const kp = pendingKeyPoints;
+        pendingKeyPoints = null;
 
-        {/* ✅ keep section tag for styling if you want (optional) */}
-        <ul
-          className="lrrAiUl isKeyPointsCards"
-          data-section="key-points"
-        >
+        blocks.push(
+          <details className="lrrKp" open key={`kp-${i}`}>
+            <summary className="lrrKpSummary">
+              <span className="lrrKpTitle">{kp.label}:</span>
+              {kp.value ? <span className="lrrKpVal"> {kp.value}</span> : null}
+              <span className="lrrKpHint"> (click to collapse)</span>
+            </summary>
+
+            <ul className="lrrAiUl isKeyPointsCards" data-section={kp.sectionKey}>
+              {items.map((t, idx) => (
+                <li key={idx} className="lrrAiLi">
+                  {t}
+                </li>
+              ))}
+            </ul>
+          </details>
+        );
+
+        continue;
+      }
+
+      // Normal bullet list (section-styled)
+      blocks.push(
+        <ul className="lrrAiUl" data-section={currentSection || undefined} key={`ul-${i}`}>
           {items.map((t, idx) => (
             <li key={idx} className="lrrAiLi">
               {t}
             </li>
           ))}
         </ul>
-      </details>
-    );
+      );
 
-    continue;
-  }
-
-  // ✅ Normal bullet list (tagged by currentSection, e.g. "issues", "facts", "reasoning")
-  blocks.push(
-    <ul
-      className="lrrAiUl"
-      data-section={currentSection || undefined}
-      key={`ul-${i}`}
-    >
-      {items.map((t, idx) => (
-        <li key={idx} className="lrrAiLi">
-          {t}
-        </li>
-      ))}
-    </ul>
-  );
-
-  continue;
-}
+      continue;
+    }
 
     // Paragraph block (consume until blank line or heading or bullets)
     const para = [];
     while (
       i < lines.length &&
-      lines[i].trim() &&
+      String(lines[i] || "").trim() &&
       !isHeadingLine(lines[i]) &&
       !isBulletLine(lines[i])
     ) {
-      para.push(lines[i].trim());
+      para.push(String(lines[i] || "").trim());
       i += 1;
     }
 
     blocks.push(
-      <p className="lrrAiP" key={`p-${i}`}>
+      <p className="lrrAiP" data-section={currentSection || undefined} key={`p-${i}`}>
         {para.join(" ")}
       </p>
     );
