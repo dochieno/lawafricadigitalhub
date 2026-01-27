@@ -721,7 +721,10 @@ export default function LawReportReader() {
   const llrNo = report.reportNumber || report.llrNo || report.llrNumber || String(reportId);
 
   return (
-    <div className="lrr2Wrap">
+    <div
+      className="lrr2Wrap"
+      data-theme={readingTheme}
+    >
       {/* Top header + search */}
       <header className="lrr2Header">
         <div className="lrr2HeaderTop">
@@ -1066,25 +1069,26 @@ export default function LawReportReader() {
       ) : !textHasContent ? (
         <div className="lrr2Empty">This report has no content yet.</div>
       ) : (
+        
         <article className="lrr2Article">
           <div className="lrr2ArticleTitle">Case File / Transcript</div>
            
            <div className="lrr2ReaderBar">
-  <div className="lrr2ReaderGroup">
-    <span style={{ fontWeight: 900, fontSize: 12 }}>Text size</span>
-    <button
-      className="lrr2ReaderBtn"
-      onClick={() => setFontScale((v) => Math.max(0.9, Number((v - 0.05).toFixed(2))))}
-    >
-      A−
-    </button>
-    <button
-      className="lrr2ReaderBtn"
-      onClick={() => setFontScale((v) => Math.min(1.2, Number((v + 0.05).toFixed(2))))}
-    >
-      A+
-    </button>
-  </div>
+        <div className="lrr2ReaderGroup">
+          <span style={{ fontWeight: 900, fontSize: 12 }}>Text size</span>
+          <button
+            className="lrr2ReaderBtn"
+            onClick={() => setFontScale((v) => Math.max(0.9, Number((v - 0.05).toFixed(2))))}
+          >
+            A−
+          </button>
+          <button
+            className="lrr2ReaderBtn"
+            onClick={() => setFontScale((v) => Math.min(1.2, Number((v + 0.05).toFixed(2))))}
+          >
+            A+
+          </button>
+        </div>
 
           <div className="lrr2ReaderGroup">
             <span style={{ fontWeight: 900, fontSize: 12 }}>Theme</span>

@@ -337,30 +337,7 @@
   }
 }
 
-/* =========================
-   Meta table: classic LLR grid style (like sample table 2)
-   Background: #f5f5dc
-========================= */
 
-.lrr2MetaCard {
-  background: #f5f5dc;                 /* ✅ beige */
-  border: 1px solid rgba(15, 23, 42, 0.55);
-  border-radius: 0;                    /* ✅ square corners like table */
-  box-shadow: none;                    /* ✅ remove card look */
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-
-/* Optional: meta note row at the bottom */
-.lrr2MetaNote {
-  background: #f5f5dc;
-  border-top: 1px solid rgba(15, 23, 42, 0.45);
-  padding: 6px 8px;
-  font-family: "Times New Roman", Times, serif;
-  font-size: 12px;
-  color: #333;
-}
 
 /* Actions */
 .lrr2ActionBtns {
