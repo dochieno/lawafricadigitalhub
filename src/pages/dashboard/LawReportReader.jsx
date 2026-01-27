@@ -1069,42 +1069,108 @@ export default function LawReportReader() {
         <article className="lrr2Article">
           <div className="lrr2ArticleTitle">Case File / Transcript</div>
            
-           <div className="lrr2ReaderBar">
-        <div className="lrr2ReaderGroup">
-          <span style={{ fontWeight: 900, fontSize: 12 }}>Text size</span>
-          <button
-            className="lrr2ReaderBtn"
-            onClick={() => setFontScale((v) => Math.max(0.9, Number((v - 0.05).toFixed(2))))}
-          >
-            A−
-          </button>
-          <button
-            className="lrr2ReaderBtn"
-            onClick={() => setFontScale((v) => Math.min(1.2, Number((v + 0.05).toFixed(2))))}
-          >
-            A+
-          </button>
-        </div>
+        <div className="lrr2ReaderBar">
+          {/* Left group: typography */}
+          <div className="lrr2ReaderCluster">
+            <button
+              type="button"
+              className="lrr2IconBtn"
+              onClick={() =>
+                setFontScale((v) => Math.max(0.9, Number((v - 0.05).toFixed(2))))
+              }
+              title="Decrease text size"
+              aria-label="Decrease text size"
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M5 18h2.2l1.2-3h5.2l1.2 3H17L12.9 6h-1.8L5 18z" stroke="currentColor" strokeWidth="1.6" />
+                <path d="M9.2 13.2h4l-2-5-2 5z" stroke="currentColor" strokeWidth="1.6" />
+                <path d="M18 10h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+              <span className="lrr2IconBtnText">A−</span>
+            </button>
 
-          <div className="lrr2ReaderGroup">
-            <span style={{ fontWeight: 900, fontSize: 12 }}>Theme</span>
-            {["paper", "sepia", "dark"].map((t) => (
-              <button
-                key={t}
-                className={`lrr2ReaderBtn ${readingTheme === t ? "isOn" : ""}`}
-                onClick={() => setReadingTheme(t)}
-              >
-                {t}
-              </button>
-            ))}
+            <button
+              type="button"
+              className="lrr2IconBtn"
+              onClick={() =>
+                setFontScale((v) => Math.min(1.2, Number((v + 0.05).toFixed(2))))
+              }
+              title="Increase text size"
+              aria-label="Increase text size"
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M5 18h2.2l1.2-3h5.2l1.2 3H17L12.9 6h-1.8L5 18z" stroke="currentColor" strokeWidth="1.6" />
+                <path d="M9.2 13.2h4l-2-5-2 5z" stroke="currentColor" strokeWidth="1.6" />
+                <path d="M20 8v6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                <path d="M17 11h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+              <span className="lrr2IconBtnText">A+</span>
+            </button>
+
+            <button
+              type="button"
+              className={`lrr2IconBtn ${serif ? "isOn" : ""}`}
+              onClick={() => setSerif((v) => !v)}
+              title={serif ? "Serif font (on)" : "Serif font (off)"}
+              aria-label="Toggle serif font"
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M7 18h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                <path d="M9 18V6h6v12" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+                <path d="M8 6h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+              <span className="lrr2IconBtnText">Serif</span>
+            </button>
           </div>
 
-          <div className="lrr2ReaderGroup">
+          {/* Right group: theme pills */}
+          <div className="lrr2ReaderCluster">
             <button
-              className={`lrr2ReaderBtn ${serif ? "isOn" : ""}`}
-              onClick={() => setSerif((v) => !v)}
+              type="button"
+              className={`lrr2IconBtn ${readingTheme === "paper" ? "isOn" : ""}`}
+              onClick={() => setReadingTheme("paper")}
+              title="Paper theme"
+              aria-label="Paper theme"
             >
-              Serif
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M7 3h7l3 3v15H7V3z" stroke="currentColor" strokeWidth="1.6" />
+                <path d="M14 3v4h4" stroke="currentColor" strokeWidth="1.6" />
+                <path d="M9 11h6M9 15h6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+              </svg>
+              <span className="lrr2IconBtnText">Paper</span>
+            </button>
+
+            <button
+              type="button"
+              className={`lrr2IconBtn ${readingTheme === "sepia" ? "isOn" : ""}`}
+              onClick={() => setReadingTheme("sepia")}
+              title="Sepia theme"
+              aria-label="Sepia theme"
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M7 3h10v18H7V3z" stroke="currentColor" strokeWidth="1.6" />
+                <path d="M9 8h6M9 12h6M9 16h5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                <path d="M5.5 6.5c1.2-1.2 2.7-2 4.5-2" stroke="currentColor" strokeWidth="1.2" opacity=".7" />
+              </svg>
+              <span className="lrr2IconBtnText">Sepia</span>
+            </button>
+
+            <button
+              type="button"
+              className={`lrr2IconBtn ${readingTheme === "dark" ? "isOn" : ""}`}
+              onClick={() => setReadingTheme("dark")}
+              title="Dark theme"
+              aria-label="Dark theme"
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <span className="lrr2IconBtnText">Dark</span>
             </button>
           </div>
         </div>
