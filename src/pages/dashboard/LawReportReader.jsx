@@ -216,8 +216,11 @@ function AiSummaryRichText({ text }) {
   // Detect bullets: "-", "•", "*", "–"
   const isBulletLine = (s) => /^\s*[-•*–]\s+/.test(s);
 
-  const blocks = [];
-  let i = 0;
+    const blocks = [];
+    let i = 0;
+
+    // If we see a "Key Points:" heading, we wait and wrap the next bullet list into a <details>.
+    let pendingKeyPoints = null;
 
   while (i < lines.length) {
     const raw = lines[i];
@@ -230,16 +233,21 @@ function AiSummaryRichText({ text }) {
     }
 
     // Heading line
-    if (isHeadingLine(s)) {
-      const [label, ...rest] = s.split(":");
-      const value = rest.join(":").trim();
-      const isKeyPoints = /^key points?\s*$/i.test(label.trim());
+// Heading line
+if (isHeadingLine(s)) {
+  const [label, ...rest] = s.split(":");
+  const value = rest.join(":").trim();
+  const isKeyPoints = /^key points?\s*$/i.test(label.trim());
+
+  // Special handling: Key Points becomes a collapsible section wrapping the next bullet list
+      if (isKeyPoints) {
+        pendingKeyPoints = { label: label.trim(), value };
+        i += 1;
+        continue;
+      }
 
       blocks.push(
-        <div
-          className={`lrrAiBlock ${isKeyPoints ? "isKeyPoints" : ""}`}
-          key={`h-${i}`}
-        >
+        <div className="lrrAiBlock" key={`h-${i}`}>
           <div className="lrrAiH">
             {label.trim()}:
             {value ? <span className="lrrAiHVal"> {value}</span> : null}
@@ -250,26 +258,53 @@ function AiSummaryRichText({ text }) {
       continue;
     }
 
-    // Bullet list
-    if (isBulletLine(raw)) {
-      const items = [];
-      while (i < lines.length && isBulletLine(lines[i])) {
-        const itemText = lines[i].replace(/^\s*[-•*–]\s+/, "").trim();
-        if (itemText) items.push(itemText);
-        i += 1;
-      }
+  // Bullet list
+  if (isBulletLine(raw)) {
+    const items = [];
+    while (i < lines.length && isBulletLine(lines[i])) {
+      const itemText = lines[i].replace(/^\s*[-•*–]\s+/, "").trim();
+      if (itemText) items.push(itemText);
+      i += 1;
+    }
+
+    // If the previous heading was "Key Points:", wrap as a collapsible details + numbered cards
+    if (pendingKeyPoints) {
+      const kp = pendingKeyPoints;
+      pendingKeyPoints = null;
 
       blocks.push(
-        <ul className="lrrAiUl" key={`ul-${i}`}>
-          {items.map((t, idx) => (
-            <li key={idx} className="lrrAiLi">
-              {t}
-            </li>
-          ))}
-        </ul>
+        <details className="lrrKp" open key={`kp-${i}`}>
+          <summary className="lrrKpSummary">
+            <span className="lrrKpTitle">{kp.label}:</span>
+            {kp.value ? <span className="lrrKpVal"> {kp.value}</span> : null}
+            <span className="lrrKpHint"> (click to collapse)</span>
+          </summary>
+
+          <ul className="lrrAiUl isKeyPointsCards">
+            {items.map((t, idx) => (
+              <li key={idx} className="lrrAiLi">
+                {t}
+              </li>
+            ))}
+          </ul>
+        </details>
       );
+
       continue;
     }
+
+    // Normal bullets remain normal
+    blocks.push(
+      <ul className="lrrAiUl" key={`ul-${i}`}>
+        {items.map((t, idx) => (
+          <li key={idx} className="lrrAiLi">
+            {t}
+          </li>
+        ))}
+      </ul>
+    );
+    continue;
+  }
 
     // Paragraph block (consume until blank line or heading or bullets)
     const para = [];
