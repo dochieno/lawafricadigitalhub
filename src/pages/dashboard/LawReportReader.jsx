@@ -189,20 +189,6 @@ function CaseContentFormatted({ text }) {
   );
 }
 
-// ----------------------
-// AI Summary Panel (same API endpoints as your current code)
-// ----------------------
-function formatDateMaybe(d) {
-  if (!d) return "—";
-  try {
-    const dt = new Date(d);
-    if (Number.isNaN(dt.getTime())) return String(d);
-    return dt.toLocaleString();
-  } catch {
-    return String(d);
-  }
-}
-
 function AiSummaryRichText({ text }) {
   const lines = String(text || "")
     .replace(/\r\n/g, "\n")
@@ -451,39 +437,11 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* Subtle status line */}
-      <div className="lrrAiStatus">
-        {loading ? (
-          <span>Preparing summary…</span>
-        ) : result ? (
-          <span>
-            Summary type: <b>{result.type ?? type}</b>
-          </span>
-        ) : null}
-      </div>
-
       {error ? <div className="lrrAiError">{error}</div> : null}
 
       {result ? (
         <div className="lrrAiResult">
-          <div className="lrrAiMeta">
-            <div className="lrrAiMetaCol">
-              {"cached" in result ? (
-                <div>
-                  <b>Cached:</b> {String(result.cached)}
-                </div>
-              ) : null}
-            </div>
 
-            <div className="lrrAiMetaCol right">
-              <div>
-                <b>Created:</b> {formatDateMaybe(result.createdAt)}
-              </div>
-              <div>
-                <b>Updated:</b> {formatDateMaybe(result.updatedAt)}
-              </div>
-            </div>
-          </div>
 
           {/* ✅ Upgrade prompt: Basic -> Extended (user-triggered) */}
           {String(result.type ?? type).toLowerCase() === "basic" ? (
@@ -849,7 +807,7 @@ useEffect(() => {
       {/* Top header + search */}
       <header className="lrr2Header">
         <div className="lrr2HeaderTop">
-          <div className="lrr2Brand">Law Africa Law Reports</div>
+          <div className="lrr2Brand">Law Africa Law Reports-Case File (Transcript)</div>
 
           <div className="lrr2HeaderRight">
             <button className="lrr2LinkBtn" onClick={() => navigate("/dashboard/law-reports")}>
@@ -1216,9 +1174,7 @@ useEffect(() => {
         <div className="lrr2Empty">This report has no content yet.</div>
       ) : (
         
-        <article className="lrr2Article">
-          <div className="lrr2ArticleTitle">Case File / Transcript</div>
-           
+        <article className="lrr2Article">           
         <div className="lrr2ReaderBar">
           {/* Left group: typography */}
           <div className="lrr2ReaderCluster">
