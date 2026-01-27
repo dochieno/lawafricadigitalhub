@@ -1045,8 +1045,8 @@
 ========================= */
 .lrr2CaseFmt {
   font-family: ui-serif, Georgia, "Times New Roman", Times, serif;
-  font-size: 16px;
-  line-height: 1.75;
+  font-size: 13px;
+  line-height: 1.65;
   color: rgba(15, 23, 42, 0.95);
   padding: 2px 2px;
   text-align: justify;
@@ -1061,7 +1061,7 @@
 
 .lrr2CaseH {
   margin: 16px 0 10px 0;
-  font-size: 14px;
+  font-size: 13px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   font-weight: 900;
@@ -1079,19 +1079,13 @@
   overflow-wrap: anywhere;
   word-break: break-word;
 }
-/* =========================
-   Crowding Fix Pack
-   - Wider layout
-   - Lighter top section hierarchy
-   - Better grid proportions
-========================= */
 
 /* 1) Increase working width (less wrapping = less crowded) */
 .lrr2Header,
 .lrr2TitleLine,
 .lrr2TopGrid,
 .lrr2Content {
-  max-width: 1200px; /* was 980 */
+  max-width: 1000px; /* was 980 */
 }
 
 /* 2) Give the page more breathing room between major blocks */
@@ -1188,7 +1182,7 @@
 }
 
 .lrr2Row {
-  grid-template-columns: 120px 1fr; /* a little more room for keys */
+  grid-template-columns: 100px 1fr; /* a little more room for keys */
 }
 
 /* 10) On small screens: keep everything stacked cleanly */
