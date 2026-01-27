@@ -1203,4 +1203,24 @@
   .lrr2TopGrid {
     grid-template-columns: 1fr;
   }
+}.lrr2Html :where(h2){ font-size:18px; font-weight:900; margin:14px 0 8px; }
+.lrr2Html :where(h3){ font-size:16px; font-weight:900; margin:12px 0 6px; }
+.lrr2Html :where(h4){ font-size:14px; font-weight:900; margin:10px 0 6px; }
+.lrr2Html :where(p){ margin: 8px 0; line-height:1.7; }
+.lrr2Html :where(blockquote){
+  border-left:4px solid rgba(148,163,184,.5);
+  padding-left:12px;
+  margin:10px 0;
 }
+.lrr2Html :where(table){
+  width:100%;
+  border-collapse:collapse;
+  margin:10px 0;
+}
+.lrr2Html :where(th, td){
+  border:1px solid rgba(148,163,184,.5);
+  padding:8px;
+  vertical-align:top;
+}
+.lrr2Html :where(ul,ol){ padding-left:20px; }
+.lrr2Html :where(a){ text-decoration:underline; }

@@ -17,6 +17,13 @@ function isPublicUser() {
   return String(userType).toLowerCase() === "public" && (!inst || inst <= 0);
 }
 
+function isProbablyHtml(s) {
+  const x = String(s || "").trim();
+  if (!x) return false;
+  // very conservative: real tags, not just "<" in text
+  return /<\/?(p|br|div|span|h1|h2|h3|h4|ul|ol|li|table|thead|tbody|tr|td|th|blockquote)\b/i.test(x);
+}
+
 function isGlobalAdminUser() {
   const c = getAuthClaims();
 
@@ -1010,26 +1017,29 @@ export default function LawReportReader() {
       </div>
 
       {/* Unified content area (THIS MUST be OUTSIDE lrr2TopGrid) */}
-      <section className="lrr2Content">
-        {view === "ai" ? (
-          <LawReportAiSummaryPanel
-            lawReportId={reportId}
-            digestTitle={title} // parties/title you already computed
-            courtLabel={report?.court || ""} // from report
-          />
-        ) : !textHasContent ? (
-          <div className="lrr2Empty">This report has no content yet.</div>
-        ) : (
-          <article className="lrr2Article">
-            <div className="lrr2ArticleTitle">Case File / Transcript</div>
+    <section className="lrr2Content">
+      {view === "ai" ? (
+        <LawReportAiSummaryPanel
+          lawReportId={reportId}
+          digestTitle={title} // parties/title you already computed
+          courtLabel={report?.court || ""} // from report
+        />
+      ) : !textHasContent ? (
+        <div className="lrr2Empty">This report has no content yet.</div>
+      ) : (
+        <article className="lrr2Article">
+          <div className="lrr2ArticleTitle">Case File / Transcript</div>
 
-            <div className={`lrr2Collapse ${contentOpen ? "open" : "closed"}`}>
-              {/* ✅ Render readable paragraphs instead of a giant <pre> */}
+          <div className={`lrr2Collapse ${contentOpen ? "open" : "closed"}`}>
+            {isProbablyHtml(rawContent) ? (
+              <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: rawContent }} />
+            ) : (
               <CaseContentFormatted text={rawContent} />
-            </div>
-          </article>
-        )}
-      </section>
+            )}
+          </div>
+        </article>
+      )}
+    </section>
     </div>
   );
 }
