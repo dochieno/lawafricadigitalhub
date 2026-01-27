@@ -342,7 +342,7 @@ export default function AdminReportContent() {
           <span className="rc-pill">
             Last saved: <b>{lastSavedAt ? new Date(lastSavedAt).toLocaleString() : "—"}</b>
           </span>
-          <span className="rc-pill">Tip: paste from Word, then use “Remove format” if needed</span>
+          <span className="rc-pill">Tip: pasted from Word, then use “Remove format” if needed</span>
         </div>
 
         <div className="rc-editor-wrap">
