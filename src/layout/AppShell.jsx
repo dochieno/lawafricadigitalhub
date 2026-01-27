@@ -103,7 +103,7 @@ export default function AppShell() {
 
             {/* ✅ DEV: Content Blocks tester (temporary quick navigation) */}
             {import.meta.env.DEV && (
-              <NavLink to="/dashboard/dev/content-blocks" className="nav-link nav-child">
+              <NavLink to="/dashboard/content-blocks" className="nav-link nav-child">
                 🧪 Content Blocks Tester
               </NavLink>
             )}

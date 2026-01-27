@@ -1,12 +1,42 @@
+// src/pages/dev/DevContentBlocksTest.jsx
 import { useMemo, useState } from "react";
 import api from "../../api/client";
 import "../../styles/devContentBlocksTest.css";
 
 /**
  * Dev-only tester for normalized blocks JSON.
- * Calls:
- *  GET /law-reports/{id}/content/json?forceBuild=true
+ *
+ * ✅ Supports BOTH API styles (so you won't get stuck on 405):
+ *
+ * Style A (recommended):
+ *   POST /law-reports/{id}/content/build         (force build)
+ *   GET  /law-reports/{id}/content/json          (read cached json)
+ *
+ * Style B (legacy fallback):
+ *   GET  /law-reports/{id}/content/json?forceBuild=true
+ *
+ * The code below tries Style A first, and if it hits 404/405,
+ * it automatically falls back to Style B.
  */
+
+function isMethodNotAllowed(err) {
+  return Number(err?.response?.status) === 405;
+}
+
+function isNotFound(err) {
+  return Number(err?.response?.status) === 404;
+}
+
+function toErrMsg(e, fallback = "Request failed.") {
+  return (
+    e?.response?.data?.message ||
+    e?.response?.data?.detail ||
+    e?.response?.data?.error ||
+    e?.message ||
+    fallback
+  );
+}
+
 export default function DevContentBlocksTest() {
   const [lawReportId, setLawReportId] = useState("");
   const [forceBuild, setForceBuild] = useState(true);
@@ -30,23 +60,51 @@ export default function DevContentBlocksTest() {
 
     setLoading(true);
     setErr("");
-    try {
-      // NOTE: controller route we created:
-      // GET /api/law-reports/{id}/content/json
-      // Your axios client already prefixes /api if configured; keep as below to match your other calls.
-      const res = await api.get(`/law-reports/${id}/content/json`, {
-        params: { forceBuild },
-        // IMPORTANT: controller returns Content(application/json) => axios parses as object if headers are right
-      });
+    setJson(null);
 
-      setJson(res.data ?? null);
+    try {
+      // -------------------------
+      // 1) FORCE BUILD (preferred: POST)
+      // -------------------------
+      if (forceBuild) {
+        try {
+          // ✅ preferred build endpoint
+          // (create this in API when ready)
+          await api.post(`/law-reports/${id}/content/build`);
+        } catch (buildErr) {
+          // If build endpoint doesn't exist or doesn't allow POST,
+          // we will fallback later to legacy GET ?forceBuild=true
+          if (!isNotFound(buildErr) && !isMethodNotAllowed(buildErr)) {
+            // real error (401/403/500 etc.)
+            throw buildErr;
+          }
+        }
+      }
+
+      // -------------------------
+      // 2) READ JSON (preferred: GET without params)
+      // -------------------------
+      try {
+        const res = await api.get(`/law-reports/${id}/content/json`);
+        setJson(res.data ?? null);
+        return;
+      } catch (getErr) {
+        // If endpoint exists but requires legacy param OR server rejects GET,
+        // try legacy fallback below
+        if (!isNotFound(getErr) && !isMethodNotAllowed(getErr)) {
+          throw getErr;
+        }
+      }
+
+      // -------------------------
+      // 3) LEGACY FALLBACK: GET with forceBuild param
+      // -------------------------
+      const res2 = await api.get(`/law-reports/${id}/content/json`, {
+        params: { forceBuild },
+      });
+      setJson(res2.data ?? null);
     } catch (e) {
-      const msg =
-        e?.response?.data?.message ||
-        e?.response?.data?.detail ||
-        e?.message ||
-        "Request failed.";
-      setErr(String(msg));
+      setErr(String(toErrMsg(e, "Request failed.")));
       setJson(null);
     } finally {
       setLoading(false);
@@ -66,6 +124,7 @@ export default function DevContentBlocksTest() {
               onChange={(e) => setLawReportId(e.target.value)}
               placeholder="e.g. 1745"
               className="dcbInput"
+              inputMode="numeric"
             />
           </label>
 
@@ -126,7 +185,6 @@ export default function DevContentBlocksTest() {
                 }
 
                 if (type === "listitem") {
-                  // Prefer structured marker/text if present
                   const marker = b?.data?.marker ? String(b.data.marker) : "";
                   const t = b?.data?.text ? String(b.data.text) : text;
                   return (
