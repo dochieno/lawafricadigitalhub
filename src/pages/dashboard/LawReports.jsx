@@ -32,6 +32,8 @@ function IcArrowLeft(props) {
   );
 }
 
+
+
 function IcCase(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
@@ -183,8 +185,43 @@ function parseSearchResponse(payload) {
   return { items: Array.isArray(items) ? items : [], total: Number(total) || 0 };
 }
 
+function stripHtmlToText(html) {
+  const s = String(html || "");
+  if (!s) return "";
+
+  // remove script/style blocks
+  const noScripts = s
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ");
+
+  // preserve some structure before stripping tags
+  const withBreaks = noScripts
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>\s*/gi, "\n\n")
+    .replace(/<\/div>\s*/gi, "\n");
+
+  // strip remaining tags
+  const noTags = withBreaks.replace(/<\/?[^>]+>/g, " ");
+
+  // decode common entities
+  return noTags
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function cleanPreview(text) {
-  const t = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  // 🔑 NEW: strip HTML first
+  const t = stripHtmlToText(text)
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .trim();
+
   if (!t) return "";
   return t.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
 }
@@ -792,7 +829,8 @@ export default function LawReports() {
     if (mode === "server") {
       return truncateText(cleanPreview(r?.previewText || ""), 100);
     }
-    return truncateText(makeReportExcerpt(r, 260), 100);
+    // client mode can also carry html in meta.content/excerpt
+    return truncateText(cleanPreview(makeReportExcerpt(r, 260)), 100);
   }
 
   function setPageToFirst() {
