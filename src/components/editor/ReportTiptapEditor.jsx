@@ -1,14 +1,15 @@
 import React, { useEffect } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import Underline from "@tiptap/extension-underline";
-import Link from "@tiptap/extension-link";
-import TextAlign from "@tiptap/extension-text-align";
-import Placeholder from "@tiptap/extension-placeholder";
-import Table from "@tiptap/extension-table";
-import TableRow from "@tiptap/extension-table-row";
-import TableHeader from "@tiptap/extension-table-header";
-import TableCell from "@tiptap/extension-table-cell";
+
+import { StarterKit } from "@tiptap/starter-kit";
+import { Underline } from "@tiptap/extension-underline";
+import { Link } from "@tiptap/extension-link";
+import { TextAlign } from "@tiptap/extension-text-align";
+import { Placeholder } from "@tiptap/extension-placeholder";
+import { Table } from "@tiptap/extension-table";
+import { TableRow } from "@tiptap/extension-table-row";
+import { TableHeader } from "@tiptap/extension-table-header";
+import { TableCell } from "@tiptap/extension-table-cell";
 
 // Keep this minimal + predictable for law reports
 const extensions = [
@@ -91,7 +92,11 @@ export default function ReportTiptapEditor({ value, onChange, disabled }) {
   }, [disabled, editor]);
 
   if (!editor) {
-    return <div style={{ padding: 10, color: "#6b7280", fontWeight: 800 }}>Loading editor…</div>;
+    return (
+      <div style={{ padding: 10, color: "#6b7280", fontWeight: 800 }}>
+        Loading editor…
+      </div>
+    );
   }
 
   return (
@@ -245,17 +250,31 @@ export default function ReportTiptapEditor({ value, onChange, disabled }) {
         <ToolbarBtn
           title="Insert table (3x3)"
           disabled={disabled}
-          onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+          onClick={() =>
+            editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+          }
         >
           Table
         </ToolbarBtn>
-        <ToolbarBtn title="Add row" disabled={disabled} onClick={() => editor.chain().focus().addRowAfter().run()}>
+        <ToolbarBtn
+          title="Add row"
+          disabled={disabled}
+          onClick={() => editor.chain().focus().addRowAfter().run()}
+        >
           +Row
         </ToolbarBtn>
-        <ToolbarBtn title="Add column" disabled={disabled} onClick={() => editor.chain().focus().addColumnAfter().run()}>
+        <ToolbarBtn
+          title="Add column"
+          disabled={disabled}
+          onClick={() => editor.chain().focus().addColumnAfter().run()}
+        >
           +Col
         </ToolbarBtn>
-        <ToolbarBtn title="Delete table" disabled={disabled} onClick={() => editor.chain().focus().deleteTable().run()}>
+        <ToolbarBtn
+          title="Delete table"
+          disabled={disabled}
+          onClick={() => editor.chain().focus().deleteTable().run()}
+        >
           Del table
         </ToolbarBtn>
 
