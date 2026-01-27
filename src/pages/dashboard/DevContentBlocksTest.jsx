@@ -36,7 +36,6 @@ export default function DevContentBlocksTest() {
   const [lawReportId, setLawReportId] = useState("");
   const [forceBuild, setForceBuild] = useState(true);
 
-  // ✅ NEW
   const [useAiFormatter, setUseAiFormatter] = useState(false);
   const [aiMaxInputChars, setAiMaxInputChars] = useState(20000);
 
@@ -57,18 +56,17 @@ export default function DevContentBlocksTest() {
     return res.data ?? null;
   }
 
-  // ✅ NEW
   async function aiFormat(id) {
     const res = await api.post(`/law-reports/${id}/ai-format`, {
-      force: true,
+      force: !!forceBuild, // ✅ respect UI toggle
       maxInputChars: Number(aiMaxInputChars) || 20000,
     });
     return res.data ?? null;
   }
 
-  async function getJson(id) {
+  async function getJson(id, forceBuildOverride) {
     const res = await api.get(`/law-reports/${id}/content/json`, {
-      params: { forceBuild },
+      params: { forceBuild: !!forceBuildOverride },
     });
     return safeJsonParse(res.data);
   }
@@ -94,14 +92,15 @@ export default function DevContentBlocksTest() {
     setStatus(null);
 
     try {
-      // ✅ If AI is enabled, build via AI formatter first
+      // If AI enabled, trigger AI build. Otherwise optional regex build.
       if (useAiFormatter) {
         await aiFormat(id);
       } else if (forceBuild) {
         await build(id);
       }
 
-      const data = await getJson(id);
+      // ✅ When AI is enabled, we don't need forceBuild on GET because we already built.
+      const data = await getJson(id, !useAiFormatter && forceBuild);
       setJson(data ?? null);
 
       try {
@@ -146,7 +145,6 @@ export default function DevContentBlocksTest() {
             Force build (POST /build first)
           </label>
 
-          {/* ✅ NEW */}
           <label className="dcbCheck">
             <input
               type="checkbox"
@@ -156,7 +154,6 @@ export default function DevContentBlocksTest() {
             Use AI formatter (POST /ai-format)
           </label>
 
-          {/* ✅ NEW */}
           {useAiFormatter ? (
             <label className="dcbField" style={{ minWidth: 180 }}>
               <span>AI max input chars</span>
@@ -210,12 +207,14 @@ export default function DevContentBlocksTest() {
                       {text}
                     </h1>
                   );
+
                 if (type === "metaline")
                   return (
                     <div key={idx} className="lexMeta">
                       {text}
                     </div>
                   );
+
                 if (type === "heading")
                   return (
                     <div key={idx} className="lexHeading">
