@@ -1,8 +1,3 @@
-/* =========================
-   Law Report Reader v2 (lrr2*)
-   - Matches new JSX: lrr2* + lrrAi*
-========================= */
-
 .lrr2Wrap {
   --bg: #f3f4f6;
 
@@ -1083,4 +1078,129 @@
 .lrr2CaseP {
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+/* =========================
+   Crowding Fix Pack
+   - Wider layout
+   - Lighter top section hierarchy
+   - Better grid proportions
+========================= */
+
+/* 1) Increase working width (less wrapping = less crowded) */
+.lrr2Header,
+.lrr2TitleLine,
+.lrr2TopGrid,
+.lrr2Content {
+  max-width: 1200px; /* was 980 */
+}
+
+/* 2) Give the page more breathing room between major blocks */
+.lrr2TitleLine {
+  margin: 22px auto 0;
+  line-height: 1.25;
+}
+
+.lrr2TopGrid {
+  margin-top: 16px;
+  gap: 18px;
+}
+
+/* 3) Actions column should be a fixed comfortable width */
+.lrr2TopGrid {
+  grid-template-columns: 1fr 360px; /* instead of 1.15fr 0.85fr */
+}
+
+/* On medium screens shrink the action width a bit */
+@media (max-width: 1100px) {
+  .lrr2TopGrid {
+    grid-template-columns: 1fr 320px;
+  }
+}
+
+/* 4) Make the search header lighter/less tall */
+.lrr2Header {
+  padding: 12px;
+}
+
+.lrr2Brand {
+  font-size: 20px; /* was 22 */
+}
+
+.lrr2SearchInput,
+.lrr2SearchBtn {
+  padding: 10px 12px; /* was 12px 14px */
+  border-radius: 12px;
+}
+
+.lrr2SearchRow {
+  margin-top: 10px;
+  gap: 6px;
+}
+
+/* 5) Tone down the “card weight” so it doesn’t feel like stacked boxes */
+.lrr2Header,
+.lrr2ActionsCard,
+.lrr2Article,
+.lrrAi {
+  box-shadow: 0 8px 18px rgba(2, 6, 23, 0.08); /* softer */
+}
+
+/* 6) Make AI panel visually lighter (it currently competes too much) */
+.lrrAi {
+  padding: 12px;
+}
+
+.lrrAiTop {
+  gap: 4px;
+}
+
+.lrrAiHeadnoteTitle {
+  font-size: 16px; /* was 18 */
+}
+
+.lrrAiHeadnoteRule {
+  margin-top: 8px;
+}
+
+.lrrAiResult {
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.lrrAiBody {
+  padding: 10px;
+}
+
+/* 7) Keep the right sticky card from “hugging” the top too much */
+.lrr2ActionsCard {
+  top: 22px; /* was 16px */
+}
+
+/* 8) Give content section more separation from top grid */
+.lrr2Content {
+  margin-top: 18px;
+}
+
+/* 9) Meta table: reduce visual density slightly (still table-like) */
+.lrr2Key,
+.lrr2Val {
+  padding: 5px 8px; /* was 6px 8px */
+}
+
+.lrr2Row {
+  grid-template-columns: 120px 1fr; /* a little more room for keys */
+}
+
+/* 10) On small screens: keep everything stacked cleanly */
+@media (max-width: 900px) {
+  .lrr2Header,
+  .lrr2TitleLine,
+  .lrr2TopGrid,
+  .lrr2Content {
+    max-width: 980px; /* fallback */
+  }
+
+  .lrr2TopGrid {
+    grid-template-columns: 1fr;
+  }
 }
