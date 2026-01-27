@@ -32,6 +32,7 @@ import InstitutionMembersAdmin from "./pages/dashboard/institution/InstitutionMe
 import AdminSubscriptionRequests from "./pages/dashboard/approvals/AdminSubscriptionRequests";
 import AppShell from "./layout/AppShell";
 import AiSummaryTest from "./pages/AiSummaryTest.jsx";
+import DevContentBlocksTest from "./pages/dashboard/DevContentBlocksTest";
 
 import Explore from "./pages/dashboard/Explore";
 import Library from "./pages/dashboard/Library";
@@ -145,6 +146,7 @@ export default function App() {
               <Route path="admin/llr-services" element={<AdminLLRServices />} />
               <Route path="admin/llr-services/import" element={<AdminLLRImport />} />
               <Route path="ai-test" element={<AiSummaryTest />} />
+              <Route path="/dashboard/dev/content-blocks" element={<DevContentBlocksTest />} />
               <Route
                 path="admin/llr-services/:legalDocumentId/content"
                 element={<AdminReportContent />}
