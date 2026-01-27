@@ -132,6 +132,7 @@ function splitIntoParagraphs(text) {
 
   let x = t;
 
+
   // Break before headings that appear as words in the blob
   for (const h of headings) {
     const re = new RegExp(`\\s(${h})\\s`, "g");
@@ -215,6 +216,7 @@ function AiSummaryRichText({ text }) {
 
   // Detect bullets: "-", "•", "*", "–"
   const isBulletLine = (s) => /^\s*[-•*–]\s+/.test(s);
+    let currentSection = null;
 
     const blocks = [];
     let i = 0;
@@ -233,78 +235,92 @@ function AiSummaryRichText({ text }) {
     }
 
     // Heading line
-// Heading line
 if (isHeadingLine(s)) {
   const [label, ...rest] = s.split(":");
+  const labelTrim = label.trim();
   const value = rest.join(":").trim();
-  const isKeyPoints = /^key points?\s*$/i.test(label.trim());
 
-  // Special handling: Key Points becomes a collapsible section wrapping the next bullet list
-      if (isKeyPoints) {
-        pendingKeyPoints = { label: label.trim(), value };
-        i += 1;
-        continue;
-      }
+  // ✅ track section for the NEXT blocks (bullets/paragraphs)
+  currentSection = labelTrim.toLowerCase();
 
-      blocks.push(
-        <div className="lrrAiBlock" key={`h-${i}`}>
-          <div className="lrrAiH">
-            {label.trim()}:
-            {value ? <span className="lrrAiHVal"> {value}</span> : null}
-          </div>
-        </div>
-      );
-      i += 1;
-      continue;
-    }
+  const isKeyPoints = /^key points?\s*$/i.test(labelTrim);
 
-  // Bullet list
-  if (isBulletLine(raw)) {
-    const items = [];
-    while (i < lines.length && isBulletLine(lines[i])) {
-      const itemText = lines[i].replace(/^\s*[-•*–]\s+/, "").trim();
-      if (itemText) items.push(itemText);
-      i += 1;
-    }
-
-    // If the previous heading was "Key Points:", wrap as a collapsible details + numbered cards
-    if (pendingKeyPoints) {
-      const kp = pendingKeyPoints;
-      pendingKeyPoints = null;
-
-      blocks.push(
-        <details className="lrrKp" open key={`kp-${i}`}>
-          <summary className="lrrKpSummary">
-            <span className="lrrKpTitle">{kp.label}:</span>
-            {kp.value ? <span className="lrrKpVal"> {kp.value}</span> : null}
-            <span className="lrrKpHint"> (click to collapse)</span>
-          </summary>
-
-          <ul className="lrrAiUl isKeyPointsCards">
-            {items.map((t, idx) => (
-              <li key={idx} className="lrrAiLi">
-                {t}
-              </li>
-            ))}
-          </ul>
-        </details>
-      );
-
-      continue;
-    }
-
-    // Normal bullets remain normal
-    blocks.push(
-      <ul className="lrrAiUl" key={`ul-${i}`}>
-        {items.map((t, idx) => (
-          <li key={idx} className="lrrAiLi">
-            {t}
-          </li>
-        ))}
-      </ul>
-    );
+  // Key Points handled elsewhere (collapsible wrapping next bullet list)
+  if (isKeyPoints) {
+    pendingKeyPoints = { label: labelTrim, value };
+    i += 1;
     continue;
   }
+
+  blocks.push(
+    <div className="lrrAiBlock" key={`h-${i}`}>
+      <div className="lrrAiH">
+        {labelTrim}:
+        {value ? <span className="lrrAiHVal"> {value}</span> : null}
+      </div>
+    </div>
+  );
+
+  i += 1;
+  continue;
+}
+
+// Bullet list
+if (isBulletLine(raw)) {
+  const items = [];
+  while (i < lines.length && isBulletLine(lines[i])) {
+    const itemText = lines[i].replace(/^\s*[-•*–]\s+/, "").trim();
+    if (itemText) items.push(itemText);
+    i += 1;
+  }
+
+  // ✅ If the previous heading was "Key Points:", wrap as a collapsible details + numbered cards
+  if (pendingKeyPoints) {
+    const kp = pendingKeyPoints;
+    pendingKeyPoints = null;
+
+    blocks.push(
+      <details className="lrrKp" open key={`kp-${i}`}>
+        <summary className="lrrKpSummary">
+          <span className="lrrKpTitle">{kp.label}:</span>
+          {kp.value ? <span className="lrrKpVal"> {kp.value}</span> : null}
+          <span className="lrrKpHint"> (click to collapse)</span>
+        </summary>
+
+        {/* ✅ keep section tag for styling if you want (optional) */}
+        <ul
+          className="lrrAiUl isKeyPointsCards"
+          data-section="key-points"
+        >
+          {items.map((t, idx) => (
+            <li key={idx} className="lrrAiLi">
+              {t}
+            </li>
+          ))}
+        </ul>
+      </details>
+    );
+
+    continue;
+  }
+
+  // ✅ Normal bullet list (tagged by currentSection, e.g. "issues", "facts", "reasoning")
+  blocks.push(
+    <ul
+      className="lrrAiUl"
+      data-section={currentSection || undefined}
+      key={`ul-${i}`}
+    >
+      {items.map((t, idx) => (
+        <li key={idx} className="lrrAiLi">
+          {t}
+        </li>
+      ))}
+    </ul>
+  );
+
+  continue;
+}
 
     // Paragraph block (consume until blank line or heading or bullets)
     const para = [];
