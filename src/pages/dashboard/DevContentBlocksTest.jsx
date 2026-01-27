@@ -6,26 +6,19 @@ import "../../styles/devContentBlocksTest.css";
 /**
  * Dev-only tester for normalized blocks JSON.
  *
- * ✅ Supports BOTH API styles (so you won't get stuck on 405):
+ * Supports BOTH possible backend shapes:
  *
- * Style A (recommended):
- *   POST /law-reports/{id}/content/build         (force build)
- *   GET  /law-reports/{id}/content/json          (read cached json)
+ * A) REST style:
+ *   GET  /api/law-reports/{id}/content/json?forceBuild=true
+ *   GET  /api/law-reports/{id}/content/json/status
  *
- * Style B (legacy fallback):
- *   GET  /law-reports/{id}/content/json?forceBuild=true
+ * B) Query style:
+ *   GET  /api/law-reports/content/json?lawReportId={id}&forceBuild=true
+ *   GET  /api/law-reports/content/json/status?lawReportId={id}
  *
- * The code below tries Style A first, and if it hits 404/405,
- * it automatically falls back to Style B.
+ * And your confirmed controller:
+ *   POST /api/law-reports/{id}/content/build?force=true
  */
-
-function isMethodNotAllowed(err) {
-  return Number(err?.response?.status) === 405;
-}
-
-function isNotFound(err) {
-  return Number(err?.response?.status) === 404;
-}
 
 function toErrMsg(e, fallback = "Request failed.") {
   return (
@@ -37,6 +30,29 @@ function toErrMsg(e, fallback = "Request failed.") {
   );
 }
 
+function safeJsonParse(maybeStringOrObj) {
+  if (maybeStringOrObj == null) return null;
+  if (typeof maybeStringOrObj !== "string") return maybeStringOrObj;
+
+  try {
+    return JSON.parse(maybeStringOrObj);
+  } catch {
+    return null;
+  }
+}
+
+async function firstOk(fns) {
+  let lastErr = null;
+  for (const fn of fns) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error("All attempts failed.");
+}
+
 export default function DevContentBlocksTest() {
   const [lawReportId, setLawReportId] = useState("");
   const [forceBuild, setForceBuild] = useState(true);
@@ -44,68 +60,91 @@ export default function DevContentBlocksTest() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [json, setJson] = useState(null);
+  const [status, setStatus] = useState(null);
 
   const blocks = useMemo(() => {
     const arr = json?.blocks;
     return Array.isArray(arr) ? arr : [];
   }, [json]);
 
+  // ---------- Endpoints ----------
+
+  async function build(id) {
+    // POST /api/law-reports/{id}/content/build?force=true
+    const res = await api.post(`/law-reports/${id}/content/build`, null, {
+      params: { force: true },
+    });
+    return res.data ?? null;
+  }
+
+  async function getJsonRest(id) {
+    // GET /api/law-reports/{id}/content/json?forceBuild=true
+    const res = await api.get(`/law-reports/${id}/content/json`, {
+      params: { forceBuild },
+    });
+    return safeJsonParse(res.data);
+  }
+
+  async function getJsonQuery(id) {
+    // GET /api/law-reports/content/json?lawReportId=...&forceBuild=true
+    const res = await api.get(`/law-reports/content/json`, {
+      params: { lawReportId: id, forceBuild },
+    });
+    return safeJsonParse(res.data);
+  }
+
+  async function getStatusRest(id) {
+    // GET /api/law-reports/{id}/content/json/status
+    const res = await api.get(`/law-reports/${id}/content/json/status`);
+    return res.data ?? null;
+  }
+
+  async function getStatusQuery(id) {
+    // GET /api/law-reports/content/json/status?lawReportId=...
+    const res = await api.get(`/law-reports/content/json/status`, {
+      params: { lawReportId: id },
+    });
+    return res.data ?? null;
+  }
+
+  // ---------- UI Action ----------
+
   async function run() {
     const id = Number(lawReportId);
+
     if (!Number.isFinite(id) || id <= 0) {
       setErr("Enter a valid LawReportId.");
       setJson(null);
+      setStatus(null);
       return;
     }
 
     setLoading(true);
     setErr("");
     setJson(null);
+    setStatus(null);
 
     try {
-      // -------------------------
-      // 1) FORCE BUILD (preferred: POST)
-      // -------------------------
+      // If forceBuild is checked: build first (your confirmed POST endpoint)
       if (forceBuild) {
-        try {
-          // ✅ preferred build endpoint
-          // (create this in API when ready)
-          await api.post(`/law-reports/${id}/content/build`);
-        } catch (buildErr) {
-          // If build endpoint doesn't exist or doesn't allow POST,
-          // we will fallback later to legacy GET ?forceBuild=true
-          if (!isNotFound(buildErr) && !isMethodNotAllowed(buildErr)) {
-            // real error (401/403/500 etc.)
-            throw buildErr;
-          }
-        }
+        await build(id);
       }
 
-      // -------------------------
-      // 2) READ JSON (preferred: GET without params)
-      // -------------------------
+      // Fetch JSON: try REST style, then query style
+      const data = await firstOk([() => getJsonRest(id), () => getJsonQuery(id)]);
+      setJson(data ?? null);
+
+      // Fetch status: try REST style, then query style (optional)
       try {
-        const res = await api.get(`/law-reports/${id}/content/json`);
-        setJson(res.data ?? null);
-        return;
-      } catch (getErr) {
-        // If endpoint exists but requires legacy param OR server rejects GET,
-        // try legacy fallback below
-        if (!isNotFound(getErr) && !isMethodNotAllowed(getErr)) {
-          throw getErr;
-        }
+        const st = await firstOk([() => getStatusRest(id), () => getStatusQuery(id)]);
+        setStatus(st ?? null);
+      } catch {
+        setStatus(null);
       }
-
-      // -------------------------
-      // 3) LEGACY FALLBACK: GET with forceBuild param
-      // -------------------------
-      const res2 = await api.get(`/law-reports/${id}/content/json`, {
-        params: { forceBuild },
-      });
-      setJson(res2.data ?? null);
     } catch (e) {
-      setErr(String(toErrMsg(e, "Request failed.")));
+      setErr(String(toErrMsg(e)));
       setJson(null);
+      setStatus(null);
     } finally {
       setLoading(false);
     }
@@ -122,7 +161,7 @@ export default function DevContentBlocksTest() {
             <input
               value={lawReportId}
               onChange={(e) => setLawReportId(e.target.value)}
-              placeholder="e.g. 1745"
+              placeholder="e.g. 2"
               className="dcbInput"
               inputMode="numeric"
             />
@@ -134,7 +173,7 @@ export default function DevContentBlocksTest() {
               checked={forceBuild}
               onChange={(e) => setForceBuild(e.target.checked)}
             />
-            Force build (reparse now)
+            Force build (POST /build first)
           </label>
 
           <button className="dcbBtn" onClick={run} disabled={loading}>
@@ -143,6 +182,19 @@ export default function DevContentBlocksTest() {
         </div>
 
         {err ? <div className="dcbErr">{err}</div> : null}
+
+        {status ? (
+          <div className="dcbStatus">
+            <div>
+              <b>Status:</b> exists={String(status.exists)} · blocksCount=
+              {String(status.blocksCount ?? "-")}
+            </div>
+            <div className="dcbStatusMeta">
+              hash: {String(status.hash ?? "-")} · builtBy:{" "}
+              {String(status.builtBy ?? "-")}
+            </div>
+          </div>
+        ) : null}
       </header>
 
       <div className="dcbGrid">
@@ -187,6 +239,7 @@ export default function DevContentBlocksTest() {
                 if (type === "listitem") {
                   const marker = b?.data?.marker ? String(b.data.marker) : "";
                   const t = b?.data?.text ? String(b.data.text) : text;
+
                   return (
                     <div key={idx} className="lexLi">
                       {marker ? <span className="lexLiMarker">{marker}</span> : null}
@@ -195,7 +248,6 @@ export default function DevContentBlocksTest() {
                   );
                 }
 
-                // paragraph default
                 return (
                   <p key={idx} className="lexP">
                     {text}
