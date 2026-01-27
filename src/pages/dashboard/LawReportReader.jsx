@@ -811,69 +811,103 @@ export default function LawReportReader() {
       {/* Two columns: meta table + actions (ONLY these two cards live inside this grid) */}
       <div className="lrr2TopGrid">
         <section className="lrr2MetaCard">
-          <div className="lrr2MetaTable">
-            <div className="lrr2Row">
-              <div className="lrr2Key">LLRNO</div>
-              <div className="lrr2Val">{llrNo}</div>
-            </div>
+        <div className="lrr2MetaChips">
+          {llrNo ? (
+            <button className="lrr2MetaChip" data-tip="LLR Number">
+              <span className="lrr2MetaIcon">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" strokeWidth="1.6" />
+                  <path d="M8 9h8M8 13h6" stroke="currentColor" strokeWidth="1.6" />
+                </svg>
+              </span>
+              {llrNo}
+            </button>
+          ) : null}
 
-            {report.caseNumber ? (
-              <div className="lrr2Row">
-                <div className="lrr2Key">CASENO</div>
-                <div className="lrr2Val">{report.caseNumber}</div>
-              </div>
-            ) : null}
+          {report.caseNumber ? (
+            <button className="lrr2MetaChip" data-tip="Case Number">
+              <span className="lrr2MetaIcon">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M7 7h10v10H7z" stroke="currentColor" strokeWidth="1.6" />
+                  <path d="M9 11h6M9 14h4" stroke="currentColor" strokeWidth="1.6" />
+                </svg>
+              </span>
+              {report.caseNumber}
+            </button>
+          ) : null}
 
-            {report.court ? (
-              <div className="lrr2Row">
-                <div className="lrr2Key">COURT</div>
-                <div className="lrr2Val">{report.court}</div>
-              </div>
-            ) : null}
+          {report.court ? (
+            <button className="lrr2MetaChip" data-tip="Court">
+              <span className="lrr2MetaIcon">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M4 10h16" stroke="currentColor" strokeWidth="1.6" />
+                  <path d="M6 10V6h12v4" stroke="currentColor" strokeWidth="1.6" />
+                  <path d="M6 18h12" stroke="currentColor" strokeWidth="1.6" />
+                </svg>
+              </span>
+              {report.court}
+            </button>
+          ) : null}
 
-            {report.country ? (
-              <div className="lrr2Row">
-                <div className="lrr2Key">COUNTRY</div>
-                <div className="lrr2Val">{report.country}</div>
-              </div>
-            ) : null}
+          {report.country ? (
+            <button className="lrr2MetaChip" data-tip="Country">
+              <span className="lrr2MetaIcon">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" />
+                  <path d="M3 12h18M12 3a15 15 0 0 1 0 18" stroke="currentColor" strokeWidth="1.4" />
+                </svg>
+              </span>
+              {report.country}
+            </button>
+          ) : null}
 
-            {report.town || report.townPostCode ? (
-              <div className="lrr2Row">
-                <div className="lrr2Key">TOWN</div>
-                <div className="lrr2Val">{report.town || report.townPostCode}</div>
-              </div>
-            ) : null}
+          {report.decisionTypeLabel ? (
+            <button className="lrr2MetaChip" data-tip="Decision Type">
+              <span className="lrr2MetaIcon">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M12 3v18M5 12h14" stroke="currentColor" strokeWidth="1.6" />
+                </svg>
+              </span>
+              {report.decisionTypeLabel}
+            </button>
+          ) : null}
 
-            {report.decisionTypeLabel ? (
-              <div className="lrr2Row">
-                <div className="lrr2Key">DECISION</div>
-                <div className="lrr2Val">{report.decisionTypeLabel}</div>
-              </div>
-            ) : null}
+          {report.judges ? (
+            <button className="lrr2MetaChip" data-tip="Judge(s)">
+              <span className="lrr2MetaIcon">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="8" r="3" stroke="currentColor" strokeWidth="1.6" />
+                  <path d="M5 20c1.5-4 12.5-4 14 0" stroke="currentColor" strokeWidth="1.6" />
+                </svg>
+              </span>
+              {report.judges}
+            </button>
+          ) : null}
 
-            {report.judges ? (
-              <div className="lrr2Row">
-                <div className="lrr2Key">JUDGE</div>
-                <div className="lrr2Val">{report.judges}</div>
-              </div>
-            ) : null}
+          {report.decisionDate ? (
+            <button className="lrr2MetaChip" data-tip="Decision Date">
+              <span className="lrr2MetaIcon">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" strokeWidth="1.6" />
+                  <path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" strokeWidth="1.6" />
+                </svg>
+              </span>
+              {formatDate(report.decisionDate)}
+            </button>
+          ) : null}
 
-            {report.decisionDate ? (
-              <div className="lrr2Row">
-                <div className="lrr2Key">DATE</div>
-                <div className="lrr2Val">{formatDate(report.decisionDate)}</div>
-              </div>
-            ) : null}
-
-            {isAdmin ? <div className="lrr2MetaNote">admin access</div> : null}
-            {!isAdmin && accessLoading ? (
-              <div className="lrr2MetaNote">checking access…</div>
-            ) : null}
-            {!isAdmin && availabilityLoading ? (
-              <div className="lrr2MetaNote">checking availability…</div>
-            ) : null}
-          </div>
+          {/* subtle status hints */}
+          {isAdmin ? (
+            <span className="lrr2MetaHint" data-tip="Access level">
+              admin access
+            </span>
+          ) : null}
+        </div>
+        {!isAdmin && accessLoading ? (
+          <span className="lrr2MetaHint" data-tip="Checking subscription access">
+            checking access…
+          </span>
+        ) : null}
         </section>
 
         <section className="lrr2ActionsCard">
@@ -1074,7 +1108,6 @@ export default function LawReportReader() {
             </button>
           </div>
         </div>
-
           <div
             className={`lrr2Collapse ${contentOpen ? "open" : "closed"} lrr2Theme-${readingTheme}`}
             style={{
