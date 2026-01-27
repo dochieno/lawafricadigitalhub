@@ -1,11 +1,8 @@
 .lrr2Wrap {
-  --bg: #f3f4f6;
-
   --surface: rgba(255, 255, 255, 0.92);
   --surface2: rgba(255, 255, 255, 0.80);
   --surface3: rgba(255, 255, 255, 0.70);
 
-  --ink: rgba(17, 24, 39, 0.92);
   --muted: rgba(17, 24, 39, 0.68);
 
   --border: rgba(15, 23, 42, 0.12);
@@ -20,13 +17,8 @@
   --shadowSoft: 0 10px 22px rgba(2, 6, 23, 0.10);
 
   min-height: 100vh;
-  background:
-    radial-gradient(1100px 520px at 14% -10%, rgba(161, 24, 30, 0.12), transparent 60%),
-    radial-gradient(980px 520px at 92% 0%, rgba(14, 165, 165, 0.10), transparent 55%),
-    radial-gradient(900px 520px at 40% 110%, rgba(2, 6, 23, 0.05), transparent 55%),
-    linear-gradient(180deg, #f7f8fb 0%, #eef1f5 100%);
-
-  color: var(--ink);
+  background: var(--reader-bg, #f7f8fb);
+  color: var(--reader-ink, rgba(17,24,39,0.92));
   padding: 18px 16px 56px;
 }
 

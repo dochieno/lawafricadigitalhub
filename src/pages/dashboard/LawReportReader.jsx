@@ -900,11 +900,7 @@ export default function LawReportReader() {
           ) : null}
 
           {/* subtle status hints */}
-          {isAdmin ? (
-            <span className="lrr2MetaHint" data-tip="Access level">
-              admin access
-            </span>
-          ) : null}
+
         </div>
         {!isAdmin && accessLoading ? (
           <span className="lrr2MetaHint" data-tip="Checking subscription access">
