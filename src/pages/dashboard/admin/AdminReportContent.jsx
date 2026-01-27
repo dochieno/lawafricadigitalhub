@@ -2,9 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import api from "../../../api/client";
 
-import { CKEditor } from "@ckeditor/ckeditor5-react";
-import ClassicEditor from "@ckeditor/ckeditor5-build-classic";
 import AdminPageFooter from "../../../components/AdminPageFooter";
+import ReportTiptapEditor from "../../../components/editor/ReportTiptapEditor";
 
 /* =========================
    Helpers
@@ -179,7 +178,9 @@ export default function AdminReportContent() {
 
   const [dto, setDto] = useState(null);
 
+  // ✅ remains HTML
   const [contentHtml, setContentHtml] = useState("");
+
   const [title, setTitle] = useState(initialTitle);
   const [legalDocumentId, setLegalDocumentId] = useState(null);
   const [lastSavedAt, setLastSavedAt] = useState(null);
@@ -292,7 +293,6 @@ export default function AdminReportContent() {
           border-radius: 999px;
         }
         .rc-editor-wrap { padding: 14px; }
-        .ck-editor__editable_inline { min-height: 68vh; }
       `}</style>
 
       <div className="rc-head">
@@ -311,7 +311,6 @@ export default function AdminReportContent() {
           </div>
         </div>
 
-        {/* ✅ Icon actions, single row */}
         <div className="rc-actions">
           <IconButton title="Back" onClick={() => navigate(-1)} disabled={saving} kind="neutral">
             <IBack />
@@ -350,29 +349,7 @@ export default function AdminReportContent() {
           {loading ? (
             <div style={{ padding: 14, color: "#6b7280", fontWeight: 800 }}>Loading…</div>
           ) : (
-            <CKEditor
-              editor={ClassicEditor}
-              data={contentHtml}
-              disabled={saving}
-              onChange={(event, editor) => setContentHtml(editor.getData())}
-              config={{
-                toolbar: [
-                  "heading",
-                  "|",
-                  "bold",
-                  "italic",
-                  "link",
-                  "bulletedList",
-                  "numberedList",
-                  "|",
-                  "blockQuote",
-                  "insertTable",
-                  "|",
-                  "undo",
-                  "redo",
-                ],
-              }}
-            />
+            <ReportTiptapEditor value={contentHtml} onChange={setContentHtml} disabled={saving} />
           )}
         </div>
       </div>
@@ -397,7 +374,11 @@ export default function AdminReportContent() {
         }
         right={
           <span className="admin-footer-muted">
-            {saving ? "Saving…" : lastSavedAt ? `Last saved: ${new Date(lastSavedAt).toLocaleString()}` : "Tip: Paste from Word, then use “Remove format” if needed."}
+            {saving
+              ? "Saving…"
+              : lastSavedAt
+              ? `Last saved: ${new Date(lastSavedAt).toLocaleString()}`
+              : "Tip: Paste from Word, then use “Remove format” if needed."}
           </span>
         }
       />
