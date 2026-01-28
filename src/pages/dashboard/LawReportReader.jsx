@@ -1016,150 +1016,14 @@ useEffect(() => {
           </span>
         ) : null}
         </section>
-
-        <section className="lrr2ActionsCard">
-          <div className="lrr2ActionBtns">
-            {view === "content" ? (
-              <>
-                {/* Primary action in CONTENT view */}
-                <button
-                  type="button"
-                  className="lrr2Btn primary isActive"
-                  onClick={() => {
-                    setView("content");
-                    setContentOpen(true);
-                  }}
-                >
-                  <span className="lrr2BtnIcon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"
-                        stroke="currentColor"
-                        strokeWidth="1.7"
-                      />
-                      <path
-                        d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"
-                        stroke="currentColor"
-                        strokeWidth="1.7"
-                      />
-                    </svg>
-                  </span>
-                  View Case Content
-                </button>
-
-                {/* Switch to AI */}
-                <button
-                  type="button"
-                  className="lrr2Btn"
-                  onClick={() => {
-                    setView("ai");
-                    setContentOpen(false);
-                  }}
-                >
-                  <span className="lrr2BtnIcon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M12 2l1.2 4.1L17 7.3l-3.8 1.2L12 12l-1.2-3.5L7 7.3l3.8-1.2L12 2z"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M19 13l.8 2.6L22 16l-2.2.6L19 19l-.8-2.4L16 16l2.2-.4L19 13z"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M5 14l.9 3L9 18l-3.1 1L5 22l-1-3-3-1 3-1 .9-3z"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </span>
-                  Summarize with LegalAI
-                </button>
-
-                {/* Collapse toggle ONLY in content view */}
-                <button
-                  type="button"
-                  className="lrr2Btn"
-                  onClick={() => setContentOpen((v) => !v)}
-                >
-                  <span className="lrr2BtnIcon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M6 9l6 6 6-6"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </span>
-                  {contentOpen ? "Hide Case Content" : "Show Case Content"}
-                </button>
-              </>
-            ) : (
-              <>
-                {/* Primary action in AI view: go back to content */}
-                <button
-                  type="button"
-                  className="lrr2Btn primary isActive"
-                  onClick={() => {
-                    setView("content");
-                    setContentOpen(true);
-                  }}
-                >
-                  <span className="lrr2BtnIcon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"
-                        stroke="currentColor"
-                        strokeWidth="1.7"
-                      />
-                      <path
-                        d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"
-                        stroke="currentColor"
-                        strokeWidth="1.7"
-                      />
-                    </svg>
-                  </span>
-                  Back to Case Content
-                </button>
-
-                {/* Optional: keep "Download" only in AI view */}
-                <button type="button" className="lrr2Btn" disabled title="Coming soon">
-                  <span className="lrr2BtnIcon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M12 3v10"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      />
-                      <path
-                        d="M8 11l4 4 4-4"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M5 21h14"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                  </span>
-                  Download AI Report
-                </button>
-              </>
-            )}
+      <section className="lrr2ActionsCard">
+        <div className="lrr2ActionBtns">
+          {/* Tools have moved to the Transcript tab area */}
+          <div className="lrr2ActionsHint">
+            Use the tabs below to switch between <b>Transcript</b> and <b>LegalAI Summary</b>.
           </div>
-        </section>
+        </div>
+      </section>
       </div>
 
       {/* Unified content area (THIS MUST be OUTSIDE lrr2TopGrid) */}
@@ -1203,128 +1067,230 @@ useEffect(() => {
         <div className="lrr2Empty">This report has no content yet.</div>
       ) : (
         
-        <article className="lrr2Article">           
-        <div className="lrr2ReaderBar">
-          {/* Left group: typography */}
-          <div className="lrr2ReaderCluster">
-            <button
-              type="button"
-              className="lrr2IconBtn"
-              onClick={() =>
-                setFontScale((v) => Math.max(0.9, Number((v - 0.05).toFixed(2))))
-              }
-              title="Decrease text size"
-              aria-label="Decrease text size"
-            >
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M5 18h2.2l1.2-3h5.2l1.2 3H17L12.9 6h-1.8L5 18z" stroke="currentColor" strokeWidth="1.6" />
-                <path d="M9.2 13.2h4l-2-5-2 5z" stroke="currentColor" strokeWidth="1.6" />
-                <path d="M18 10h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              </svg>
-              <span className="lrr2IconBtnText">A−</span>
-            </button>
+<article className="lrr2Article">
+  <div className="lrr2TranscriptTools">
 
-            <button
-              type="button"
-              className="lrr2IconBtn"
-              onClick={() =>
-                setFontScale((v) => Math.min(1.2, Number((v + 0.05).toFixed(2))))
-              }
-              title="Increase text size"
-              aria-label="Increase text size"
-            >
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M5 18h2.2l1.2-3h5.2l1.2 3H17L12.9 6h-1.8L5 18z" stroke="currentColor" strokeWidth="1.6" />
-                <path d="M9.2 13.2h4l-2-5-2 5z" stroke="currentColor" strokeWidth="1.6" />
-                <path d="M20 8v6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                <path d="M17 11h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              </svg>
-              <span className="lrr2IconBtnText">A+</span>
-            </button>
+    {/* Case actions now live under the Transcript tab */}
+    <div className="lrr2CaseActions">
+      <button
+        type="button"
+        className="lrr2Btn primary"
+        onClick={() => {
+          setView("content");
+          setContentOpen(true);
+        }}
+        title="View case content"
+      >
+        View Case Content
+      </button>
 
-            <button
-              type="button"
-              className={`lrr2IconBtn ${serif ? "isOn" : ""}`}
-              onClick={() => setSerif((v) => !v)}
-              title={serif ? "Serif font (on)" : "Serif font (off)"}
-              aria-label="Toggle serif font"
-            >
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M7 18h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                <path d="M9 18V6h6v12" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-                <path d="M8 6h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              </svg>
-              <span className="lrr2IconBtnText">Serif</span>
-            </button>
-          </div>
+      <button
+        type="button"
+        className="lrr2Btn"
+        onClick={() => {
+          setView("ai");
+          setContentOpen(false);
+        }}
+        title="Summarize with LegalAI"
+      >
+        Summarize with LegalAI
+      </button>
 
-          {/* Right group: theme pills */}
-          <div className="lrr2ReaderCluster">
-            <button
-              type="button"
-              className={`lrr2IconBtn ${readingTheme === "paper" ? "isOn" : ""}`}
-              onClick={() => setReadingTheme("paper")}
-              title="Paper theme"
-              aria-label="Paper theme"
-            >
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M7 3h7l3 3v15H7V3z" stroke="currentColor" strokeWidth="1.6" />
-                <path d="M14 3v4h4" stroke="currentColor" strokeWidth="1.6" />
-                <path d="M9 11h6M9 15h6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-              </svg>
-              <span className="lrr2IconBtnText">Paper</span>
-            </button>
+      <button
+        type="button"
+        className="lrr2Btn"
+        onClick={() => setContentOpen((v) => !v)}
+        title={contentOpen ? "Hide case content" : "Show case content"}
+      >
+        {contentOpen ? "Hide Case Content" : "Show Case Content"}
+      </button>
+    </div>
 
-            <button
-              type="button"
-              className={`lrr2IconBtn ${readingTheme === "sepia" ? "isOn" : ""}`}
-              onClick={() => setReadingTheme("sepia")}
-              title="Sepia theme"
-              aria-label="Sepia theme"
-            >
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M7 3h10v18H7V3z" stroke="currentColor" strokeWidth="1.6" />
-                <path d="M9 8h6M9 12h6M9 16h5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                <path d="M5.5 6.5c1.2-1.2 2.7-2 4.5-2" stroke="currentColor" strokeWidth="1.2" opacity=".7" />
-              </svg>
-              <span className="lrr2IconBtnText">Sepia</span>
-            </button>
+    {/* Reader tools */}
+    <div className="lrr2ReaderBar">
+      {/* Left group: typography */}
+      <div className="lrr2ReaderCluster">
+        <button
+          type="button"
+          className="lrr2IconBtn"
+          onClick={() =>
+            setFontScale((v) => Math.max(0.9, Number((v - 0.05).toFixed(2))))
+          }
+          title="Decrease text size"
+          aria-label="Decrease text size"
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M5 18h2.2l1.2-3h5.2l1.2 3H17L12.9 6h-1.8L5 18z"
+              stroke="currentColor"
+              strokeWidth="1.6"
+            />
+            <path
+              d="M9.2 13.2h4l-2-5-2 5z"
+              stroke="currentColor"
+              strokeWidth="1.6"
+            />
+            <path
+              d="M18 10h4"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            />
+          </svg>
+          <span className="lrr2IconBtnText">A−</span>
+        </button>
 
-            <button
-              type="button"
-              className={`lrr2IconBtn ${readingTheme === "dark" ? "isOn" : ""}`}
-              onClick={() => setReadingTheme("dark")}
-              title="Dark theme"
-              aria-label="Dark theme"
-            >
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              <span className="lrr2IconBtnText">Dark</span>
-            </button>
-          </div>
-        </div>
-          <div
-            className={`lrr2Collapse ${contentOpen ? "open" : "closed"} lrr2Theme-${readingTheme}`}
-            style={{
-              fontSize: `${fontScale}em`,
-              fontFamily: serif
-                ? 'ui-serif, Georgia, "Times New Roman", Times, serif'
-                : 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
-            }}
-          >
-            {isProbablyHtml(rawContent) ? (
-              <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: rawContent }} />
-            ) : (
-              <CaseContentFormatted text={rawContent} />
-            )}
-          </div>
-        </article>
+        <button
+          type="button"
+          className="lrr2IconBtn"
+          onClick={() =>
+            setFontScale((v) => Math.min(1.2, Number((v + 0.05).toFixed(2))))
+          }
+          title="Increase text size"
+          aria-label="Increase text size"
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M5 18h2.2l1.2-3h5.2l1.2 3H17L12.9 6h-1.8L5 18z"
+              stroke="currentColor"
+              strokeWidth="1.6"
+            />
+            <path
+              d="M9.2 13.2h4l-2-5-2 5z"
+              stroke="currentColor"
+              strokeWidth="1.6"
+            />
+            <path
+              d="M20 8v6"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            />
+            <path
+              d="M17 11h6"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            />
+          </svg>
+          <span className="lrr2IconBtnText">A+</span>
+        </button>
+
+        <button
+          type="button"
+          className={`lrr2IconBtn ${serif ? "isOn" : ""}`}
+          onClick={() => setSerif((v) => !v)}
+          title={serif ? "Serif font (on)" : "Serif font (off)"}
+          aria-label="Toggle serif font"
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M7 18h10"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            />
+            <path
+              d="M9 18V6h6v12"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M8 6h8"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            />
+          </svg>
+          <span className="lrr2IconBtnText">Serif</span>
+        </button>
+      </div>
+
+      {/* Right group: theme pills */}
+      <div className="lrr2ReaderCluster">
+        <button
+          type="button"
+          className={`lrr2IconBtn ${readingTheme === "paper" ? "isOn" : ""}`}
+          onClick={() => setReadingTheme("paper")}
+          title="Paper theme"
+          aria-label="Paper theme"
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 3h7l3 3v15H7V3z" stroke="currentColor" strokeWidth="1.6" />
+            <path d="M14 3v4h4" stroke="currentColor" strokeWidth="1.6" />
+            <path
+              d="M9 11h6M9 15h6"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+            />
+          </svg>
+          <span className="lrr2IconBtnText">Paper</span>
+        </button>
+
+        <button
+          type="button"
+          className={`lrr2IconBtn ${readingTheme === "sepia" ? "isOn" : ""}`}
+          onClick={() => setReadingTheme("sepia")}
+          title="Sepia theme"
+          aria-label="Sepia theme"
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 3h10v18H7V3z" stroke="currentColor" strokeWidth="1.6" />
+            <path
+              d="M9 8h6M9 12h6M9 16h5"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+            />
+            <path
+              d="M5.5 6.5c1.2-1.2 2.7-2 4.5-2"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              opacity=".7"
+            />
+          </svg>
+          <span className="lrr2IconBtnText">Sepia</span>
+        </button>
+
+        <button
+          type="button"
+          className={`lrr2IconBtn ${readingTheme === "dark" ? "isOn" : ""}`}
+          onClick={() => setReadingTheme("dark")}
+          title="Dark theme"
+          aria-label="Dark theme"
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="lrr2IconBtnText">Dark</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div
+    className={`lrr2Collapse ${contentOpen ? "open" : "closed"} lrr2Theme-${readingTheme}`}
+    style={{
+      fontSize: `${fontScale}em`,
+      fontFamily: serif
+        ? 'ui-serif, Georgia, "Times New Roman", Times, serif'
+        : 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+    }}
+  >
+    {isProbablyHtml(rawContent) ? (
+      <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: rawContent }} />
+    ) : (
+      <CaseContentFormatted text={rawContent} />
+    )}
+  </div>
+</article>
       )}
     </section>
     </div>

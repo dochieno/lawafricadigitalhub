@@ -213,15 +213,21 @@ function BarList({
   emptyText = "No data yet.",
   searchable = false,
 }) {
-  const safe = Array.isArray(items) ? items : [];
+
   const [q, setQ] = useState("");
 
-  const filtered = useMemo(() => {
-    if (!searchable) return safe;
-    const s = q.trim().toLowerCase();
-    if (!s) return safe;
-    return safe.filter((x) => String(x.key).toLowerCase().includes(s));
-  }, [q, safe, searchable]);
+const filtered = useMemo(() => {
+  const safe = Array.isArray(items) ? items : [];
+
+  if (!searchable) return safe;
+
+  const s = q.trim().toLowerCase();
+  if (!s) return safe;
+
+  return safe.filter((x) =>
+    String(x.key).toLowerCase().includes(s)
+  );
+}, [items, q, searchable]);
 
   const max = Math.max(1, ...filtered.map((x) => num(x.value)));
 

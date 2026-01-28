@@ -2090,4 +2090,20 @@ color: var(--reader-ink, rgba(15, 23, 42, 0.92));
   background: rgba(161, 24, 30, 0.08);
   color: var(--reader-ink);
   line-height: 1;
+}/* Transcript tools container (sits under tabs nicely) */
+.lrr2TranscriptTools{
+  margin: 10px 0 12px;
+}
+
+/* Reader bar can be sticky if you want */
+.lrr2ReaderBar{
+  position: sticky;
+  top: 62px; /* adjust if your tabs height differs */
+  z-index: 15;
+}
+.lrr2CaseActions{
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
 }
