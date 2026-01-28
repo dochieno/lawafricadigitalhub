@@ -444,7 +444,6 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel,onOpenRe
     const items = Array.isArray(payload) ? payload : Array.isArray(payload?.items) ? payload.items : [];
     const normalized = items.map(normalizeAiCase);
     setRelatedCases(normalized);
-    setRelatedCases(items);
     if (!items.length) setRelatedCasesError("No suggestions returned.");
     else flash("Related cases loaded.");
   } catch (e) {
@@ -786,9 +785,11 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel,onOpenRe
               setChatLoading(true);
 
               // ✅ API call (we'll confirm endpoint in Step 3D)
+              const history = chatMsgs.slice(-8).map((m) => ({ role: m.role, content: m.content }));
+
               const res = await api.post(`/ai/law-reports/${Number(lawReportId)}/chat`, {
                 message: msg,
-                // optionally include type/context later
+                history,
               });
 
               const reply =
@@ -1560,7 +1561,6 @@ useEffect(() => {
     <section className="lrr2Content">
       {view === "ai" ? (
         <LawReportAiSummaryPanel
-          LawReportAiSummaryPanel
           lawReportId={reportId}
           digestTitle={title}
           courtLabel={report?.court || ""}
