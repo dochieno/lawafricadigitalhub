@@ -5,27 +5,41 @@
 ========================================================= */
 :root {
   /* LawAfrica Brand */
-  --la-brand: #8b1c1c;        /* primary maroon */
+  --la-brand: #8b1c1c;
   --la-brand-soft: rgba(139, 28, 28, 0.08);
   --la-brand-muted: rgba(139, 28, 28, 0.6);
 
   /* Surfaces */
   --ga-bg: #f8fafc;
   --ga-card: #ffffff;
+
+  /* Borders */
   --ga-border: rgba(15, 23, 42, 0.08);
+  --ga-border-soft: rgba(15, 23, 42, 0.06);
 
   /* Text */
   --ga-ink: #0f172a;
   --ga-muted: #64748b;
   --ga-soft: #94a3b8;
 
+  /* Radius */
+  --ga-radius: 18px;
+  --ga-radius-lg: 20px;
+
   /* Elevation */
+  --ga-shadow-sm: 0 8px 24px rgba(2, 6, 23, 0.06);
+  --ga-shadow-md: 0 14px 38px rgba(2, 6, 23, 0.10);
   --ga-shadow-soft: 0 8px 24px rgba(2, 6, 23, 0.06);
   --ga-shadow-hover: 0 14px 38px rgba(2, 6, 23, 0.10);
 
-  --ga-radius: 18px;
-}
+  /* Accents */
+  --ga-danger: #b91c1c;
+  --ga-grad: linear-gradient(135deg, #8b1c1c 0%, #a11f1f 55%, #d946ef 130%);
+  --ga-grad-2: linear-gradient(135deg, #8b1c1c 0%, #a11f1f 60%, #ef4444 140%);
 
+  /* Focus ring */
+  --ga-focus: 0 0 0 4px rgba(139, 28, 28, 0.18);
+}
 /* =========================================================
    Page shell
 ========================================================= */
@@ -373,11 +387,12 @@
    Panels
 ========================================================= */
 .ga-panel {
-  border: 1px solid rgba(15, 23, 42, 0.10);
-  background: rgba(255, 255, 255, 0.90);
-  border-radius: 18px;
-  padding: 14px;
-  box-shadow: var(--ga-shadow-sm);
+background: var(--ga-card);
+border: 1px solid var(--ga-border);
+border-radius: var(--ga-radius);
+padding: 18px;
+box-shadow: var(--ga-shadow-soft);
+transition: transform .18s ease, box-shadow .18s ease;
 }
 
 .ga-panel-modern {
@@ -385,8 +400,8 @@
 }
 
 .ga-panel-modern:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--ga-shadow-md);
+transform: translateY(-2px);
+box-shadow: var(--ga-shadow-hover);
 }
 
 .ga-panel-head {
@@ -406,15 +421,17 @@
 }
 
 .ga-panel-title {
-  font-weight: 950;
+  font-size: 13px;
+  font-weight: 650;
   color: var(--ga-ink);
-  font-size: 15px;
+  letter-spacing: -0.01em;
 }
 
 .ga-panel-sub {
   margin-top: 4px;
-  color: #64748b;
+  color: var(--ga-muted);
   font-size: 12px;
+  font-weight: 550;
 }
 
 /* =========================================================
@@ -427,16 +444,22 @@
 }
 
 .ga-searchInput {
-  width: 220px;
+  width: 240px;
   max-width: 56vw;
-  padding: 9px 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(15, 23, 42, 0.10);
-  background: rgba(255,255,255,0.92);
-  font-weight: 800;
-  color: #0b1220;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--ga-border);
+  background: rgba(248, 250, 252, 0.9);
+  font-weight: 600;
+  color: var(--ga-ink);
   outline: none;
-  transition: box-shadow 140ms ease, border-color 140ms ease;
+  transition: box-shadow 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.ga-searchInput:focus {
+  border-color: rgba(139, 28, 28, 0.35);
+  box-shadow: var(--ga-focus);
+  background: #ffffff;
 }
 
 .ga-searchInput::placeholder {
@@ -592,13 +615,13 @@ stroke: #ffffff;
 .ga-barrow-barwrap {
   height: 10px;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.20);
+  background: rgba(15, 23, 42, 0.06);
   overflow: hidden;
 }
 
 .ga-barrow-bar {
   height: 10px;
-  background: linear-gradient(90deg, #6366f1, #06b6d4);
+  background: linear-gradient(90deg, #8b1c1c, #a11f1f, #06b6d4);
   border-radius: 999px;
 }
 
