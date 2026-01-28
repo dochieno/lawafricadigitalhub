@@ -65,6 +65,8 @@ function formatDate(d) {
   return dt.toISOString().slice(0, 10);
 }
 
+
+
 function getApiErrorMessage(err, fallback = "Request failed.") {
   const data = err?.response?.data;
 
@@ -84,6 +86,15 @@ function getApiErrorMessage(err, fallback = "Request failed.") {
   if (typeof err?.message === "string") return err.message;
   return fallback;
 }
+
+//Related cases
+async function fetchRelatedLawReports(id, take = 8) {
+  const res = await api.get(`/law-reports/${Number(id)}/related`, {
+    params: { take },
+  });
+  return res.data ?? [];
+}
+
 
 // ----------------------
 // Case content formatting (NEW)
@@ -349,6 +360,10 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const didAutoGenRef = useRef(false);
+  // Phase 4 — Cross-Case Intelligence (Related cases)
+  const [relatedCases, setRelatedCases] = useState([]); // [{ title, court, year, citation, url }]
+  const [relatedCasesLoading, setRelatedCasesLoading] = useState(false);
+  const [relatedCasesError, setRelatedCasesError] = useState("");
 
   // NEW: UX helpers
   const [sourceLabel, setSourceLabel] = useState(""); // "Cached" | "Generated" | ""
@@ -404,6 +419,8 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel }) {
     }
   }
 
+  
+
   useEffect(() => {
     if (!canRun) return;
 
@@ -411,6 +428,9 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel }) {
     didAutoGenRef.current = false;
     setSourceLabel("");
     setToast("");
+    setRelatedCases([]);
+    setRelatedCasesError("");
+    setRelatedCasesLoading(false);
 
     let cancelled = false;
 
@@ -573,6 +593,72 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel }) {
           <div className="lrrAiBody">
             <AiSummaryRichText text={result.summary || ""} />
           </div>
+
+          {/* Phase 4 — Related Kenyan Cases */}
+<div className="lrr2Panel" style={{ marginTop: 12 }}>
+  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+    <div>
+      <div style={{ fontWeight: 700 }}>Related Kenyan Cases</div>
+      <div style={{ opacity: 0.75, fontSize: 13 }}>
+        AI-suggested similar decisions (may include items not in our database).
+      </div>
+    </div>
+
+    {/* Button is present but not wired yet (Step 4.2) */}
+    <button
+      type="button"
+      className="lrr2Btn"
+      disabled={relatedCasesLoading}
+      onClick={() => {
+        // Step 4.2 will wire this. For now: safe placeholder.
+        setRelatedCasesError("Not enabled yet. (We will wire the AI fetch in the next step.)");
+      }}
+      title="Find related Kenyan cases"
+    >
+      {relatedCasesLoading ? "Finding…" : "Find related"}
+    </button>
+      </div>
+
+      {relatedCasesError ? (
+        <div style={{ marginTop: 10, opacity: 0.85 }}>
+          {relatedCasesError}
+        </div>
+      ) : null}
+
+      {!relatedCasesLoading && !relatedCasesError && relatedCases.length === 0 ? (
+        <div style={{ marginTop: 10, opacity: 0.75 }}>
+          No related cases loaded yet.
+        </div>
+      ) : null}
+
+      {relatedCases.length > 0 ? (
+        <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {relatedCases.map((c, idx) => {
+            const label =
+              c.citation ||
+              [c.title, c.year].filter(Boolean).join(" • ") ||
+              `Related case ${idx + 1}`;
+
+            return c.url ? (
+              <a
+                key={`${label}-${idx}`}
+                href={c.url}
+                target="_blank"
+                rel="noreferrer"
+                className="lrr2Pill"
+                title={c.title || label}
+              >
+                {label}
+              </a>
+            ) : (
+              <span key={`${label}-${idx}`} className="lrr2Pill" title={c.title || label}>
+                {label}
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
         </div>
       ) : loading ? null : (
         <div className="lrrAiTip">No summary available yet.</div>
@@ -614,6 +700,10 @@ export default function LawReportReader() {
 
   // UI state: "content" or "ai"
   const [view, setView] = useState("content");
+  // Related cases (DB-only)
+  const [relatedDb, setRelatedDb] = useState([]);
+  const [relatedDbLoading, setRelatedDbLoading] = useState(false);
+  const [relatedDbError, setRelatedDbError] = useState("");
 
   const [fontScale, setFontScale] = useState(1); // 0.9 - 1.2
   const [readingTheme, setReadingTheme] = useState("paper"); // paper | sepia | dark
@@ -645,11 +735,43 @@ useEffect(() => {
     const max = Math.max(1, scrollHeight - clientHeight);
     setProgress(Math.min(1, Math.max(0, scrollTop / max)));
   }
+  
 
   onScroll();
   window.addEventListener("scroll", onScroll, { passive: true });
   return () => window.removeEventListener("scroll", onScroll);
 }, []);
+
+
+  //Related Cases:
+useEffect(() => {
+  let cancelled = false;
+
+  async function loadRelatedDb() {
+    if (view !== "content") return; // ✅ only when Transcript tab
+    if (!Number.isFinite(reportId) || reportId <= 0) return;
+
+    try {
+      setRelatedDbLoading(true);
+      setRelatedDbError("");
+      const list = await fetchRelatedLawReports(reportId, 8);
+      if (!cancelled) setRelatedDb(Array.isArray(list) ? list : []);
+    } catch (e) {
+      if (!cancelled) {
+        setRelatedDb([]);
+        setRelatedDbError(getApiErrorMessage(e, "Failed to load related cases."));
+      }
+    } finally {
+      if (!cancelled) setRelatedDbLoading(false);
+    }
+  }
+
+  loadRelatedDb();
+  return () => {
+    cancelled = true;
+  };
+}, [reportId, view]);
+
 
   useEffect(() => {
     if (!openResults) return;
@@ -1152,10 +1274,14 @@ useEffect(() => {
       {view === "ai" ? (
         <LawReportAiSummaryPanel
           lawReportId={reportId}
-          digestTitle={title} // parties/title you already computed
-          courtLabel={report?.court || ""} // from report
+          digestTitle={title}
+          courtLabel={report?.court || ""}
+          relatedDb={relatedDb}
+          relatedDbLoading={relatedDbLoading}
+          relatedDbError={relatedDbError}
+          onOpenRelated={(rid) => navigate(`/dashboard/law-reports/${rid}`)}
         />
-      ) : !textHasContent ? (
+      ): !textHasContent ? (
         <div className="lrr2Empty">This report has no content yet.</div>
       ) : (
         
@@ -1370,6 +1496,80 @@ useEffect(() => {
       <CaseContentFormatted text={rawContent} />
     )}
   </div>
+  {/* ✅ Related cases under Transcript (DB-only) */}
+{/* ✅ Related cases under Transcript (DB-only) */}
+{contentOpen && (
+  <div className="lrr2Panel" style={{ marginTop: 12 }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+      <div>
+        <div style={{ fontWeight: 700 }}>Related cases (in our database)</div>
+        <div style={{ opacity: 0.75, fontSize: 13 }}>
+          Similar court / type / parties (fast match).
+        </div>
+      </div>
+
+      <button
+        type="button"
+        className="lrr2Btn"
+        disabled={relatedDbLoading}
+        onClick={async () => {
+          try {
+            setRelatedDbLoading(true);
+            setRelatedDbError("");
+            const list = await fetchRelatedLawReports(reportId, 8);
+            setRelatedDb(Array.isArray(list) ? list : []);
+          } catch (e) {
+            setRelatedDb([]);
+            setRelatedDbError(getApiErrorMessage(e, "Failed to load related cases."));
+          } finally {
+            setRelatedDbLoading(false);
+          }
+        }}
+        title="Refresh related cases"
+      >
+        {relatedDbLoading ? "Loading…" : "Refresh"}
+      </button>
+    </div>
+
+    {relatedDbError ? (
+      <div style={{ marginTop: 10, opacity: 0.85 }}>{relatedDbError}</div>
+    ) : relatedDbLoading ? (
+      <div style={{ marginTop: 10, opacity: 0.75 }}>Loading related cases…</div>
+    ) : relatedDb.length === 0 ? (
+      <div style={{ marginTop: 10, opacity: 0.75 }}>No related cases found.</div>
+    ) : (
+      <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+        {relatedDb.map((r, idx) => {
+          const rid = Number(r?.id);
+          const titleText = r?.title || r?.parties || `Report #${rid || idx + 1}`;
+          const meta = [r?.courtTypeLabel, r?.caseTypeLabel, r?.decisionTypeLabel, r?.year]
+            .filter(Boolean)
+            .join(" • ");
+          const right = r?.citation || "";
+
+          return (
+            <button
+              type="button"
+              key={rid || idx}
+              className="lrr2SearchItem"
+              onClick={() => rid && navigate(`/dashboard/law-reports/${rid}`)}
+              title={titleText}
+              style={{ textAlign: "left" }}
+            >
+              <div className="lrr2SearchItemLeft">
+                <div className="lrr2SearchItemTitle">{titleText}</div>
+                {meta ? <div className="lrr2SearchItemMeta">{meta}</div> : null}
+              </div>
+              <div className="lrr2SearchItemRight">
+                {right ? <span className="lrr2Tag">{right}</span> : null}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    )}
+  </div>
+)}
 </article>
       )}
     </section>
