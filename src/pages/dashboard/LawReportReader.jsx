@@ -354,7 +354,7 @@ function AiSummaryRichText({ text }) {
 
   return <div className="lrrAiRich">{blocks}</div>;
 }
-function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel }) {
+function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel,onOpenRelated }) {
   const [type, setType] = useState("basic"); // basic | extended
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -391,6 +391,36 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel }) {
     window.clearTimeout(flash._t);
     flash._t = window.setTimeout(() => setToast(""), 1400);
   }
+
+  //Fetch with AI
+  async function fetchAiRelatedCases() {
+  if (!canRun) return;
+
+  setRelatedCasesLoading(true);
+  setRelatedCasesError("");
+
+  try {
+    const res = await api.post(
+      `/ai/law-reports/${Number(lawReportId)}/related-cases`,
+      {}, // no body
+      {
+        params: { takeKenya: 2, takeForeign: 2 }, // ✅ your requirement
+      }
+    );
+
+    const payload = res.data?.items ?? res.data?.data?.items ?? res.data?.data ?? res.data;
+    const items = Array.isArray(payload) ? payload : Array.isArray(payload?.items) ? payload.items : [];
+
+    setRelatedCases(items);
+    if (!items.length) setRelatedCasesError("No suggestions returned.");
+    else flash("Related cases loaded.");
+  } catch (e) {
+    setRelatedCases([]);
+    setRelatedCasesError(getApiErrorMessage(e, "Failed to fetch AI related cases."));
+  } finally {
+    setRelatedCasesLoading(false);
+  }
+}
 
   async function onCopySummary() {
     const text = String(result?.summary || "").trim();
@@ -593,72 +623,137 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel }) {
           <div className="lrrAiBody">
             <AiSummaryRichText text={result.summary || ""} />
           </div>
+        {/* Phase 4 — AI Related Cases (Enhancement-only) */}
+        <div className="lrr2Panel" style={{ marginTop: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontWeight: 800 }}>AI Related Cases</div>
+              <div style={{ opacity: 0.75, fontSize: 13 }}>
+                Enhancement only · returns <b>2 Kenya</b> and <b>2 Outside Kenya</b>. Always verify citations.
+              </div>
+            </div>
 
-          {/* Phase 4 — Related Kenyan Cases */}
-<div className="lrr2Panel" style={{ marginTop: 12 }}>
-  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-    <div>
-      <div style={{ fontWeight: 700 }}>Related Kenyan Cases</div>
-      <div style={{ opacity: 0.75, fontSize: 13 }}>
-        AI-suggested similar decisions (may include items not in our database).
-      </div>
-    </div>
+            <button
+              type="button"
+              className="lrr2Btn"
+              disabled={relatedCasesLoading}
+              onClick={fetchAiRelatedCases}
+              title="Find AI related cases"
+            >
+              {relatedCasesLoading ? "Finding…" : "Find related"}
+            </button>
+          </div>
 
-    {/* Button is present but not wired yet (Step 4.2) */}
-    <button
-      type="button"
-      className="lrr2Btn"
-      disabled={relatedCasesLoading}
-      onClick={() => {
-        // Step 4.2 will wire this. For now: safe placeholder.
-        setRelatedCasesError("Not enabled yet. (We will wire the AI fetch in the next step.)");
-      }}
-      title="Find related Kenyan cases"
-    >
-      {relatedCasesLoading ? "Finding…" : "Find related"}
-    </button>
-      </div>
+          {relatedCasesError ? (
+            <div style={{ marginTop: 10, opacity: 0.9 }}>{relatedCasesError}</div>
+          ) : null}
 
-      {relatedCasesError ? (
-        <div style={{ marginTop: 10, opacity: 0.85 }}>
-          {relatedCasesError}
+          {!relatedCasesLoading && !relatedCasesError && relatedCases.length === 0 ? (
+            <div style={{ marginTop: 10, opacity: 0.75 }}>
+              No AI related cases loaded yet. Click <b>Find related</b>.
+            </div>
+          ) : null}
+
+          {relatedCases.length > 0 ? (
+            <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
+              {(() => {
+                const kenya = relatedCases.filter(
+                  (x) => String(x?.jurisdiction || "").toLowerCase() === "kenya"
+                );
+                const foreign = relatedCases.filter(
+                  (x) => String(x?.jurisdiction || "").toLowerCase() !== "kenya"
+                );
+
+                const renderItem = (c, idx) => {
+                  const title = c?.title || `Related case ${idx + 1}`;
+                  const cite = c?.citation || "";
+                  const court = c?.court || "";
+                  const year = c?.year ? String(c.year) : "";
+                  const meta = [court, year].filter(Boolean).join(" • ");
+                  const rid = Number(c?.lawReportId || 0);
+                  const url = c?.url || "";
+                  const note = c?.note || "";
+
+                  // Prefer internal navigation if LawReportId looks valid
+                  const canOpenInternal = Number.isFinite(rid) && rid > 0;
+
+                  return (
+                    <div
+                      key={`${title}-${idx}`}
+                      style={{
+                        padding: 12,
+                        borderRadius: 14,
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        background: "rgba(0,0,0,0.08)",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                        <div style={{ minWidth: 260 }}>
+                          <div style={{ fontWeight: 900, lineHeight: 1.25 }}>{title}</div>
+                          {meta ? <div style={{ marginTop: 4, fontSize: 12, opacity: 0.78 }}>{meta}</div> : null}
+                        </div>
+
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          {cite ? <span className="lrr2Tag">{cite}</span> : null}
+                          {String(c?.jurisdiction || "").toLowerCase() !== "kenya" ? (
+                            <span className="lrr2Tag soft">Persuasive</span>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {note ? (
+                        <div style={{ marginTop: 8, fontSize: 12, opacity: 0.85, fontWeight: 700 }}>
+                          {note}
+                        </div>
+                      ) : null}
+
+                      <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      {canOpenInternal ? (
+                        <button
+                          type="button"
+                          className="lrr2Btn"
+                          onClick={() => onOpenRelated?.(rid)}
+                          title="Open in LawAfrica"
+                        >
+                          Open in LawAfrica
+                        </button>
+                      ) : null}
+
+                        {!canOpenInternal && url ? (
+                          <a className="lrr2Btn" href={url} target="_blank" rel="noreferrer">
+                            Open reference
+                          </a>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                };
+
+                return (
+                  <>
+                    <div>
+                      <div style={{ fontWeight: 800, marginBottom: 8 }}>Kenya</div>
+                      {kenya.length ? (
+                        <div style={{ display: "grid", gap: 10 }}>{kenya.map(renderItem)}</div>
+                      ) : (
+                        <div style={{ opacity: 0.75 }}>No Kenya suggestions returned.</div>
+                      )}
+                    </div>
+
+                    <div style={{ marginTop: 6 }}>
+                      <div style={{ fontWeight: 800, marginBottom: 8 }}>Outside Kenya</div>
+                      {foreign.length ? (
+                        <div style={{ display: "grid", gap: 10 }}>{foreign.map(renderItem)}</div>
+                      ) : (
+                        <div style={{ opacity: 0.75 }}>No foreign suggestions returned.</div>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          ) : null}
         </div>
-      ) : null}
-
-      {!relatedCasesLoading && !relatedCasesError && relatedCases.length === 0 ? (
-        <div style={{ marginTop: 10, opacity: 0.75 }}>
-          No related cases loaded yet.
-        </div>
-      ) : null}
-
-      {relatedCases.length > 0 ? (
-        <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {relatedCases.map((c, idx) => {
-            const label =
-              c.citation ||
-              [c.title, c.year].filter(Boolean).join(" • ") ||
-              `Related case ${idx + 1}`;
-
-            return c.url ? (
-              <a
-                key={`${label}-${idx}`}
-                href={c.url}
-                target="_blank"
-                rel="noreferrer"
-                className="lrr2Pill"
-                title={c.title || label}
-              >
-                {label}
-              </a>
-            ) : (
-              <span key={`${label}-${idx}`} className="lrr2Pill" title={c.title || label}>
-                {label}
-              </span>
-            );
-          })}
-        </div>
-      ) : null}
-    </div>
         </div>
       ) : loading ? null : (
         <div className="lrrAiTip">No summary available yet.</div>
@@ -1273,12 +1368,10 @@ useEffect(() => {
     <section className="lrr2Content">
       {view === "ai" ? (
         <LawReportAiSummaryPanel
+          LawReportAiSummaryPanel
           lawReportId={reportId}
           digestTitle={title}
           courtLabel={report?.court || ""}
-          relatedDb={relatedDb}
-          relatedDbLoading={relatedDbLoading}
-          relatedDbError={relatedDbError}
           onOpenRelated={(rid) => navigate(`/dashboard/law-reports/${rid}`)}
         />
       ): !textHasContent ? (
