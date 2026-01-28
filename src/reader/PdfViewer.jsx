@@ -11,6 +11,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
+
 function looksLikeRangeCacheFailure(err) {
   const msg = String(err?.message || err || "").toLowerCase();
   if (msg.includes("err_cache_operation_not_supported")) return true;
