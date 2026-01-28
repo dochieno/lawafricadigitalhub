@@ -1163,6 +1163,35 @@ useEffect(() => {
       </div>
 
       {/* Unified content area (THIS MUST be OUTSIDE lrr2TopGrid) */}
+      {/* Tabs bar (UI only — uses existing state) */}
+    <div className="lrr2Tabs" role="tablist" aria-label="Reader tabs">
+      <button
+        type="button"
+        role="tab"
+        aria-selected={view === "content"}
+        className={`lrr2Tab ${view === "content" ? "isActive" : ""}`}
+        onClick={() => {
+          setView("content");
+          setContentOpen(true);
+        }}
+      >
+        Transcript
+      </button>
+
+      <button
+        type="button"
+        role="tab"
+        aria-selected={view === "ai"}
+        className={`lrr2Tab ${view === "ai" ? "isActive" : ""}`}
+        onClick={() => {
+          setView("ai");
+          setContentOpen(false);
+        }}
+      >
+        LegalAI Summary
+        <span className="lrr2TabBadge">AI</span>
+      </button>
+    </div>
     <section className="lrr2Content">
       {view === "ai" ? (
         <LawReportAiSummaryPanel

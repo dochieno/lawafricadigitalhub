@@ -1966,4 +1966,128 @@ color: var(--reader-ink, rgba(15, 23, 42, 0.92));
 .lrrAiFooterNote b{
   font-weight: 900;
   opacity: 0.85;
+}/* ===========================
+   Meta chip tooltips (data-tip)
+   =========================== */
+
+.lrr2MetaChip,
+.lrr2MetaHint {
+  position: relative;
+}
+
+/* tooltip bubble */
+.lrr2MetaChip[data-tip]::after,
+.lrr2MetaHint[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #fff;
+  box-shadow: 0 14px 40px rgba(2, 6, 23, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 50;
+}
+
+/* tooltip arrow */
+.lrr2MetaChip[data-tip]::before,
+.lrr2MetaHint[data-tip]::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 4px);
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: rgba(15, 23, 42, 0.92);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+  z-index: 50;
+}
+
+/* show on hover + keyboard focus */
+.lrr2MetaChip[data-tip]:hover::after,
+.lrr2MetaChip[data-tip]:hover::before,
+.lrr2MetaChip[data-tip]:focus-visible::after,
+.lrr2MetaChip[data-tip]:focus-visible::before,
+.lrr2MetaHint[data-tip]:hover::after,
+.lrr2MetaHint[data-tip]:hover::before,
+.lrr2MetaHint[data-tip]:focus-visible::after,
+.lrr2MetaHint[data-tip]:focus-visible::before {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-2px);
+}
+/* =========================
+   Tabs (Transcript | LegalAI)
+========================= */
+.lrr2Tabs{
+  max-width: 1000px;
+  margin: 14px auto 0;
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--reader-surface) 92%, transparent);
+  box-shadow: 0 8px 18px rgba(2, 6, 23, 0.08);
+
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.lrr2Tab{
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--reader-ink);
+  cursor: pointer;
+
+  padding: 10px 12px;
+  border-radius: 12px;
+
+  font-weight: 950;
+  font-size: 13px;
+  letter-spacing: -0.01em;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.lrr2Tab:hover{
+  background: color-mix(in srgb, var(--reader-surface) 85%, transparent);
+  border-color: color-mix(in srgb, var(--border) 75%, transparent);
+  transform: translateY(-1px);
+}
+
+.lrr2Tab.isActive{
+  background: linear-gradient(
+    135deg,
+    rgba(161, 24, 30, 0.14),
+    rgba(112, 40, 64, 0.10),
+    rgba(14, 165, 165, 0.10)
+  );
+  border-color: rgba(14, 165, 165, 0.35);
+  box-shadow: 0 0 0 4px rgba(14,165,165,0.10), 0 10px 22px rgba(2, 6, 23, 0.08);
+}
+
+.lrr2TabBadge{
+  font-size: 11px;
+  font-weight: 950;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(161, 24, 30, 0.22);
+  background: rgba(161, 24, 30, 0.08);
+  color: var(--reader-ink);
+  line-height: 1;
 }
