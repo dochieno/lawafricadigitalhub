@@ -343,14 +343,16 @@ function AiSummaryRichText({ text }) {
 
   return <div className="lrrAiRich">{blocks}</div>;
 }
-
 function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel }) {
-const [type, setType] = useState("basic"); // basic | extended
+  const [type, setType] = useState("basic"); // basic | extended
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
-const didAutoGenRef = useRef(false);
+  const didAutoGenRef = useRef(false);
 
+  // NEW: UX helpers
+  const [sourceLabel, setSourceLabel] = useState(""); // "Cached" | "Generated" | ""
+  const [toast, setToast] = useState(""); // lightweight feedback
 
   const canRun = useMemo(
     () => Number.isFinite(Number(lawReportId)) && Number(lawReportId) > 0,
@@ -360,91 +362,181 @@ const didAutoGenRef = useRef(false);
   function isCacheMiss(err) {
     return err?.response?.status === 404;
   }
-
+  
   async function generateSummary({ force = false } = {}) {
-  const res = await api.post(
-    `/ai/law-reports/${Number(lawReportId)}/summary`,
-    { type, forceRegenerate: force }
-  );
-  return res.data?.data ?? res.data;
-}
+    const res = await api.post(
+      `/ai/law-reports/${Number(lawReportId)}/summary`,
+      { type, forceRegenerate: force }
+    );
+    return res.data?.data ?? res.data;
+  }
 
-useEffect(() => {
-  if (!canRun) return;
+  function flash(msg) {
+    setToast(msg);
+    window.clearTimeout(flash._t);
+    flash._t = window.setTimeout(() => setToast(""), 1400);
+  }
 
-  // reset "auto-generate once" guard each time report/type changes
-  didAutoGenRef.current = false;
+  async function onCopySummary() {
+    const text = String(result?.summary || "").trim();
+    if (!text) return flash("Nothing to copy.");
+    try {
+      await navigator.clipboard?.writeText(text);
+      flash("Summary copied.");
+    } catch {
+      flash("Copy failed.");
+    }
+  }
 
-  let cancelled = false;
-
-  (async () => {
+  async function onRegenerate() {
+    if (!canRun) return;
     setLoading(true);
     setError("");
     try {
-      // 1) Try cached first (GET)
-      const res = await api.get(`/ai/law-reports/${Number(lawReportId)}/summary`, {
-        params: { type },
-      });
-
-      if (cancelled) return;
-      setResult(res.data?.data ?? res.data);
-      setError("");
-    } catch (err) {
-      if (cancelled) return;
-
-      // 2) If cache miss (404), auto-generate ONCE (POST), then show it
-      if (isCacheMiss(err) && !didAutoGenRef.current) {
-        didAutoGenRef.current = true;
-        try {
-          const generated = await generateSummary({ force: false });
-          if (cancelled) return;
-          setResult(generated);
-          setError("");
-        } catch (genErr) {
-          if (cancelled) return;
-          setResult(null);
-          setError(getApiErrorMessage(genErr, "Failed to generate AI summary."));
-        }
-      } else {
-        // 3) Other errors (401/403/500/etc.)
-        setResult(null);
-        setError(getApiErrorMessage(err, "No cached summary found yet."));
-      }
+      const generated = await generateSummary({ force: true });
+      setResult(generated);
+      setSourceLabel("Generated");
+      flash("Regenerated.");
+    } catch (e) {
+      setError(getApiErrorMessage(e, "Failed to regenerate AI summary."));
     } finally {
-      // ✅ Always clear loading (even on early returns before)
-      if (!cancelled) setLoading(false);
+      setLoading(false);
     }
-  })();
+  }
 
-  return () => {
-    cancelled = true;
-  };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [canRun, type, lawReportId]);
+  useEffect(() => {
+    if (!canRun) return;
+
+    // reset "auto-generate once" guard each time report/type changes
+    didAutoGenRef.current = false;
+    setSourceLabel("");
+    setToast("");
+
+    let cancelled = false;
+
+    (async () => {
+      setLoading(true);
+      setError("");
+      try {
+        // 1) Try cached first (GET)
+        const res = await api.get(`/ai/law-reports/${Number(lawReportId)}/summary`, {
+          params: { type },
+        });
+
+        if (cancelled) return;
+        setResult(res.data?.data ?? res.data);
+        setSourceLabel("Cached");
+        setError("");
+      } catch (err) {
+        if (cancelled) return;
+
+        // 2) If cache miss (404), auto-generate ONCE (POST), then show it
+        if (isCacheMiss(err) && !didAutoGenRef.current) {
+          didAutoGenRef.current = true;
+          try {
+            const generated = await generateSummary({ force: false });
+            if (cancelled) return;
+            setResult(generated);
+            setSourceLabel("Generated");
+            setError("");
+          } catch (genErr) {
+            if (cancelled) return;
+            setResult(null);
+            setSourceLabel("");
+            setError(getApiErrorMessage(genErr, "Failed to generate AI summary."));
+          }
+        } else {
+          // 3) Other errors (401/403/500/etc.)
+          setResult(null);
+          setSourceLabel("");
+          setError(getApiErrorMessage(err, "No cached summary found yet."));
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canRun, type, lawReportId]);
+
+  const isExtended = String(result?.type ?? type).toLowerCase() === "extended";
 
   return (
     <section className="lrrAi">
-      <div className="lrrAiTop">
-        <div className="lrrAiTitleRow">
-          <div className="lrrAiTitle">LegalAI Summary</div>
-          <span className="lrrAiBadge">AI generated</span>
-        </div>
+<div className="lrrAiTop">
+  <div className="lrrAiTitleRow">
+    <div className="lrrAiTitle">LegalAI Summary</div>
 
-        <div className="lrrAiHeadnote">
-          <div className="lrrAiHeadnoteTitle">{digestTitle || "—"}</div>
-          <div className="lrrAiHeadnoteMeta">{courtLabel || "—"}</div>
-          <div className="lrrAiHeadnoteRule" />
-        </div>
-      </div>
+    {sourceLabel ? (
+      <span className="lrrAiBadge" title="Where this result came from">
+        {sourceLabel}
+      </span>
+    ) : (
+      <span className="lrrAiBadge">AI generated</span>
+    )}
+
+    {/* Icon actions – LegalAI tab only */}
+    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      {/* Copy */}
+      <button
+        type="button"
+        className="lrrAiUpgradeBtn ghost"
+        disabled={loading || !result}
+        onClick={onCopySummary}
+        title="Copy summary"
+        aria-label="Copy summary"
+      >
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="9" y="9" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.6" />
+          <rect x="5" y="5" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.6" />
+        </svg>
+      </button>
+
+      {/* Summarize / Regenerate */}
+      <button
+        type="button"
+        className="lrrAiUpgradeBtn"
+        disabled={loading || !canRun}
+        onClick={onRegenerate}
+        title="Summarize / regenerate"
+        aria-label="Summarize / regenerate"
+      >
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M12 2l1.2 4.2L17.4 8l-4.2 1.2L12 13.4l-1.2-4.2L6.6 8l4.2-1.8L12 2z"
+            stroke="currentColor"
+            strokeWidth="1.6"
+          />
+          <path
+            d="M5 20c2.5-2.2 5.2-3.3 8-3.3s5.5 1.1 8 3.3"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+          />
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <div className="lrrAiHeadnote">
+    <div className="lrrAiHeadnoteTitle">{digestTitle || "—"}</div>
+    <div className="lrrAiHeadnoteMeta">{courtLabel || "—"}</div>
+    <div className="lrrAiHeadnoteRule" />
+  </div>
+
+  {/* Tiny toast (copy feedback, etc.) */}
+  {toast ? <div className="lrrAiToast">{toast}</div> : null}
+</div>
 
       {error ? <div className="lrrAiError">{error}</div> : null}
 
       {result ? (
         <div className="lrrAiResult">
-
-
           {/* ✅ Upgrade prompt: Basic -> Extended (user-triggered) */}
-          {String(result.type ?? type).toLowerCase() === "basic" ? (
+          {!isExtended ? (
             <div className="lrrAiUpgrade">
               <div className="lrrAiUpgradeText">
                 Need more depth? Generate an <b>Extended</b> analysis (more detailed; will be token-gated later).
@@ -486,11 +578,11 @@ useEffect(() => {
         <div className="lrrAiTip">No summary available yet.</div>
       )}
 
-          <div className="lrrAiFooterNote">
-      *** This summary is automatically generated by LegalAI and may be cached for performance.
-      Always verify critical details against the full case text —{" "}
-      <b>{String(result?.type ?? type).toLowerCase() === "extended" ? "Extended" : "Basic"}</b>.
-    </div>
+      <div className="lrrAiFooterNote">
+        *** This summary is automatically generated by LegalAI and may be cached for performance.
+        Always verify critical details against the full case text —{" "}
+        <b>{isExtended ? "Extended" : "Basic"}</b>.
+      </div>
     </section>
   );
 }
@@ -1082,18 +1174,6 @@ useEffect(() => {
         title="View case content"
       >
         View Case Content
-      </button>
-
-      <button
-        type="button"
-        className="lrr2Btn"
-        onClick={() => {
-          setView("ai");
-          setContentOpen(false);
-        }}
-        title="Summarize with LegalAI"
-      >
-        Summarize with LegalAI
       </button>
 
       <button

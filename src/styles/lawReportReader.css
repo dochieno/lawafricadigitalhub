@@ -549,6 +549,13 @@ color: var(--reader-ink, rgba(15, 23, 42, 0.92));
   background: rgba(161, 24, 30, 0.08);
   color: rgba(15, 23, 42, 0.88);
 }
+/* Tiny toast under AI title row */
+.lrrAiTop .lrrAiToast{
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 850;
+  color: var(--muted);
+}
 
 .lrrAiSub {
   font-size: 12px;
@@ -1193,6 +1200,11 @@ color: var(--reader-ink, rgba(15, 23, 42, 0.92));
   box-shadow: 0 14px 30px rgba(161, 24, 30, 0.16);
   transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
 }
+/* Reuse the same "pill button" for top-right actions (Copy / Regenerate) */
+.lrrAiTitleRow .lrrAiUpgradeBtn{
+  padding: 8px 12px;   /* slightly tighter in the header row */
+  font-size: 12px;
+}
 
 .lrrAiUpgradeBtn:hover{
   transform: translateY(-1px);
@@ -1205,6 +1217,12 @@ color: var(--reader-ink, rgba(15, 23, 42, 0.92));
   color: var(--reader-ink);
   border: 1px solid var(--border);
   box-shadow: 0 10px 18px rgba(2, 6, 23, 0.06);
+}
+/* Ghost button should inherit theme surface (esp. dark mode) */
+.lrrAiUpgradeBtn.ghost{
+  background: color-mix(in srgb, var(--reader-surface) 92%, transparent);
+  color: var(--reader-ink);
+  border: 1px solid var(--border);
 }
 
 .lrrAiUpgradeBtn.ghost:hover{
@@ -2094,6 +2112,12 @@ color: var(--reader-ink, rgba(15, 23, 42, 0.92));
 .lrr2TranscriptTools{
   margin: 10px 0 12px;
 }
+.lrr2CaseActions{
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
 
 /* Reader bar can be sticky if you want */
 .lrr2ReaderBar{
@@ -2101,9 +2125,19 @@ color: var(--reader-ink, rgba(15, 23, 42, 0.92));
   top: 62px; /* adjust if your tabs height differs */
   z-index: 15;
 }
-.lrr2CaseActions{
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
+/* Icons-only reader tools (hide the text labels inside the pills) */
+.lrr2ReaderBar .lrr2IconBtnText{
+  display: none;
+}
+
+/* Make icon buttons tighter and consistent */
+.lrr2ReaderBar .lrr2IconBtn{
+  padding: 8px 10px;
+  gap: 0;              /* no space reserved for hidden text */
+}
+
+/* Ensure SVG stays crisp */
+.lrr2ReaderBar .lrr2IconBtn svg{
+  width: 18px;
+  height: 18px;
 }
