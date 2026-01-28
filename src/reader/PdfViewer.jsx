@@ -1,8 +1,9 @@
 // src/reader/PdfViewer.jsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import api from "../api/client";
 import { getPdfSource } from "../utils/pdfSource";
+
 import "../styles/reader.css";
 
 /* PDF worker */
@@ -117,12 +118,12 @@ export default function PdfViewer({
     if (el) pageElsRef.current[pageNumber] = el;
   }
 
-  function scrollToPage(targetPage, behavior = "auto") {
+    const scrollToPage = useCallback((targetPage, behavior = "auto") => {
     const el = pageElsRef.current[targetPage];
     if (!el) return false;
     el.scrollIntoView({ behavior, block: "start" });
     return true;
-  }
+    }, []);
 
   /* ==================================================
      RESET WHEN DOCUMENT CHANGES
@@ -217,55 +218,63 @@ export default function PdfViewer({
   /* ==================================================
      APPLY RESUME
      ================================================== */
-  useEffect(() => {
-    if (!ready || !numPages || !resumeLoaded) return;
-    if (resumeAppliedRef.current) return;
+  /* ==================================================
+     APPLY RESUME
+     ================================================== */
+      useEffect(() => {
+        if (!ready || !numPages || !resumeLoaded) return;
+        if (resumeAppliedRef.current) return;
 
-    const targetRaw = resumeTargetRef.current;
-    if (!targetRaw) return;
+        const targetRaw = resumeTargetRef.current;
+        if (!targetRaw) return;
 
-    const maxPage = allowedMaxPage ?? numPages;
-    const target = Math.min(Math.max(1, Number(targetRaw)), maxPage);
+        const maxPage = allowedMaxPage ?? numPages;
+        const target = Math.min(Math.max(1, Number(targetRaw)), maxPage);
 
-    setRenderLimit((prev) => Math.max(prev, Math.min(target + 6, maxPage)));
-    setPage(target);
+        setRenderLimit((prev) => Math.max(prev, Math.min(target + 6, maxPage)));
+        setPage(target);
 
-    const attemptScroll = () => {
-      isProgrammaticNavRef.current = true;
+        const attemptScroll = () => {
+          isProgrammaticNavRef.current = true;
 
-      const ok = scrollToPage(target, "auto");
-      if (ok) {
-        resumeAppliedRef.current = true;
-        setTimeout(() => {
-          isProgrammaticNavRef.current = false;
-        }, 350);
-        return;
-      }
-      setTimeout(attemptScroll, 80);
-    };
+          const ok = scrollToPage(target, "auto");
+          if (ok) {
+            resumeAppliedRef.current = true;
+            setTimeout(() => {
+              isProgrammaticNavRef.current = false;
+            }, 350);
+            return;
+          }
+          setTimeout(attemptScroll, 80);
+        };
 
-    setTimeout(attemptScroll, 80);
-  }, [ready, numPages, resumeLoaded, allowedMaxPage]);
+        setTimeout(attemptScroll, 80);
+      }, [ready, numPages, resumeLoaded, allowedMaxPage, scrollToPage]);
 
   /* ==================================================
      SAFE PAGE SETTER
      ================================================== */
-  function safeSetPage(nextPage) {
+    const safeSetPage = useCallback(
+    (nextPage) => {
     if (allowedMaxPage && nextPage > allowedMaxPage) {
-      if (typeof onPreviewLimitReached === "function") onPreviewLimitReached();
-      return;
+    if (typeof onPreviewLimitReached === "function") onPreviewLimitReached();
+    return;
     }
+
 
     isProgrammaticNavRef.current = true;
     setPage(nextPage);
 
+
     requestAnimationFrame(() => {
-      scrollToPage(nextPage, "smooth");
-      setTimeout(() => {
-        isProgrammaticNavRef.current = false;
-      }, 350);
+    scrollToPage(nextPage, "smooth");
+    setTimeout(() => {
+    isProgrammaticNavRef.current = false;
+    }, 350);
     });
-  }
+    },
+    [allowedMaxPage, onPreviewLimitReached, scrollToPage]
+    );
 
   /* ==================================================
      Scroll-based current-page detection
@@ -387,11 +396,11 @@ export default function PdfViewer({
   /* ==================================================
      Go-to-page helpers
      ================================================== */
-  function openPageJump() {
-    setPageJumpError("");
-    setPageJumpValue(String(page));
-    setShowPageJump(true);
-  }
+  const openPageJump = useCallback(() => {
+  setPageJumpError("");
+  setPageJumpValue(String(page));
+  setShowPageJump(true);
+  }, [page]);
 
   function submitPageJump() {
     const raw = (pageJumpValue || "").trim();
@@ -420,9 +429,11 @@ export default function PdfViewer({
       const el = pageJumpInputRef.current;
       if (el) {
         el.focus();
-        try {
-          el.select();
-        } catch {}
+    try {
+      el.select();
+    } catch {
+  // ignore
+}
       }
     }, 0);
     return () => clearTimeout(t);
@@ -476,7 +487,7 @@ export default function PdfViewer({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [page, numPages, allowedMaxPage, showNoteBox, showNotes, showPageJump]);
+  }, [page, numPages, allowedMaxPage, showNoteBox, showNotes, showPageJump,safeSetPage,openPageJump,]);
 
   /* ==================================================
      Highlight capture (unchanged)
@@ -588,7 +599,9 @@ export default function PdfViewer({
 
       try {
         selection.removeAllRanges();
-      } catch {}
+      } catch {
+  // ignore
+}
     }, 30);
   }
 
@@ -613,7 +626,7 @@ export default function PdfViewer({
     });
   }
 
-  function hasOverlapOnPage(meta) {
+  function hasOverlapOnPage() {
     return false;
   }
 
