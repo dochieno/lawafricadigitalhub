@@ -369,6 +369,24 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel,onOpenRe
   const [sourceLabel, setSourceLabel] = useState(""); // "Cached" | "Generated" | ""
   const [toast, setToast] = useState(""); // lightweight feedback
 
+  //AI
+  // Phase 5 — Chat with LegalAI (per-case)
+    const [chatOpen, setChatOpen] = useState(false);
+    const [chatLoading, setChatLoading] = useState(false);
+    const [chatError, setChatError] = useState("");
+    const [chatInput, setChatInput] = useState("");
+    const [chatMsgs, setChatMsgs] = useState([
+      {
+        role: "assistant",
+        content:
+          "Ask me anything about this case: issues, holding, reasoning, relevant statutes, and how it compares to similar cases.",
+      },
+    ]);
+
+ function addMsg(role, content) {
+  setChatMsgs((prev) => [...prev, { role, content }]);
+}
+
   const canRun = useMemo(
     () => Number.isFinite(Number(lawReportId)) && Number(lawReportId) > 0,
     [lawReportId]
@@ -392,6 +410,20 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel,onOpenRe
     flash._t = window.setTimeout(() => setToast(""), 1400);
   }
 
+//AI Related Cases Helper
+  function normalizeAiCase(x) {
+    return {
+      jurisdiction: x?.jurisdiction || x?.country || x?.region || "",
+      lawReportId: x?.lawReportId ?? x?.id ?? null,
+      url: x?.url || x?.link || x?.sourceUrl || "",
+      title: x?.title || x?.caseName || x?.name || "",
+      court: x?.court || x?.courtName || "",
+      year: x?.year || x?.decisionYear || "",
+      citation: x?.citation || x?.cite || "",
+      note: x?.note || x?.reason || x?.whyRelevant || "",
+    };
+  }
+
   //Fetch with AI
   async function fetchAiRelatedCases() {
   if (!canRun) return;
@@ -410,7 +442,8 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel,onOpenRe
 
     const payload = res.data?.items ?? res.data?.data?.items ?? res.data?.data ?? res.data;
     const items = Array.isArray(payload) ? payload : Array.isArray(payload?.items) ? payload.items : [];
-
+    const normalized = items.map(normalizeAiCase);
+    setRelatedCases(normalized);
     setRelatedCases(items);
     if (!items.length) setRelatedCasesError("No suggestions returned.");
     else flash("Related cases loaded.");
@@ -516,7 +549,7 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel,onOpenRe
 
   return (
     <section className="lrrAi">
-<div className="lrrAiTop">
+  <div className="lrrAiTop">
   <div className="lrrAiTitleRow">
     <div className="lrrAiTitle">LegalAI Summary</div>
 
@@ -562,6 +595,28 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel,onOpenRe
           />
           <path
             d="M5 20c2.5-2.2 5.2-3.3 8-3.3s5.5 1.1 8 3.3"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+          />
+        </svg>
+      </button>
+      <button
+        type="button"
+        className={`lrrAiUpgradeBtn ${chatOpen ? "ghost" : ""}`}
+        onClick={() => setChatOpen((v) => !v)}
+        title="Chat with LegalAI"
+        aria-label="Chat with LegalAI"
+      >
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M4 5.5C4 4.1 5.1 3 6.5 3h11C19.9 3 21 4.1 21 5.5v7C21 13.9 19.9 15 18.5 15H11l-4.5 4V15H6.5C5.1 15 4 13.9 4 12.5v-7z"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M7.5 7.5h10M7.5 10.5h7"
             stroke="currentColor"
             strokeWidth="1.6"
             strokeLinecap="round"
@@ -623,6 +678,143 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel,onOpenRe
           <div className="lrrAiBody">
             <AiSummaryRichText text={result.summary || ""} />
           </div>
+          {chatOpen ? (
+  <div className="lrr2Panel" style={{ marginTop: 12 }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+      <div>
+        <div style={{ fontWeight: 800 }}>Chat with LegalAI</div>
+        <div style={{ opacity: 0.75, fontSize: 13 }}>
+          Ask about issues, holdings, reasoning, and related/persuasive cases.
+        </div>
+      </div>
+
+      <button
+        type="button"
+        className="lrr2Btn"
+        onClick={() => {
+          setChatMsgs((prev) =>
+            prev.length > 1
+              ? [
+                  prev[0],
+                  {
+                    role: "assistant",
+                    content:
+                      "Cleared. Ask a new question about this case.",
+                  },
+                ]
+              : prev
+          );
+          setChatError("");
+          setChatInput("");
+        }}
+        title="Clear chat"
+      >
+        Clear
+      </button>
+    </div>
+      <div
+        style={{
+          marginTop: 10,
+          borderRadius: 14,
+          border: "1px solid rgba(255,255,255,0.12)",
+          background: "rgba(0,0,0,0.06)",
+          padding: 12,
+          maxHeight: 320,
+          overflow: "auto",
+        }}
+      >
+        {chatMsgs.map((m, idx) => (
+          <div
+            key={idx}
+            style={{
+              display: "flex",
+              justifyContent: m.role === "user" ? "flex-end" : "flex-start",
+              marginBottom: 10,
+            }}
+          >
+            <div
+              style={{
+                maxWidth: "86%",
+                padding: "10px 12px",
+                borderRadius: 14,
+                fontSize: 13,
+                lineHeight: 1.45,
+                whiteSpace: "pre-wrap",
+                border: "1px solid rgba(255,255,255,0.10)",
+                background: m.role === "user" ? "rgba(161,24,30,0.14)" : "rgba(255,255,255,0.08)",
+                fontWeight: 650,
+              }}
+            >
+              {m.content}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {chatError ? <div style={{ marginTop: 10, opacity: 0.9 }}>{chatError}</div> : null}
+
+      <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <input
+          className="lrr2SearchInput"
+          value={chatInput}
+          onChange={(e) => setChatInput(e.target.value)}
+          placeholder="Ask LegalAI… e.g. What were the key issues and the holding?"
+          style={{ flex: 1, minWidth: 240 }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              document.getElementById("lrrChatSendBtn")?.click();
+            }
+          }}
+        />
+
+        <button
+          id="lrrChatSendBtn"
+          type="button"
+          className="lrr2Btn primary"
+          disabled={chatLoading || !String(chatInput || "").trim()}
+          onClick={async () => {
+            if (!canRun) return;
+            const msg = String(chatInput || "").trim();
+            if (!msg) return;
+
+            setChatInput("");
+            setChatError("");
+            addMsg("user", msg);
+
+            try {
+              setChatLoading(true);
+
+              // ✅ API call (we'll confirm endpoint in Step 3D)
+              const res = await api.post(`/ai/law-reports/${Number(lawReportId)}/chat`, {
+                message: msg,
+                // optionally include type/context later
+              });
+
+              const reply =
+                res.data?.reply ||
+                res.data?.data?.reply ||
+                res.data?.message ||
+                res.data?.data?.message ||
+                res.data?.content ||
+                res.data?.data?.content ||
+                "";
+
+              addMsg("assistant", String(reply || "No response returned."));
+            } catch (e) {
+              setChatError(getApiErrorMessage(e, "Chat failed."));
+              addMsg("assistant", "Sorry — I couldn’t complete that request. Please try again.");
+            } finally {
+              setChatLoading(false);
+            }
+          }}
+          title="Send"
+        >
+          {chatLoading ? "Sending…" : "Send"}
+        </button>
+      </div>
+    </div>
+  ) : null}
         {/* Phase 4 — AI Related Cases (Enhancement-only) */}
         <div className="lrr2Panel" style={{ marginTop: 12 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
