@@ -222,6 +222,10 @@ export default function AppShell() {
                       Books
                     </NavLink>
 
+                    <NavLink to="/dashboard/admin/toc-test" className="nav-link nav-child">
+                      Table of Contents (Test)
+                    </NavLink>
+
                     <NavLink to="/dashboard/admin/llr-services" className="nav-link nav-child">
                       LLR Services
                     </NavLink>
