@@ -1,9 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+// src/pages/documents/DocumentReader.jsx
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import api, { checkDocumentAvailability } from "../../api/client";
 import PdfViewer from "../../reader/PdfViewer";
 import "../../styles/reader.css";
+
+/** ---------------------------
+ * Small helpers (pure)
+ * -------------------------- */
+function safeAbort(ctrl) {
+  if (!ctrl) return;
+  try {
+    ctrl.abort();
+  } catch (err) {
+    console.debug("AbortController abort failed (non-fatal):", err);
+  }
+}
 
 export default function DocumentReader() {
   const { id } = useParams();
@@ -21,7 +34,6 @@ export default function DocumentReader() {
   const [loadingAccess, setLoadingAccess] = useState(true);
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [loadingAccessHint, setLoadingAccessHint] = useState("Checking access");
-  
 
   // hard-block overlay
   const [blocked, setBlocked] = useState(false);
@@ -48,39 +60,114 @@ export default function DocumentReader() {
     setTimeout(() => setToast(null), 2500);
   }
 
+  // ---------------------------------------------
+  // ✅ ToC drawer state + PdfViewer API bridge
+  // ---------------------------------------------
+  const [tocOpen, setTocOpen] = useState(false);
+  const [toc, setToc] = useState([]);
+  const [tocLoading, setTocLoading] = useState(false);
+  const [tocError, setTocError] = useState("");
+
+  // Store PdfViewer API in a ref (NOT state)
+  const viewerApiRef = useRef(null);
+
+  // avoid setState after unmount (for ToC)
+  const mountedRef = useRef(false);
+
+  // Track in-flight requests (for ToC)
+  const tocAbortRef = useRef(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      safeAbort(tocAbortRef.current);
+    };
+  }, []);
+
+  const handleRegisterApi = useCallback((apiObj) => {
+    viewerApiRef.current = apiObj; // { jumpToPage } or null
+  }, []);
+
+  const openToc = useCallback(() => {
+    setTocOpen(true);
+    setTocLoading(true);
+    setTocError("");
+  }, []);
+
+  const closeToc = useCallback(() => {
+    setTocOpen(false);
+  }, []);
+
+  const onTocClick = useCallback((pageNumber) => {
+    const p = Number(pageNumber);
+    if (!Number.isFinite(p) || p <= 0) return;
+
+    const ok = viewerApiRef.current?.jumpToPage?.(p, "smooth");
+    if (ok) setTocOpen(false);
+  }, []);
+
+  // Load ToC only when drawer opens
+  useEffect(() => {
+    if (!tocOpen) return;
+    if (!Number.isFinite(docId) || docId <= 0) return;
+
+    safeAbort(tocAbortRef.current);
+    const ctrl = new AbortController();
+    tocAbortRef.current = ctrl;
+
+    api
+      .get(`/documents/${docId}/toc`, { signal: ctrl.signal })
+      .then((res) => {
+        if (!mountedRef.current || ctrl.signal.aborted) return;
+
+        const items = Array.isArray(res.data) ? res.data : res.data?.items || [];
+        setToc(items);
+        setTocLoading(false);
+      })
+      .catch((err) => {
+        if (!mountedRef.current || ctrl.signal.aborted) return;
+
+        console.debug("Failed to load ToC:", err);
+        setTocError(err?.response?.data?.message || "Failed to load Table of Contents.");
+        setTocLoading(false);
+      });
+
+    return () => safeAbort(ctrl);
+  }, [docId, tocOpen]);
+
   // Detect landing from Paystack/MPESA
-useEffect(() => {
-  const qs = new URLSearchParams(location.search);
-  const paidQs = (qs.get("paid") || "").trim();
-  const providerQs = (qs.get("provider") || "").trim();
+  useEffect(() => {
+    const qs = new URLSearchParams(location.search);
+    const paidQs = (qs.get("paid") || "").trim();
+    const providerQs = (qs.get("provider") || "").trim();
 
-  const paidState = location.state?.paid === true;
-  const providerState = (location.state?.provider || "").trim();
+    const paidState = location.state?.paid === true;
+    const providerState = (location.state?.provider || "").trim();
 
-  const paid = paidState || paidQs === "1";
-  const provider = providerState || providerQs;
+    const paid = paidState || paidQs === "1";
+    const provider = providerState || providerQs;
 
-  if (paid) {
-    setJustPaid(true);
-    setPaidProvider(provider);
-    showToast(`Payment successful ✅${provider ? ` (${provider})` : ""}`, "success");
+    if (paid) {
+      setJustPaid(true);
+      setPaidProvider(provider);
+      showToast(`Payment successful ✅${provider ? ` (${provider})` : ""}`, "success");
 
-    // Only strip URL params if we used query params
-    if (paidQs === "1") {
-      qs.delete("paid");
-      qs.delete("provider");
-      navigate(
-        {
-          pathname: location.pathname,
-          search: qs.toString() ? `?${qs.toString()}` : "",
-        },
-        { replace: true }
-      );
+      // Only strip URL params if we used query params
+      if (paidQs === "1") {
+        qs.delete("paid");
+        qs.delete("provider");
+        navigate(
+          {
+            pathname: location.pathname,
+            search: qs.toString() ? `?${qs.toString()}` : "",
+          },
+          { replace: true }
+        );
+      }
     }
-  }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, []);
-
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -117,10 +204,9 @@ useEffect(() => {
         setBlockMessage("Access blocked. Please contact your administrator.");
 
         // If we just paid, MPESA may still be finalizing in backend -> retry a few times
-        const maxAttempts = justPaid ? 10 : 1; // ~ (10 attempts) * delays below = short grace period
+        const maxAttempts = justPaid ? 10 : 1;
         let attempt = 0;
 
-        // delays: quick at first, then slower
         const delays = [400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2200];
 
         while (!cancelled && aliveRef.current) {
@@ -162,37 +248,27 @@ useEffect(() => {
             if (cancelled || !aliveRef.current) return;
 
             if (isIgnorable(err)) {
-              // throttle cancel etc. -> do not treat as failure
-              // try again quickly if we are in payment grace period
+              // ignore
             } else {
               const status = err?.response?.status;
 
-              // If justPaid: allow a grace period for entitlement to update
-              // Common transient: 403/404 while webhook/payment finalization catches up
               if (!justPaid) throw err;
-
-              // If auth failed, don’t keep looping forever
               if (status === 401) throw err;
-
-              // Otherwise keep retrying until attempts are exhausted
             }
 
             if (attempt >= maxAttempts) {
-              // Exhausted retries -> show normal failure
               throw err;
             }
 
             await sleep(delays[Math.min(attempt - 1, delays.length - 1)]);
           }
         }
-        } catch (err) {
-          // ✅ If request was canceled by our throttle, don't treat it as a real failure
-          if (err?.code === "ERR_CANCELED") return;
+      } catch (err) {
+        if (err?.code === "ERR_CANCELED") return;
 
-          console.error("Failed to load access", err);
-          if (!cancelled && aliveRef.current) setAccess(null);
-        } finally {
-
+        console.error("Failed to load access", err);
+        if (!cancelled && aliveRef.current) setAccess(null);
+      } finally {
         if (!cancelled && aliveRef.current) setLoadingAccess(false);
       }
     }
@@ -222,7 +298,7 @@ useEffect(() => {
           } catch (err) {
             const status = err?.response?.status;
             if (status === 404) return false;
-            if (status === 401 || status === 403) return true; // access/auth handled elsewhere
+            if (status === 401 || status === 403) return true;
             console.warn("Availability check failed (non-blocking):", err);
             return true;
           }
@@ -343,10 +419,7 @@ useEffect(() => {
             )}
 
             <div className="preview-lock-actions">
-              <button
-                className="outline-btn"
-                onClick={() => navigate(`/dashboard/documents/${id}`)}
-              >
+              <button className="outline-btn" onClick={() => navigate(`/dashboard/documents/${id}`)}>
                 Back to Details
               </button>
 
@@ -407,67 +480,127 @@ useEffect(() => {
   const maxPages = access.hasFullAccess ? null : access.previewMaxPages;
 
   return (
-    <div className="reader-shell">
+    <div className="reader-layout">
       {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
 
-      {/* Non-blocking meta hint */}
-      {loadingMeta ? (
-        <div
-          style={{
-            position: "fixed",
-            top: 62,
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 20,
-            fontSize: 12,
-            fontWeight: 800,
-            color: "#6b7280",
-            background: "rgba(255,255,255,0.75)",
-            border: "1px solid rgba(229,231,235,0.9)",
-            padding: "6px 10px",
-            borderRadius: 999,
-            backdropFilter: "blur(6px)",
-          }}
-        >
-          Preparing document…
+      {/* Mobile topbar */}
+      <div className="readerpage-topbar">
+        <button className="readerpage-tocbtn" type="button" onClick={openToc} title="Table of Contents">
+          ☰ ToC
+        </button>
+
+        <div className="readerpage-title" title={`Document ${docId}`}>
+          Reader
         </div>
-      ) : null}
+      </div>
 
-      <PdfViewer
-        documentId={docId}
-        maxAllowedPage={maxPages}
-        onPreviewLimitReached={() => setLocked(true)}
-      />
+      {/* Backdrop (mobile) */}
+      {tocOpen && <div className="readerpage-tocBackdrop" onClick={closeToc} />}
 
-      {locked && !access.hasFullAccess && (
-        <div className="preview-lock-backdrop">
-          <div className="preview-lock-card">
-            <h2>Preview limit reached</h2>
-            <p>
-              You’re reading a preview of this publication. To continue beyond page{" "}
-              {access.previewMaxPages}, you’ll need full access.
-            </p>
+      {/* ToC drawer / sidebar */}
+      <div className={`readerpage-tocDrawer ${tocOpen ? "open" : ""}`}>
+        <div className="readerpage-tocHeader">
+          <div className="readerpage-tocTitle">Table of Contents</div>
+          <button className="readerpage-tocClose" type="button" onClick={closeToc} title="Close">
+            ✕
+          </button>
+        </div>
 
-            <div className="preview-lock-actions">
-              <button className="outline-btn" onClick={() => navigate(`/dashboard/documents/${id}`)}>
-                Back to Details
-              </button>
+        <div className="readerpage-tocBody">
+          {tocLoading ? (
+            <div className="readerpage-tocState">Loading ToC…</div>
+          ) : tocError ? (
+            <div className="readerpage-tocState error">{tocError}</div>
+          ) : toc?.length ? (
+            <div className="readerpage-tocList">
+              {toc.map((item, idx) => {
+                const label =
+                  item.title || item.heading || item.text || item.label || `Section ${idx + 1}`;
+                const pageNumber = item.pageNumber ?? item.page ?? item.startPage ?? null;
 
-              <button className="primary-btn" onClick={() => navigate(`/dashboard/documents/${id}`)}>
-                Purchase Access
-              </button>
-
-              <button className="outline-btn" onClick={() => navigate("/dashboard/explore")}>
-                Explore More
-              </button>
+                return (
+                  <button
+                    key={item.id || `${idx}-${label}`}
+                    className="readerpage-tocItem"
+                    type="button"
+                    onClick={() => onTocClick(pageNumber)}
+                    disabled={!pageNumber}
+                    title={pageNumber ? `Go to page ${pageNumber}` : "No page mapped"}
+                  >
+                    <div className="readerpage-tocItemTitle">{label}</div>
+                    <div className="readerpage-tocItemPage">{pageNumber ? pageNumber : "—"}</div>
+                  </button>
+                );
+              })}
             </div>
-
-            <p className="preview-lock-footnote">
-              You can purchase this publication from the details page to unlock full reading access.
-            </p>
-          </div>
+          ) : (
+            <div className="readerpage-tocState">No ToC available.</div>
+          )}
         </div>
-      )}
+      </div>
+
+      {/* Main reader */}
+      <div className="readerpage-main">
+        {/* Non-blocking meta hint */}
+        {loadingMeta ? (
+          <div
+            style={{
+              position: "fixed",
+              top: 62,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 20,
+              fontSize: 12,
+              fontWeight: 800,
+              color: "#6b7280",
+              background: "rgba(255,255,255,0.75)",
+              border: "1px solid rgba(229,231,235,0.9)",
+              padding: "6px 10px",
+              borderRadius: 999,
+              backdropFilter: "blur(6px)",
+            }}
+          >
+            Preparing document…
+          </div>
+        ) : null}
+
+        <PdfViewer
+          documentId={docId}
+          maxAllowedPage={maxPages}
+          onPreviewLimitReached={() => setLocked(true)}
+          onRegisterApi={handleRegisterApi}
+        />
+
+        {locked && !access.hasFullAccess && (
+          <div className="preview-lock-backdrop">
+            <div className="preview-lock-card">
+              <h2>Preview limit reached</h2>
+              <p>
+                You’re reading a preview of this publication. To continue beyond page{" "}
+                {access.previewMaxPages}, you’ll need full access.
+              </p>
+
+              <div className="preview-lock-actions">
+                <button className="outline-btn" onClick={() => navigate(`/dashboard/documents/${id}`)}>
+                  Back to Details
+                </button>
+
+                <button className="primary-btn" onClick={() => navigate(`/dashboard/documents/${id}`)}>
+                  Purchase Access
+                </button>
+
+                <button className="outline-btn" onClick={() => navigate("/dashboard/explore")}>
+                  Explore More
+                </button>
+              </div>
+
+              <p className="preview-lock-footnote">
+                You can purchase this publication from the details page to unlock full reading access.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

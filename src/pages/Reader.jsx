@@ -13,10 +13,39 @@ function safeAbort(ctrl) {
   try {
     ctrl.abort();
   } catch (err) {
-    // no-empty: keep as debug-only, but DO something
-    // (avoid noisy console.error; this is non-critical)
     console.debug("AbortController abort failed (non-fatal):", err);
   }
+}
+
+/**
+ * Normalize ToC items from any API shape:
+ * - supports: title/heading/text/label
+ * - supports: pageNumber/page/startPage
+ * returns { id, label, pageNumber, level }
+ */
+function normalizeTocItems(raw) {
+  const items = Array.isArray(raw) ? raw : raw?.items || [];
+  return items
+    .map((item, idx) => {
+      const label =
+        item?.title ||
+        item?.heading ||
+        item?.text ||
+        item?.label ||
+        item?.name ||
+        `Section ${idx + 1}`;
+
+      const pageNumberRaw = item?.pageNumber ?? item?.page ?? item?.startPage ?? null;
+      const pageNumber = Number(pageNumberRaw);
+
+      return {
+        id: item?.id ?? `${idx}-${label}`,
+        label: String(label),
+        pageNumber: Number.isFinite(pageNumber) && pageNumber > 0 ? pageNumber : null,
+        level: Number.isFinite(Number(item?.level)) ? Number(item.level) : 0,
+      };
+    })
+    .filter((x) => x.label && x.label.trim().length > 0);
 }
 
 export default function Reader() {
@@ -45,7 +74,6 @@ export default function Reader() {
    * -------------------------- */
   useEffect(() => {
     mountedRef.current = true;
-
     return () => {
       mountedRef.current = false;
       safeAbort(docAbortRef.current);
@@ -54,14 +82,14 @@ export default function Reader() {
   }, []);
 
   const handleRegisterApi = useCallback((apiObj) => {
-    viewerApiRef.current = apiObj; // { jumpToPage } or null
+    // apiObj is { jumpToPage } or null
+    viewerApiRef.current = apiObj;
   }, []);
 
   /** ---------------------------
    * Load reader state (title + resume)
    * -------------------------- */
   useEffect(() => {
-    // Abort previous doc request (if any)
     safeAbort(docAbortRef.current);
 
     const ctrl = new AbortController();
@@ -74,44 +102,30 @@ export default function Reader() {
         setDoc(res.data);
       })
       .catch((err) => {
-        // If aborted, do nothing
         if (!mountedRef.current || ctrl.signal.aborted) return;
-
-        // no-empty: record something lightweight
         console.debug("Failed to load reader-state:", err);
-
         setDoc(null);
       });
   }, [id]);
 
   /** ---------------------------
-   * Open/close ToC (event handler)
-   * IMPORTANT: setState happens HERE (event), not in the effect body,
-   * to satisfy react-hooks/set-state-in-effect.
+   * Open/close ToC
    * -------------------------- */
   const openToc = useCallback(() => {
-    // If we’re already open, do nothing
     setTocOpen(true);
-
-    // Start loading UX (event-driven, not inside useEffect)
     setTocLoading(true);
     setTocError("");
-
-    // Optional: keep old toc while loading (current behavior)
+    // keep existing ToC while loading (nice UX)
   }, []);
 
-  const closeToc = useCallback(() => {
-    setTocOpen(false);
-  }, []);
+  const closeToc = useCallback(() => setTocOpen(false), []);
 
   /** ---------------------------
    * Load ToC only when drawer opens
-   * (NO setState directly in the effect body)
    * -------------------------- */
   useEffect(() => {
     if (!tocOpen) return;
 
-    // Abort previous toc request (if any)
     safeAbort(tocAbortRef.current);
 
     const ctrl = new AbortController();
@@ -122,23 +136,21 @@ export default function Reader() {
       .then((res) => {
         if (!mountedRef.current || ctrl.signal.aborted) return;
 
-        const items = Array.isArray(res.data) ? res.data : res.data?.items || [];
-        setToc(items);
+        const normalized = normalizeTocItems(res.data);
+        setToc(normalized);
         setTocLoading(false);
       })
       .catch((err) => {
         if (!mountedRef.current || ctrl.signal.aborted) return;
 
-        // no-empty: keep a trace for debugging
         console.debug("Failed to load ToC:", err);
-
         setTocError(err?.response?.data?.message || "Failed to load Table of Contents.");
         setTocLoading(false);
       });
   }, [id, tocOpen]);
 
   const title = useMemo(() => doc?.title || doc?.name || "Reader", [doc]);
-  const startPage = doc?.resume?.pageNumber || 1;
+  const startPage = useMemo(() => Number(doc?.resume?.pageNumber || 1), [doc]);
 
   const onTocClick = useCallback((pageNumber) => {
     const p = Number(pageNumber);
@@ -192,25 +204,22 @@ export default function Reader() {
             <div className="readerpage-tocState error">{tocError}</div>
           ) : toc?.length ? (
             <div className="readerpage-tocList">
-              {toc.map((item, idx) => {
-                const label =
-                  item.title || item.heading || item.text || item.label || `Section ${idx + 1}`;
-                const pageNumber = item.pageNumber ?? item.page ?? item.startPage ?? null;
-
-                return (
-                  <button
-                    key={item.id || `${idx}-${label}`}
-                    className="readerpage-tocItem"
-                    type="button"
-                    onClick={() => onTocClick(pageNumber)}
-                    disabled={!pageNumber}
-                    title={pageNumber ? `Go to page ${pageNumber}` : "No page mapped"}
-                  >
-                    <div className="readerpage-tocItemTitle">{label}</div>
-                    <div className="readerpage-tocItemPage">{pageNumber ? pageNumber : "—"}</div>
-                  </button>
-                );
-              })}
+              {toc.map((item) => (
+                <button
+                  key={item.id}
+                  className="readerpage-tocItem"
+                  type="button"
+                  onClick={() => onTocClick(item.pageNumber)}
+                  disabled={!item.pageNumber}
+                  title={item.pageNumber ? `Go to page ${item.pageNumber}` : "No page mapped"}
+                  style={{
+                    paddingLeft: 12 + Math.min(4, Math.max(0, item.level)) * 12,
+                  }}
+                >
+                  <div className="readerpage-tocItemTitle">{item.label}</div>
+                  <div className="readerpage-tocItemPage">{item.pageNumber ? item.pageNumber : "—"}</div>
+                </button>
+              ))}
             </div>
           ) : (
             <div className="readerpage-tocState">No ToC available.</div>
@@ -220,7 +229,11 @@ export default function Reader() {
 
       {/* Main reader */}
       <div className="readerpage-main">
-        <PdfViewer documentId={id} startPage={startPage} onRegisterApi={handleRegisterApi} />
+        <PdfViewer
+          documentId={id}
+          startPage={startPage}
+          onRegisterApi={handleRegisterApi}
+        />
       </div>
     </div>
   );

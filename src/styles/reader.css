@@ -1,9 +1,10 @@
 /* =========================
-   Reader (2026 Minimal)
+   Reader (2026 Minimal) — CLEANED
+   - PdfViewer styles (react-pdf + notes + page jump + FAB)
+   - Reader.jsx ToC drawer (mobile bottom sheet + desktop sidebar)
    ========================= */
 
-/* If your app defines these elsewhere, keep them there.
-   These are safe fallbacks so reader.css doesn't break standalone. */
+/* Safe fallbacks (keep if you don't define tokens elsewhere) */
 :root {
   --la-red: #a11212;
   --la-gray: #6b7280;
@@ -17,6 +18,9 @@
   --reader-radius: 16px;
 }
 
+/* =========================================================
+   PdfViewer root + dark mode
+   ========================================================= */
 .reader-shell {
   background: var(--reader-bg);
   min-height: 100vh;
@@ -34,9 +38,9 @@
   color: var(--reader-ink);
 }
 
-/* =========================
-   Top Glass Bar (NEW)
-   ========================= */
+/* =========================================================
+   Top Glass Bar (PdfViewer)
+   ========================================================= */
 .reader-topbar {
   position: sticky;
   top: 0;
@@ -64,7 +68,6 @@
   gap: 10px;
 }
 
-/* small “chip” pill */
 .reader-chip {
   display: inline-flex;
   align-items: center;
@@ -83,7 +86,6 @@
   background: rgba(17, 24, 39, 0.55);
 }
 
-/* icon buttons */
 .icon-btn {
   height: 34px;
   min-width: 34px;
@@ -101,7 +103,6 @@
 .icon-btn:hover {
   background: rgba(255, 255, 255, 0.8);
 }
-
 .reader-shell.dark .icon-btn:hover {
   background: rgba(17, 24, 39, 0.78);
 }
@@ -115,17 +116,16 @@
   box-shadow: 0 0 0 3px rgba(161, 18, 18, 0.14);
 }
 
-/* =========================
-   Layout + Scroll Area
-   ========================= */
+/* =========================================================
+   Layout + Scroll Area (PdfViewer)
+   ========================================================= */
 .reader-container {
   width: 100%;
   max-width: 1040px;
   margin: 0 auto;
-  padding: 18px 14px 84px; /* bottom padding so FAB doesn't cover content */
+  padding: 18px 14px 84px; /* keep space for FAB */
 }
 
-/* Scroll container: only topbar consumes sticky space now */
 .reader-scroll {
   height: calc(100vh - 64px);
   overflow-y: auto;
@@ -136,7 +136,7 @@
   user-select: text;
 }
 
-/* cleaner scrollbar (webkit) */
+/* scrollbar (webkit) */
 .reader-scroll::-webkit-scrollbar {
   width: 10px;
 }
@@ -148,9 +148,9 @@
   background: rgba(229, 231, 235, 0.18);
 }
 
-/* =========================
-   PDF Pages
-   ========================= */
+/* =========================================================
+   PDF Pages + Layers (react-pdf)
+   ========================================================= */
 .pdf-page-wrapper {
   position: relative;
   display: flex;
@@ -159,7 +159,6 @@
   padding: 0 8px;
 }
 
-/* subtle “paper” frame around each rendered page */
 .pdf-page-wrapper .react-pdf__Page {
   border-radius: var(--reader-radius);
   overflow: hidden;
@@ -172,7 +171,6 @@
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.60);
 }
 
-/* Text selection + layering (keep your highlight logic working) */
 .react-pdf__Page__textContent,
 .react-pdf__Page__textContent span {
   user-select: text !important;
@@ -194,29 +192,29 @@
   z-index: 1;
 }
 
-/* Rect highlights overlay */
+/* Rect highlight overlay */
 .highlight-layer {
   position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 5;
 }
-.highlight-layer svg {
-  pointer-events: none;
-}
+.highlight-layer svg,
 svg.highlight-layer {
   pointer-events: none;
 }
 
-/* =========================
-   Floating Nav Pill (NEW)
-   ========================= */
+/* =========================================================
+   Floating Nav Pill (PdfViewer)
+   ========================================================= */
 .reader-fab {
   position: fixed;
   left: 50%;
   bottom: 16px;
   transform: translateX(-50%);
   z-index: 70;
+  pointer-events: auto;
+
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -248,7 +246,6 @@ svg.highlight-layer {
 .fab-btn:hover {
   background: rgba(255, 255, 255, 0.85);
 }
-
 .reader-shell.dark .fab-btn:hover {
   background: rgba(17, 24, 39, 0.8);
 }
@@ -279,9 +276,10 @@ svg.highlight-layer {
   background: rgba(17, 24, 39, 0.55);
 }
 
-/* =========================
-   Page Jump Popover (NEW)
-   ========================= */
+/* =========================================================
+   Page Jump Popover (PdfViewer)
+   (kept single definition; removed duplicates)
+   ========================================================= */
 .pagejump-popover {
   position: absolute;
   left: 50%;
@@ -293,16 +291,27 @@ svg.highlight-layer {
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 22px 70px rgba(0, 0, 0, 0.22);
   padding: 12px;
+  z-index: 9999;
+  pointer-events: auto; /* critical: typing/clicking */
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .reader-shell.dark .pagejump-popover {
   background: rgba(17, 24, 39, 0.92);
 }
 
+.pagejump-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
 .pagejump-title {
   font-weight: 900;
   font-size: 13px;
-  margin-bottom: 10px;
   letter-spacing: 0.2px;
 }
 
@@ -322,6 +331,7 @@ svg.highlight-layer {
   color: var(--reader-ink);
   outline: none;
   font-weight: 700;
+  font-size: 14px;
 }
 
 .reader-shell.dark .pagejump-input {
@@ -333,43 +343,41 @@ svg.highlight-layer {
   box-shadow: 0 0 0 3px rgba(161, 18, 18, 0.14);
 }
 
-.pagejump-go {
-  height: 40px;
-  padding: 0 14px;
-  border-radius: 12px;
-  border: none;
-  background: var(--la-red);
-  color: #fff;
+.pagejump-iconbtn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--reader-border);
+  background: rgba(255, 255, 255, 0.9);
   font-weight: 900;
   cursor: pointer;
+  color: var(--reader-ink);
+}
+
+.reader-shell.dark .pagejump-iconbtn {
+  background: rgba(17, 24, 39, 0.75);
+}
+
+.pagejump-iconbtn.primary {
+  border-color: rgba(0, 0, 0, 0.10);
 }
 
 .pagejump-error {
   margin-top: 8px;
   font-size: 12px;
-  color: var(--la-red);
-  font-weight: 700;
-}
-
-.pagejump-close {
-  margin-top: 10px;
-  width: 100%;
-  height: 38px;
-  border-radius: 12px;
-  border: 1px solid var(--reader-border);
-  background: rgba(255, 255, 255, 0.55);
-  color: var(--reader-ink);
-  cursor: pointer;
   font-weight: 800;
+  color: #b91c1c;
 }
 
-.reader-shell.dark .pagejump-close {
-  background: rgba(17, 24, 39, 0.55);
+/* (Legacy classes retained in case older markup exists) */
+.pagejump-go,
+.pagejump-close {
+  display: none;
 }
 
-/* =========================
-   Notes modal
-   ========================= */
+/* =========================================================
+   Notes modal (PdfViewer)
+   ========================================================= */
 .note-overlay {
   position: fixed;
   inset: 0;
@@ -419,7 +427,7 @@ svg.highlight-layer {
   background: rgba(0, 0, 0, 0.25);
 }
 
-/* color chips row */
+/* highlight color chips row */
 .hl-color-row {
   display: flex;
   align-items: center;
@@ -453,7 +461,6 @@ svg.highlight-layer {
   margin-top: 12px;
 }
 
-/* buttons used in modal */
 .reader-btn {
   background: var(--la-red);
   color: #ffffff;
@@ -473,9 +480,9 @@ svg.highlight-layer {
   cursor: not-allowed;
 }
 
-/* =========================
-   Notes Sidebar (NEW open/close + backdrop)
-   ========================= */
+/* =========================================================
+   Notes Sidebar (PdfViewer)
+   ========================================================= */
 .notes-backdrop {
   position: fixed;
   inset: 0;
@@ -504,15 +511,9 @@ svg.highlight-layer {
   background: rgba(17, 24, 39, 0.96);
 }
 
-.notes-sidebar.open {
-  transform: translateX(0);
-}
+.notes-sidebar.open { transform: translateX(0); }
+.notes-sidebar.closed { transform: translateX(100%); }
 
-.notes-sidebar.closed {
-  transform: translateX(100%);
-}
-
-/* header */
 .notes-header {
   padding: 14px 14px;
   border-bottom: 1px solid var(--reader-border);
@@ -535,7 +536,6 @@ svg.highlight-layer {
   color: var(--reader-ink);
 }
 
-/* list */
 .notes-list {
   padding: 12px;
   overflow-y: auto;
@@ -571,7 +571,6 @@ svg.highlight-layer {
   position: relative;
   border: 1px solid rgba(17, 24, 39, 0.08);
 }
-
 .reader-shell.dark .note-item {
   background: rgba(31, 41, 55, 0.65);
   border-color: rgba(255, 255, 255, 0.08);
@@ -588,7 +587,6 @@ svg.highlight-layer {
 .note-item.flash {
   animation: noteFlash 0.9s ease;
 }
-
 @keyframes noteFlash {
   0% { background: rgba(255, 230, 150, 0.45); }
   100% { background: transparent; }
@@ -608,7 +606,6 @@ svg.highlight-layer {
   white-space: pre-wrap;
 }
 
-/* small icon actions */
 .note-actions-inline {
   display: flex;
   gap: 10px;
@@ -624,7 +621,6 @@ svg.highlight-layer {
   color: var(--reader-ink);
 }
 
-/* edit box */
 .note-edit {
   width: 100%;
   min-height: 70px;
@@ -654,9 +650,7 @@ svg.highlight-layer {
 .note-color-dot.pink   { background: rgba(255, 140, 200, 0.75); }
 .note-color-dot.green  { background: rgba(140, 240, 180, 0.85); }
 
-/* =========================
-   Highlight marks (text-layer)
-   ========================= */
+/* Highlight marks (text-layer) */
 .pdf-highlight {
   padding: 0 1px;
   border-radius: 3px;
@@ -667,16 +661,12 @@ svg.highlight-layer {
 .pdf-highlight--pink   { background: rgba(255, 140, 200, 0.35); }
 .pdf-highlight--green  { background: rgba(140, 240, 180, 0.40); }
 
-/* =========================
-   Legacy bottom nav (keep, but hide/de-emphasize)
-   ========================= */
-.reader-nav {
-  display: none; /* new viewer uses reader-fab */
-}
+/* Legacy bottom nav (hidden) */
+.reader-nav { display: none; }
 
-/* =========================
-   Preview lock overlay
-   ========================= */
+/* =========================================================
+   Preview lock overlay (if used)
+   ========================================================= */
 .preview-lock-backdrop {
   position: fixed;
   inset: 0;
@@ -724,36 +714,9 @@ svg.highlight-layer {
   color: var(--reader-muted);
 }
 
-/* =========================
-   Responsive tweaks
-   ========================= */
-@media (max-width: 520px) {
-  .reader-topbar-inner {
-    padding: 10px 10px;
-  }
-
-  .reader-chip {
-    height: 30px;
-    padding: 0 8px;
-  }
-
-  .icon-btn {
-    height: 32px;
-    min-width: 32px;
-    padding: 0 9px;
-  }
-
-  .reader-fab {
-    bottom: 12px;
-  }
-
-  .fab-mid {
-    display: none; /* preserve space: use arrows only on tiny screens */
-  }
-}
-/* =========================
-   Toast (tiny, modern)
-   ========================= */
+/* =========================================================
+   Toast (optional)
+   ========================================================= */
 .toast {
   position: fixed;
   top: 14px;
@@ -781,302 +744,29 @@ svg.highlight-layer {
   -webkit-backdrop-filter: blur(14px);
 }
 
-/* success / error variants */
-.toast-success {
-  border-color: rgba(34, 197, 94, 0.28);
-}
+.toast-success { border-color: rgba(34, 197, 94, 0.28); }
+.toast-error { border-color: rgba(239, 68, 68, 0.30); }
 
-.toast-error {
-  border-color: rgba(239, 68, 68, 0.30);
-}
-
-/* dark mode */
 .reader-shell.dark .toast {
   background: rgba(17, 24, 39, 0.88);
   color: #e5e7eb;
   border-color: rgba(255, 255, 255, 0.14);
 }
 
-/* small screens: keep it readable */
-@media (max-width: 520px) {
-  .toast {
-    top: 10px;
-    width: min(92vw, 520px);
-    justify-content: center;
-    text-align: center;
-  }
-}
-/* Ensure floating nav allows interaction */
-.reader-fab {
-  position: fixed;
-  left: 50%;
-  bottom: 18px;
-  transform: translateX(-50%);
-  z-index: 50;
-  pointer-events: auto;
-}
-
-/* Compact popover */
-.pagejump-popover {
-  position: absolute;
-  bottom: 56px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 240px;
-  padding: 10px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
-  backdrop-filter: blur(10px);
-  z-index: 9999;
-
-  /* ✅ Critical: allow typing/clicking */
-  pointer-events: auto;
-}
-
-.pagejump-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.pagejump-title {
-  font-weight: 900;
-  font-size: 13px;
-}
-
-.pagejump-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.pagejump-input {
-  flex: 1;
-  height: 36px;
-  border-radius: 10px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  padding: 0 10px;
-  font-size: 14px;
-  outline: none;
-}
-
-.pagejump-input:focus {
-  border-color: rgba(59, 130, 246, 0.65);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
-}
-
-/* Small icon buttons */
-.pagejump-iconbtn {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  border: 1px solid rgba(0, 0, 0, 0.10);
-  background: rgba(255, 255, 255, 0.9);
-  font-weight: 900;
-  cursor: pointer;
-}
-
-.pagejump-iconbtn.primary {
-  border-color: rgba(0, 0, 0, 0.10);
-}
-
-.pagejump-error {
-  margin-top: 8px;
-  font-size: 12px;
-  font-weight: 800;
-  color: #b91c1c;
-}
-/* =========================
-   Reader ToC sidebar
-   ========================= */
-
-.reader-layout {
-  display: flex;
-  min-height: 100vh;
-}
-
-.reader-main {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-/* floating ToC button */
-.toc-fab {
-  position: fixed;
-  top: 72px;
-  left: 12px;
-  z-index: 60;
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  border: 1px solid rgba(226, 232, 240, 1);
-  background: rgba(255, 255, 255, 0.86);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.12);
-  font-weight: 900;
-  cursor: pointer;
-}
-
-.toc-fab.open {
-  border-color: rgba(165, 180, 252, 1);
-}
-
-/* sidebar */
-.reader-toc {
-  width: 320px;
-  flex: 0 0 320px;
-  border-right: 1px solid rgba(226, 232, 240, 1);
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.reader-toc.closed {
-  display: none;
-}
-
-.reader-toc-head {
-  padding: 12px 12px 10px;
-  border-bottom: 1px solid rgba(241, 245, 249, 1);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.reader-toc-title {
-  font-weight: 950;
-  letter-spacing: -0.01em;
-  color: #0f172a;
-}
-
-.reader-toc-close {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  border: 1px solid rgba(226, 232, 240, 1);
-  background: #fff;
-  cursor: pointer;
-  font-weight: 900;
-}
-
-.reader-toc-body {
-  padding: 10px;
-  overflow: auto;
-  min-height: 0;
-}
-
-.reader-toc-muted {
-  color: rgba(100, 116, 139, 1);
-  font-size: 13px;
-  font-weight: 700;
-  padding: 8px;
-}
-
-.reader-toc-error {
-  border: 1px solid rgba(254, 202, 202, 1);
-  background: rgba(254, 242, 242, 1);
-  color: rgba(153, 27, 27, 1);
-  border-radius: 14px;
-  padding: 10px 10px;
-  font-weight: 800;
-  font-size: 13px;
-}
-
-/* tree */
-.reader-toc-tree {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.reader-toc-item {
-  width: 100%;
-  text-align: left;
-  border: 1px solid rgba(226, 232, 240, 1);
-  background: #fff;
-  border-radius: 14px;
-  padding: 10px 10px;
-  cursor: pointer;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.06);
-}
-
-.reader-toc-item:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 16px 28px rgba(0, 0, 0, 0.10);
-}
-
-.reader-toc-item.active {
-  border-color: rgba(165, 180, 252, 1);
-  box-shadow: 0 0 0 4px rgba(165, 180, 252, 0.22), 0 18px 44px rgba(0, 0, 0, 0.10);
-}
-
-.reader-toc-item-title {
-  font-weight: 850;
-  color: rgba(15, 23, 42, 1);
-  font-size: 13px;
-  line-height: 1.25;
-}
-
-.reader-toc-item-meta {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 11px;
-  font-weight: 850;
-  color: rgba(100, 116, 139, 1);
-  white-space: nowrap;
-}
-
-.reader-toc-children {
-  margin-top: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-/* mobile: make ToC slide over content */
-@media (max-width: 980px) {
-  .reader-toc {
-    position: fixed;
-    left: 0;
-    top: 0;
-    z-index: 70;
-    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.25);
-  }
-  .reader-toc.closed {
-    display: none;
-  }
-}
 /* =========================================================
-   Reader Page Layout (wrapper around PdfViewer)
+   Reader.jsx layout + ToC drawer (the version you’re using)
    ========================================================= */
-
 .reader-layout {
   position: relative;
   height: 100vh;
   width: 100%;
   overflow: hidden;
-  background: var(--ga-bg, #f8fafc);
+  background: #f8fafc;
   display: flex;
   flex-direction: column;
 }
 
-/* =========================================================
-   Reader Page Topbar (mobile-first)
-   ========================================================= */
-
+/* Mobile topbar */
 .readerpage-topbar {
   display: flex;
   align-items: center;
@@ -1112,10 +802,7 @@ svg.highlight-layer {
   text-overflow: ellipsis;
 }
 
-/* =========================================================
-   ToC Backdrop (mobile)
-   ========================================================= */
-
+/* Backdrop */
 .readerpage-tocBackdrop {
   position: fixed;
   inset: 0;
@@ -1124,10 +811,7 @@ svg.highlight-layer {
   z-index: 40;
 }
 
-/* =========================================================
-   ToC Drawer (mobile-first: bottom sheet)
-   ========================================================= */
-
+/* ToC drawer (mobile bottom sheet) */
 .readerpage-tocDrawer {
   position: fixed;
   left: 0;
@@ -1150,10 +834,6 @@ svg.highlight-layer {
 .readerpage-tocDrawer.open {
   transform: translateY(0);
 }
-
-/* =========================================================
-   ToC Header
-   ========================================================= */
 
 .readerpage-tocHeader {
   display: flex;
@@ -1178,10 +858,6 @@ svg.highlight-layer {
   padding: 4px;
 }
 
-/* =========================================================
-   ToC Body
-   ========================================================= */
-
 .readerpage-tocBody {
   flex: 1;
   overflow: auto;
@@ -1199,10 +875,6 @@ svg.highlight-layer {
 .readerpage-tocState.error {
   color: #b91c1c;
 }
-
-/* =========================================================
-   ToC List + Items
-   ========================================================= */
 
 .readerpage-tocList {
   display: flex;
@@ -1228,6 +900,11 @@ svg.highlight-layer {
   background: rgba(15, 23, 42, 0.05);
 }
 
+.readerpage-tocItem:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .readerpage-tocItemTitle {
   font-size: 13.5px;
   font-weight: 600;
@@ -1242,10 +919,7 @@ svg.highlight-layer {
   padding-left: 10px;
 }
 
-/* =========================================================
-   Main Reader Content
-   ========================================================= */
-
+/* Main reader content wrapper */
 .readerpage-main {
   position: relative;
   flex: 1;
@@ -1253,10 +927,7 @@ svg.highlight-layer {
   overflow: hidden;
 }
 
-/* =========================================================
-   Desktop Enhancements (≥ 1024px)
-   ========================================================= */
-
+/* Desktop: ToC becomes a left sidebar */
 @media (min-width: 1024px) {
   .reader-layout {
     flex-direction: row;
@@ -1272,7 +943,10 @@ svg.highlight-layer {
 
   .readerpage-tocDrawer {
     position: relative;
-    inset: auto;
+    left: auto;
+    right: auto;
+    bottom: auto;
+
     height: auto;
     width: 300px;
     min-width: 280px;
@@ -1285,11 +959,52 @@ svg.highlight-layer {
     transition: none;
   }
 
-  .readerpage-tocHeader {
-    border-bottom: 1px solid rgba(15, 23, 42, 0.12);
-  }
-
   .readerpage-main {
     flex: 1;
+  }
+}
+
+/* =========================================================
+   Responsive tweaks
+   ========================================================= */
+@media (max-width: 520px) {
+  .reader-topbar-inner {
+    padding: 10px 10px;
+  }
+
+  .reader-chip {
+    height: 30px;
+    padding: 0 8px;
+  }
+
+  .icon-btn {
+    height: 32px;
+    min-width: 32px;
+    padding: 0 9px;
+  }
+
+  .reader-fab {
+    bottom: 12px;
+  }
+
+  .fab-mid {
+    display: none;
+  }
+
+  .toast {
+    top: 10px;
+    width: min(92vw, 520px);
+    justify-content: center;
+    text-align: center;
+  }
+}
+@media (min-width: 1024px) {
+  .readerpage-tocDrawer {
+    transform: none !important;
+  }
+}
+@media (min-width: 1024px) {
+  .readerpage-tocClose {
+    display: none;
   }
 }

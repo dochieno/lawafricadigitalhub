@@ -1,8 +1,8 @@
+// src/reader/PdfViewer.jsx
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import api from "../api/client";
 import { getPdfSource } from "../utils/pdfSource";
-
 import "../styles/reader.css";
 
 /* PDF worker */
@@ -49,9 +49,7 @@ function computeOffsetsFromRange(textLayerEl, range) {
 
   const startLocal = range.startContainer?.nodeType === 3 ? range.startOffset : 0;
   const endLocal =
-    range.endContainer?.nodeType === 3
-      ? range.endOffset
-      : endSpan.textContent?.length || 0;
+    range.endContainer?.nodeType === 3 ? range.endOffset : endSpan.textContent?.length || 0;
 
   let start = 0;
   for (let i = 0; i < startIdx; i++) start += (spans[i].textContent || "").length;
@@ -62,7 +60,6 @@ function computeOffsetsFromRange(textLayerEl, range) {
   end += endLocal;
 
   if (end < start) [start, end] = [end, start];
-
   return { start, end };
 }
 
@@ -81,7 +78,6 @@ function applyHighlightByOffsets(textLayerEl, start, end, noteId, color = "yello
   if (spans.length === 0) return;
 
   let pos = 0;
-
   for (const span of spans) {
     const spanText = span.textContent || "";
     const spanStart = pos;
@@ -105,11 +101,16 @@ function applyHighlightByOffsets(textLayerEl, start, end, noteId, color = "yello
     mark.className = `pdf-highlight pdf-highlight--${color}`;
     mark.textContent = middle;
     mark.dataset.noteId = String(noteId);
-
     span.appendChild(mark);
 
     if (after) span.appendChild(document.createTextNode(after));
   }
+}
+
+/** Defer state updates so we don't setState synchronously in effect bodies */
+function defer(fn) {
+  if (typeof queueMicrotask === "function") queueMicrotask(fn);
+  else setTimeout(fn, 0);
 }
 
 /* =========================================================
@@ -120,7 +121,7 @@ export default function PdfViewer({
   startPage = 1,
   maxAllowedPage = null,
   onPreviewLimitReached,
-  onRegisterApi, // ✅ allow parent to control navigation (ToC click)
+  onRegisterApi, // parent uses this for ToC click: { jumpToPage }
 }) {
   const [numPages, setNumPages] = useState(null);
   const [page, setPage] = useState(startPage || 1);
@@ -135,12 +136,13 @@ export default function PdfViewer({
 
   /* ---------------- Reading Progress ---------------- */
   const [resumeLoaded, setResumeLoaded] = useState(false);
-  const lastSavedPageRef = useRef(null);
-  const readingStartRef = useRef(Date.now());
-  const pageUpdateTimeoutRef = useRef(null);
+const lastSavedPageRef = useRef(null);
+const readingStartRef = useRef(0); // set in effect (no Date.now in render)
+const pageUpdateTimeoutRef = useRef(null);
 
   const resumeTargetRef = useRef(null);
   const resumeAppliedRef = useRef(false);
+  const pendingJumpRef = useRef(null);
 
   /* ---------------- Reader Preferences ---------------- */
   const [zoom, setZoom] = useState(1);
@@ -170,7 +172,6 @@ export default function PdfViewer({
   const [highlightColor, setHighlightColor] = useState("yellow");
   const [highlightMeta, setHighlightMeta] = useState(null);
 
-  const pendingJumpRef = useRef(null);
   const noteRefs = useRef({});
 
   /* Scroll + observer */
@@ -189,11 +190,10 @@ export default function PdfViewer({
 
   const fileSource = useMemo(() => getPdfSource(documentId), [documentId]);
 
-  const pdfOptions = useMemo(() => {
-    return safeMode
-      ? { disableRange: true, disableStream: true }
-      : { disableRange: false, disableStream: false };
-  }, [safeMode]);
+  const pdfOptions = useMemo(
+    () => (safeMode ? { disableRange: true, disableStream: true } : { disableRange: false, disableStream: false }),
+    [safeMode]
+  );
 
   const highlightsByPage = useMemo(() => {
     const map = {};
@@ -209,9 +209,9 @@ export default function PdfViewer({
     return maxAllowedPage ? Math.min(maxAllowedPage, numPages) : numPages;
   }, [numPages, maxAllowedPage]);
 
-  function registerPageEl(pageNumber, el) {
+  const registerPageEl = useCallback((pageNumber, el) => {
     if (el) pageElsRef.current[pageNumber] = el;
-  }
+  }, []);
 
   const scrollToPage = useCallback((targetPage, behavior = "auto") => {
     const el = pageElsRef.current[targetPage];
@@ -224,53 +224,60 @@ export default function PdfViewer({
      RESET WHEN DOCUMENT CHANGES
      ================================================== */
   useEffect(() => {
-    setNumPages(null);
-    setReady(false);
-    setLoadPct(0);
-    setLoadError("");
-    setRenderLimit(10);
+    defer(() => {
+      setNumPages(null);
+      setReady(false);
+      setLoadPct(0);
+      setLoadError("");
+      setRenderLimit(10);
 
-    setSafeMode(false);
-    setDocKey((k) => k + 1);
+      setSafeMode(false);
+      setDocKey((k) => k + 1);
 
-    setPage(startPage || 1);
+      setPage(startPage || 1);
 
-    setResumeLoaded(false);
-    pendingJumpRef.current = null;
-    resumeTargetRef.current = null;
-    resumeAppliedRef.current = false;
+      setResumeLoaded(false);
+      pendingJumpRef.current = null;
+      resumeTargetRef.current = null;
+      resumeAppliedRef.current = false;
 
-    previewLimitTriggeredRef.current = false;
+      previewLimitTriggeredRef.current = false;
+    });
   }, [documentId, startPage]);
 
   /* ==================================================
      LOAD READING PROGRESS
      ================================================== */
   useEffect(() => {
-    let cancelled = false;
+    const ctrl = new AbortController();
 
-    setResumeLoaded(false);
-    pendingJumpRef.current = null;
-    resumeTargetRef.current = null;
-    resumeAppliedRef.current = false;
+    defer(() => {
+      setResumeLoaded(false);
+      pendingJumpRef.current = null;
+      resumeTargetRef.current = null;
+      resumeAppliedRef.current = false;
+    });
 
     api
-      .get(`/reading-progress/${documentId}`)
+      .get(`/reading-progress/${documentId}`, { signal: ctrl.signal })
       .then((res) => {
-        if (cancelled) return;
+        if (ctrl.signal.aborted) return;
         const saved = res.data?.pageNumber;
         if (saved && saved > 0) {
           pendingJumpRef.current = saved;
           resumeTargetRef.current = saved;
         }
-        setResumeLoaded(true);
+        defer(() => setResumeLoaded(true));
       })
-      .catch(() => {
-        if (!cancelled) setResumeLoaded(true);
+      .catch((err) => {
+        if (ctrl.signal.aborted) return;
+        // non-blocking: still allow reader to continue
+        console.warn("reading-progress load failed:", err);
+        defer(() => setResumeLoaded(true));
       });
 
     return () => {
-      cancelled = true;
+      ctrl.abort();
     };
   }, [documentId]);
 
@@ -296,7 +303,9 @@ export default function PdfViewer({
         secondsReadDelta,
         isCompleted: percentage >= 100,
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.warn("reading-progress save failed:", err);
+      });
   }, [page, ready, numPages, resumeLoaded, documentId]);
 
   /* ==================================================
@@ -305,8 +314,11 @@ export default function PdfViewer({
   useEffect(() => {
     if (!ready || !numPages) return;
     const maxPage = allowedMaxPage ?? numPages;
+
     if (page >= renderLimit - 4) {
-      setRenderLimit((prev) => Math.min(maxPage, prev + 10));
+      defer(() => {
+        setRenderLimit((prev) => Math.min(maxPage, prev + 10));
+      });
     }
   }, [page, renderLimit, ready, numPages, allowedMaxPage]);
 
@@ -323,13 +335,19 @@ export default function PdfViewer({
     const maxPage = allowedMaxPage ?? numPages;
     const target = Math.min(Math.max(1, Number(targetRaw)), maxPage);
 
-    setRenderLimit((prev) => Math.max(prev, Math.min(target + 6, maxPage)));
-    setPage(target);
+    defer(() => {
+      setRenderLimit((prev) => Math.max(prev, Math.min(target + 6, maxPage)));
+      setPage(target);
+    });
+
+    let cancelled = false;
 
     const attemptScroll = () => {
-      isProgrammaticNavRef.current = true;
+      if (cancelled) return;
 
+      isProgrammaticNavRef.current = true;
       const ok = scrollToPage(target, "auto");
+
       if (ok) {
         resumeAppliedRef.current = true;
         setTimeout(() => {
@@ -341,6 +359,10 @@ export default function PdfViewer({
     };
 
     setTimeout(attemptScroll, 80);
+
+    return () => {
+      cancelled = true;
+    };
   }, [ready, numPages, resumeLoaded, allowedMaxPage, scrollToPage]);
 
   /* ==================================================
@@ -365,6 +387,12 @@ export default function PdfViewer({
     },
     [allowedMaxPage, onPreviewLimitReached, scrollToPage]
   );
+
+    useEffect(() => {
+    // set start timestamp after mount / document change
+    readingStartRef.current = Date.now();
+  }, [documentId]);
+
 
   /* ==================================================
      Scroll-based current-page detection
@@ -407,6 +435,7 @@ export default function PdfViewer({
     if (bestPage !== lastScrollComputedPageRef.current && !isProgrammaticNavRef.current) {
       lastScrollComputedPageRef.current = bestPage;
       clearTimeout(pageUpdateTimeoutRef.current);
+
       pageUpdateTimeoutRef.current = setTimeout(() => setPage(bestPage), 60);
 
       if (
@@ -448,7 +477,7 @@ export default function PdfViewer({
 
     if (pageObserverRef.current) pageObserverRef.current.disconnect();
 
-    pageObserverRef.current = new IntersectionObserver(
+    const observer = new IntersectionObserver(
       (entries) => {
         const visible = entries
           .filter((e) => e.isIntersecting)
@@ -464,25 +493,38 @@ export default function PdfViewer({
           pageUpdateTimeoutRef.current = setTimeout(() => setPage(current), 40);
         }
       },
-      {
-        root,
-        rootMargin: "-10% 0px -55% 0px",
-        threshold: [0.15, 0.35, 0.55],
-      }
+      { root, rootMargin: "-10% 0px -55% 0px", threshold: [0.15, 0.35, 0.55] }
     );
 
-    pages.forEach((p) => pageObserverRef.current.observe(p));
-    return () => pageObserverRef.current?.disconnect();
-  }, [ready, zoom, renderLimit, allowedMaxPage]);
+    pageObserverRef.current = observer;
+    pages.forEach((p) => observer.observe(p));
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [ready, zoom, renderLimit]);
 
   /* ==================================================
      NOTES: LOAD
      ================================================== */
   useEffect(() => {
+    const ctrl = new AbortController();
+
     api
-      .get(`/legal-document-notes/document/${documentId}`)
-      .then((res) => setNotes(res.data || []))
-      .catch(() => {});
+      .get(`/legal-document-notes/document/${documentId}`, { signal: ctrl.signal })
+      .then((res) => {
+        if (ctrl.signal.aborted) return;
+        setNotes(res.data || []);
+      })
+      .catch((err) => {
+        if (ctrl.signal.aborted) return;
+        console.warn("notes load failed:", err);
+        setNotes([]);
+      });
+
+    return () => {
+      ctrl.abort();
+    };
   }, [documentId]);
 
   /* ==================================================
@@ -494,8 +536,8 @@ export default function PdfViewer({
     setShowPageJump(true);
   }, [page]);
 
-  function submitPageJump() {
-    const raw = (pageJumpValue || "").trim();
+  const submitPageJump = useCallback(() => {
+    const raw = String(pageJumpValue || "").trim();
     const n = Number(raw);
     const max = allowedMaxPage ?? numPages ?? 1;
 
@@ -512,21 +554,23 @@ export default function PdfViewer({
     setShowPageJump(false);
     setPageJumpError("");
     safeSetPage(n);
-  }
+  }, [pageJumpValue, allowedMaxPage, numPages, safeSetPage]);
 
   useEffect(() => {
     if (!showPageJump) return;
+
     const t = setTimeout(() => {
       const el = pageJumpInputRef.current;
       if (el) {
         el.focus();
         try {
           el.select();
-        } catch {
-          // ignore
+        } catch (err) {
+          console.warn("page jump select failed:", err);
         }
       }
     }, 0);
+
     return () => clearTimeout(t);
   }, [showPageJump]);
 
@@ -536,40 +580,32 @@ export default function PdfViewer({
   useEffect(() => {
     function onKeyDown(e) {
       const tag = document.activeElement?.tagName?.toLowerCase();
-      const typing =
-        tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable;
+      const typing = tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable;
 
       if (typing) return;
 
       if (e.key === "ArrowLeft") {
         e.preventDefault();
         safeSetPage(Math.max(1, page - 1));
-      }
-      if (e.key === "ArrowRight") {
+      } else if (e.key === "ArrowRight") {
         e.preventDefault();
         safeSetPage(Math.min((allowedMaxPage ?? numPages) || 1, page + 1));
-      }
-      if (e.key === "n" || e.key === "N") {
+      } else if (e.key === "n" || e.key === "N") {
         e.preventDefault();
         setShowNotes((v) => !v);
-      }
-      if (e.key === "d" || e.key === "D") {
+      } else if (e.key === "d" || e.key === "D") {
         e.preventDefault();
         setDarkMode((v) => !v);
-      }
-      if (e.key === "+" || e.key === "=") {
+      } else if (e.key === "+" || e.key === "=") {
         e.preventDefault();
         setZoom((z) => Math.min(1.6, Math.round((z + 0.1) * 10) / 10));
-      }
-      if (e.key === "-" || e.key === "_") {
+      } else if (e.key === "-" || e.key === "_") {
         e.preventDefault();
         setZoom((z) => Math.max(0.7, Math.round((z - 0.1) * 10) / 10));
-      }
-      if (e.key === "g" || e.key === "G") {
+      } else if (e.key === "g" || e.key === "G") {
         e.preventDefault();
         openPageJump();
-      }
-      if (e.key === "Escape") {
+      } else if (e.key === "Escape") {
         if (showNoteBox) setShowNoteBox(false);
         if (showNotes) setShowNotes(false);
         if (showPageJump) setShowPageJump(false);
@@ -583,7 +619,7 @@ export default function PdfViewer({
   /* ==================================================
      Highlight capture
      ================================================== */
-  function handleMouseUp() {
+  const handleMouseUp = useCallback(() => {
     setTimeout(() => {
       if (isUserScrollingRef.current) return;
 
@@ -594,7 +630,6 @@ export default function PdfViewer({
       if (!text || text.length < 3) return;
 
       const range = selection.getRangeAt(0);
-
       const wrapper = getPageWrapperFromSelection(selection);
       if (!wrapper) return;
 
@@ -616,18 +651,15 @@ export default function PdfViewer({
       try {
         const textLayerEl = wrapper.querySelector(".react-pdf__Page__textContent");
         if (textLayerEl) offsets = computeOffsetsFromRange(textLayerEl, range);
-      } catch {
-        // best-effort only
+      } catch (err) {
+        console.warn("offset compute failed (non-blocking):", err);
       }
 
       setSelectedText(text);
       setNoteContent("");
 
       setHighlightMeta({
-        id:
-          typeof crypto !== "undefined" && crypto.randomUUID
-            ? crypto.randomUUID()
-            : String(Date.now()),
+        id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
         page: pageNumber,
         text,
         rects,
@@ -640,11 +672,11 @@ export default function PdfViewer({
 
       try {
         selection.removeAllRanges();
-      } catch {
-        // ignore
+      } catch (err) {
+        console.warn("selection clear failed:", err);
       }
     }, 30);
-  }
+  }, []);
 
   /* ==================================================
      jumpToPage (for Notes + ToC)
@@ -678,6 +710,7 @@ export default function PdfViewer({
     [allowedMaxPage, numPages, scrollToPage, scheduleComputePageFromScroll]
   );
 
+  // expose API to parent (Reader ToC uses this)
   useEffect(() => {
     if (typeof onRegisterApi !== "function") return;
 
@@ -686,29 +719,28 @@ export default function PdfViewer({
     return () => {
       try {
         onRegisterApi(null);
-      } catch {
-        // ignore
+      } catch (err) {
+        console.warn("onRegisterApi(null) failed:", err);
       }
     };
   }, [onRegisterApi, jumpToPage]);
 
-  function hasOverlapOnPage() {
-    return false;
-  }
+  const focusNote = useCallback(
+    (noteId) => {
+      setShowNotes(true);
+      setActiveNoteId(noteId);
 
-  const focusNote = useCallback((noteId) => {
-    setShowNotes(true);
-    setActiveNoteId(noteId);
-
-    setTimeout(() => {
-      const el = noteRefs.current[noteId];
-      if (el && typeof el.scrollIntoView === "function") {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-        setFlashNoteId(noteId);
-        setTimeout(() => setFlashNoteId(null), 900);
-      }
-    }, 50);
-  }, []);
+      setTimeout(() => {
+        const el = noteRefs.current[noteId];
+        if (el && typeof el.scrollIntoView === "function") {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          setFlashNoteId(noteId);
+          setTimeout(() => setFlashNoteId(null), 900);
+        }
+      }, 50);
+    },
+    [setShowNotes]
+  );
 
   const attachHighlightClickHandler = useCallback(
     (textLayerEl) => {
@@ -744,13 +776,7 @@ export default function PdfViewer({
 
       for (const n of pageNotes) {
         if (n.charOffsetStart != null && n.charOffsetEnd != null) {
-          applyHighlightByOffsets(
-            textLayer,
-            n.charOffsetStart,
-            n.charOffsetEnd,
-            n.id,
-            n.highlightColor || "yellow"
-          );
+          applyHighlightByOffsets(textLayer, n.charOffsetStart, n.charOffsetEnd, n.id, n.highlightColor || "yellow");
         }
       }
 
@@ -766,15 +792,24 @@ export default function PdfViewer({
     for (let p = 1; p <= max; p++) applyHighlightsForPage(p);
   }, [ready, renderLimit, allowedMaxPage, applyHighlightsForPage]);
 
+  const hasOverlapOnPage = useCallback(() => false, []);
+
+  const resetNoteDraft = useCallback(() => {
+    setShowNoteBox(false);
+    setSelectedText("");
+    setNoteContent("");
+    setHighlightMeta(null);
+  }, []);
+
   async function saveNote() {
+    if (!highlightMeta) return;
+
+    if (hasOverlapOnPage(highlightMeta)) {
+      alert("A highlight already exists in that selected range.");
+      return;
+    }
+
     try {
-      if (!highlightMeta) return;
-
-      if (hasOverlapOnPage(highlightMeta)) {
-        alert("A highlight already exists in that selected range.");
-        return;
-      }
-
       const finalContent =
         noteContent && noteContent.trim().length > 0 ? noteContent.trim() : highlightMeta.text;
 
@@ -810,6 +845,7 @@ export default function PdfViewer({
       ]);
 
       setTimeout(() => applyHighlightsForPage(highlightMeta.page), 80);
+      resetNoteDraft();
     } catch (err) {
       console.error("Failed to save note:", err);
       alert(
@@ -817,19 +853,14 @@ export default function PdfViewer({
           JSON.stringify(err?.response?.data) ||
           "Failed to save note. Please try again."
       );
-      return;
-    } finally {
-      setShowNoteBox(false);
-      setSelectedText("");
-      setNoteContent("");
-      setHighlightMeta(null);
+      // still close the modal to match your previous behavior
+      resetNoteDraft();
     }
   }
 
   async function saveEdit(noteId) {
     try {
       await api.put(`/legal-document-notes/${noteId}`, { content: editingContent });
-
       setNotes((ns) => ns.map((n) => (n.id === noteId ? { ...n, content: editingContent } : n)));
     } catch (err) {
       alert(
@@ -837,14 +868,17 @@ export default function PdfViewer({
           JSON.stringify(err?.response?.data) ||
           "Failed to update note."
       );
-    } finally {
-      setEditingNoteId(null);
-      setEditingContent("");
     }
+
+    // no finally (eslint), but always reset (same behavior)
+    setEditingNoteId(null);
+    setEditingContent("");
   }
 
   async function deleteNote(noteId) {
-    if (!confirm("Delete this note?")) return;
+
+    const ok = confirm("Delete this note?");
+    if (!ok) return;
 
     try {
       await api.delete(`/legal-document-notes/${noteId}`);
@@ -902,21 +936,25 @@ export default function PdfViewer({
               className="icon-btn"
               onClick={() => setZoom((z) => Math.max(0.7, Math.round((z - 0.1) * 10) / 10))}
               title="Zoom out (-)"
+              type="button"
             >
               −
             </button>
+
             <div className="reader-chip" title="Zoom">
               {Math.round(zoom * 100)}%
             </div>
+
             <button
               className="icon-btn"
               onClick={() => setZoom((z) => Math.min(1.6, Math.round((z + 0.1) * 10) / 10))}
               title="Zoom in (+)"
+              type="button"
             >
               +
             </button>
 
-            <button className="icon-btn" onClick={openPageJump} title="Go to page (G)">
+            <button className="icon-btn" onClick={openPageJump} title="Go to page (G)" type="button">
               🔎
             </button>
 
@@ -924,6 +962,7 @@ export default function PdfViewer({
               className="icon-btn"
               onClick={() => setDarkMode((d) => !d)}
               title={darkMode ? "Light mode (D)" : "Dark mode (D)"}
+              type="button"
             >
               {darkMode ? "☀️" : "🌙"}
             </button>
@@ -932,6 +971,7 @@ export default function PdfViewer({
               className={`icon-btn ${showNotes ? "active" : ""}`}
               onClick={() => setShowNotes((v) => !v)}
               title="Notes (N)"
+              type="button"
             >
               📝
             </button>
@@ -1061,10 +1101,10 @@ export default function PdfViewer({
               setNumPages(null);
               setLoadError("Unable to load document source.");
             }}
-            onLoadSuccess={({ numPages }) => {
-              setNumPages(numPages);
+            onLoadSuccess={({ numPages: loadedPages }) => {
+              setNumPages(loadedPages);
 
-              const allowed = maxAllowedPage ? Math.min(maxAllowedPage, numPages) : numPages;
+              const allowed = maxAllowedPage ? Math.min(maxAllowedPage, loadedPages) : loadedPages;
 
               let initial = startPage || 1;
               if (pendingJumpRef.current != null) {
@@ -1102,7 +1142,7 @@ export default function PdfViewer({
                     ref={(el) => registerPageEl(pageNumber, el)}
                   >
                     <svg className="highlight-layer" width="100%" height="100%">
-                      {(highlightsByPage?.[pageNumber] || []).map((h) =>
+                      {(highlightsByPage?.[pageNumber] || []).flatMap((h) =>
                         (h.rects || []).map((r, idx) => (
                           <rect
                             key={`${h.id}-${idx}`}
@@ -1148,11 +1188,12 @@ export default function PdfViewer({
           onClick={() => safeSetPage(Math.max(1, page - 1))}
           disabled={page <= 1}
           title="Previous page (←)"
+          type="button"
         >
           ◀
         </button>
 
-        <button className="fab-mid" onClick={openPageJump} title="Go to page (G)">
+        <button className="fab-mid" onClick={openPageJump} title="Go to page (G)" type="button">
           {page} / {numPages || "—"}
         </button>
 
@@ -1161,6 +1202,7 @@ export default function PdfViewer({
           onClick={() => safeSetPage(Math.min((allowedMaxPage ?? numPages) || 1, page + 1))}
           disabled={numPages ? page >= (allowedMaxPage ?? numPages) : true}
           title="Next page (→)"
+          type="button"
         >
           ▶
         </button>
@@ -1236,19 +1278,11 @@ export default function PdfViewer({
             />
 
             <div className="note-actions">
-              <button
-                className="reader-btn secondary"
-                onClick={() => {
-                  setShowNoteBox(false);
-                  setSelectedText("");
-                  setNoteContent("");
-                  setHighlightMeta(null);
-                }}
-              >
+              <button className="reader-btn secondary" onClick={resetNoteDraft} type="button">
                 Cancel
               </button>
 
-              <button className="reader-btn" onClick={saveNote}>
+              <button className="reader-btn" onClick={saveNote} type="button">
                 Save
               </button>
             </div>
@@ -1261,7 +1295,7 @@ export default function PdfViewer({
       <div className={`notes-sidebar ${showNotes ? "open" : "closed"}`}>
         <div className="notes-header">
           <h3>Notes</h3>
-          <button onClick={() => setShowNotes(false)} title="Close (Esc)">
+          <button onClick={() => setShowNotes(false)} title="Close (Esc)" type="button">
             ✕
           </button>
         </div>
@@ -1289,11 +1323,7 @@ export default function PdfViewer({
                       if (el) noteRefs.current[note.id] = el;
                     }}
                   >
-                    <div
-                      className="note-meta"
-                      onClick={() => jumpToPage(note.pageNumber)}
-                      style={{ cursor: "pointer" }}
-                    >
+                    <div className="note-meta" onClick={() => jumpToPage(note.pageNumber)} style={{ cursor: "pointer" }}>
                       <span className={`note-color-dot ${note.highlightColor || "yellow"}`} />
                       Page {note.pageNumber ?? "—"}
                     </div>
@@ -1306,12 +1336,15 @@ export default function PdfViewer({
                           onChange={(e) => setEditingContent(e.target.value)}
                         />
                         <div className="note-actions-inline">
-                          <button onClick={() => saveEdit(note.id)}>💾</button>
+                          <button onClick={() => saveEdit(note.id)} type="button">
+                            💾
+                          </button>
                           <button
                             onClick={() => {
                               setEditingNoteId(null);
                               setEditingContent("");
                             }}
+                            type="button"
                           >
                             ✕
                           </button>
@@ -1326,10 +1359,13 @@ export default function PdfViewer({
                               setEditingNoteId(note.id);
                               setEditingContent(note.content);
                             }}
+                            type="button"
                           >
                             ✏️
                           </button>
-                          <button onClick={() => deleteNote(note.id)}>🗑️</button>
+                          <button onClick={() => deleteNote(note.id)} type="button">
+                            🗑️
+                          </button>
                         </div>
                       </>
                     )}
