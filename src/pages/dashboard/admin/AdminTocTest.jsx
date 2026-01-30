@@ -1,596 +1,513 @@
+// src/pages/dashboard/admin/AdminTocEditor.jsx
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Papa from "papaparse";
+import api from "../../../api/client";
+import "../../../styles/adminTocEditor.css";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
-import {
-  adminCreateTocEntry,
-  adminDeleteTocEntry,
-  adminGetDocumentToc,
-  adminImportToc,
-  adminUpdateTocEntry,
-} from "../../../api/toc";
+/* =========================================================
+   API (Admin ToC)
+   Controller route:
+   /api/admin/legal-documents/{id:int}/toc
+========================================================= */
+function adminTocBase(docId) {
+  return `/admin/legal-documents/${docId}/toc`;
+}
 
-function prettyJson(obj) {
-  try {
-    return JSON.stringify(obj, null, 2);
-  } catch {
-    return "";
+async function adminGetDocsForDropdown() {
+  // Admin-only list used in your admin UI
+  const res = await api.get(`/legal-documents/admin`);
+  return res.data ?? [];
+}
+
+async function publicGetDocById(id) {
+  // Your controller has Kind in DTO here:
+  // GET /api/legal-documents/{id}
+  const res = await api.get(`/legal-documents/${id}`);
+  return res.data ?? null;
+}
+
+async function adminGetTocTree(docId) {
+  const res = await api.get(adminTocBase(docId));
+  return res.data?.items ?? [];
+}
+
+async function adminImportToc(docId, payload) {
+  const res = await api.post(`${adminTocBase(docId)}/import`, payload);
+  return res.data;
+}
+
+/* =========================================================
+   Helpers
+========================================================= */
+function toInt(v, fallback = null) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.trunc(n) : fallback;
+}
+
+function norm(s) {
+  return String(s ?? "").trim();
+}
+
+function csvKey(s) {
+  return String(s ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[_-]+/g, "");
+}
+
+function uuid() {
+  return Math.random().toString(16).slice(2) + Date.now().toString(16);
+}
+
+function parentKeyFromOutlineKey(k) {
+  const s = norm(k);
+  if (!s) return "";
+  const parts = s.split(".").map((x) => x.trim()).filter(Boolean);
+  if (parts.length <= 1) return "";
+  return parts.slice(0, -1).join(".");
+}
+
+/**
+ * ✅ Numeric enums (backend):
+ * TocEntryLevel: Chapter=1, Section=2, Subsection=3
+ * TocTargetType: PageRange=1, Anchor=2
+ */
+function levelFromDepth(depth) {
+  if (depth <= 1) return 1; // Chapter
+  if (depth === 2) return 2; // Section
+  return 3; // Subsection
+}
+
+function inferLevelFromKey(k) {
+  const depth = norm(k).split(".").filter(Boolean).length;
+  return levelFromDepth(depth);
+}
+
+function targetTypeFromValues({ anchorId, startPage, endPage }) {
+  if (norm(anchorId)) return 2; // Anchor
+  if (Number.isFinite(Number(startPage)) || Number.isFinite(Number(endPage))) return 1; // PageRange
+  return 1;
+}
+
+function parseLevelCell(v, fallbackLevel = 2) {
+  const s = norm(v);
+  if (!s) return fallbackLevel;
+
+  // numeric in csv
+  const n = Number(s);
+  if (Number.isFinite(n)) {
+    const i = Math.trunc(n);
+    if (i === 1 || i === 2 || i === 3) return i;
   }
+
+  // label in csv
+  const t = s.toLowerCase();
+  if (t === "chapter") return 1;
+  if (t === "section") return 2;
+  if (t === "subsection" || t === "sub-section" || t === "sub section") return 3;
+
+  return fallbackLevel;
 }
 
-function normTargetType(v) {
-  // backend enum: PageRange=1, Anchor=2
-  const n = Number(v);
-  return n === 2 ? 2 : 1;
+function parseTargetTypeCell(v, fallbackType = 1) {
+  const s = norm(v);
+  if (!s) return fallbackType;
+
+  const n = Number(s);
+  if (Number.isFinite(n)) {
+    const i = Math.trunc(n);
+    if (i === 1 || i === 2) return i;
+  }
+
+  const t = s.toLowerCase();
+  if (t.includes("anchor")) return 2;
+  if (t.includes("page")) return 1;
+
+  return fallbackType;
 }
 
-function normLevel(v) {
-  // backend enum: Chapter=1, Section=2, Subsection=3
-  const n = Number(v);
-  if (n === 1 || n === 2 || n === 3) return n;
-  return 2;
-}
+/* =========================================================
+   CSV -> TocImportItem[]
+   Expected columns (case-insensitive, spaces ok):
+   Key, Title, StartPage, EndPage, AnchorId, PageLabel, Notes, Level, TargetType, Order
+========================================================= */
+function parseTocCsvToImportItems(csvText) {
+  const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true, dynamicTyping: false });
+  if (parsed.errors?.length) {
+    throw new Error(parsed.errors[0]?.message || "CSV parse error");
+  }
 
-export default function AdminTocTest() {
-  const [sp, setSp] = useSearchParams();
+  const rows = Array.isArray(parsed.data) ? parsed.data : [];
+  if (!rows.length) return { items: [], issues: ["No rows found in CSV."] };
 
-  const docId = useMemo(() => {
-    const raw = (sp.get("docId") || "").trim();
-    const n = Number(raw);
-    return Number.isFinite(n) && n > 0 ? n : null;
-  }, [sp]);
+  const keyToClientId = new Map();
+  const issues = [];
 
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
+  // First pass: assign clientIds
+  const temp = [];
+  for (let i = 0; i < rows.length; i++) {
+    const raw = rows[i] || {};
+    const m = {};
+    for (const [k, v] of Object.entries(raw)) m[csvKey(k)] = v;
 
-  const [tree, setTree] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
+    const outlineKey = norm(m["key"] || m["number"] || "");
+    const title = norm(m["title"] || m["name"] || "");
 
-  // Expand/collapse state (ids)
-  const [openIds, setOpenIds] = useState(() => new Set());
+    if (!title) {
+      issues.push(`Row ${i + 2}: Missing Title.`);
+      continue;
+    }
 
-  // Upload modal (simple textarea)
-  const [showUpload, setShowUpload] = useState(false);
-  const [mode, setMode] = useState("replace"); // replace | append
-  const [payloadText, setPayloadText] = useState("");
+    const clientId = uuid();
+    if (outlineKey) keyToClientId.set(outlineKey, clientId);
 
-  // Add/Edit modal
-  const [showEditor, setShowEditor] = useState(false);
-  const [editorMode, setEditorMode] = useState("create"); // create | edit
-  const [editorParentId, setEditorParentId] = useState(null);
-  const [editorEntryId, setEditorEntryId] = useState(null);
+    temp.push({ __row: i + 2, __outlineKey: outlineKey, __clientId: clientId, __map: m });
+  }
 
-  const [form, setForm] = useState({
-    title: "",
-    level: 2,
-    targetType: 1,
-    startPage: "",
-    endPage: "",
-    anchorId: "",
-    pageLabel: "",
-    notes: "",
+  // Second pass: build payload items
+  const payloadItems = temp.map((r, idx) => {
+    const m = r.__map;
+
+    const outlineKey = r.__outlineKey;
+    const parentOutlineKey = parentKeyFromOutlineKey(outlineKey);
+    const parentClientId = parentOutlineKey ? keyToClientId.get(parentOutlineKey) || null : null;
+
+    const title = norm(m["title"] || m["name"] || "");
+    const notes = norm(m["notes"] || "");
+    const pageLabel = norm(m["pagelabel"] || "");
+
+    const startPage = toInt(m["startpage"], null);
+    const endPage = toInt(m["endpage"], null);
+    const anchorId = norm(m["anchorid"] || "");
+
+    const inferredLevel = outlineKey ? inferLevelFromKey(outlineKey) : 2;
+    const level = parseLevelCell(m["level"], inferredLevel);
+
+    const inferredTargetType = targetTypeFromValues({ anchorId, startPage, endPage });
+    const targetType = parseTargetTypeCell(m["targettype"], inferredTargetType);
+
+    const order = toInt(m["order"], null);
+    const orderFinal = Number.isFinite(order) ? order : idx;
+
+    return {
+      clientId: r.__clientId,
+      parentClientId: parentClientId || null,
+      title,
+      level, // ✅ numeric enum
+      order: orderFinal,
+      targetType, // ✅ numeric enum
+      startPage,
+      endPage,
+      anchorId: anchorId || null,
+      pageLabel: pageLabel || null,
+      notes: notes || null,
+    };
   });
 
-const findNodeById = useCallback((nodes, id) => {
-  for (const n of nodes || []) {
-    if (n.id === id) return n;
-    const hit = findNodeById(n.children || [], id);
-    if (hit) return hit;
-  }
-  return null;
-}, []);
+  return { items: payloadItems, issues };
+}
 
+/* =========================================================
+   Page
+========================================================= */
+export default function AdminTocEditor() {
+  const [docs, setDocs] = useState([]);
+  const [docId, setDocId] = useState("");
+  const [selectedKind, setSelectedKind] = useState(null); // 1=Standard, 2=Report
+  const [loadingDocs, setLoadingDocs] = useState(false);
 
-const selectedNode = useMemo(() => {
-  if (!selectedId) return null;
-  return findNodeById(tree, selectedId);
-}, [tree, selectedId, findNodeById]);
+  const [loadingToc, setLoadingToc] = useState(false);
+  const [tree, setTree] = useState([]);
 
+  const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
 
-  async function load() {
-    if (!docId) {
-      setTree([]);
-      setSelectedId(null);
-      return;
-    }
-    setLoading(true);
-    setErr("");
+  // Upload modal state
+  const [showUpload, setShowUpload] = useState(false);
+  const [importMode, setImportMode] = useState("replace"); // "replace" | "append"
+  const [csvFileName, setCsvFileName] = useState("");
+  const [csvPreviewItems, setCsvPreviewItems] = useState([]);
+  const [csvPreviewIssues, setCsvPreviewIssues] = useState([]);
+  const fileInputRef = useRef(null);
+
+  const docOptions = useMemo(() => {
+    return (docs || []).map((d) => ({
+      id: d.id ?? d.Id,
+      title: d.title ?? d.Title,
+      status: d.status ?? d.Status,
+      pageCount: d.pageCount ?? d.PageCount,
+      // Might not exist on this list endpoint — we handle it via GetById on selection
+      kind: d.kind ?? d.Kind,
+    }));
+  }, [docs]);
+
+  const loadDocs = useCallback(async () => {
+    setError("");
+    setInfo("");
+    setLoadingDocs(true);
     try {
-      const res = await adminGetDocumentToc(docId);
-      const items = res?.items ?? [];
-      setTree(items);
-
-      // Auto-open roots for nicer UX
-      const nextOpen = new Set(openIds);
-      for (const r of items) nextOpen.add(r.id);
-      setOpenIds(nextOpen);
-
-      // Keep selection if possible
-      if (selectedId) {
-        const still = findNodeById(items, selectedId);
-        if (!still) setSelectedId(null);
+      const list = await adminGetDocsForDropdown();
+      setDocs(Array.isArray(list) ? list : []);
+      if (!Array.isArray(list) || list.length === 0) {
+        setInfo("No documents returned from /api/legal-documents/admin.");
       }
     } catch (e) {
-      setErr(e?.response?.data?.message || e?.message || "Failed to load ToC.");
-      setTree([]);
-      setSelectedId(null);
+      setError(e?.response?.data?.message || String(e?.message || e));
     } finally {
-      setLoading(false);
+      setLoadingDocs(false);
     }
-  }
+  }, []);
+
+  const loadToc = useCallback(async (id) => {
+    const did = Number(id);
+    if (!did) {
+      setTree([]);
+      return;
+    }
+
+    setError("");
+    setInfo("");
+    setLoadingToc(true);
+
+    try {
+      // ✅ Check Kind via your GetById that includes Kind
+      const doc = await publicGetDocById(did);
+      const kind = doc?.kind ?? doc?.Kind ?? null;
+      setSelectedKind(kind);
+
+      // Block Report
+      if (kind === 2) {
+        setTree([]);
+        setInfo("This document is Kind=Report. ToC editor is for Standard documents only.");
+        return;
+      }
+
+      const t = await adminGetTocTree(did);
+      setTree(Array.isArray(t) ? t : []);
+      if (!t || t.length === 0) setInfo("No ToC entries yet.");
+    } catch (e) {
+      setError(e?.response?.data?.message || e?.message || "Failed to load ToC.");
+    } finally {
+      setLoadingToc(false);
+    }
+  }, []);
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [docId]);
+    loadDocs();
+  }, [loadDocs]);
 
-  function toggleOpen(id) {
-    setOpenIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function openCreate({ parentId }) {
-    setErr("");
-    setEditorMode("create");
-    setEditorParentId(parentId ?? null);
-    setEditorEntryId(null);
-    setForm({
-      title: "",
-      level: parentId ? 2 : 1, // default: root=Chapter, child=Section
-      targetType: 1,
-      startPage: "",
-      endPage: "",
-      anchorId: "",
-      pageLabel: "",
-      notes: "",
-    });
-    setShowEditor(true);
-  }
-
-  function openEdit(node) {
-    if (!node) return;
-    setErr("");
-    setEditorMode("edit");
-    setEditorParentId(node.parentId ?? null);
-    setEditorEntryId(node.id);
-
-    setForm({
-      title: node.title || "",
-      level: normLevel(node.level),
-      targetType: normTargetType(node.targetType),
-      startPage: node.startPage ?? "",
-      endPage: node.endPage ?? "",
-      anchorId: node.anchorId ?? "",
-      pageLabel: node.pageLabel ?? "",
-      notes: node.notes ?? "",
-    });
-
-    setShowEditor(true);
-  }
-
-  async function saveEditor() {
-    if (!docId) return;
-
-    const payload = {
-      title: String(form.title || "").trim(),
-      level: normLevel(form.level),
-      targetType: normTargetType(form.targetType),
-      startPage:
-        form.startPage === "" || form.startPage === null ? null : Number(form.startPage),
-      endPage: form.endPage === "" || form.endPage === null ? null : Number(form.endPage),
-      anchorId: String(form.anchorId || "").trim() || null,
-      pageLabel: String(form.pageLabel || "").trim() || null,
-      notes: String(form.notes || "").trim() || null,
-    };
-
-    if (!payload.title) {
-      setErr("Title is required.");
-      return;
+  useEffect(() => {
+    if (docId) loadToc(docId);
+    else {
+      setTree([]);
+      setSelectedKind(null);
     }
+  }, [docId, loadToc]);
 
-    // Basic client-side checks (server also validates)
-    if (payload.targetType === 1) {
-      if (!payload.startPage || payload.startPage <= 0) {
-        setErr("StartPage is required and must be > 0 for PageRange.");
-        return;
-      }
-      if (payload.endPage && payload.endPage < payload.startPage) {
-        setErr("EndPage cannot be less than StartPage.");
-        return;
-      }
-    } else {
-      if (!payload.anchorId) {
-        setErr("AnchorId is required for Anchor target type.");
-        return;
-      }
-      // Clear pages if anchor
-      payload.startPage = null;
-      payload.endPage = null;
-    }
+  async function onReload() {
+    await loadToc(docId);
+  }
 
-    setLoading(true);
-    setErr("");
+  function resetCsvPreview() {
+    setCsvFileName("");
+    setCsvPreviewItems([]);
+    setCsvPreviewIssues([]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function handleCsvFile(file) {
+    setError("");
+    setInfo("");
+    resetCsvPreview();
+
     try {
-      if (editorMode === "create") {
-        const createPayload = {
-          ...payload,
-          parentId: editorParentId,
-        };
-        await adminCreateTocEntry(docId, createPayload);
-      } else {
-        await adminUpdateTocEntry(docId, editorEntryId, payload);
-      }
-
-      setShowEditor(false);
-      await load();
+      const text = await file.text();
+      const out = parseTocCsvToImportItems(text);
+      setCsvFileName(file.name || "toc.csv");
+      setCsvPreviewItems(out.items || []);
+      setCsvPreviewIssues(out.issues || []);
+      setInfo(`CSV loaded: ${out.items?.length || 0} row(s) ready for import preview.`);
     } catch (e) {
-      setErr(e?.response?.data?.message || e?.message || "Save failed.");
-    } finally {
-      setLoading(false);
+      setError(String(e?.message || e));
     }
   }
 
-  async function handleDelete() {
-    if (!docId || !selectedNode) return;
-    const ok = window.confirm(`Delete "${selectedNode.title}"?\n\n(Children must be deleted first.)`);
+  async function confirmImportCsv() {
+    const did = Number(docId);
+    if (!did) return setError("Pick a document first.");
+    if (selectedKind === 2) return setError("This is Kind=Report. Import is disabled for Report.");
+    if (!csvPreviewItems.length) return setError("No CSV items loaded.");
+
+    const ok = window.confirm(
+      `Import ${csvPreviewItems.length} ToC item(s) to document #${did} using mode "${importMode}"?`
+    );
     if (!ok) return;
 
-    setLoading(true);
-    setErr("");
+    setError("");
+    setInfo("");
     try {
-      await adminDeleteTocEntry(docId, selectedNode.id);
-      setSelectedId(null);
-      await load();
-    } catch (e) {
-      setErr(e?.response?.data?.message || e?.message || "Delete failed.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleImport() {
-    if (!docId) return;
-
-    let parsed;
-    try {
-      parsed = JSON.parse(payloadText || "{}");
-    } catch {
-      setErr("Invalid JSON. Paste valid JSON payload.");
-      return;
-    }
-
-    const finalPayload =
-      parsed?.items && parsed?.mode
-        ? parsed
-        : {
-            mode,
-            items: Array.isArray(parsed) ? parsed : parsed?.items || [],
-          };
-
-    if (!finalPayload?.items?.length) {
-      setErr("Import payload has no items.");
-      return;
-    }
-
-    setLoading(true);
-    setErr("");
-    try {
-      await adminImportToc(docId, finalPayload);
+      await adminImportToc(did, { mode: importMode, items: csvPreviewItems });
       setShowUpload(false);
-      setPayloadText("");
-      await load();
+      resetCsvPreview();
+      await loadToc(did);
+      setInfo("✅ Imported ToC successfully.");
     } catch (e) {
-      setErr(e?.response?.data?.message || e?.message || "Import failed.");
-    } finally {
-      setLoading(false);
+      setError(e?.response?.data?.message || String(e?.message || e));
     }
   }
 
-  const canEdit = Boolean(selectedNode);
-  const canAddChild = Boolean(selectedNode);
-  const canDelete = Boolean(selectedNode);
-
   return (
-    <div style={{ padding: 18 }}>
-      {/* Header */}
-      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <h2 style={{ margin: 0 }}>Admin • ToC Editor (Test)</h2>
-
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <label style={{ fontSize: 13, opacity: 0.75 }}>docId:</label>
-          <input
-            value={docId ?? ""}
-            onChange={(e) => setSp({ docId: e.target.value })}
-            placeholder="e.g. 123"
-            style={{
-              padding: "8px 10px",
-              borderRadius: 10,
-              border: "1px solid rgba(15,23,42,0.18)",
-              minWidth: 140,
-            }}
-          />
+    <div className="laTocPage">
+      <div className="laTocTop">
+        <div>
+          <h1 className="laTocH1">Admin · ToC Editor (Test)</h1>
+          <div className="laTocSub">
+            Uses <b>GET /api/admin/legal-documents/:id/toc</b> and{" "}
+            <b>POST /api/admin/legal-documents/:id/toc/import</b>.
+          </div>
         </div>
 
-        <button
-          type="button"
-          onClick={load}
-          disabled={!docId || loading}
-          style={btnStyle("ghost")}
-        >
-          {loading ? "Loading..." : "Reload"}
-        </button>
+        <div className="laTocActions">
+          <button className="laBtn" type="button" onClick={loadDocs} disabled={loadingDocs}>
+            {loadingDocs ? "Loading…" : "Reload Docs"}
+          </button>
 
-        <button
-          type="button"
-          onClick={() => openCreate({ parentId: null })}
-          disabled={!docId || loading}
-          style={btnStyle("primary")}
-        >
-          + Add Root
-        </button>
+          <button className="laBtn" type="button" onClick={onReload} disabled={!docId || loadingToc}>
+            {loadingToc ? "Loading…" : "Reload ToC"}
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setShowUpload(true)}
-          disabled={!docId || loading}
-          style={btnStyle("ghost")}
-        >
-          Upload ToC (JSON)
-        </button>
+          <button
+            className="laBtnPrimary"
+            type="button"
+            onClick={() => setShowUpload(true)}
+            disabled={!docId || selectedKind === 2}
+            title={!docId ? "Pick a document first" : selectedKind === 2 ? "Report docs not supported" : "Upload CSV"}
+          >
+            Upload ToC (CSV)
+          </button>
+        </div>
       </div>
 
-      {err && (
-        <div style={alertStyle}>
-          {err}
-        </div>
+      {(error || info) && (
+        <div className={`laTocAlert ${error ? "err" : "ok"}`}>{error || info}</div>
       )}
 
-      {/* Body */}
-      <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "420px 1fr", gap: 14 }}>
-        {/* Left: Tree */}
-        <div style={cardStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-            <div>
-              <div style={{ fontSize: 13, opacity: 0.75 }}>ToC Tree</div>
-              <div style={{ fontSize: 12, opacity: 0.6, marginTop: 2 }}>
-                Click item to select • Use chevron to expand/collapse
-              </div>
-            </div>
+      <div className="laTocCard">
+        <div className="laTocRow">
+          <label className="laTocLabel">Legal Document</label>
+          <select className="laTocSelect" value={docId} onChange={(e) => setDocId(e.target.value)}>
+            <option value="">— Select a document —</option>
+            {docOptions.map((d) => (
+              <option key={d.id} value={d.id}>
+                #{d.id} · {d.title}
+                {d.pageCount ? ` · ${d.pageCount}p` : ""}
+                {d.status ? ` · ${d.status}` : ""}
+              </option>
+            ))}
+          </select>
 
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                type="button"
-                onClick={() => openCreate({ parentId: selectedNode?.id ?? null })}
-                disabled={!docId || loading || !canAddChild}
-                style={btnStyle("ghostSmall")}
-                title="Add child under selected"
-              >
-                + Child
-              </button>
-              <button
-                type="button"
-                onClick={() => openEdit(selectedNode)}
-                disabled={!docId || loading || !canEdit}
-                style={btnStyle("ghostSmall")}
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={!docId || loading || !canDelete}
-                style={btnStyle("dangerSmall")}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-
-          <div style={{ marginTop: 10 }}>
-            {!docId ? (
-              <div style={{ opacity: 0.7 }}>Enter docId to load ToC.</div>
-            ) : !tree?.length ? (
-              <div style={{ opacity: 0.7 }}>No ToC entries yet.</div>
-            ) : (
-              <TocTree
-                items={tree}
-                depth={0}
-                openIds={openIds}
-                onToggleOpen={toggleOpen}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-              />
-            )}
+          <div className="laTocHint">
+            Kind:{" "}
+            <b>
+              {selectedKind === 1 ? "Standard" : selectedKind === 2 ? "Report" : "—"}
+            </b>{" "}
+            (Report is blocked in this editor)
           </div>
         </div>
 
-        {/* Right: Details + raw json */}
-        <div style={{ display: "grid", gap: 14 }}>
-          <div style={cardStyle}>
-            <div style={{ fontSize: 13, opacity: 0.75, marginBottom: 8 }}>Selected</div>
-
-            {!selectedNode ? (
-              <div style={{ opacity: 0.7 }}>Select an item from the tree.</div>
-            ) : (
-              <div style={{ display: "grid", gap: 8 }}>
-                <div style={{ fontSize: 16 }}>{selectedNode.title}</div>
-
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 13, opacity: 0.8 }}>
-                  <Chip label={`Level: ${levelLabel(selectedNode.level)}`} />
-                  <Chip label={`Target: ${targetLabel(selectedNode.targetType)}`} />
-                  {selectedNode.targetType === 2 ? (
-                    <Chip label={`Anchor: ${selectedNode.anchorId || "-"}`} />
-                  ) : (
-                    <Chip
-                      label={`Pages: ${selectedNode.startPage || "-"}${selectedNode.endPage ? `–${selectedNode.endPage}` : ""}`}
-                    />
-                  )}
-                  {selectedNode.pageLabel ? <Chip label={`Label: ${selectedNode.pageLabel}`} /> : null}
-                </div>
-
-                {selectedNode.notes ? (
-                  <div style={{ fontSize: 13, opacity: 0.85 }}>
-                    <div style={{ fontSize: 12, opacity: 0.65, marginBottom: 4 }}>Notes (admin-only)</div>
-                    <div>{selectedNode.notes}</div>
-                  </div>
-                ) : null}
-              </div>
-            )}
+        <div className="laTocGrid">
+          <div className="laTocPane">
+            <div className="laTocPaneTitle">Tree (raw)</div>
+            <pre className="laTocPre">{JSON.stringify(tree, null, 2)}</pre>
           </div>
 
-          <div style={cardStyle}>
-            <div style={{ fontSize: 13, opacity: 0.75, marginBottom: 8 }}>Tree (raw JSON)</div>
-            <pre style={preStyle}>{prettyJson(tree)}</pre>
+          <div className="laTocPane">
+            <div className="laTocPaneTitle">Preview</div>
+            {!tree?.length ? <div className="laTocEmpty">No ToC entries yet.</div> : <TocTreePreview items={tree} />}
           </div>
         </div>
       </div>
 
-      {/* Upload Modal */}
+      {/* ================= Upload Modal ================= */}
       {showUpload && (
-        <div className="modal-overlay">
-          <div className="modal" style={{ maxWidth: 900 }}>
-            <h3 style={{ marginTop: 0 }}>Upload ToC</h3>
+        <div className="laModalOverlay" role="dialog" aria-modal="true">
+          <div className="laModal">
+            <div className="laModalHead">
+              <div>
+                <div className="laModalTitle">Upload ToC (CSV)</div>
+                <div className="laModalSub">
+                  Columns: <code>Key</code>, <code>Title</code>, <code>StartPage</code>, <code>EndPage</code>,{" "}
+                  <code>PageLabel</code>, <code>AnchorId</code>, <code>Notes</code>, <code>Level</code>,{" "}
+                  <code>TargetType</code>, <code>Order</code> (optional).
+                </div>
+              </div>
 
-            <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
-              <label style={{ fontSize: 13, opacity: 0.75 }}>Mode</label>
-              <select
-                value={mode}
-                onChange={(e) => setMode(e.target.value)}
-                style={inputStyle}
+              <button
+                className="laBtn"
+                type="button"
+                onClick={() => {
+                  setShowUpload(false);
+                  resetCsvPreview();
+                }}
               >
-                <option value="replace">replace</option>
-                <option value="append">append</option>
-              </select>
+                Close
+              </button>
+            </div>
 
-              <div style={{ fontSize: 13, opacity: 0.7 }}>
-                Paste JSON: either full payload <code>{"{ mode, items }"}</code> or <code>[...]</code>.
+            <div className="laModalBody">
+              <div className="laModalRow">
+                <label className="laTocLabel">Mode</label>
+                <select className="laTocSelect" value={importMode} onChange={(e) => setImportMode(e.target.value)}>
+                  <option value="replace">replace (wipe existing and set)</option>
+                  <option value="append">append (keep existing and add)</option>
+                </select>
               </div>
-            </div>
 
-            <textarea
-              value={payloadText}
-              onChange={(e) => setPayloadText(e.target.value)}
-              placeholder='{"mode":"replace","items":[...]}'
-              style={textareaStyle}
-            />
-
-            <div className="modal-actions" style={{ marginTop: 12 }}>
-              <button className="modal-btn secondary" onClick={() => setShowUpload(false)}>
-                Cancel
-              </button>
-              <button className="modal-btn" onClick={handleImport} disabled={loading}>
-                {loading ? "Importing..." : "Import"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add/Edit Modal */}
-      {showEditor && (
-        <div className="modal-overlay">
-          <div className="modal" style={{ maxWidth: 760 }}>
-            <h3 style={{ marginTop: 0 }}>
-              {editorMode === "create" ? "Add ToC Entry" : "Edit ToC Entry"}
-            </h3>
-
-            <div style={{ display: "grid", gap: 10 }}>
-              <Field label="Title *">
+              <div className="laModalRow">
                 <input
-                  value={form.title}
-                  onChange={(e) => setForm((s) => ({ ...s, title: e.target.value }))}
-                  style={inputStyleWide}
-                  placeholder="e.g. Chapter One: Marriage Rites"
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleCsvFile(f);
+                  }}
                 />
-              </Field>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <Field label="Level">
-                  <select
-                    value={form.level}
-                    onChange={(e) => setForm((s) => ({ ...s, level: Number(e.target.value) }))}
-                    style={inputStyleWide}
-                  >
-                    <option value={1}>Chapter</option>
-                    <option value={2}>Section</option>
-                    <option value={3}>Subsection</option>
-                  </select>
-                </Field>
-
-                <Field label="Target Type">
-                  <select
-                    value={form.targetType}
-                    onChange={(e) =>
-                      setForm((s) => ({ ...s, targetType: Number(e.target.value) }))
-                    }
-                    style={inputStyleWide}
-                  >
-                    <option value={1}>Page Range</option>
-                    <option value={2}>Anchor</option>
-                  </select>
-                </Field>
+                <div className="laTocHint">
+                  Loaded: <b>{csvFileName || "none"}</b>
+                </div>
               </div>
 
-              {normTargetType(form.targetType) === 1 ? (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <Field label="Start Page *">
-                    <input
-                      value={form.startPage}
-                      onChange={(e) => setForm((s) => ({ ...s, startPage: e.target.value }))}
-                      style={inputStyleWide}
-                      placeholder="e.g. 1"
-                    />
-                  </Field>
-                  <Field label="End Page (optional)">
-                    <input
-                      value={form.endPage}
-                      onChange={(e) => setForm((s) => ({ ...s, endPage: e.target.value }))}
-                      style={inputStyleWide}
-                      placeholder="e.g. 74"
-                    />
-                  </Field>
+              {csvPreviewIssues.length > 0 && (
+                <div className="laTocAlert err">
+                  {csvPreviewIssues.slice(0, 6).map((x, i) => (
+                    <div key={i}>{x}</div>
+                  ))}
                 </div>
-              ) : (
-                <Field label="AnchorId *">
-                  <input
-                    value={form.anchorId}
-                    onChange={(e) => setForm((s) => ({ ...s, anchorId: e.target.value }))}
-                    style={inputStyleWide}
-                    placeholder="e.g. blk_123 or heading_1"
-                  />
-                </Field>
               )}
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <Field label="Page Label (optional)">
-                  <input
-                    value={form.pageLabel}
-                    onChange={(e) => setForm((s) => ({ ...s, pageLabel: e.target.value }))}
-                    style={inputStyleWide}
-                    placeholder='e.g. "ix", "xi", "497"'
-                  />
-                </Field>
+              <div className="laModalSplit">
+                <div>
+                  <div className="laTocPaneTitle">Parsed items (first 100)</div>
+                  <pre className="laTocPre">{JSON.stringify(csvPreviewItems.slice(0, 100), null, 2)}</pre>
+                </div>
 
-                <Field label="Notes (admin-only)">
-                  <input
-                    value={form.notes}
-                    onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))}
-                    style={inputStyleWide}
-                    placeholder="optional notes"
-                  />
-                </Field>
+                <div>
+                  <div className="laTocPaneTitle">Tree preview (computed)</div>
+                  <TocTreePreview items={buildTreeFromImportItems(csvPreviewItems)} />
+                </div>
               </div>
             </div>
 
-            <div className="modal-actions" style={{ marginTop: 12 }}>
-              <button className="modal-btn secondary" onClick={() => setShowEditor(false)}>
-                Cancel
-              </button>
-              <button className="modal-btn" onClick={saveEditor} disabled={loading}>
-                {loading ? "Saving..." : "Save"}
+            <div className="laModalFoot">
+              <button
+                className="laBtnPrimary"
+                type="button"
+                onClick={confirmImportCsv}
+                disabled={!docId || selectedKind === 2 || csvPreviewItems.length === 0}
+              >
+                Import
               </button>
             </div>
           </div>
@@ -600,217 +517,70 @@ const selectedNode = useMemo(() => {
   );
 }
 
-/* ---------------- UI helpers ---------------- */
-
-function TocTree({ items, depth, openIds, onToggleOpen, selectedId, onSelect }) {
+/* =========================================================
+   Preview components (frontend-only)
+========================================================= */
+function TocTreePreview({ items }) {
   return (
-    <div style={{ display: "grid", gap: 6 }}>
-      {items.map((x) => {
-        const hasChildren = (x.children || []).length > 0;
-        const isOpen = openIds.has(x.id);
-        const isSelected = selectedId === x.id;
-
-        const dest =
-          x.targetType === 2
-            ? `#${x.anchorId || ""}`
-            : x.endPage
-            ? `p.${x.startPage}–${x.endPage}`
-            : x.startPage
-            ? `p.${x.startPage}`
-            : "";
-
-        return (
-          <div key={x.id}>
-            <div
-              onClick={() => onSelect(x.id)}
-              style={{
-                cursor: "pointer",
-                borderRadius: 12,
-                padding: "8px 10px",
-                border: isSelected ? "1px solid rgba(139,28,28,0.35)" : "1px solid rgba(15,23,42,0.10)",
-                background: isSelected ? "rgba(139,28,28,0.06)" : "white",
-                marginLeft: depth * 14,
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-              }}
-            >
-              {hasChildren ? (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleOpen(x.id);
-                  }}
-                  title={isOpen ? "Collapse" : "Expand"}
-                  style={{
-                    width: 26,
-                    height: 26,
-                    borderRadius: 10,
-                    border: "1px solid rgba(15,23,42,0.12)",
-                    background: "white",
-                    cursor: "pointer",
-                  }}
-                >
-                  {isOpen ? "▾" : "▸"}
-                </button>
-              ) : (
-                <div style={{ width: 26 }} />
-              )}
-
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {x.title}
-                </div>
-                <div style={{ fontSize: 12, opacity: 0.65 }}>
-                  {levelLabel(x.level)} • {targetLabel(x.targetType)} {dest ? `• ${dest}` : ""}
-                  {x.pageLabel ? ` • (${x.pageLabel})` : ""}
-                </div>
-              </div>
-            </div>
-
-            {hasChildren && isOpen ? (
-              <TocTree
-                items={x.children}
-                depth={depth + 1}
-                openIds={openIds}
-                onToggleOpen={onToggleOpen}
-                selectedId={selectedId}
-                onSelect={onSelect}
-              />
-            ) : null}
-          </div>
-        );
-      })}
+    <div className="laTocTree">
+      {items.map((x) => (
+        <TocTreeNode key={x.id ?? x.clientId} node={x} depth={0} />
+      ))}
     </div>
   );
 }
 
-function Chip({ label }) {
+function TocTreeNode({ node, depth }) {
+  const children = node.children || node.Children || [];
+  const title = node.title ?? node.Title ?? "";
+  const pageLabel = node.pageLabel ?? node.PageLabel ?? "";
+  const startPage = node.startPage ?? node.StartPage;
+  const endPage = node.endPage ?? node.EndPage;
+
+  let right = "";
+  if (pageLabel) right = pageLabel;
+  else if (startPage != null || endPage != null) right = `${startPage ?? ""}${endPage != null ? `–${endPage}` : ""}`;
+
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        padding: "6px 10px",
-        borderRadius: 999,
-        border: "1px solid rgba(15,23,42,0.12)",
-        background: "rgba(255,255,255,0.7)",
-      }}
-    >
-      {label}
-    </span>
+    <div className="laTocNode" style={{ marginLeft: depth * 14 }}>
+      <div className="laTocNodeRow">
+        <div className="laTocNodeTitle">{title || "—"}</div>
+        {right ? <div className="laTocNodeMeta">{right}</div> : null}
+      </div>
+
+      {children.length > 0 && (
+        <div className="laTocNodeChildren">
+          {children.map((c) => (
+            <TocTreeNode key={c.id ?? c.clientId} node={c} depth={depth + 1} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
-function Field({ label, children }) {
-  return (
-    <label style={{ display: "grid", gap: 6 }}>
-      <div style={{ fontSize: 12, opacity: 0.75 }}>{label}</div>
-      {children}
-    </label>
-  );
-}
+function buildTreeFromImportItems(items) {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) return [];
 
-function levelLabel(v) {
-  const n = Number(v);
-  if (n === 1) return "Chapter";
-  if (n === 3) return "Subsection";
-  return "Section";
-}
+  const byId = new Map();
+  const roots = [];
 
-function targetLabel(v) {
-  const n = Number(v);
-  return n === 2 ? "Anchor" : "PageRange";
-}
+  for (const it of list) byId.set(it.clientId, { ...it, children: [] });
 
-const cardStyle = {
-  border: "1px solid rgba(15,23,42,0.12)",
-  borderRadius: 14,
-  padding: 14,
-  background: "white",
-};
-
-const alertStyle = {
-  marginTop: 12,
-  padding: 12,
-  borderRadius: 12,
-  border: "1px solid rgba(220,38,38,0.22)",
-  background: "rgba(220,38,38,0.06)",
-  color: "#991b1b",
-};
-
-const preStyle = {
-  margin: 0,
-  whiteSpace: "pre-wrap",
-  wordBreak: "break-word",
-  fontSize: 12,
-  lineHeight: 1.4,
-};
-
-const inputStyle = {
-  padding: "8px 10px",
-  borderRadius: 10,
-  border: "1px solid rgba(15,23,42,0.18)",
-  background: "white",
-};
-
-const inputStyleWide = {
-  padding: "10px 12px",
-  borderRadius: 12,
-  border: "1px solid rgba(15,23,42,0.18)",
-  background: "white",
-};
-
-const textareaStyle = {
-  width: "100%",
-  minHeight: 320,
-  padding: 12,
-  borderRadius: 12,
-  border: "1px solid rgba(15,23,42,0.18)",
-  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-  fontSize: 12,
-  lineHeight: 1.4,
-};
-
-function btnStyle(kind) {
-  const base = {
-    padding: "8px 12px",
-    borderRadius: 10,
-    border: "1px solid rgba(15,23,42,0.18)",
-    background: "white",
-    cursor: "pointer",
-  };
-
-  const small = {
-    padding: "7px 10px",
-    borderRadius: 10,
-    border: "1px solid rgba(15,23,42,0.18)",
-    background: "white",
-    cursor: "pointer",
-    fontSize: 12,
-  };
-
-  if (kind === "primary") {
-    return {
-      ...base,
-      border: "1px solid rgba(139,28,28,0.35)",
-      background: "rgba(139,28,28,0.08)",
-    };
+  for (const it of list) {
+    const node = byId.get(it.clientId);
+    const pid = it.parentClientId;
+    if (pid && byId.has(pid)) byId.get(pid).children.push(node);
+    else roots.push(node);
   }
 
-  if (kind === "ghost") return base;
-
-  if (kind === "ghostSmall") return small;
-
-  if (kind === "dangerSmall") {
-    return {
-      ...small,
-      border: "1px solid rgba(220,38,38,0.25)",
-      background: "rgba(220,38,38,0.06)",
-      color: "#991b1b",
-    };
+  function sortNode(n) {
+    n.children.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    n.children.forEach(sortNode);
   }
+  roots.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  roots.forEach(sortNode);
 
-  return base;
+  return roots;
 }
