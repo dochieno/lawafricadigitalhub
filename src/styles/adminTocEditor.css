@@ -320,7 +320,23 @@
   .laModalSplit {
     grid-template-columns: 1fr;
   }
+}@media (max-width: 720px) {
+  .laModalOverlay {
+    padding: 10px;
+  }
+
+  .laModal {
+    width: 100%;
+    max-height: 94vh;
+    border-radius: 18px;
+  }
+
+  .laTocPre,
+  .laTocTree {
+    max-height: 36vh;
+  }
 }
+
 
 .laModalFoot {
   padding: 12px 14px;
@@ -338,14 +354,50 @@ code {
   font-size: 0.95em;
   color: rgba(15, 23, 42, 0.9);
 }
-/* Make the modal body scroll so Import button stays reachable */
-.laModalBody {
-  max-height: calc(90vh - 160px);
-  overflow: auto;
+/* =========================================================
+   Scroll polish: modal stays within viewport and content scrolls,
+   so the footer (Import/Close) stays reachable.
+   ========================================================= */
+
+/* Modal itself should not exceed viewport height */
+.laModal {
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Keep the two preview panes scrollable too */
+/* Body becomes the scrolling region (footer stays visible) */
+.laModalBody {
+  flex: 1 1 auto;
+  min-height: 0; /* critical for scroll containers inside flex */
+  overflow: auto;
+  max-height: none; /* controlled by flex parent */
+}
+
+/* Footer stays pinned at the bottom of the modal */
+.laModalFoot {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  backdrop-filter: blur(8px);
+}
+
+/* Two preview panes: keep them scrollable, without growing too tall */
+.laModalSplit {
+  align-items: stretch;
+}
+
 .laModalSplit > div {
-  max-height: 52vh;
+  min-height: 0; /* allow inner scroll */
+}
+
+/* Your <pre> already scrolls (laTocPre), but cap it so it doesn't push footer away */
+.laTocPre {
+  max-height: 42vh;
+}
+
+/* If you have a tree preview container, make it scroll too (safe even if unused) */
+.laTocTree {
+  max-height: 42vh;
   overflow: auto;
 }

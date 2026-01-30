@@ -5,14 +5,6 @@ import api, { checkDocumentAvailability } from "../../api/client";
 import PdfViewer from "../../reader/PdfViewer";
 import "../../styles/reader.css";
 
-/**
- * Speed upgrades + MPESA safety:
- * ✅ Gate only on /access
- * ✅ Load offer + availability in background
- * ✅ When landing from payment (?paid=1), retry /access for a short window (MPESA is async)
- * ✅ Ignore axios cancels (throttle) so “Profile load failed” style noise doesn’t break reader
- */
-
 export default function DocumentReader() {
   const { id } = useParams();
   const navigate = useNavigate();

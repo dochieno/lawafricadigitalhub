@@ -1,33 +1,6 @@
 // src/api/toc.js
 import api from "./client";
 
-/** -----------------------------
- * Public / Reader
- * ------------------------------
- * NOTE:
- * You currently DO NOT have a public endpoint:
- *   GET /api/legal-documents/{id}/toc
- * (the controller method is commented out)
- *
- * So we keep this exported function, but make it fail loudly
- * to avoid silent 405/404 confusion.
- */
-
-// GET /api/legal-documents/{id}/toc   (NOT AVAILABLE YET)
-// eslint-disable-next-line no-unused-vars
-export async function getDocumentToc(documentId) {
-  throw new Error(
-    "Public ToC endpoint is not enabled on the API yet. " +
-      "Either re-enable GET /api/legal-documents/{id}/toc on the backend, " +
-      "or call adminGetDocumentToc from admin pages."
-  );
-}
-
-/** -----------------------------
- * Admin
- * ------------------------------ */
-
-// GET /api/admin/legal-documents/{id}/toc
 export async function adminGetDocumentToc(documentId) {
   const res = await api.get(`/admin/legal-documents/${documentId}/toc`);
   return res.data;
