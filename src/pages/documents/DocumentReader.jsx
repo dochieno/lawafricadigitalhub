@@ -126,6 +126,18 @@ function TocTree({ nodes, depth = 0, expanded, onToggle, onPick }) {
   );
 }
 
+/** ✅ Accept all response shapes (this is the main fix) */
+function extractTocItemsFromResponse(data) {
+  if (!data) return [];
+
+  // Case A: API returns the tree directly (array)
+  if (Array.isArray(data)) return data;
+
+  // Case B: wrapped
+  const items = data.items ?? data.Items ?? data.data?.items ?? data.data?.Items;
+  return Array.isArray(items) ? items : [];
+}
+
 export default function DocumentReader() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -198,34 +210,27 @@ export default function DocumentReader() {
     viewerApiRef.current = apiObj; // { jumpToPage } or null
   }, []);
 
-  // ✅ Better UX: only show loader if ToC isn't already loaded
   const openToc = useCallback(() => {
     setTocOpen(true);
+    setTocLoading(true);
     setTocError("");
-    setTocLoading(!toc?.length);
-    // keep existing toc while loading (nice UX)
-  }, [toc?.length]);
+  }, []);
 
   const closeToc = useCallback(() => {
     setTocOpen(false);
   }, []);
 
-  // ✅ Deterministic close: jumpToPage may return void
   const onTocClick = useCallback((pageNumber) => {
     const p = Number(pageNumber);
     if (!Number.isFinite(p) || p <= 0) return;
 
-    try {
-      viewerApiRef.current?.jumpToPage?.(p, "smooth");
-      setTocOpen(false);
-    } catch (e) {
-      console.debug("jumpToPage failed:", e);
-    }
+    const ok = viewerApiRef.current?.jumpToPage?.(p, "smooth");
+    if (ok) setTocOpen(false);
   }, []);
 
   const toggleTocNode = useCallback((idStr) => {
-    setTocExpanded((prev) => {
-      const next = new Set(prev);
+    setTocExpanded((set0) => {
+      const next = new Set(set0);
       if (next.has(idStr)) next.delete(idStr);
       else next.add(idStr);
       return next;
@@ -241,21 +246,18 @@ export default function DocumentReader() {
     const ctrl = new AbortController();
     tocAbortRef.current = ctrl;
 
-    // ✅ IMPORTANT: Reader endpoint is /api/legal-documents/{id}/toc
-    // ✅ Also: skip in-flight de-dupe to avoid any weirdness
     api
-      .get(`/legal-documents/${docId}/toc`, { signal: ctrl.signal, __skipDedupe: true })
+      .get(`/legal-documents/${docId}/toc`, { signal: ctrl.signal })
       .then((res) => {
         if (!mountedRef.current || ctrl.signal.aborted) return;
 
-        const items = res.data?.items ?? [];
-        const arr = Array.isArray(items) ? items : [];
+        const arr = extractTocItemsFromResponse(res?.data);
         setToc(arr);
         setTocLoading(false);
 
         // Expand top-level by default (nice UX)
-        setTocExpanded((prev) => {
-          if (prev.size > 0) return prev; // don't overwrite user toggles
+        setTocExpanded((set0) => {
+          if (set0.size > 0) return set0; // don't overwrite user toggles
           const next = new Set();
           for (const n of arr) {
             const idStr = nodeId(n, "");
@@ -268,7 +270,13 @@ export default function DocumentReader() {
         if (!mountedRef.current || ctrl.signal.aborted) return;
 
         console.debug("Failed to load ToC:", err);
-        setTocError(err?.response?.data?.message || "Failed to load Table of Contents.");
+
+        const status = err?.response?.status;
+        const msg =
+          err?.response?.data?.message ||
+          (status ? `Failed to load Table of Contents (HTTP ${status}).` : "Failed to load Table of Contents.");
+
+        setTocError(msg);
         setTocLoading(false);
       });
 
@@ -321,8 +329,7 @@ export default function DocumentReader() {
     }
 
     async function fetchAccessOnce() {
-      // ✅ Your client only supports __skipDedupe (not __skipThrottle)
-      const accessRes = await api.get(`/legal-documents/${docId}/access`, { __skipDedupe: true });
+      const accessRes = await api.get(`/legal-documents/${docId}/access`, { __skipThrottle: true });
       return accessRes.data;
     }
 
@@ -628,8 +635,7 @@ export default function DocumentReader() {
           </button>
         </div>
 
-        {/* ✅ Force scroll so content never pushes actions out of reach */}
-        <div className="readerpage-tocBody" style={{ overflowY: "auto" }}>
+        <div className="readerpage-tocBody">
           {tocLoading ? (
             <div className="readerpage-tocState">Loading ToC…</div>
           ) : tocError ? (
