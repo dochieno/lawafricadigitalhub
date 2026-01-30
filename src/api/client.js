@@ -169,11 +169,7 @@ function canDedupe(config) {
   return true;
 }
 
-/**
- * ✅ Axios v1 fix:
- * In browsers, axios.defaults.adapter can be an ARRAY, not a function.
- * We must resolve it to a real function via axios.getAdapter when available.
- */
+
 function resolveAdapter(config) {
   // If caller already provided a function adapter, use it.
   if (typeof config?.adapter === "function") return config.adapter;

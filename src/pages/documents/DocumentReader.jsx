@@ -108,7 +108,7 @@ function TocTree({ nodes, depth = 0, expanded, onToggle, onPick }) {
                 title={jumpPage ? `Go to page ${jumpPage}` : "No page mapped"}
                 style={{ flex: 1 }}
               >
-                <div className="readerpage-tocItemTitle">{title}</div>
+                <div className="readerpage-tocItemTitle">{title || "—"}</div>
                 <div className="readerpage-tocItemPage">{right || "—"}</div>
               </button>
             </div>
@@ -198,23 +198,29 @@ export default function DocumentReader() {
     viewerApiRef.current = apiObj; // { jumpToPage } or null
   }, []);
 
+  // ✅ Better UX: only show loader if ToC isn't already loaded
   const openToc = useCallback(() => {
     setTocOpen(true);
-    setTocLoading(true);
     setTocError("");
+    setTocLoading(!toc?.length);
     // keep existing toc while loading (nice UX)
-  }, []);
+  }, [toc?.length]);
 
   const closeToc = useCallback(() => {
     setTocOpen(false);
   }, []);
 
+  // ✅ Deterministic close: jumpToPage may return void
   const onTocClick = useCallback((pageNumber) => {
     const p = Number(pageNumber);
     if (!Number.isFinite(p) || p <= 0) return;
 
-    const ok = viewerApiRef.current?.jumpToPage?.(p, "smooth");
-    if (ok) setTocOpen(false);
+    try {
+      viewerApiRef.current?.jumpToPage?.(p, "smooth");
+      setTocOpen(false);
+    } catch (e) {
+      console.debug("jumpToPage failed:", e);
+    }
   }, []);
 
   const toggleTocNode = useCallback((idStr) => {
@@ -226,7 +232,7 @@ export default function DocumentReader() {
     });
   }, []);
 
-  // Load ToC only when drawer opens
+  // ✅ Load ToC only when drawer opens
   useEffect(() => {
     if (!tocOpen) return;
     if (!Number.isFinite(docId) || docId <= 0) return;
@@ -235,9 +241,10 @@ export default function DocumentReader() {
     const ctrl = new AbortController();
     tocAbortRef.current = ctrl;
 
-    // ✅ IMPORTANT: your endpoint is /api/legal-documents/{id}/toc
+    // ✅ IMPORTANT: Reader endpoint is /api/legal-documents/{id}/toc
+    // ✅ Also: skip in-flight de-dupe to avoid any weirdness
     api
-      .get(`/legal-documents/${docId}/toc`, { signal: ctrl.signal })
+      .get(`/legal-documents/${docId}/toc`, { signal: ctrl.signal, __skipDedupe: true })
       .then((res) => {
         if (!mountedRef.current || ctrl.signal.aborted) return;
 
@@ -314,7 +321,8 @@ export default function DocumentReader() {
     }
 
     async function fetchAccessOnce() {
-      const accessRes = await api.get(`/legal-documents/${docId}/access`, { __skipThrottle: true });
+      // ✅ Your client only supports __skipDedupe (not __skipThrottle)
+      const accessRes = await api.get(`/legal-documents/${docId}/access`, { __skipDedupe: true });
       return accessRes.data;
     }
 
@@ -620,19 +628,15 @@ export default function DocumentReader() {
           </button>
         </div>
 
-        <div className="readerpage-tocBody">
+        {/* ✅ Force scroll so content never pushes actions out of reach */}
+        <div className="readerpage-tocBody" style={{ overflowY: "auto" }}>
           {tocLoading ? (
             <div className="readerpage-tocState">Loading ToC…</div>
           ) : tocError ? (
             <div className="readerpage-tocState error">{tocError}</div>
           ) : toc?.length ? (
             <div className="readerpage-tocList">
-              <TocTree
-                nodes={toc}
-                expanded={tocExpanded}
-                onToggle={toggleTocNode}
-                onPick={onTocClick}
-              />
+              <TocTree nodes={toc} expanded={tocExpanded} onToggle={toggleTocNode} onPick={onTocClick} />
             </div>
           ) : (
             <div className="readerpage-tocState">
