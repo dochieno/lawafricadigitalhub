@@ -1254,3 +1254,7 @@ svg.highlight-layer {
   color: #7a1414;
   font-weight: 900;
 }
+/* optional */
+.readerOutlineRow.active-ancestor .readerpage-tocItem {
+  opacity: 0.9;
+}
