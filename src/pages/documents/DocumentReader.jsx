@@ -19,7 +19,8 @@ function safeAbort(ctrl) {
 }
 
 /** ---------------------------
- * ToC helpers (tree DTO aware)
+ * Outline helpers (tree DTO aware)
+ * - Supports both camelCase and PascalCase (in case API serializer differs)
  * -------------------------- */
 function nodeId(n, fallback) {
   return String(n?.id ?? n?.Id ?? fallback);
@@ -58,7 +59,7 @@ function nodeJumpPage(n) {
   return null;
 }
 
-function TocTree({ nodes, depth = 0, expanded, onToggle, onPick }) {
+function OutlineTree({ nodes, depth = 0, expanded, onToggle, onPick }) {
   const arr = Array.isArray(nodes) ? nodes : [];
 
   return (
@@ -111,7 +112,7 @@ function TocTree({ nodes, depth = 0, expanded, onToggle, onPick }) {
 
             {hasChildren && isOpen ? (
               <div style={{ marginTop: 2 }}>
-                <TocTree nodes={children} depth={depth + 1} expanded={expanded} onToggle={onToggle} onPick={onPick} />
+                <OutlineTree nodes={children} depth={depth + 1} expanded={expanded} onToggle={onToggle} onPick={onPick} />
               </div>
             ) : null}
           </div>
@@ -157,25 +158,25 @@ export default function DocumentReader() {
   }
 
   // ---------------------------------------------
-  // ✅ ToC state + PdfViewer API bridge
+  // ✅ Outline state + PdfViewer API bridge
   // ---------------------------------------------
-  const [tocOpen, setTocOpen] = useState(false);
-  const [toc, setToc] = useState([]);
-  const [tocLoading, setTocLoading] = useState(false);
-  const [tocError, setTocError] = useState("");
+  const [outlineOpen, setOutlineOpen] = useState(false);
+  const [outline, setOutline] = useState([]);
+  const [outlineLoading, setOutlineLoading] = useState(false);
+  const [outlineError, setOutlineError] = useState("");
 
-  const [tocExpanded, setTocExpanded] = useState(() => new Set());
+  const [outlineExpanded, setOutlineExpanded] = useState(() => new Set());
 
   const viewerApiRef = useRef(null);
 
   const mountedRef = useRef(false);
-  const tocAbortRef = useRef(null);
+  const outlineAbortRef = useRef(null);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      safeAbort(tocAbortRef.current);
+      safeAbort(outlineAbortRef.current);
     };
   }, []);
 
@@ -183,24 +184,20 @@ export default function DocumentReader() {
     viewerApiRef.current = apiObj;
   }, []);
 
-  const openToc = useCallback(() => {
-    setTocOpen(true);
-  }, []);
+  const openOutline = useCallback(() => setOutlineOpen(true), []);
+  const closeOutline = useCallback(() => setOutlineOpen(false), []);
 
-  const closeToc = useCallback(() => {
-    setTocOpen(false);
-  }, []);
-
-  const onTocClick = useCallback((pageNumber) => {
+  const onOutlineClick = useCallback((pageNumber) => {
     const p = Number(pageNumber);
     if (!Number.isFinite(p) || p <= 0) return;
 
+    // Your PdfViewer API expects 1-based (based on your usage)
     const ok = viewerApiRef.current?.jumpToPage?.(p, "smooth");
-    if (ok) setTocOpen(false);
+    if (ok) setOutlineOpen(false);
   }, []);
 
-  const toggleTocNode = useCallback((idStr) => {
-    setTocExpanded((prevSet) => {
+  const toggleOutlineNode = useCallback((idStr) => {
+    setOutlineExpanded((prevSet) => {
       const next = new Set(prevSet);
       if (next.has(idStr)) next.delete(idStr);
       else next.add(idStr);
@@ -208,29 +205,29 @@ export default function DocumentReader() {
     });
   }, []);
 
-  // ✅ Always fetch ToC when docId changes (BACKGROUND)
-  const fetchToc = useCallback(async () => {
+  // ✅ Always fetch Outline when docId changes (BACKGROUND)
+  const fetchOutline = useCallback(async () => {
     if (!Number.isFinite(docId) || docId <= 0) return;
 
-    safeAbort(tocAbortRef.current);
+    safeAbort(outlineAbortRef.current);
     const ctrl = new AbortController();
-    tocAbortRef.current = ctrl;
+    outlineAbortRef.current = ctrl;
 
-    setTocLoading(true);
-    setTocError("");
+    setOutlineLoading(true);
+    setOutlineError("");
 
     try {
-      // IMPORTANT: Reader endpoint
-      const res = await api.get(`/legal-documents/${docId}/toc`, { signal: ctrl.signal });
+      // ✅ NEW endpoint: /outline
+      const res = await api.get(`/legal-documents/${docId}/outline`, { signal: ctrl.signal });
 
       if (!mountedRef.current || ctrl.signal.aborted) return;
 
-      const items = res.data?.items ?? [];
+      const items = res?.data?.items;
       const arr = Array.isArray(items) ? items : [];
-      setToc(arr);
+      setOutline(arr);
 
       // Expand top-level by default once
-      setTocExpanded((prevSet) => {
+      setOutlineExpanded((prevSet) => {
         if (prevSet.size > 0) return prevSet;
         const next = new Set();
         for (const n of arr) {
@@ -241,22 +238,20 @@ export default function DocumentReader() {
       });
     } catch (err) {
       if (!mountedRef.current || ctrl.signal.aborted) return;
-      console.debug("Failed to load ToC:", err);
-      setToc([]);
-      setTocError(err?.response?.data?.message || "Failed to load Table of Contents.");
+      console.debug("Failed to load Outline:", err);
+      setOutline([]);
+      setOutlineError(err?.response?.data?.message || "Failed to load table of contents.");
     } finally {
-  if (mountedRef.current && !ctrl.signal.aborted) {
-    setTocLoading(false);
-  }
-}
-
+      if (mountedRef.current && !ctrl.signal.aborted) {
+        setOutlineLoading(false);
+      }
+    }
   }, [docId]);
 
   useEffect(() => {
-    // load ToC as soon as document changes
     if (!Number.isFinite(docId) || docId <= 0) return;
-    fetchToc();
-  }, [docId, fetchToc]);
+    fetchOutline();
+  }, [docId, fetchOutline]);
 
   // Detect landing from Paystack/MPESA
   useEffect(() => {
@@ -587,7 +582,7 @@ export default function DocumentReader() {
 
       {/* Mobile topbar */}
       <div className="readerpage-topbar">
-        <button className="readerpage-tocbtn" type="button" onClick={openToc} title="Table of Contents">
+        <button className="readerpage-tocbtn" type="button" onClick={openOutline} title="Table of Contents">
           ☰ ToC
         </button>
 
@@ -597,43 +592,48 @@ export default function DocumentReader() {
       </div>
 
       {/* Backdrop (mobile) */}
-      {tocOpen && <div className="readerpage-tocBackdrop" onClick={closeToc} />}
+      {outlineOpen && <div className="readerpage-tocBackdrop" onClick={closeOutline} />}
 
-      {/* ToC drawer / sidebar */}
-      <div className={`readerpage-tocDrawer ${tocOpen ? "open" : ""}`}>
+      {/* Drawer / sidebar */}
+      <div className={`readerpage-tocDrawer ${outlineOpen ? "open" : ""}`}>
         <div className="readerpage-tocHeader">
           <div className="readerpage-tocTitle">Table of Contents</div>
-          <button className="readerpage-tocClose" type="button" onClick={closeToc} title="Close">
+          <button className="readerpage-tocClose" type="button" onClick={closeOutline} title="Close">
             ✕
           </button>
         </div>
 
         <div className="readerpage-tocBody">
-          {tocLoading ? (
+          {outlineLoading ? (
             <div className="readerpage-tocState">Loading ToC…</div>
-          ) : tocError ? (
+          ) : outlineError ? (
             <div className="readerpage-tocState error">
-              {tocError}
+              {outlineError}
               <div style={{ marginTop: 10 }}>
-                <button className="outline-btn" type="button" onClick={fetchToc}>
+                <button className="outline-btn" type="button" onClick={fetchOutline}>
                   Retry
                 </button>
               </div>
             </div>
-          ) : toc?.length ? (
+          ) : outline?.length ? (
             <div className="readerpage-tocList">
-              <TocTree nodes={toc} expanded={tocExpanded} onToggle={toggleTocNode} onPick={onTocClick} />
+              <OutlineTree
+                nodes={outline}
+                expanded={outlineExpanded}
+                onToggle={toggleOutlineNode}
+                onPick={onOutlineClick}
+              />
             </div>
           ) : (
             <div className="readerpage-tocState">
               No ToC available for document #{docId}.
               <div style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>
                 Confirm the Reader API returns it:{" "}
-                <span style={{ fontWeight: 800 }}>/api/legal-documents/{docId}/toc</span>
+                <span style={{ fontWeight: 800 }}>/api/legal-documents/{docId}/outline</span>
               </div>
               <div style={{ marginTop: 10 }}>
-                <button className="outline-btn" type="button" onClick={fetchToc}>
-                  Reload ToC
+                <button className="outline-btn" type="button" onClick={fetchOutline}>
+                  Reload
                 </button>
               </div>
             </div>
