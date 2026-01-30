@@ -4,20 +4,6 @@ import Papa from "papaparse";
 import api from "../../../api/client";
 import "../../../styles/adminTocEditor.css";
 
-/* =========================================================
-   ✅ API (Admin ToC)
-
-   Backend controller:
-   [Route("api/admin/legal-documents/{id:int}/toc")]
-
-   IMPORTANT:
-   Your `api` axios client already targets `/api` (based on your other working calls like
-   api.post("/law-reports/import") -> /api/law-reports/import).
-
-   So here we MUST use:
-   /admin/legal-documents/:id/toc
-   (NOT /documents/:id/toc, and NOT /legal-documents/:id/toc)
-========================================================= */
 function assertDocId(docId) {
   const did = Number(docId);
   return Number.isFinite(did) && did > 0 ? did : 0;
@@ -57,9 +43,12 @@ async function adminImportToc(docId, payload) {
    Helpers
 ========================================================= */
 function toInt(v, fallback = null) {
-  const n = Number(v);
+  const s = String(v ?? "").trim();
+  if (!s) return fallback;          // ✅ empty => null, not 0
+  const n = Number(s);
   return Number.isFinite(n) ? Math.trunc(n) : fallback;
 }
+
 
 function norm(s) {
   return String(s ?? "").trim();
@@ -85,11 +74,6 @@ function parentKeyFromOutlineKey(k) {
   return parts.slice(0, -1).join(".");
 }
 
-/**
- * ✅ Numeric enums (backend):
- * TocEntryLevel: Chapter=1, Section=2, Subsection=3
- * TocTargetType: PageRange=1, Anchor=2
- */
 function levelFromDepth(depth) {
   if (depth <= 1) return 1; // Chapter
   if (depth === 2) return 2; // Section
@@ -144,11 +128,7 @@ function parseTargetTypeCell(v, fallbackType = 1) {
   return fallbackType;
 }
 
-/* =========================================================
-   CSV -> TocImportItem[]
-   Expected columns (case-insensitive, spaces ok):
-   Key, Title, StartPage, EndPage, AnchorId, PageLabel, Notes, Level, TargetType, Order
-========================================================= */
+
 function parseTocCsvToImportItems(csvText) {
   const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true, dynamicTyping: false });
   if (parsed.errors?.length) {

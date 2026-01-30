@@ -338,3 +338,14 @@ code {
   font-size: 0.95em;
   color: rgba(15, 23, 42, 0.9);
 }
+/* Make the modal body scroll so Import button stays reachable */
+.laModalBody {
+  max-height: calc(90vh - 160px);
+  overflow: auto;
+}
+
+/* Keep the two preview panes scrollable too */
+.laModalSplit > div {
+  max-height: 52vh;
+  overflow: auto;
+}
