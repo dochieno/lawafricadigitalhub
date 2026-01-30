@@ -5,34 +5,51 @@ import api from "../../../api/client";
 import "../../../styles/adminTocEditor.css";
 
 /* =========================================================
-   API (Admin ToC)
-   Controller route:
-   /api/admin/legal-documents/{id:int}/toc
+   ✅ API (Admin ToC)
+
+   Backend controller:
+   [Route("api/admin/legal-documents/{id:int}/toc")]
+
+   IMPORTANT:
+   Your `api` axios client already targets `/api` (based on your other working calls like
+   api.post("/law-reports/import") -> /api/law-reports/import).
+
+   So here we MUST use:
+   /admin/legal-documents/:id/toc
+   (NOT /documents/:id/toc, and NOT /legal-documents/:id/toc)
 ========================================================= */
+function assertDocId(docId) {
+  const did = Number(docId);
+  return Number.isFinite(did) && did > 0 ? did : 0;
+}
+
 function adminTocBase(docId) {
-  return `/admin/legal-documents/${docId}/toc`;
+  const did = assertDocId(docId);
+  // ✅ Will become /api/admin/legal-documents/:id/toc via axios baseURL
+  return `/admin/legal-documents/${did}/toc`;
 }
 
 async function adminGetDocsForDropdown() {
-  // Admin-only list used in your admin UI
+  // ✅ [Authorize(Roles="Admin")] [HttpGet("admin")] on /api/legal-documents/admin
   const res = await api.get(`/legal-documents/admin`);
   return res.data ?? [];
 }
 
 async function publicGetDocById(id) {
-  // Your controller has Kind in DTO here:
-  // GET /api/legal-documents/{id}
+  // ✅ GET /api/legal-documents/{id} (includes Kind in your DTO)
   const res = await api.get(`/legal-documents/${id}`);
   return res.data ?? null;
 }
 
 async function adminGetTocTree(docId) {
-  const res = await api.get(adminTocBase(docId));
+  const did = assertDocId(docId);
+  const res = await api.get(adminTocBase(did));
   return res.data?.items ?? [];
 }
 
 async function adminImportToc(docId, payload) {
-  const res = await api.post(`${adminTocBase(docId)}/import`, payload);
+  const did = assertDocId(docId);
+  const res = await api.post(`${adminTocBase(did)}/import`, payload);
   return res.data;
 }
 
@@ -237,8 +254,7 @@ export default function AdminTocEditor() {
       title: d.title ?? d.Title,
       status: d.status ?? d.Status,
       pageCount: d.pageCount ?? d.PageCount,
-      // Might not exist on this list endpoint — we handle it via GetById on selection
-      kind: d.kind ?? d.Kind,
+      kind: d.kind ?? d.Kind, // might be missing on this endpoint; we still check GetById
     }));
   }, [docs]);
 
@@ -246,12 +262,13 @@ export default function AdminTocEditor() {
     setError("");
     setInfo("");
     setLoadingDocs(true);
+
     try {
       const list = await adminGetDocsForDropdown();
-      setDocs(Array.isArray(list) ? list : []);
-      if (!Array.isArray(list) || list.length === 0) {
-        setInfo("No documents returned from /api/legal-documents/admin.");
-      }
+      const arr = Array.isArray(list) ? list : [];
+      setDocs(arr);
+
+      if (!arr.length) setInfo("No documents returned from /api/legal-documents/admin.");
     } catch (e) {
       setError(e?.response?.data?.message || String(e?.message || e));
     } finally {
@@ -260,9 +277,10 @@ export default function AdminTocEditor() {
   }, []);
 
   const loadToc = useCallback(async (id) => {
-    const did = Number(id);
+    const did = assertDocId(id);
     if (!did) {
       setTree([]);
+      setSelectedKind(null);
       return;
     }
 
@@ -271,7 +289,7 @@ export default function AdminTocEditor() {
     setLoadingToc(true);
 
     try {
-      // ✅ Check Kind via your GetById that includes Kind
+      // ✅ 1) Check Kind via your GetById that includes Kind
       const doc = await publicGetDocById(did);
       const kind = doc?.kind ?? doc?.Kind ?? null;
       setSelectedKind(kind);
@@ -283,11 +301,23 @@ export default function AdminTocEditor() {
         return;
       }
 
+      // ✅ 2) Load ToC from the ADMIN controller route
       const t = await adminGetTocTree(did);
       setTree(Array.isArray(t) ? t : []);
       if (!t || t.length === 0) setInfo("No ToC entries yet.");
     } catch (e) {
-      setError(e?.response?.data?.message || e?.message || "Failed to load ToC.");
+      const status = e?.response?.status;
+      const serverMsg = e?.response?.data?.message;
+
+      // ✅ Helpful hint for the exact bug you saw
+      if (status === 405) {
+        setError(
+          `405 (Method Not Allowed). This usually means the request hit the wrong route (e.g. /documents/:id/toc). ` +
+            `Confirm the ToC calls use: GET ${adminTocBase(did)} and POST ${adminTocBase(did)}/import.`
+        );
+      } else {
+        setError(serverMsg || e?.message || "Failed to load ToC.");
+      }
     } finally {
       setLoadingToc(false);
     }
@@ -334,7 +364,7 @@ export default function AdminTocEditor() {
   }
 
   async function confirmImportCsv() {
-    const did = Number(docId);
+    const did = assertDocId(docId);
     if (!did) return setError("Pick a document first.");
     if (selectedKind === 2) return setError("This is Kind=Report. Import is disabled for Report.");
     if (!csvPreviewItems.length) return setError("No CSV items loaded.");
@@ -346,6 +376,7 @@ export default function AdminTocEditor() {
 
     setError("");
     setInfo("");
+
     try {
       await adminImportToc(did, { mode: importMode, items: csvPreviewItems });
       setShowUpload(false);
@@ -353,7 +384,17 @@ export default function AdminTocEditor() {
       await loadToc(did);
       setInfo("✅ Imported ToC successfully.");
     } catch (e) {
-      setError(e?.response?.data?.message || String(e?.message || e));
+      const status = e?.response?.status;
+      const serverMsg = e?.response?.data?.message;
+
+      if (status === 405) {
+        setError(
+          `405 (Method Not Allowed) during import. Ensure you're posting to: ` +
+            `${adminTocBase(did)}/import (admin controller), not /documents/:id/toc or /legal-documents/:id/toc.`
+        );
+      } else {
+        setError(serverMsg || String(e?.message || e));
+      }
     }
   }
 
@@ -389,13 +430,12 @@ export default function AdminTocEditor() {
         </div>
       </div>
 
-      {(error || info) && (
-        <div className={`laTocAlert ${error ? "err" : "ok"}`}>{error || info}</div>
-      )}
+      {(error || info) && <div className={`laTocAlert ${error ? "err" : "ok"}`}>{error || info}</div>}
 
       <div className="laTocCard">
         <div className="laTocRow">
           <label className="laTocLabel">Legal Document</label>
+
           <select className="laTocSelect" value={docId} onChange={(e) => setDocId(e.target.value)}>
             <option value="">— Select a document —</option>
             {docOptions.map((d) => (
@@ -408,11 +448,8 @@ export default function AdminTocEditor() {
           </select>
 
           <div className="laTocHint">
-            Kind:{" "}
-            <b>
-              {selectedKind === 1 ? "Standard" : selectedKind === 2 ? "Report" : "—"}
-            </b>{" "}
-            (Report is blocked in this editor)
+            Kind: <b>{selectedKind === 1 ? "Standard" : selectedKind === 2 ? "Report" : "—"}</b> (Report is blocked in
+            this editor)
           </div>
         </div>
 
