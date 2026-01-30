@@ -401,3 +401,265 @@ code {
   max-height: 42vh;
   overflow: auto;
 }
+/* =========================================================
+   Admin ToC Editor: template + instructions
+========================================================= */
+
+.laTocHelp {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+}
+
+.laTocHelpTitle {
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.laTocHelpList {
+  margin: 0;
+  padding-left: 18px;
+  color: rgba(15, 23, 42, 0.85);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.laTocHelpBullets {
+  margin-top: 6px;
+  margin-bottom: 6px;
+  padding-left: 18px;
+  color: rgba(15, 23, 42, 0.78);
+  font-size: 12.5px;
+}
+
+.laTocHelpNote {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: rgba(15, 23, 42, 0.72);
+  font-weight: 700;
+}
+
+/* Modal head actions */
+.laModalHeadActions {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Slightly nicer file row spacing */
+.laModalFileRow {
+  gap: 12px;
+}
+
+.laModalNote {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: rgba(15, 23, 42, 0.72);
+  font-weight: 700;
+}
+
+/* =========================================================
+   Preview tree indent (remove inline margin-left)
+========================================================= */
+
+.laTocNode {
+  margin-left: calc(var(--tocDepth, 0) * 14px);
+}
+
+.laTocNodeRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.laTocNodeTitle {
+  font-weight: 800;
+}
+
+.laTocNodeMeta {
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.65);
+  font-weight: 800;
+}
+
+.laTocNodeChildren {
+  margin-top: 4px;
+}
+/* =========================================================
+   Admin ToC Editor: Step 4 Manual Editor
+========================================================= */
+
+.laTocPaneTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.laTocPaneActions {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.laTocDetails {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(15, 23, 42, 0.12);
+}
+
+.laEditTree {
+  display: grid;
+  gap: 10px;
+}
+
+.laEditNode {
+  margin-left: calc(var(--tocDepth, 0) * 14px);
+}
+
+.laEditRow {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 14px;
+  padding: 10px;
+}
+
+.laEditExpand {
+  width: 28px;
+  min-width: 28px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.laEditExpand.disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.laEditDrag {
+  width: 28px;
+  min-width: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  cursor: grab;
+  user-select: none;
+}
+
+.laEditMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.laEditTopLine {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.laEditTitle {
+  flex: 1;
+  min-width: 0;
+  font-weight: 900;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  padding: 8px 10px;
+  outline: none;
+}
+
+.laEditRight {
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(15, 23, 42, 0.62);
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.65);
+  white-space: nowrap;
+}
+
+.laEditFields {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.laEditField {
+  display: grid;
+  gap: 6px;
+}
+
+.laEditField label {
+  font-size: 11px;
+  font-weight: 900;
+  color: rgba(15, 23, 42, 0.7);
+}
+
+.laEditField input,
+.laEditField select {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 12px;
+  padding: 8px 10px;
+  outline: none;
+  font-size: 13px;
+}
+
+.laEditField.wide {
+  grid-column: span 6;
+}
+
+.laEditActions {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.laBtnDanger {
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+  color: rgba(153, 27, 27, 0.95);
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.laBtnDanger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Children spacing */
+.laEditChildren {
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+/* Responsive: collapse editor fields */
+@media (max-width: 980px) {
+  .laEditFields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .laEditField.wide {
+    grid-column: span 2;
+  }
+}
