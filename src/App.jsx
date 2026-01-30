@@ -3,6 +3,7 @@ import { AuthProvider } from "./auth/AuthContext";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import AdminOrInstitutionAdminRoute from "./routes/AdminOrInstitutionAdminRoute";
 import AdminRoute from "./routes/AdminRoute";
+import AdminTocTest from "./pages/dashboard/admin/AdminTocTest";
 
 import AdminLLRImport from "./pages/dashboard/admin/AdminLLRImport";
 import LawReportReader from "./pages/dashboard/LawReportReader";
@@ -143,6 +144,7 @@ export default function App() {
               <Route path="admin/institutions" element={<AdminInstitutions />} />
               <Route path="admin/content-products" element={<AdminContentProducts />} />
               <Route path="admin/documents" element={<AdminDocuments />} />
+              <Route path="admin/toc-test" element={<AdminTocTest />} />
               <Route path="admin/llr-services" element={<AdminLLRServices />} />
               <Route path="admin/llr-services/import" element={<AdminLLRImport />} />
               <Route path="ai-test" element={<AiSummaryTest />} />
