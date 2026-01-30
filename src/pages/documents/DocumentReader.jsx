@@ -18,6 +18,80 @@ function safeAbort(ctrl) {
   }
 }
 
+/** ---------------------------
+ * ToC helpers (tree DTO aware)
+ * -------------------------- */
+function nodeTitle(n, fallback = "—") {
+  return String(n?.title ?? n?.Title ?? n?.label ?? n?.text ?? n?.heading ?? fallback);
+}
+
+function nodeChildren(n) {
+  const c = n?.children ?? n?.Children;
+  return Array.isArray(c) ? c : [];
+}
+
+function nodeRightLabel(n) {
+  const pageLabel = n?.pageLabel ?? n?.PageLabel;
+  const startPage = n?.startPage ?? n?.StartPage;
+  const endPage = n?.endPage ?? n?.EndPage;
+
+  if (pageLabel) return String(pageLabel);
+  if (startPage != null || endPage != null) {
+    return `${startPage ?? ""}${endPage != null ? `–${endPage}` : ""}`.trim();
+  }
+  return "";
+}
+
+function nodeJumpPage(n) {
+  // Primary: StartPage (PageRange entries)
+  const startPage = n?.startPage ?? n?.StartPage;
+  const p = Number(startPage);
+  if (Number.isFinite(p) && p > 0) return p;
+
+  // Fallbacks (if you ever return a flattened ToC later)
+  const pageNumber = n?.pageNumber ?? n?.page ?? n?.Page;
+  const p2 = Number(pageNumber);
+  if (Number.isFinite(p2) && p2 > 0) return p2;
+
+  return null;
+}
+
+function TocTree({ nodes, depth = 0, onPick }) {
+  const arr = Array.isArray(nodes) ? nodes : [];
+
+  return (
+    <>
+      {arr.map((n, idx) => {
+        const id = n?.id ?? n?.Id ?? `${depth}-${idx}-${nodeTitle(n, "node")}`;
+        const title = nodeTitle(n);
+        const children = nodeChildren(n);
+        const right = nodeRightLabel(n);
+        const jumpPage = nodeJumpPage(n);
+
+        return (
+          <div key={id} style={{ marginLeft: depth * 14 }}>
+            <button
+              className="readerpage-tocItem"
+              type="button"
+              disabled={!jumpPage}
+              onClick={() => jumpPage && onPick(jumpPage)}
+              title={jumpPage ? `Go to page ${jumpPage}` : "No page mapped"}
+              style={{ paddingLeft: 12 }}
+            >
+              <div className="readerpage-tocItemTitle">{title}</div>
+              <div className="readerpage-tocItemPage">{right || "—"}</div>
+            </button>
+
+            {children.length > 0 ? (
+              <TocTree nodes={children} depth={depth + 1} onPick={onPick} />
+            ) : null}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 export default function DocumentReader() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -93,6 +167,7 @@ export default function DocumentReader() {
     setTocOpen(true);
     setTocLoading(true);
     setTocError("");
+    // keep existing toc while loading (nice UX)
   }, []);
 
   const closeToc = useCallback(() => {
@@ -116,13 +191,14 @@ export default function DocumentReader() {
     const ctrl = new AbortController();
     tocAbortRef.current = ctrl;
 
+    // ✅ IMPORTANT: your endpoint is /api/legal-documents/{id}/toc
     api
-      .get(`/documents/${docId}/toc`, { signal: ctrl.signal })
+      .get(`/legal-documents/${docId}/toc`, { signal: ctrl.signal })
       .then((res) => {
         if (!mountedRef.current || ctrl.signal.aborted) return;
 
-        const items = Array.isArray(res.data) ? res.data : res.data?.items || [];
-        setToc(items);
+        const items = res.data?.items ?? [];
+        setToc(Array.isArray(items) ? items : []);
         setTocLoading(false);
       })
       .catch((err) => {
@@ -336,10 +412,7 @@ export default function DocumentReader() {
   // ✅ Gate UI only on access
   if (loadingAccess) {
     return (
-      <div
-        className="reader-shell"
-        style={{ display: "grid", placeItems: "center", minHeight: "100vh" }}
-      >
+      <div className="reader-shell" style={{ display: "grid", placeItems: "center", minHeight: "100vh" }}>
         <div style={{ textAlign: "center", padding: 20 }}>
           <div style={{ fontWeight: 900, marginBottom: 8 }}>Loading reader…</div>
           <div style={{ color: "#6b7280", fontSize: 13 }}>{loadingAccessHint}</div>
@@ -513,25 +586,8 @@ export default function DocumentReader() {
             <div className="readerpage-tocState error">{tocError}</div>
           ) : toc?.length ? (
             <div className="readerpage-tocList">
-              {toc.map((item, idx) => {
-                const label =
-                  item.title || item.heading || item.text || item.label || `Section ${idx + 1}`;
-                const pageNumber = item.pageNumber ?? item.page ?? item.startPage ?? null;
-
-                return (
-                  <button
-                    key={item.id || `${idx}-${label}`}
-                    className="readerpage-tocItem"
-                    type="button"
-                    onClick={() => onTocClick(pageNumber)}
-                    disabled={!pageNumber}
-                    title={pageNumber ? `Go to page ${pageNumber}` : "No page mapped"}
-                  >
-                    <div className="readerpage-tocItemTitle">{label}</div>
-                    <div className="readerpage-tocItemPage">{pageNumber ? pageNumber : "—"}</div>
-                  </button>
-                );
-              })}
+              {/* ✅ Render the nested tree structure (Children) like admin preview */}
+              <TocTree nodes={toc} onPick={onTocClick} />
             </div>
           ) : (
             <div className="readerpage-tocState">No ToC available.</div>
@@ -576,8 +632,8 @@ export default function DocumentReader() {
             <div className="preview-lock-card">
               <h2>Preview limit reached</h2>
               <p>
-                You’re reading a preview of this publication. To continue beyond page{" "}
-                {access.previewMaxPages}, you’ll need full access.
+                You’re reading a preview of this publication. To continue beyond page {access.previewMaxPages}, you’ll
+                need full access.
               </p>
 
               <div className="preview-lock-actions">
