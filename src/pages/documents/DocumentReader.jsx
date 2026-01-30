@@ -18,6 +18,14 @@ function safeAbort(ctrl) {
   }
 }
 
+function safeJsonParse(str, fallback) {
+  try {
+    return JSON.parse(str);
+  } catch {
+    return fallback;
+  }
+}
+
 /** ---------------------------
  * Outline helpers (tree DTO aware)
  * - Supports both camelCase and PascalCase (in case API serializer differs)
@@ -59,7 +67,58 @@ function nodeJumpPage(n) {
   return null;
 }
 
-function OutlineTree({ nodes, depth = 0, expanded, onToggle, onPick }) {
+function collectAllNodeIds(nodes, depth = 0, out = new Set()) {
+  const arr = Array.isArray(nodes) ? nodes : [];
+  for (let i = 0; i < arr.length; i += 1) {
+    const n = arr[i];
+    const id = nodeId(n, `${depth}-${i}-${nodeTitle(n, "node")}`);
+    if (id) out.add(id);
+    const kids = nodeChildren(n);
+    if (kids.length) collectAllNodeIds(kids, depth + 1, out);
+  }
+  return out;
+}
+
+/**
+ * Filter tree by title, keeping ancestor chain for matches.
+ * Returns a NEW tree (safe).
+ */
+function filterOutlineTree(nodes, query) {
+  const q = (query || "").trim().toLowerCase();
+  if (!q) return Array.isArray(nodes) ? nodes : [];
+
+  function walk(list) {
+    const arr = Array.isArray(list) ? list : [];
+    const out = [];
+    for (const n of arr) {
+      const title = nodeTitle(n, "").toLowerCase();
+      const kids = nodeChildren(n);
+      const keptKids = walk(kids);
+
+      const match = title.includes(q);
+      if (match || keptKids.length) {
+        // clone node shallowly, keep only filtered children
+        out.push({
+          ...n,
+          children: keptKids,
+          Children: keptKids, // support both shapes
+        });
+      }
+    }
+    return out;
+  }
+
+  return walk(nodes);
+}
+
+function OutlineTree({
+  nodes,
+  depth = 0,
+  expanded,
+  activePage,
+  onToggle,
+  onPick,
+}) {
   const arr = Array.isArray(nodes) ? nodes : [];
 
   return (
@@ -74,36 +133,32 @@ function OutlineTree({ nodes, depth = 0, expanded, onToggle, onPick }) {
         const right = nodeRightLabel(n);
         const jumpPage = nodeJumpPage(n);
 
+        const isActive =
+          Number.isFinite(activePage) &&
+          Number.isFinite(jumpPage) &&
+          jumpPage > 0 &&
+          activePage === jumpPage;
+
         return (
-          <div key={id} style={{ marginLeft: depth * 14 }}>
-            <div style={{ display: "flex", alignItems: "stretch", gap: 8 }}>
+          <div key={id} className="readerOutlineRow" style={{ "--outline-depth": depth }}>
+            <div className="readerOutlineRowInner">
               <button
                 type="button"
+                className={`readerOutlineTwisty ${hasChildren ? "" : "disabled"}`}
                 onClick={() => hasChildren && onToggle(id)}
                 disabled={!hasChildren}
                 title={hasChildren ? (isOpen ? "Collapse" : "Expand") : ""}
-                style={{
-                  width: 30,
-                  minWidth: 30,
-                  border: "none",
-                  background: "transparent",
-                  cursor: hasChildren ? "pointer" : "default",
-                  opacity: hasChildren ? 1 : 0.25,
-                  fontSize: 14,
-                  lineHeight: "34px",
-                }}
                 aria-label={hasChildren ? (isOpen ? "Collapse section" : "Expand section") : "No children"}
               >
                 {hasChildren ? (isOpen ? "▾" : "▸") : "•"}
               </button>
 
               <button
-                className="readerpage-tocItem"
+                className={`readerpage-tocItem ${isActive ? "active" : ""}`}
                 type="button"
                 disabled={!jumpPage}
                 onClick={() => jumpPage && onPick(jumpPage)}
                 title={jumpPage ? `Go to page ${jumpPage}` : "No page mapped"}
-                style={{ flex: 1 }}
               >
                 <div className="readerpage-tocItemTitle">{title || "—"}</div>
                 <div className="readerpage-tocItemPage">{right || "—"}</div>
@@ -111,8 +166,15 @@ function OutlineTree({ nodes, depth = 0, expanded, onToggle, onPick }) {
             </div>
 
             {hasChildren && isOpen ? (
-              <div style={{ marginTop: 2 }}>
-                <OutlineTree nodes={children} depth={depth + 1} expanded={expanded} onToggle={onToggle} onPick={onPick} />
+              <div className="readerOutlineChildren">
+                <OutlineTree
+                  nodes={children}
+                  depth={depth + 1}
+                  expanded={expanded}
+                  activePage={activePage}
+                  onToggle={onToggle}
+                  onPick={onPick}
+                />
               </div>
             ) : null}
           </div>
@@ -167,10 +229,27 @@ export default function DocumentReader() {
 
   const [outlineExpanded, setOutlineExpanded] = useState(() => new Set());
 
+  const [outlineQuery, setOutlineQuery] = useState("");
+  const [activePage, setActivePage] = useState(null);
+
   const viewerApiRef = useRef(null);
 
   const mountedRef = useRef(false);
   const outlineAbortRef = useRef(null);
+
+  // drawer width (desktop) persisted per browser
+  const OUTLINE_WIDTH_KEY = "la_reader_outline_width";
+  const OUTLINE_EXPANDED_KEY = useMemo(
+    () => (Number.isFinite(docId) && docId > 0 ? `la_reader_outline_expanded_${docId}` : ""),
+    [docId]
+  );
+
+  const [outlineWidth, setOutlineWidth] = useState(() => {
+    const raw = localStorage.getItem(OUTLINE_WIDTH_KEY);
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 260 && n <= 560) return n;
+    return 340;
+  });
 
   useEffect(() => {
     mountedRef.current = true;
@@ -187,14 +266,29 @@ export default function DocumentReader() {
   const openOutline = useCallback(() => setOutlineOpen(true), []);
   const closeOutline = useCallback(() => setOutlineOpen(false), []);
 
-  const onOutlineClick = useCallback((pageNumber) => {
-    const p = Number(pageNumber);
-    if (!Number.isFinite(p) || p <= 0) return;
+  // ✅ Preview clamp + jump
+  const onOutlineClick = useCallback(
+    (pageNumber) => {
+      const p = Number(pageNumber);
+      if (!Number.isFinite(p) || p <= 0) return;
 
-    // Your PdfViewer API expects 1-based (based on your usage)
-    const ok = viewerApiRef.current?.jumpToPage?.(p, "smooth");
-    if (ok) setOutlineOpen(false);
-  }, []);
+      // Preview clamp
+      if (!access?.hasFullAccess && Number.isFinite(access?.previewMaxPages)) {
+        if (p > access.previewMaxPages) {
+          showToast(
+            `This section is outside preview (ends at page ${access.previewMaxPages}). Purchase to continue.`,
+            "error"
+          );
+          setLocked(true);
+          return;
+        }
+      }
+
+      const ok = viewerApiRef.current?.jumpToPage?.(p, "smooth");
+      if (ok) setOutlineOpen(false);
+    },
+    [access]
+  );
 
   const toggleOutlineNode = useCallback((idStr) => {
     setOutlineExpanded((prevSet) => {
@@ -203,6 +297,85 @@ export default function DocumentReader() {
       else next.add(idStr);
       return next;
     });
+  }, []);
+
+  const expandAll = useCallback(() => {
+    setOutlineExpanded(() => collectAllNodeIds(outline));
+  }, [outline]);
+
+  const collapseAll = useCallback(() => {
+    setOutlineExpanded(() => new Set());
+  }, []);
+
+  // Persist expanded state per document
+  useEffect(() => {
+    if (!OUTLINE_EXPANDED_KEY) return;
+    const arr = Array.from(outlineExpanded.values());
+    localStorage.setItem(OUTLINE_EXPANDED_KEY, JSON.stringify(arr));
+  }, [OUTLINE_EXPANDED_KEY, outlineExpanded]);
+
+  // Restore expanded state when doc changes (after outline loads)
+  const restoreExpandedForDoc = useCallback(() => {
+    if (!OUTLINE_EXPANDED_KEY) return;
+    const raw = localStorage.getItem(OUTLINE_EXPANDED_KEY);
+    const arr = safeJsonParse(raw || "[]", []);
+    if (Array.isArray(arr) && arr.length) {
+      setOutlineExpanded(new Set(arr.map(String)));
+    } else {
+      // default expand top-level later
+      setOutlineExpanded(new Set());
+    }
+  }, [OUTLINE_EXPANDED_KEY]);
+
+  // Persist width
+  useEffect(() => {
+    localStorage.setItem(OUTLINE_WIDTH_KEY, String(outlineWidth));
+  }, [outlineWidth]);
+
+  // Best-effort active page tracking (only works if PdfViewer exposes getCurrentPage())
+  useEffect(() => {
+    let t = null;
+
+    function tick() {
+      const p = viewerApiRef.current?.getCurrentPage?.();
+      const n = Number(p);
+      if (Number.isFinite(n) && n > 0) {
+        setActivePage((prev) => (prev === n ? prev : n));
+      }
+    }
+
+    // start polling once viewer api exists
+    t = window.setInterval(() => tick(), 500);
+
+    return () => {
+      if (t) window.clearInterval(t);
+    };
+  }, []);
+
+  // Resizable drawer drag
+  const draggingRef = useRef(false);
+
+  const onResizePointerDown = useCallback((e) => {
+    draggingRef.current = true;
+    document.body.classList.add("readerOutlineResizing");
+    try {
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    } catch {
+      // non-fatal
+    }
+  }, []);
+
+  const onResizePointerMove = useCallback((e) => {
+    if (!draggingRef.current) return;
+    const x = e.clientX;
+    // Drawer is left side; width = x (approx) minus a small margin if you have outer padding
+    const next = Math.max(260, Math.min(560, x));
+    setOutlineWidth(next);
+  }, []);
+
+  const onResizePointerUp = useCallback(() => {
+    draggingRef.current = false;
+    document.body.classList.remove("readerOutlineResizing");
   }, []);
 
   // ✅ Always fetch Outline when docId changes (BACKGROUND)
@@ -217,7 +390,6 @@ export default function DocumentReader() {
     setOutlineError("");
 
     try {
-      // ✅ NEW endpoint: /outline
       const res = await api.get(`/legal-documents/${docId}/outline`, { signal: ctrl.signal });
 
       if (!mountedRef.current || ctrl.signal.aborted) return;
@@ -226,7 +398,10 @@ export default function DocumentReader() {
       const arr = Array.isArray(items) ? items : [];
       setOutline(arr);
 
-      // Expand top-level by default once
+      // restore persisted expanded for doc (if any)
+      restoreExpandedForDoc();
+
+      // Expand top-level by default once if nothing restored
       setOutlineExpanded((prevSet) => {
         if (prevSet.size > 0) return prevSet;
         const next = new Set();
@@ -246,12 +421,18 @@ export default function DocumentReader() {
         setOutlineLoading(false);
       }
     }
-  }, [docId]);
+  }, [docId, restoreExpandedForDoc]);
 
   useEffect(() => {
     if (!Number.isFinite(docId) || docId <= 0) return;
+    setOutlineQuery("");
+    setActivePage(null);
     fetchOutline();
   }, [docId, fetchOutline]);
+
+  const filteredOutline = useMemo(() => {
+    return filterOutlineTree(outline, outlineQuery);
+  }, [outline, outlineQuery]);
 
   // Detect landing from Paystack/MPESA
   useEffect(() => {
@@ -438,10 +619,10 @@ export default function DocumentReader() {
   // ✅ Gate UI only on access
   if (loadingAccess) {
     return (
-      <div className="reader-shell" style={{ display: "grid", placeItems: "center", minHeight: "100vh" }}>
-        <div style={{ textAlign: "center", padding: 20 }}>
-          <div style={{ fontWeight: 900, marginBottom: 8 }}>Loading reader…</div>
-          <div style={{ color: "#6b7280", fontSize: 13 }}>{loadingAccessHint}</div>
+      <div className="reader-shell readerCenter">
+        <div className="readerLoadingCard">
+          <div className="readerLoadingTitle">Loading reader…</div>
+          <div className="readerLoadingHint">{loadingAccessHint}</div>
         </div>
       </div>
     );
@@ -449,7 +630,7 @@ export default function DocumentReader() {
 
   if (!access) {
     return (
-      <div className="reader-shell" style={{ padding: 20 }}>
+      <div className="reader-shell readerPadded">
         <p>Unable to open document.</p>
         <button className="outline-btn" onClick={() => navigate("/dashboard/explore")}>
           Back to Explore
@@ -477,39 +658,12 @@ export default function DocumentReader() {
           <div className="preview-lock-card">
             <h2>Access blocked</h2>
 
-            {blockReason && (
-              <div
-                style={{
-                  display: "inline-flex",
-                  padding: "6px 10px",
-                  borderRadius: 999,
-                  fontSize: 12,
-                  fontWeight: 900,
-                  border: "1px solid #fecaca",
-                  background: "#fef2f2",
-                  color: "#991b1b",
-                  marginBottom: 10,
-                }}
-              >
-                {blockReason}
-              </div>
-            )}
+            {blockReason && <div className="readerBlockBadge">{blockReason}</div>}
 
-            <p style={{ whiteSpace: "pre-wrap" }}>{blockMessage}</p>
+            <p className="readerBlockMessage">{blockMessage}</p>
 
             {!canPurchaseIndividually && (
-              <div
-                style={{
-                  marginTop: 10,
-                  padding: "10px 12px",
-                  borderRadius: 12,
-                  background: "#fffbeb",
-                  border: "1px solid #fcd34d",
-                  color: "#92400e",
-                  fontSize: 13,
-                  fontWeight: 700,
-                }}
-              >
+              <div className="readerBlockWarn">
                 {purchaseDisabledReason ||
                   "Purchases are disabled for institution accounts. Please contact your administrator."}
               </div>
@@ -543,7 +697,7 @@ export default function DocumentReader() {
             </p>
 
             {canPay && (
-              <p className="preview-lock-footnote" style={{ marginTop: 6 }}>
+              <p className="preview-lock-footnote readerTip">
                 Tip: Go to the details page to complete the purchase.
               </p>
             )}
@@ -577,7 +731,12 @@ export default function DocumentReader() {
   const maxPages = access.hasFullAccess ? null : access.previewMaxPages;
 
   return (
-    <div className="reader-layout">
+    <div
+      className="reader-layout"
+      style={{ "--reader-outline-width": `${outlineWidth}px` }}
+      onPointerMove={onResizePointerMove}
+      onPointerUp={onResizePointerUp}
+    >
       {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
 
       {/* Mobile topbar */}
@@ -598,40 +757,80 @@ export default function DocumentReader() {
       <div className={`readerpage-tocDrawer ${outlineOpen ? "open" : ""}`}>
         <div className="readerpage-tocHeader">
           <div className="readerpage-tocTitle">Table of Contents</div>
+
+          <div className="readerOutlineHeaderActions">
+            <button className="readerOutlineMiniBtn" type="button" onClick={expandAll} title="Expand all">
+              Expand
+            </button>
+            <button className="readerOutlineMiniBtn" type="button" onClick={collapseAll} title="Collapse all">
+              Collapse
+            </button>
+          </div>
+
           <button className="readerpage-tocClose" type="button" onClick={closeOutline} title="Close">
             ✕
           </button>
         </div>
 
         <div className="readerpage-tocBody">
+          <div className="readerOutlineSearchWrap">
+            <input
+              className="readerOutlineSearch"
+              type="search"
+              value={outlineQuery}
+              onChange={(e) => setOutlineQuery(e.target.value)}
+              placeholder="Search sections…"
+              aria-label="Search table of contents"
+            />
+            {outlineQuery ? (
+              <button
+                type="button"
+                className="readerOutlineClear"
+                onClick={() => setOutlineQuery("")}
+                title="Clear search"
+              >
+                ✕
+              </button>
+            ) : null}
+          </div>
+
           {outlineLoading ? (
             <div className="readerpage-tocState">Loading ToC…</div>
           ) : outlineError ? (
             <div className="readerpage-tocState error">
               {outlineError}
-              <div style={{ marginTop: 10 }}>
+              <div className="readerOutlineStateActions">
                 <button className="outline-btn" type="button" onClick={fetchOutline}>
                   Retry
                 </button>
               </div>
             </div>
-          ) : outline?.length ? (
+          ) : filteredOutline?.length ? (
             <div className="readerpage-tocList">
               <OutlineTree
-                nodes={outline}
+                nodes={filteredOutline}
                 expanded={outlineExpanded}
+                activePage={activePage}
                 onToggle={toggleOutlineNode}
                 onPick={onOutlineClick}
               />
             </div>
+          ) : outline?.length ? (
+            <div className="readerpage-tocState">
+              No matches for <strong>{outlineQuery.trim()}</strong>.
+              <div className="readerOutlineStateActions">
+                <button className="outline-btn" type="button" onClick={() => setOutlineQuery("")}>
+                  Clear search
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="readerpage-tocState">
               No ToC available for document #{docId}.
-              <div style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>
-                Confirm the Reader API returns it:{" "}
-                <span style={{ fontWeight: 800 }}>/api/legal-documents/{docId}/outline</span>
+              <div className="readerOutlineHint">
+                Confirm the Reader API returns it: <span>/api/legal-documents/{docId}/outline</span>
               </div>
-              <div style={{ marginTop: 10 }}>
+              <div className="readerOutlineStateActions">
                 <button className="outline-btn" type="button" onClick={fetchOutline}>
                   Reload
                 </button>
@@ -639,31 +838,20 @@ export default function DocumentReader() {
             </div>
           )}
         </div>
+
+        {/* Desktop resize handle */}
+        <div
+          className="readerOutlineResizeHandle"
+          role="separator"
+          aria-orientation="vertical"
+          title="Drag to resize"
+          onPointerDown={onResizePointerDown}
+        />
       </div>
 
       {/* Main reader */}
       <div className="readerpage-main">
-        {loadingMeta ? (
-          <div
-            style={{
-              position: "fixed",
-              top: 62,
-              left: "50%",
-              transform: "translateX(-50%)",
-              zIndex: 20,
-              fontSize: 12,
-              fontWeight: 800,
-              color: "#6b7280",
-              background: "rgba(255,255,255,0.75)",
-              border: "1px solid rgba(229,231,235,0.9)",
-              padding: "6px 10px",
-              borderRadius: 999,
-              backdropFilter: "blur(6px)",
-            }}
-          >
-            Preparing document…
-          </div>
-        ) : null}
+        {loadingMeta ? <div className="readerMetaPill">Preparing document…</div> : null}
 
         <PdfViewer
           documentId={docId}

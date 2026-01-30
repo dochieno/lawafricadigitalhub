@@ -1008,3 +1008,249 @@ svg.highlight-layer {
     display: none;
   }
 }
+/* =========================================================
+   Reader: layout polish + Outline UI (1–5)
+========================================================= */
+
+/* helpers */
+.readerCenter {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+}
+
+.readerPadded {
+  padding: 20px;
+}
+
+.readerLoadingCard {
+  text-align: center;
+  padding: 20px;
+}
+
+.readerLoadingTitle {
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.readerLoadingHint {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+/* blocked badge + warning */
+.readerBlockBadge {
+  display: inline-flex;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+  margin-bottom: 10px;
+}
+
+.readerBlockMessage {
+  white-space: pre-wrap;
+}
+
+.readerBlockWarn {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.readerTip {
+  margin-top: 6px;
+}
+
+/* meta pill */
+.readerMetaPill {
+  position: fixed;
+  top: 62px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  font-size: 12px;
+  font-weight: 800;
+  color: #6b7280;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(229, 231, 235, 0.9);
+  padding: 6px 10px;
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+}
+
+/* =========================================================
+   Outline drawer width & resizing
+========================================================= */
+
+.reader-layout {
+  /* default; overridden by inline CSS variable */
+  --reader-outline-width: 340px;
+}
+
+/* If your drawer is already positioned with a fixed width, this makes it resizable */
+.readerpage-tocDrawer {
+  width: var(--reader-outline-width);
+  max-width: 92vw;
+}
+
+/* Resize handle (desktop only) */
+.readerOutlineResizeHandle {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .readerOutlineResizeHandle {
+    display: block;
+    position: absolute;
+    top: 0;
+    right: -6px;
+    width: 12px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 50;
+  }
+
+  .readerOutlineResizeHandle::before {
+    content: "";
+    position: absolute;
+    top: 10px;
+    bottom: 10px;
+    left: 50%;
+    width: 2px;
+    transform: translateX(-50%);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.12);
+  }
+
+  body.readerOutlineResizing {
+    cursor: col-resize;
+    user-select: none;
+  }
+}
+
+/* =========================================================
+   Outline header actions + search
+========================================================= */
+
+.readerOutlineHeaderActions {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: auto;
+  margin-right: 8px;
+}
+
+.readerOutlineMiniBtn {
+  border: 1px solid rgba(229, 231, 235, 0.9);
+  background: rgba(255, 255, 255, 0.85);
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 12px;
+  color: #374151;
+  cursor: pointer;
+}
+
+.readerOutlineMiniBtn:hover {
+  background: rgba(255, 255, 255, 1);
+}
+
+.readerOutlineSearchWrap {
+  position: relative;
+  padding: 10px 10px 8px;
+}
+
+.readerOutlineSearch {
+  width: 100%;
+  border: 1px solid rgba(229, 231, 235, 0.95);
+  border-radius: 12px;
+  padding: 10px 36px 10px 12px;
+  font-size: 13px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.readerOutlineSearch:focus {
+  border-color: rgba(139, 28, 28, 0.35); /* uses your LawAfrica maroon feel */
+  box-shadow: 0 0 0 3px rgba(139, 28, 28, 0.10);
+}
+
+.readerOutlineClear {
+  position: absolute;
+  top: 50%;
+  right: 18px;
+  transform: translateY(-40%);
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  color: #6b7280;
+  cursor: pointer;
+}
+
+.readerOutlineStateActions {
+  margin-top: 10px;
+}
+
+.readerOutlineHint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.readerOutlineHint span {
+  font-weight: 800;
+}
+
+/* =========================================================
+   Outline tree rows (remove inline CSS)
+========================================================= */
+
+.readerOutlineRow {
+  margin-left: calc(var(--outline-depth, 0) * 14px);
+}
+
+.readerOutlineRowInner {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.readerOutlineTwisty {
+  width: 30px;
+  min-width: 30px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 34px;
+  color: #111827;
+  opacity: 1;
+}
+
+.readerOutlineTwisty.disabled {
+  cursor: default;
+  opacity: 0.25;
+}
+
+.readerOutlineChildren {
+  margin-top: 2px;
+}
+
+/* active item highlight */
+.readerpage-tocItem.active {
+  border-color: rgba(139, 28, 28, 0.35);
+  background: rgba(139, 28, 28, 0.06);
+}
+
+.readerpage-tocItem.active .readerpage-tocItemTitle {
+  color: #7a1414;
+  font-weight: 900;
+}
