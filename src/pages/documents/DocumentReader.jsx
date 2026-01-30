@@ -47,12 +47,10 @@ function nodeRightLabel(n) {
 }
 
 function nodeJumpPage(n) {
-  // Primary for your tree DTO: StartPage
   const startPage = n?.startPage ?? n?.StartPage;
   const p = Number(startPage);
   if (Number.isFinite(p) && p > 0) return p;
 
-  // Fallbacks if you ever return flattened items
   const pageNumber = n?.pageNumber ?? n?.page ?? n?.Page;
   const p2 = Number(pageNumber);
   if (Number.isFinite(p2) && p2 > 0) return p2;
@@ -78,7 +76,6 @@ function TocTree({ nodes, depth = 0, expanded, onToggle, onPick }) {
         return (
           <div key={id} style={{ marginLeft: depth * 14 }}>
             <div style={{ display: "flex", alignItems: "stretch", gap: 8 }}>
-              {/* caret toggle */}
               <button
                 type="button"
                 onClick={() => hasChildren && onToggle(id)}
@@ -99,7 +96,6 @@ function TocTree({ nodes, depth = 0, expanded, onToggle, onPick }) {
                 {hasChildren ? (isOpen ? "▾" : "▸") : "•"}
               </button>
 
-              {/* row click = jump */}
               <button
                 className="readerpage-tocItem"
                 type="button"
@@ -113,7 +109,6 @@ function TocTree({ nodes, depth = 0, expanded, onToggle, onPick }) {
               </button>
             </div>
 
-            {/* children */}
             {hasChildren && isOpen ? (
               <div style={{ marginTop: 2 }}>
                 <TocTree nodes={children} depth={depth + 1} expanded={expanded} onToggle={onToggle} onPick={onPick} />
@@ -124,18 +119,6 @@ function TocTree({ nodes, depth = 0, expanded, onToggle, onPick }) {
       })}
     </>
   );
-}
-
-/** ✅ Accept all response shapes (this is the main fix) */
-function extractTocItemsFromResponse(data) {
-  if (!data) return [];
-
-  // Case A: API returns the tree directly (array)
-  if (Array.isArray(data)) return data;
-
-  // Case B: wrapped
-  const items = data.items ?? data.Items ?? data.data?.items ?? data.data?.Items;
-  return Array.isArray(items) ? items : [];
 }
 
 export default function DocumentReader() {
@@ -150,24 +133,19 @@ export default function DocumentReader() {
   const [contentAvailable, setContentAvailable] = useState(true);
   const [locked, setLocked] = useState(false);
 
-  // ✅ Split loading: gate only on access; keep soft loading for other data
   const [loadingAccess, setLoadingAccess] = useState(true);
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [loadingAccessHint, setLoadingAccessHint] = useState("Checking access");
 
-  // hard-block overlay
   const [blocked, setBlocked] = useState(false);
   const [blockMessage, setBlockMessage] = useState("Access blocked. Please contact your administrator.");
 
-  // purchase gating returned by /access
   const [canPurchaseIndividually, setCanPurchaseIndividually] = useState(true);
   const [purchaseDisabledReason, setPurchaseDisabledReason] = useState(null);
   const [blockReason, setBlockReason] = useState(null);
 
-  // success toast when landing from payment
   const [toast, setToast] = useState(null);
 
-  // ✅ payment landing flag (important for MPESA async finalization)
   const [justPaid, setJustPaid] = useState(false);
   const [paidProvider, setPaidProvider] = useState("");
 
@@ -179,23 +157,18 @@ export default function DocumentReader() {
   }
 
   // ---------------------------------------------
-  // ✅ ToC drawer state + PdfViewer API bridge
+  // ✅ ToC state + PdfViewer API bridge
   // ---------------------------------------------
   const [tocOpen, setTocOpen] = useState(false);
   const [toc, setToc] = useState([]);
   const [tocLoading, setTocLoading] = useState(false);
   const [tocError, setTocError] = useState("");
 
-  // collapsible state (ids expanded)
   const [tocExpanded, setTocExpanded] = useState(() => new Set());
 
-  // Store PdfViewer API in a ref (NOT state)
   const viewerApiRef = useRef(null);
 
-  // avoid setState after unmount (for ToC)
   const mountedRef = useRef(false);
-
-  // Track in-flight requests (for ToC)
   const tocAbortRef = useRef(null);
 
   useEffect(() => {
@@ -207,13 +180,11 @@ export default function DocumentReader() {
   }, []);
 
   const handleRegisterApi = useCallback((apiObj) => {
-    viewerApiRef.current = apiObj; // { jumpToPage } or null
+    viewerApiRef.current = apiObj;
   }, []);
 
   const openToc = useCallback(() => {
     setTocOpen(true);
-    setTocLoading(true);
-    setTocError("");
   }, []);
 
   const closeToc = useCallback(() => {
@@ -229,59 +200,63 @@ export default function DocumentReader() {
   }, []);
 
   const toggleTocNode = useCallback((idStr) => {
-    setTocExpanded((set0) => {
-      const next = new Set(set0);
+    setTocExpanded((prevSet) => {
+      const next = new Set(prevSet);
       if (next.has(idStr)) next.delete(idStr);
       else next.add(idStr);
       return next;
     });
   }, []);
 
-  // ✅ Load ToC only when drawer opens
-  useEffect(() => {
-    if (!tocOpen) return;
+  // ✅ Always fetch ToC when docId changes (BACKGROUND)
+  const fetchToc = useCallback(async () => {
     if (!Number.isFinite(docId) || docId <= 0) return;
 
     safeAbort(tocAbortRef.current);
     const ctrl = new AbortController();
     tocAbortRef.current = ctrl;
 
-    api
-      .get(`/legal-documents/${docId}/toc`, { signal: ctrl.signal })
-      .then((res) => {
-        if (!mountedRef.current || ctrl.signal.aborted) return;
+    setTocLoading(true);
+    setTocError("");
 
-        const arr = extractTocItemsFromResponse(res?.data);
-        setToc(arr);
-        setTocLoading(false);
+    try {
+      // IMPORTANT: Reader endpoint
+      const res = await api.get(`/legal-documents/${docId}/toc`, { signal: ctrl.signal });
 
-        // Expand top-level by default (nice UX)
-        setTocExpanded((set0) => {
-          if (set0.size > 0) return set0; // don't overwrite user toggles
-          const next = new Set();
-          for (const n of arr) {
-            const idStr = nodeId(n, "");
-            if (idStr) next.add(idStr);
-          }
-          return next;
-        });
-      })
-      .catch((err) => {
-        if (!mountedRef.current || ctrl.signal.aborted) return;
+      if (!mountedRef.current || ctrl.signal.aborted) return;
 
-        console.debug("Failed to load ToC:", err);
+      const items = res.data?.items ?? [];
+      const arr = Array.isArray(items) ? items : [];
+      setToc(arr);
 
-        const status = err?.response?.status;
-        const msg =
-          err?.response?.data?.message ||
-          (status ? `Failed to load Table of Contents (HTTP ${status}).` : "Failed to load Table of Contents.");
-
-        setTocError(msg);
-        setTocLoading(false);
+      // Expand top-level by default once
+      setTocExpanded((prevSet) => {
+        if (prevSet.size > 0) return prevSet;
+        const next = new Set();
+        for (const n of arr) {
+          const idStr = nodeId(n, "");
+          if (idStr) next.add(idStr);
+        }
+        return next;
       });
+    } catch (err) {
+      if (!mountedRef.current || ctrl.signal.aborted) return;
+      console.debug("Failed to load ToC:", err);
+      setToc([]);
+      setTocError(err?.response?.data?.message || "Failed to load Table of Contents.");
+    } finally {
+  if (mountedRef.current && !ctrl.signal.aborted) {
+    setTocLoading(false);
+  }
+}
 
-    return () => safeAbort(ctrl);
-  }, [docId, tocOpen]);
+  }, [docId]);
+
+  useEffect(() => {
+    // load ToC as soon as document changes
+    if (!Number.isFinite(docId) || docId <= 0) return;
+    fetchToc();
+  }, [docId, fetchToc]);
 
   // Detect landing from Paystack/MPESA
   useEffect(() => {
@@ -300,7 +275,6 @@ export default function DocumentReader() {
       setPaidProvider(provider);
       showToast(`Payment successful ✅${provider ? ` (${provider})` : ""}`, "success");
 
-      // Only strip URL params if we used query params
       if (paidQs === "1") {
         qs.delete("paid");
         qs.delete("provider");
@@ -337,7 +311,6 @@ export default function DocumentReader() {
       try {
         setLoadingAccess(true);
 
-        // reset per document
         setLocked(false);
         setBlocked(false);
         setOffer(null);
@@ -639,7 +612,14 @@ export default function DocumentReader() {
           {tocLoading ? (
             <div className="readerpage-tocState">Loading ToC…</div>
           ) : tocError ? (
-            <div className="readerpage-tocState error">{tocError}</div>
+            <div className="readerpage-tocState error">
+              {tocError}
+              <div style={{ marginTop: 10 }}>
+                <button className="outline-btn" type="button" onClick={fetchToc}>
+                  Retry
+                </button>
+              </div>
+            </div>
           ) : toc?.length ? (
             <div className="readerpage-tocList">
               <TocTree nodes={toc} expanded={tocExpanded} onToggle={toggleTocNode} onPick={onTocClick} />
@@ -648,8 +628,13 @@ export default function DocumentReader() {
             <div className="readerpage-tocState">
               No ToC available for document #{docId}.
               <div style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>
-                If you imported ToC in Admin, confirm the Reader API returns it:{" "}
+                Confirm the Reader API returns it:{" "}
                 <span style={{ fontWeight: 800 }}>/api/legal-documents/{docId}/toc</span>
+              </div>
+              <div style={{ marginTop: 10 }}>
+                <button className="outline-btn" type="button" onClick={fetchToc}>
+                  Reload ToC
+                </button>
               </div>
             </div>
           )}
