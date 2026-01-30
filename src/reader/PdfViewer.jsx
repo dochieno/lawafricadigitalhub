@@ -1,4 +1,3 @@
-// src/reader/PdfViewer.jsx
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import api from "../api/client";
@@ -12,6 +11,9 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
+/* =========================
+   Pure helpers (OUTSIDE component)
+   ========================= */
 function looksLikeRangeCacheFailure(err) {
   const msg = String(err?.message || err || "").toLowerCase();
   if (msg.includes("err_cache_operation_not_supported")) return true;
@@ -20,6 +22,99 @@ function looksLikeRangeCacheFailure(err) {
   return false;
 }
 
+function getPageWrapperFromSelection(selection) {
+  const node = selection?.anchorNode;
+  if (!node) return null;
+  const el = node.nodeType === 1 ? node : node.parentElement;
+  if (!el) return null;
+  return el.closest(".pdf-page-wrapper");
+}
+
+function computeOffsetsFromRange(textLayerEl, range) {
+  const spans = Array.from(textLayerEl.querySelectorAll("span"));
+  if (!spans.length) return { start: null, end: null };
+
+  function findSpan(elOrNode) {
+    const el = elOrNode?.nodeType === 1 ? elOrNode : elOrNode?.parentElement;
+    return el?.closest?.("span") || null;
+  }
+
+  const startSpan = findSpan(range.startContainer);
+  const endSpan = findSpan(range.endContainer);
+  if (!startSpan || !endSpan) return { start: null, end: null };
+
+  const startIdx = spans.indexOf(startSpan);
+  const endIdx = spans.indexOf(endSpan);
+  if (startIdx < 0 || endIdx < 0) return { start: null, end: null };
+
+  const startLocal = range.startContainer?.nodeType === 3 ? range.startOffset : 0;
+  const endLocal =
+    range.endContainer?.nodeType === 3
+      ? range.endOffset
+      : endSpan.textContent?.length || 0;
+
+  let start = 0;
+  for (let i = 0; i < startIdx; i++) start += (spans[i].textContent || "").length;
+  start += startLocal;
+
+  let end = 0;
+  for (let i = 0; i < endIdx; i++) end += (spans[i].textContent || "").length;
+  end += endLocal;
+
+  if (end < start) [start, end] = [end, start];
+
+  return { start, end };
+}
+
+function clearExistingMarks(textLayerEl) {
+  const marks = textLayerEl.querySelectorAll("mark.pdf-highlight");
+  marks.forEach((mark) => {
+    const parent = mark.parentNode;
+    while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+    parent.removeChild(mark);
+    parent.normalize();
+  });
+}
+
+function applyHighlightByOffsets(textLayerEl, start, end, noteId, color = "yellow") {
+  const spans = Array.from(textLayerEl.querySelectorAll("span"));
+  if (spans.length === 0) return;
+
+  let pos = 0;
+
+  for (const span of spans) {
+    const spanText = span.textContent || "";
+    const spanStart = pos;
+    const spanEnd = pos + spanText.length;
+    pos += spanText.length;
+
+    if (spanEnd <= start) continue;
+    if (spanStart >= end) break;
+
+    const localStart = Math.max(0, start - spanStart);
+    const localEnd = Math.min(spanText.length, end - spanStart);
+
+    const before = spanText.slice(0, localStart);
+    const middle = spanText.slice(localStart, localEnd);
+    const after = spanText.slice(localEnd);
+
+    span.textContent = "";
+    if (before) span.appendChild(document.createTextNode(before));
+
+    const mark = document.createElement("mark");
+    mark.className = `pdf-highlight pdf-highlight--${color}`;
+    mark.textContent = middle;
+    mark.dataset.noteId = String(noteId);
+
+    span.appendChild(mark);
+
+    if (after) span.appendChild(document.createTextNode(after));
+  }
+}
+
+/* =========================================================
+   COMPONENT
+   ========================================================= */
 export default function PdfViewer({
   documentId,
   startPage = 1,
@@ -419,7 +514,6 @@ export default function PdfViewer({
     safeSetPage(n);
   }
 
-  // ✅ Ensure typing works: force focus + select after popover mounts
   useEffect(() => {
     if (!showPageJump) return;
     const t = setTimeout(() => {
@@ -487,53 +581,8 @@ export default function PdfViewer({
   }, [page, numPages, allowedMaxPage, showNoteBox, showNotes, showPageJump, safeSetPage, openPageJump]);
 
   /* ==================================================
-     Highlight capture (unchanged)
+     Highlight capture
      ================================================== */
-  function getPageWrapperFromSelection(selection) {
-    const node = selection?.anchorNode;
-    if (!node) return null;
-    const el = node.nodeType === 1 ? node : node.parentElement;
-    if (!el) return null;
-    return el.closest(".pdf-page-wrapper");
-  }
-
-  // Additional Helper:
-  function computeOffsetsFromRange(textLayerEl, range) {
-    const spans = Array.from(textLayerEl.querySelectorAll("span"));
-    if (!spans.length) return { start: null, end: null };
-
-    function findSpan(elOrNode) {
-      const el = elOrNode?.nodeType === 1 ? elOrNode : elOrNode?.parentElement;
-      return el?.closest?.("span") || null;
-    }
-
-    const startSpan = findSpan(range.startContainer);
-    const endSpan = findSpan(range.endContainer);
-    if (!startSpan || !endSpan) return { start: null, end: null };
-
-    // index spans
-    const startIdx = spans.indexOf(startSpan);
-    const endIdx = spans.indexOf(endSpan);
-    if (startIdx < 0 || endIdx < 0) return { start: null, end: null };
-
-    const startLocal = range.startContainer?.nodeType === 3 ? range.startOffset : 0;
-    const endLocal =
-      range.endContainer?.nodeType === 3 ? range.endOffset : endSpan.textContent?.length || 0;
-
-    let start = 0;
-    for (let i = 0; i < startIdx; i++) start += (spans[i].textContent || "").length;
-    start += startLocal;
-
-    let end = 0;
-    for (let i = 0; i < endIdx; i++) end += (spans[i].textContent || "").length;
-    end += endLocal;
-
-    // normalize
-    if (end < start) [start, end] = [end, start];
-
-    return { start, end };
-  }
-
   function handleMouseUp() {
     setTimeout(() => {
       if (isUserScrollingRef.current) return;
@@ -597,7 +646,9 @@ export default function PdfViewer({
     }, 30);
   }
 
-  // ✅ Stable jumpToPage (used by Notes + exposed to parent for ToC)
+  /* ==================================================
+     jumpToPage (for Notes + ToC)
+     ================================================== */
   const jumpToPage = useCallback(
     (p, behavior = "smooth") => {
       if (!p) return false;
@@ -624,11 +675,9 @@ export default function PdfViewer({
 
       return true;
     },
-    // ✅ FIX: include scheduleComputePageFromScroll
     [allowedMaxPage, numPages, scrollToPage, scheduleComputePageFromScroll]
   );
 
-  // ✅ expose minimal navigation API to parent (Reader ToC)
   useEffect(() => {
     if (typeof onRegisterApi !== "function") return;
 
@@ -647,53 +696,6 @@ export default function PdfViewer({
     return false;
   }
 
-  function clearExistingMarks(textLayerEl) {
-    const marks = textLayerEl.querySelectorAll("mark.pdf-highlight");
-    marks.forEach((mark) => {
-      const parent = mark.parentNode;
-      while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
-      parent.removeChild(mark);
-      parent.normalize();
-    });
-  }
-
-  function applyHighlightByOffsets(textLayerEl, start, end, noteId, color = "yellow") {
-    const spans = Array.from(textLayerEl.querySelectorAll("span"));
-    if (spans.length === 0) return;
-
-    let pos = 0;
-
-    for (const span of spans) {
-      const spanText = span.textContent || "";
-      const spanStart = pos;
-      const spanEnd = pos + spanText.length;
-      pos += spanText.length;
-
-      if (spanEnd <= start) continue;
-      if (spanStart >= end) break;
-
-      const localStart = Math.max(0, start - spanStart);
-      const localEnd = Math.min(spanText.length, end - spanStart);
-
-      const before = spanText.slice(0, localStart);
-      const middle = spanText.slice(localStart, localEnd);
-      const after = spanText.slice(localEnd);
-
-      span.textContent = "";
-      if (before) span.appendChild(document.createTextNode(before));
-
-      const mark = document.createElement("mark");
-      mark.className = `pdf-highlight pdf-highlight--${color}`;
-      mark.textContent = middle;
-      mark.dataset.noteId = String(noteId);
-
-      span.appendChild(mark);
-
-      if (after) span.appendChild(document.createTextNode(after));
-    }
-  }
-
-  // ✅ FIX: focusNote must be defined BEFORE attachHighlightClickHandler (so deps are valid)
   const focusNote = useCallback((noteId) => {
     setShowNotes(true);
     setActiveNoteId(noteId);
@@ -708,7 +710,6 @@ export default function PdfViewer({
     }, 50);
   }, []);
 
-  // ✅ FIX: stable + depends on focusNote
   const attachHighlightClickHandler = useCallback(
     (textLayerEl) => {
       if (!textLayerEl) return;
@@ -729,7 +730,6 @@ export default function PdfViewer({
     [focusNote]
   );
 
-  // ✅ FIX: include attachHighlightClickHandler in deps
   const applyHighlightsForPage = useCallback(
     (pageNumber) => {
       const wrapper = pageElsRef.current[pageNumber];
@@ -759,15 +759,11 @@ export default function PdfViewer({
     [notes, attachHighlightClickHandler]
   );
 
-  // ✅ Re-apply highlights whenever notes change or more pages are rendered
   useEffect(() => {
     if (!ready) return;
 
     const max = Math.min(renderLimit, allowedMaxPage ?? renderLimit);
-
-    for (let p = 1; p <= max; p++) {
-      applyHighlightsForPage(p);
-    }
+    for (let p = 1; p <= max; p++) applyHighlightsForPage(p);
   }, [ready, renderLimit, allowedMaxPage, applyHighlightsForPage]);
 
   async function saveNote() {
@@ -780,9 +776,7 @@ export default function PdfViewer({
       }
 
       const finalContent =
-        noteContent && noteContent.trim().length > 0
-          ? noteContent.trim()
-          : highlightMeta.text;
+        noteContent && noteContent.trim().length > 0 ? noteContent.trim() : highlightMeta.text;
 
       await api.post("/legal-document-notes", {
         legalDocumentId: Number(documentId),
@@ -796,7 +790,6 @@ export default function PdfViewer({
 
       const res = await api.get(`/legal-document-notes/document/${documentId}`);
       setNotes(res.data || []);
-
       setShowNotes(true);
 
       setHighlights((prev) => [
@@ -835,9 +828,7 @@ export default function PdfViewer({
 
   async function saveEdit(noteId) {
     try {
-      await api.put(`/legal-document-notes/${noteId}`, {
-        content: editingContent,
-      });
+      await api.put(`/legal-document-notes/${noteId}`, { content: editingContent });
 
       setNotes((ns) => ns.map((n) => (n.id === noteId ? { ...n, content: editingContent } : n)));
     } catch (err) {
@@ -967,10 +958,6 @@ export default function PdfViewer({
             }, 120);
           }}
         >
-          {/* =========================
-              ✅ PATCH B: never “silent white screen”.
-              If PDF fails, show a clear error panel even if overlay CSS doesn't show.
-             ========================= */}
           {!ready && !!loadError && (
             <div style={{ padding: 16 }}>
               <div
@@ -991,7 +978,6 @@ export default function PdfViewer({
                   <button
                     className="outline-btn"
                     onClick={() => {
-                      // force compatibility mode retry
                       setLoadError("Reloading in compatibility mode…");
                       setSafeMode(true);
                       setReady(false);
@@ -1003,9 +989,6 @@ export default function PdfViewer({
                   >
                     Try compatibility mode
                   </button>
-                </div>
-                <div style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: "#6b7280" }}>
-                  If this only happens after Paystack return, it’s usually a token/session timing issue.
                 </div>
               </div>
             </div>
@@ -1057,10 +1040,8 @@ export default function PdfViewer({
                 return;
               }
 
-              // ✅ PATCH B (continued): ensure we don’t remain in a “blank” ready state
               setReady(false);
               setNumPages(null);
-
               setLoadError("Failed to load PDF. Please refresh and try again.");
             }}
             onSourceError={(err) => {
@@ -1076,10 +1057,8 @@ export default function PdfViewer({
                 return;
               }
 
-              // ✅ PATCH B (continued)
               setReady(false);
               setNumPages(null);
-
               setLoadError("Unable to load document source.");
             }}
             onLoadSuccess={({ numPages }) => {
@@ -1220,12 +1199,7 @@ export default function PdfViewer({
                 placeholder={`1 - ${allowedMaxPage ?? numPages ?? "?"}`}
                 autoFocus
               />
-              <button
-                className="pagejump-iconbtn primary"
-                onClick={submitPageJump}
-                title="Go"
-                type="button"
-              >
+              <button className="pagejump-iconbtn primary" onClick={submitPageJump} title="Go" type="button">
                 ✓
               </button>
             </div>
@@ -1235,7 +1209,7 @@ export default function PdfViewer({
         )}
       </div>
 
-      {/* NOTE OVERLAY + Notes sidebar... (unchanged below) */}
+      {/* NOTE OVERLAY + Notes sidebar */}
       {showNoteBox && (
         <div className="note-overlay">
           <div className="note-box">

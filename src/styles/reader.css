@@ -1059,3 +1059,237 @@ svg.highlight-layer {
     display: none;
   }
 }
+/* =========================================================
+   Reader Page Layout (wrapper around PdfViewer)
+   ========================================================= */
+
+.reader-layout {
+  position: relative;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  background: var(--ga-bg, #f8fafc);
+  display: flex;
+  flex-direction: column;
+}
+
+/* =========================================================
+   Reader Page Topbar (mobile-first)
+   ========================================================= */
+
+.readerpage-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  z-index: 20;
+}
+
+.readerpage-tocbtn {
+  appearance: none;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.readerpage-tocbtn:hover {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.readerpage-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #111827;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* =========================================================
+   ToC Backdrop (mobile)
+   ========================================================= */
+
+.readerpage-tocBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(2px);
+  z-index: 40;
+}
+
+/* =========================================================
+   ToC Drawer (mobile-first: bottom sheet)
+   ========================================================= */
+
+.readerpage-tocDrawer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+
+  height: 72vh;
+  background: #ffffff;
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -18px 48px rgba(2, 6, 23, 0.22);
+
+  transform: translateY(100%);
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+
+.readerpage-tocDrawer.open {
+  transform: translateY(0);
+}
+
+/* =========================================================
+   ToC Header
+   ========================================================= */
+
+.readerpage-tocHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+}
+
+.readerpage-tocTitle {
+  font-size: 15px;
+  font-weight: 900;
+  color: #111827;
+}
+
+.readerpage-tocClose {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+/* =========================================================
+   ToC Body
+   ========================================================= */
+
+.readerpage-tocBody {
+  flex: 1;
+  overflow: auto;
+  padding: 8px 6px 12px;
+}
+
+.readerpage-tocState {
+  padding: 20px;
+  text-align: center;
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.readerpage-tocState.error {
+  color: #b91c1c;
+}
+
+/* =========================================================
+   ToC List + Items
+   ========================================================= */
+
+.readerpage-tocList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.readerpage-tocItem {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+
+  text-align: left;
+  cursor: pointer;
+}
+
+.readerpage-tocItem:hover {
+  background: rgba(15, 23, 42, 0.05);
+}
+
+.readerpage-tocItemTitle {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #111827;
+  line-height: 1.25;
+}
+
+.readerpage-tocItemPage {
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b7280;
+  padding-left: 10px;
+}
+
+/* =========================================================
+   Main Reader Content
+   ========================================================= */
+
+.readerpage-main {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* =========================================================
+   Desktop Enhancements (≥ 1024px)
+   ========================================================= */
+
+@media (min-width: 1024px) {
+  .reader-layout {
+    flex-direction: row;
+  }
+
+  .readerpage-topbar {
+    display: none;
+  }
+
+  .readerpage-tocBackdrop {
+    display: none;
+  }
+
+  .readerpage-tocDrawer {
+    position: relative;
+    inset: auto;
+    height: auto;
+    width: 300px;
+    min-width: 280px;
+
+    border-radius: 0;
+    border-right: 1px solid rgba(15, 23, 42, 0.12);
+    box-shadow: none;
+
+    transform: none;
+    transition: none;
+  }
+
+  .readerpage-tocHeader {
+    border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+  }
+
+  .readerpage-main {
+    flex: 1;
+  }
+}
