@@ -1,5 +1,5 @@
 // src/reader/PdfViewer.jsx
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState,viewerApiRef } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import api from "../api/client";
 import { getPdfSource } from "../utils/pdfSource";
@@ -737,6 +737,14 @@ useEffect(() => {
     }
   };
 }, [onRegisterApi, jumpToPage, getCurrentPage]);
+
+useEffect(() => {
+  const t = setInterval(() => {
+    console.log("page:", viewerApiRef.current?.getCurrentPage?.());
+  }, 1500);
+  return () => clearInterval(t);
+}, []);
+
 
 
   const focusNote = useCallback(
