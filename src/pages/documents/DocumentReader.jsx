@@ -111,14 +111,7 @@ function filterOutlineTree(nodes, query) {
   return walk(nodes);
 }
 
-function OutlineTree({
-  nodes,
-  depth = 0,
-  expanded,
-  activePage,
-  onToggle,
-  onPick,
-}) {
+function OutlineTree({ nodes, depth = 0, expanded, activePage, onToggle, onPick }) {
   const arr = Array.isArray(nodes) ? nodes : [];
 
   return (
@@ -157,7 +150,7 @@ function OutlineTree({
                 className={`readerpage-tocItem ${isActive ? "active" : ""}`}
                 type="button"
                 disabled={!jumpPage}
-                onClick={() => jumpPage && onPick(jumpPage)}
+                onClick={() => jumpPage && onPick(n, jumpPage)}
                 title={jumpPage ? `Go to page ${jumpPage}` : "No page mapped"}
               >
                 <div className="readerpage-tocItemTitle">{title || "—"}</div>
@@ -237,6 +230,9 @@ export default function DocumentReader() {
   const mountedRef = useRef(false);
   const outlineAbortRef = useRef(null);
 
+  // ✅ Option A: keep track of last selected ToC node and display it in UI
+  const [selectedTocNode, setSelectedTocNode] = useState(null);
+
   // drawer width (desktop) persisted per browser
   const OUTLINE_WIDTH_KEY = "la_reader_outline_width";
   const OUTLINE_EXPANDED_KEY = useMemo(
@@ -268,9 +264,12 @@ export default function DocumentReader() {
 
   // ✅ Preview clamp + jump
   const onOutlineClick = useCallback(
-    (pageNumber) => {
+    (node, pageNumber) => {
       const p = Number(pageNumber);
       if (!Number.isFinite(p) || p <= 0) return;
+
+      // ✅ record the selection (Option A - used in UI)
+      setSelectedTocNode(node);
 
       // Preview clamp
       if (!access?.hasFullAccess && Number.isFinite(access?.previewMaxPages)) {
@@ -427,6 +426,7 @@ export default function DocumentReader() {
     if (!Number.isFinite(docId) || docId <= 0) return;
     setOutlineQuery("");
     setActivePage(null);
+    setSelectedTocNode(null); // reset selection for new doc
     fetchOutline();
   }, [docId, fetchOutline]);
 
@@ -697,9 +697,7 @@ export default function DocumentReader() {
             </p>
 
             {canPay && (
-              <p className="preview-lock-footnote readerTip">
-                Tip: Go to the details page to complete the purchase.
-              </p>
+              <p className="preview-lock-footnote readerTip">Tip: Go to the details page to complete the purchase.</p>
             )}
           </div>
         </div>
@@ -747,6 +745,12 @@ export default function DocumentReader() {
 
         <div className="readerpage-title" title={`Document ${docId}`}>
           Reader
+        </div>
+
+        {/* ✅ Option A: show selected ToC chip (prevents eslint unused var) */}
+        <div className="readerpage-selectedTocChip" title="Last selected ToC section">
+          <span className="readerpage-selectedTocLabel">Selected:</span>{" "}
+          <span className="readerpage-selectedTocValue">{selectedTocNode ? nodeTitle(selectedTocNode) : "—"}</span>
         </div>
       </div>
 

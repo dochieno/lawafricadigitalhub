@@ -124,7 +124,14 @@ export default function PdfViewer({
   onRegisterApi, // parent uses this for ToC click: { jumpToPage }
 }) {
   const [numPages, setNumPages] = useState(null);
-  const [page, setPage] = useState(startPage || 1);
+const [page, setPage] = useState(startPage || 1);
+
+// ✅ Expose "current page" via a ref so the API function stays stable
+const currentPageRef = useRef(startPage || 1);
+useEffect(() => {
+  currentPageRef.current = page;
+}, [page]);
+
   const [ready, setReady] = useState(false);
   const [highlights, setHighlights] = useState([]);
 
@@ -710,20 +717,27 @@ const pageUpdateTimeoutRef = useRef(null);
     [allowedMaxPage, numPages, scrollToPage, scheduleComputePageFromScroll]
   );
 
+  const getCurrentPage = useCallback(() => {
+  return currentPageRef.current;
+}, []);
+
+
   // expose API to parent (Reader ToC uses this)
-  useEffect(() => {
-    if (typeof onRegisterApi !== "function") return;
+// expose API to parent (Reader ToC uses this)
+useEffect(() => {
+  if (typeof onRegisterApi !== "function") return;
 
-    onRegisterApi({ jumpToPage });
+  onRegisterApi({ jumpToPage, getCurrentPage });
 
-    return () => {
-      try {
-        onRegisterApi(null);
-      } catch (err) {
-        console.warn("onRegisterApi(null) failed:", err);
-      }
-    };
-  }, [onRegisterApi, jumpToPage]);
+  return () => {
+    try {
+      onRegisterApi(null);
+    } catch (err) {
+      console.warn("onRegisterApi(null) failed:", err);
+    }
+  };
+}, [onRegisterApi, jumpToPage, getCurrentPage]);
+
 
   const focusNote = useCallback(
     (noteId) => {
