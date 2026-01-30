@@ -28,7 +28,7 @@ function safeJsonParse(str, fallback) {
 
 /** ---------------------------
  * Outline helpers (tree DTO aware)
- * - Supports both camelCase and PascalCase (in case API serializer differs)
+ * - Supports both camelCase and PascalCase
  * -------------------------- */
 function nodeId(n, fallback) {
   return String(n?.id ?? n?.Id ?? fallback);
@@ -55,16 +55,16 @@ function nodeRightLabel(n) {
   return "";
 }
 
-function nodeJumpPage(n) {
+function nodeStartPage(n) {
   const startPage = n?.startPage ?? n?.StartPage;
   const p = Number(startPage);
-  if (Number.isFinite(p) && p > 0) return p;
+  return Number.isFinite(p) && p > 0 ? p : null;
+}
 
-  const pageNumber = n?.pageNumber ?? n?.page ?? n?.Page;
-  const p2 = Number(pageNumber);
-  if (Number.isFinite(p2) && p2 > 0) return p2;
-
-  return null;
+function nodeEndPage(n) {
+  const endPage = n?.endPage ?? n?.EndPage;
+  const p = Number(endPage);
+  return Number.isFinite(p) && p > 0 ? p : null;
 }
 
 function collectAllNodeIds(nodes, depth = 0, out = new Set()) {
@@ -110,89 +110,15 @@ function filterOutlineTree(nodes, query) {
   return walk(nodes);
 }
 
-/** ---------------------------
- * Range-based "active" helpers
- * -------------------------- */
-function nodeStart(n) {
-  const s = Number(n?.startPage ?? n?.StartPage);
-  return Number.isFinite(s) && s > 0 ? s : null;
-}
-
-function nodeEnd(n) {
-  const e = Number(n?.endPage ?? n?.EndPage);
-  return Number.isFinite(e) && e > 0 ? e : null;
-}
-
-function nodeContainsPage(n, page) {
-  const s = nodeStart(n);
-  if (!s || !Number.isFinite(page) || page <= 0) return false;
-
-  const e = nodeEnd(n);
-  if (e == null) return page === s; // single-page nodes when no end
-  const lo = Math.min(s, e);
-  const hi = Math.max(s, e);
-  return page >= lo && page <= hi;
-}
-
-/**
- * Find the deepest matching node for activePage, and return:
- * - bestId: the nodeId of the deepest match
- * - pathIds: ancestor chain ids including bestId (for auto-expand + active ancestor styling)
- */
-function findDeepestMatchPath(nodes, activePage, depth = 0) {
-  const arr = Array.isArray(nodes) ? nodes : [];
-
-  let best = null; // { id, pathIds, depth, rangeLen }
-
-  for (let i = 0; i < arr.length; i += 1) {
-    const n = arr[i];
-    const id = nodeId(n, `${depth}-${i}-${nodeTitle(n, "node")}`);
-    const kids = nodeChildren(n);
-
-    // Check children first: deeper wins
-    const childBest = kids.length ? findDeepestMatchPath(kids, activePage, depth + 1) : null;
-    if (childBest?.bestId) {
-      // prepend current id as ancestor path
-      const merged = {
-        ...childBest,
-        pathIds: id ? [id, ...childBest.pathIds] : [...childBest.pathIds],
-      };
-      // compare with current best
-      if (!best || merged.bestDepth > best.bestDepth) best = merged;
-      else if (best && merged.bestDepth === best.bestDepth) {
-        // tie-breaker: smaller range length
-        if (merged.bestRangeLen < best.bestRangeLen) best = merged;
-      }
-    }
-
-    // Now check this node
-    if (nodeContainsPage(n, activePage)) {
-      const s = nodeStart(n);
-      const e = nodeEnd(n);
-      const rangeLen = e == null ? 0 : Math.abs(e - s);
-
-      const cand = {
-        bestId: id,
-        pathIds: id ? [id] : [],
-        bestDepth: depth,
-        bestRangeLen: rangeLen,
-      };
-
-      if (!best) best = cand;
-      else if (cand.bestDepth > best.bestDepth) best = cand;
-      else if (cand.bestDepth === best.bestDepth && cand.bestRangeLen < best.bestRangeLen) best = cand;
-    }
-  }
-
-  return best;
-}
-
+/** =========================================================
+ * OUTLINE TREE (range-active)
+ * ========================================================= */
 function OutlineTree({
   nodes,
   depth = 0,
   expanded,
-  activeNodeId,
-  activePathIds,
+  activePage,
+  pdfPageOffset,
   onToggle,
   onPick,
 }) {
@@ -208,21 +134,34 @@ function OutlineTree({
         const isOpen = expanded.has(id);
 
         const right = nodeRightLabel(n);
-        const jumpPage = nodeJumpPage(n);
 
-        const isActive = activeNodeId && id === activeNodeId;
-        const isInActivePath = activePathIds?.has?.(id);
+        // Raw pages from ToC (printed/page labels)
+        const startRaw = nodeStartPage(n);
+        const endRaw = nodeEndPage(n);
+
+        // ✅ Assumption: PDF page = printed page + offset
+        // If offset is 0, this is a no-op.
+        const startPdf = startRaw != null ? startRaw + pdfPageOffset : null;
+        const endPdf = endRaw != null ? endRaw + pdfPageOffset : null;
+
+        // Click target: prefer start page
+        const jumpPage = startPdf;
+
+        // ✅ Range-active: active if activePage falls inside [startPdf..endPdf]
+        const isActive = (() => {
+          const p = Number(activePage);
+          if (!Number.isFinite(p) || p <= 0) return false;
+          if (!Number.isFinite(startPdf) || !startPdf) return false;
+
+          // If we have endPdf, use range. If not, fallback to equality.
+          if (Number.isFinite(endPdf) && endPdf && endPdf >= startPdf) {
+            return p >= startPdf && p <= endPdf;
+          }
+          return p === startPdf;
+        })();
 
         return (
-          <div
-            key={id}
-            className={[
-              "readerOutlineRow",
-              isActive ? "active" : "",
-              !isActive && isInActivePath ? "active-ancestor" : "",
-            ].join(" ")}
-            style={{ "--outline-depth": depth }}
-          >
+          <div key={id} className="readerOutlineRow" style={{ "--outline-depth": depth }}>
             <div className="readerOutlineRowInner">
               <button
                 type="button"
@@ -253,8 +192,8 @@ function OutlineTree({
                   nodes={children}
                   depth={depth + 1}
                   expanded={expanded}
-                  activeNodeId={activeNodeId}
-                  activePathIds={activePathIds}
+                  activePage={activePage}
+                  pdfPageOffset={pdfPageOffset}
                   onToggle={onToggle}
                   onPick={onPick}
                 />
@@ -315,10 +254,6 @@ export default function DocumentReader() {
   const [outlineQuery, setOutlineQuery] = useState("");
   const [activePage, setActivePage] = useState(null);
 
-  // ✅ NEW: range-based active node
-  const [activeNodeId, setActiveNodeId] = useState(null);
-  const [activePathIds, setActivePathIds] = useState(() => new Set());
-
   const viewerApiRef = useRef(null);
 
   const mountedRef = useRef(false);
@@ -337,6 +272,11 @@ export default function DocumentReader() {
     if (Number.isFinite(n) && n >= 260 && n <= 560) return n;
     return 340;
   });
+
+  // ✅ ASSUMPTION for now:
+  // printed page numbers in ToC are offset from PDF pages by N.
+  // Start with 0 (no shift). Later you can compute this from PageLabel / front matter.
+  const [pdfPageOffset] = useState(40);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -418,52 +358,18 @@ export default function DocumentReader() {
     localStorage.setItem(OUTLINE_WIDTH_KEY, String(outlineWidth));
   }, [outlineWidth]);
 
-  // ✅ Active page tracking (works because PdfViewer now exposes getCurrentPage)
+  // ✅ Active page tracking (now works because PdfViewer exposes getCurrentPage)
   useEffect(() => {
-    let t = null;
-
-    function tick() {
+    const t = window.setInterval(() => {
       const p = viewerApiRef.current?.getCurrentPage?.();
       const n = Number(p);
       if (Number.isFinite(n) && n > 0) {
         setActivePage((prev) => (prev === n ? prev : n));
       }
-    }
+    }, 400);
 
-    t = window.setInterval(() => tick(), 350);
-    return () => {
-      if (t) window.clearInterval(t);
-    };
+    return () => window.clearInterval(t);
   }, []);
-
-  // ✅ NEW: compute active ToC node by range + auto-expand ancestors
-  useEffect(() => {
-    if (!outline?.length || !Number.isFinite(activePage) || activePage <= 0) {
-      setActiveNodeId(null);
-      setActivePathIds(new Set());
-      return;
-    }
-
-    const best = findDeepestMatchPath(outline, activePage);
-    if (!best?.bestId) {
-      setActiveNodeId(null);
-      setActivePathIds(new Set());
-      return;
-    }
-
-    setActiveNodeId(best.bestId);
-    const pathSet = new Set(best.pathIds || []);
-    setActivePathIds(pathSet);
-
-    // auto-expand the active branch so highlight is visible
-    if (pathSet.size) {
-      setOutlineExpanded((prev) => {
-        const next = new Set(prev);
-        for (const idStr of pathSet) next.add(String(idStr));
-        return next;
-      });
-    }
-  }, [outline, activePage]);
 
   // Resizable drawer drag
   const draggingRef = useRef(false);
@@ -490,7 +396,7 @@ export default function DocumentReader() {
     document.body.classList.remove("readerOutlineResizing");
   }, []);
 
-  // ✅ Always fetch Outline when docId changes (BACKGROUND)
+  // ✅ Always fetch Outline when docId changes
   const fetchOutline = useCallback(async () => {
     if (!Number.isFinite(docId) || docId <= 0) return;
 
@@ -537,8 +443,6 @@ export default function DocumentReader() {
     if (!Number.isFinite(docId) || docId <= 0) return;
     setOutlineQuery("");
     setActivePage(null);
-    setActiveNodeId(null);
-    setActivePathIds(new Set());
     fetchOutline();
   }, [docId, fetchOutline]);
 
@@ -922,8 +826,8 @@ export default function DocumentReader() {
               <OutlineTree
                 nodes={filteredOutline}
                 expanded={outlineExpanded}
-                activeNodeId={activeNodeId}
-                activePathIds={activePathIds}
+                activePage={activePage}
+                pdfPageOffset={pdfPageOffset}
                 onToggle={toggleOutlineNode}
                 onPick={onOutlineClick}
               />

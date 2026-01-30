@@ -717,27 +717,25 @@ const pageUpdateTimeoutRef = useRef(null);
     [allowedMaxPage, numPages, scrollToPage, scheduleComputePageFromScroll]
   );
 
-  const getCurrentPage = useCallback(() => {
-  return currentPageRef.current;
-}, []);
-
-
-  // expose API to parent (Reader ToC uses this)
+ // expose API to parent (Reader ToC uses this)
 // expose API to parent (Reader ToC uses this)
-useEffect(() => {
-  if (typeof onRegisterApi !== "function") return;
+// expose API to parent (Reader ToC uses this)
+      useEffect(() => {
+        if (typeof onRegisterApi !== "function") return;
 
-  onRegisterApi({ jumpToPage, getCurrentPage });
+        onRegisterApi({
+          jumpToPage,
+          getCurrentPage: () => page, // ✅ allows range-active highlighting in ToC
+        });
 
-  return () => {
-    try {
-      onRegisterApi(null);
-    } catch (err) {
-      console.warn("onRegisterApi(null) failed:", err);
-    }
-  };
-}, [onRegisterApi, jumpToPage, getCurrentPage]);
-
+        return () => {
+          try {
+            onRegisterApi(null);
+          } catch (err) {
+            console.warn("onRegisterApi(null) failed:", err);
+          }
+        };
+      }, [onRegisterApi, jumpToPage, page]);
 
 
 
