@@ -297,7 +297,7 @@ export default function DocumentReader() {
   });
 
   // ✅ ASSUMPTION for now (you said offset is ~40)
-  const [pdfPageOffset] = useState(40);
+  const [pdfPageOffset] = useState(0);
 
   // ✅ Step 3 additions: selected node + AI summary state
   const [selectedTocNode, setSelectedTocNode] = useState(null);
