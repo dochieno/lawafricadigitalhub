@@ -6,6 +6,19 @@ import api, { checkDocumentAvailability } from "../../api/client";
 import PdfViewer from "../../reader/PdfViewer";
 import "../../styles/reader.css";
 
+/** =========================================================
+ * AI endpoint (adjust if your route differs)
+ * =========================================================
+ * Backend you built: LegalDocumentSectionSummarizer + controller endpoint.
+ * If your swagger/postman is down, just confirm the route in your controller.
+ *
+ * Common options you might have:
+ *  - /ai/legal-documents/sections/summarize
+ *  - /ai/legal-documents/sections/summary
+ *  - /ai/legal-documents/sections
+ */
+const AI_SECTION_SUMMARY_ENDPOINT = "/ai/legal-documents/sections/summarize";
+
 /** ---------------------------
  * Small helpers (pure)
  * -------------------------- */
@@ -23,6 +36,31 @@ function safeJsonParse(str, fallback) {
     return JSON.parse(str);
   } catch {
     return fallback;
+  }
+}
+
+async function safeCopyToClipboard(text) {
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // ignore and fallback
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -140,7 +178,6 @@ function OutlineTree({
         const endRaw = nodeEndPage(n);
 
         // ✅ Assumption: PDF page = printed page + offset
-        // If offset is 0, this is a no-op.
         const startPdf = startRaw != null ? startRaw + pdfPageOffset : null;
         const endPdf = endRaw != null ? endRaw + pdfPageOffset : null;
 
@@ -153,7 +190,6 @@ function OutlineTree({
           if (!Number.isFinite(p) || p <= 0) return false;
           if (!Number.isFinite(startPdf) || !startPdf) return false;
 
-          // If we have endPdf, use range. If not, fallback to equality.
           if (Number.isFinite(endPdf) && endPdf && endPdf >= startPdf) {
             return p >= startPdf && p <= endPdf;
           }
@@ -250,12 +286,10 @@ export default function DocumentReader() {
   const [outlineError, setOutlineError] = useState("");
 
   const [outlineExpanded, setOutlineExpanded] = useState(() => new Set());
-
   const [outlineQuery, setOutlineQuery] = useState("");
   const [activePage, setActivePage] = useState(null);
 
   const viewerApiRef = useRef(null);
-
   const mountedRef = useRef(false);
   const outlineAbortRef = useRef(null);
 
@@ -273,10 +307,16 @@ export default function DocumentReader() {
     return 340;
   });
 
-  // ✅ ASSUMPTION for now:
-  // printed page numbers in ToC are offset from PDF pages by N.
-  // Start with 0 (no shift). Later you can compute this from PageLabel / front matter.
+  // ✅ ASSUMPTION for now (you said offset is ~40)
   const [pdfPageOffset] = useState(40);
+
+  // ✅ Step 3 additions: selected node + AI summary state
+  const [selectedTocNode, setSelectedTocNode] = useState(null);
+  const [sectionSummaryType, setSectionSummaryType] = useState("basic"); // "basic" | "extended"
+  const [sectionSummaryLoading, setSectionSummaryLoading] = useState(false);
+  const [sectionSummaryError, setSectionSummaryError] = useState("");
+  const [sectionSummaryText, setSectionSummaryText] = useState("");
+  const lastSummaryKeyRef = useRef("");
 
   useEffect(() => {
     mountedRef.current = true;
@@ -293,9 +333,11 @@ export default function DocumentReader() {
   const openOutline = useCallback(() => setOutlineOpen(true), []);
   const closeOutline = useCallback(() => setOutlineOpen(false), []);
 
-  // ✅ Preview clamp + jump
+  // ✅ Preview clamp + jump (also sets selected node now)
   const onOutlineClick = useCallback(
     (node, pageNumber) => {
+      setSelectedTocNode(node);
+
       const p = Number(pageNumber);
       if (!Number.isFinite(p) || p <= 0) return;
 
@@ -358,7 +400,7 @@ export default function DocumentReader() {
     localStorage.setItem(OUTLINE_WIDTH_KEY, String(outlineWidth));
   }, [outlineWidth]);
 
-  // ✅ Active page tracking (now works because PdfViewer exposes getCurrentPage)
+  // ✅ Active page tracking
   useEffect(() => {
     const t = window.setInterval(() => {
       const p = viewerApiRef.current?.getCurrentPage?.();
@@ -384,12 +426,15 @@ export default function DocumentReader() {
     }
   }, []);
 
-  const onResizePointerMove = useCallback((e) => {
-    if (!draggingRef.current) return;
-    const x = e.clientX;
-    const next = Math.max(260, Math.min(560, x));
-    setOutlineWidth(next);
-  }, []);
+  const onResizePointerMove = useCallback(
+    (e) => {
+      if (!draggingRef.current) return;
+      const x = e.clientX;
+      const next = Math.max(260, Math.min(560, x));
+      setOutlineWidth(next);
+    },
+    [setOutlineWidth]
+  );
 
   const onResizePointerUp = useCallback(() => {
     draggingRef.current = false;
@@ -443,6 +488,13 @@ export default function DocumentReader() {
     if (!Number.isFinite(docId) || docId <= 0) return;
     setOutlineQuery("");
     setActivePage(null);
+
+    // Step 3: reset summary state when doc changes
+    setSelectedTocNode(null);
+    setSectionSummaryError("");
+    setSectionSummaryText("");
+    lastSummaryKeyRef.current = "";
+
     fetchOutline();
   }, [docId, fetchOutline]);
 
@@ -632,6 +684,97 @@ export default function DocumentReader() {
     };
   }, [docId, justPaid, paidProvider]);
 
+  // =========================================================
+  // ✅ Step 3: AI Summary actions (Basic/Extended + Copy)
+  // =========================================================
+  const buildSummaryPayloadFromNode = useCallback(
+    (node, type) => {
+      if (!node) return null;
+
+      const startRaw = nodeStartPage(node);
+      if (!startRaw) return null;
+
+      const endRaw = nodeEndPage(node) ?? startRaw;
+
+      const startPdf = startRaw + pdfPageOffset;
+      const endPdf = endRaw + pdfPageOffset;
+
+      // If preview, clamp end
+      const endClamped =
+        !access?.hasFullAccess && Number.isFinite(access?.previewMaxPages)
+          ? Math.min(endPdf, access.previewMaxPages)
+          : endPdf;
+
+      return {
+        tocEntryId: node?.id ?? node?.Id ?? null,
+        legalDocumentId: docId,
+        type,
+        startPage: startPdf,
+        endPage: endClamped,
+        sectionTitle: nodeTitle(node, ""),
+      };
+    },
+    [access, docId, pdfPageOffset]
+  );
+
+  const runSectionSummary = useCallback(
+    async (type) => {
+      setSectionSummaryError("");
+      setSectionSummaryText("");
+      setSectionSummaryType(type);
+
+      if (!selectedTocNode) {
+        setSectionSummaryError("Select a section from the ToC first.");
+        return;
+      }
+
+      const payload = buildSummaryPayloadFromNode(selectedTocNode, type);
+      if (!payload) {
+        setSectionSummaryError("This ToC section has no page mapping.");
+        return;
+      }
+
+      // Avoid accidental double-hit if user clicks same button quickly
+      const key = `${payload.legalDocumentId}|${payload.tocEntryId ?? ""}|${payload.type}|${payload.startPage}-${payload.endPage}`;
+      if (sectionSummaryLoading && lastSummaryKeyRef.current === key) return;
+      lastSummaryKeyRef.current = key;
+
+      setSectionSummaryLoading(true);
+      try {
+        const res = await api.post(AI_SECTION_SUMMARY_ENDPOINT, payload);
+        const data = res?.data || {};
+        const summary = data?.summary ?? data?.Summary ?? "";
+
+        if (!summary) {
+          setSectionSummaryError("No summary returned.");
+          return;
+        }
+
+        setSectionSummaryText(String(summary));
+
+        const fromCache = data?.fromCache ?? data?.FromCache ?? false;
+        showToast(fromCache ? "Loaded from cache" : "Summary generated", "success");
+      } catch (err) {
+        console.error("Section summary failed:", err);
+        const msg =
+          err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          "Failed to summarize section. (Check endpoint route + auth)";
+        setSectionSummaryError(msg);
+      } finally {
+        setSectionSummaryLoading(false);
+      }
+    },
+    [buildSummaryPayloadFromNode, selectedTocNode, sectionSummaryLoading]
+  );
+
+  const onCopySummary = useCallback(async () => {
+    if (!sectionSummaryText) return;
+    const ok = await safeCopyToClipboard(sectionSummaryText);
+    if (ok) showToast("Copied ✅", "success");
+    else showToast("Copy failed (browser blocked clipboard)", "error");
+  }, [sectionSummaryText]);
+
   // ✅ Gate UI only on access
   if (loadingAccess) {
     return (
@@ -713,9 +856,7 @@ export default function DocumentReader() {
             </p>
 
             {canPay && (
-              <p className="preview-lock-footnote readerTip">
-                Tip: Go to the details page to complete the purchase.
-              </p>
+              <p className="preview-lock-footnote readerTip">Tip: Go to the details page to complete the purchase.</p>
             )}
           </div>
         </div>
@@ -854,6 +995,89 @@ export default function DocumentReader() {
               </div>
             </div>
           )}
+
+          {/* =========================================================
+              ✅ Step 3: Minimal AI Summary box (Basic / Extended / Copy)
+              - no heavy UI
+              - only works when a ToC item is selected
+          ========================================================= */}
+          <div
+            style={{
+              marginTop: 12,
+              paddingTop: 10,
+              borderTop: "1px solid rgba(15, 23, 42, 0.12)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>AI · Section summary</div>
+
+              <button
+                type="button"
+                className="readerOutlineMiniBtn"
+                disabled={!selectedTocNode || !sectionSummaryText}
+                onClick={onCopySummary}
+                title="Copy summary"
+              >
+                Copy
+              </button>
+            </div>
+
+            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.9 }}>
+              {selectedTocNode ? (
+                <>
+                  <div style={{ fontWeight: 600 }}>{nodeTitle(selectedTocNode)}</div>
+                  <div style={{ opacity: 0.75 }}>Pages: {nodeRightLabel(selectedTocNode) || "—"}</div>
+                </>
+              ) : (
+                <div style={{ opacity: 0.75 }}>Select a ToC section, then choose Basic or Extended.</div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button
+                type="button"
+                className="outline-btn"
+                disabled={!selectedTocNode || sectionSummaryLoading}
+                onClick={() => runSectionSummary("basic")}
+                title="Generate basic summary"
+              >
+                {sectionSummaryLoading && sectionSummaryType === "basic" ? "Basic…" : "Basic"}
+              </button>
+
+              <button
+                type="button"
+                className="outline-btn"
+                disabled={!selectedTocNode || sectionSummaryLoading}
+                onClick={() => runSectionSummary("extended")}
+                title="Generate extended summary"
+              >
+                {sectionSummaryLoading && sectionSummaryType === "extended" ? "Extended…" : "Extended"}
+              </button>
+            </div>
+
+            {sectionSummaryError ? (
+              <div style={{ marginTop: 10, color: "#b42318", fontSize: 12 }}>{sectionSummaryError}</div>
+            ) : null}
+
+            {sectionSummaryText ? (
+              <div
+                style={{
+                  marginTop: 10,
+                  padding: 10,
+                  borderRadius: 10,
+                  border: "1px solid rgba(15, 23, 42, 0.12)",
+                  background: "rgba(255,255,255,0.7)",
+                  maxHeight: 180,
+                  overflow: "auto",
+                  fontSize: 12,
+                  whiteSpace: "pre-wrap",
+                  lineHeight: 1.45,
+                }}
+              >
+                {sectionSummaryText}
+              </div>
+            ) : null}
+          </div>
         </div>
 
         {/* Desktop resize handle */}

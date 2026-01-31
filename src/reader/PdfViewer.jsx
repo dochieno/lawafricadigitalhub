@@ -716,10 +716,6 @@ const pageUpdateTimeoutRef = useRef(null);
     },
     [allowedMaxPage, numPages, scrollToPage, scheduleComputePageFromScroll]
   );
-
- // expose API to parent (Reader ToC uses this)
-// expose API to parent (Reader ToC uses this)
-// expose API to parent (Reader ToC uses this)
       useEffect(() => {
         if (typeof onRegisterApi !== "function") return;
 
