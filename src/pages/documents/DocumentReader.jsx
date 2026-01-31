@@ -6,17 +6,6 @@ import api, { checkDocumentAvailability } from "../../api/client";
 import PdfViewer from "../../reader/PdfViewer";
 import "../../styles/reader.css";
 
-/** =========================================================
- * AI endpoint (adjust if your route differs)
- * =========================================================
- * Backend you built: LegalDocumentSectionSummarizer + controller endpoint.
- * If your swagger/postman is down, just confirm the route in your controller.
- *
- * Common options you might have:
- *  - /ai/legal-documents/sections/summarize
- *  - /ai/legal-documents/sections/summary
- *  - /ai/legal-documents/sections
- */
 const AI_SECTION_SUMMARY_ENDPOINT = "/ai/legal-documents/sections/summarize";
 
 /** ---------------------------
