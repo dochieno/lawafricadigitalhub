@@ -238,38 +238,66 @@ export default function SectionSummaryPanel({
               No summary yet. Select a ToC section and click <strong>Basic</strong> or <strong>Extended</strong>.
             </div>
           ) : (
-            <div className="laSummaryContent">
-              {sections.map((s) => (
-                <section key={s.title} className="laSummarySectionCard">
-                  <div className="laSummarySectionHeader">
-                    <span className="laSummarySectionDot" aria-hidden="true" />
-                    <h3 className="laSummaryH3">{String(s.title || "").trim()}</h3>
-                  </div>
+// inside:  : ( <div className="laSummaryContent"> ... </div> )
 
-                  <div className="laSummarySectionBody">
-                    {(s.blocks || []).map((b, idx) => {
-                      if (b.kind === "ul") {
-                        return (
-                          <ul key={idx} className="laSummaryUl">
-                            {(b.items || []).map((it, i) => (
-                              <li key={`${i}-${it}`} className="laSummaryLi">
-                                {it}
-                              </li>
-                            ))}
-                          </ul>
-                        );
-                      }
+<div className="laSummaryContent">
+  {sections.map((s) => {
+    const rawTitle = String(s.title || "").trim();
+    const key = rawTitle.toLowerCase();
 
-                      return (
-                        <p key={idx} className="laSummaryP">
-                          {b.text}
-                        </p>
-                      );
-                    })}
-                  </div>
-                </section>
-              ))}
-            </div>
+    // Accent mapping (tweak keywords as you like)
+    let accent = "neutral";
+    if (key.includes("key point") || key.includes("key points")) accent = "keypoints";
+    else if (key.includes("important term") || key.includes("terms")) accent = "terms";
+    else if (key.includes("takeaway") || key.includes("practical")) accent = "takeaways";
+    else if (key.includes("facts")) accent = "facts";
+    else if (key.includes("issue")) accent = "issues";
+    else if (key.includes("holding")) accent = "holding";
+    else if (key.includes("reason")) accent = "reasoning";
+
+    const isScenario =
+      accent === "takeaways" || rawTitle.toLowerCase().includes("case scenario");
+
+    return (
+      <section
+        key={rawTitle || Math.random()}
+        className={`laSummarySectionCard laAccent-${accent} ${isScenario ? "scenario" : ""}`}
+      >
+        <div className="laSummarySectionHeader">
+          <span className="laSummarySectionDot" aria-hidden="true" />
+          <h3 className="laSummaryH3">{rawTitle || "Section"}</h3>
+        </div>
+
+        <div className="laSummarySectionBody">
+          {(s.blocks || []).map((b, idx) => {
+            if (b.kind === "ul") {
+              // Force "Practical takeaways" to render as key-point style bullets (case-scenario vibe)
+              const ulClass =
+                accent === "takeaways" ? "laSummaryUl laSummaryUlKeypoints" : "laSummaryUl";
+
+              return (
+                <ul key={idx} className={ulClass}>
+                  {(b.items || []).map((it, i) => (
+                    <li key={`${i}-${it}`} className="laSummaryLi">
+                      {it}
+                    </li>
+                  ))}
+                </ul>
+              );
+            }
+
+            return (
+              <p key={idx} className="laSummaryP">
+                {b.text}
+              </p>
+            );
+          })}
+        </div>
+      </section>
+    );
+  })}
+</div>
+
           )}
         </div>
 

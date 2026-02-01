@@ -1512,47 +1512,50 @@ svg.highlight-layer {
     justify-content: center;
     text-align: center;
   }
-}
 /* =========================
-   AI Summary Modal (Popup)
+   AI Summary Modal (Popup) — CANONICAL
+   Matches SectionSummaryPanel.jsx (overlay + modal)
    ========================= */
 
-.laSummaryModal {
+.laModalOpen {
+  overflow: hidden;
+}
+
+/* overlay */
+.laSummaryOverlay {
   position: fixed;
   inset: 0;
   z-index: 10050;
+  background: rgba(2, 6, 23, 0.55);
   display: grid;
   place-items: center;
-  padding: 18px;
+  padding: 16px;
 }
 
-.laSummaryBackdrop {
-  position: absolute;
-  inset: 0;
-  border: none;
-  background: rgba(15, 23, 42, 0.55);
-  cursor: pointer;
-}
+.laSummaryOverlay.open { opacity: 1; }
+.laSummaryOverlay.closing { opacity: 0; transition: opacity 160ms ease; }
 
-.laSummaryWindow {
-  position: relative;
-  width: min(820px, 96vw);
-  max-height: min(84vh, 760px);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-
+/* modal */
+.laSummaryModal {
+  width: min(920px, calc(100vw - 24px));
+  max-height: min(86vh, 860px);
+  background: rgba(255, 255, 255, 0.98);
   border-radius: 18px;
   border: 1px solid rgba(15, 23, 42, 0.12);
-  background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+
+  transform: translateY(0);
 }
 
-.laSummaryWindow.expanded {
-  width: min(980px, 98vw);
-  max-height: 88vh;
+.laSummaryModal.expanded {
+  width: min(1040px, calc(100vw - 24px));
+  max-height: 90vh;
 }
 
+/* header */
 .laSummaryHeader {
   display: flex;
   align-items: flex-start;
@@ -1560,62 +1563,71 @@ svg.highlight-layer {
   gap: 12px;
   padding: 14px 16px;
   border-bottom: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.92);
 }
 
-.laSummaryHeaderText {
+.laSummaryHeaderLeft {
   min-width: 0;
 }
 
 .laSummaryKicker {
   font-size: 12px;
   font-weight: 900;
-  color: rgba(15, 23, 42, 0.65);
+  color: rgba(139, 28, 28, 0.70); /* LawAfrica maroon feel */
   letter-spacing: 0.2px;
 }
 
 .laSummaryTitle {
   margin-top: 2px;
   font-size: 15px;
-  font-weight: 900;
+  font-weight: 950;
   color: #111827;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 64vw;
+  max-width: 70vw;
 }
 
 .laSummaryIconBtn {
   appearance: none;
   border: 1px solid rgba(15, 23, 42, 0.12);
-  background: rgba(255, 255, 255, 0.85);
-  width: 36px;
-  height: 36px;
+  background: rgba(255, 255, 255, 0.92);
+  width: 38px;
+  height: 38px;
   border-radius: 12px;
   cursor: pointer;
-  font-weight: 900;
+  font-weight: 950;
+  color: #111827;
 }
 
-.laSummarySubHeader {
+.laSummaryIconBtn:hover {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+/* controls row */
+.laSummaryControls {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 10px 16px;
   border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(248, 250, 252, 0.75);
+  background: rgba(248, 250, 252, 0.80);
 }
 
 .laSummaryTypePills {
   display: inline-flex;
   gap: 8px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .laPill {
   border: 1px solid rgba(15, 23, 42, 0.14);
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.92);
   padding: 7px 12px;
   border-radius: 999px;
-  font-weight: 800;
+  font-weight: 900;
   font-size: 12px;
   cursor: pointer;
 }
@@ -1625,19 +1637,40 @@ svg.highlight-layer {
   box-shadow: 0 0 0 3px rgba(139, 28, 28, 0.10);
 }
 
-.laSummaryMetaRow {
+.laSummaryHeaderActions {
   display: inline-flex;
   gap: 10px;
-  font-size: 12px;
-  font-weight: 800;
-  color: rgba(15, 23, 42, 0.65);
+  flex-wrap: nowrap;
   white-space: nowrap;
 }
 
-.laSummaryMetaRow.muted {
-  opacity: 0.75;
+/* action buttons */
+.laActionBtn {
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.92);
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-weight: 950;
+  font-size: 12px;
+  cursor: pointer;
 }
 
+.laActionBtn:hover {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.laActionBtn.primary {
+  border-color: rgba(139, 28, 28, 0.35);
+  background: rgba(139, 28, 28, 0.08);
+}
+
+.laActionBtn:disabled,
+.laPill:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* body */
 .laSummaryBody {
   flex: 1;
   overflow: auto;
@@ -1648,17 +1681,139 @@ svg.highlight-layer {
   padding: 14px;
   border-radius: 14px;
   border: 1px solid rgba(15, 23, 42, 0.10);
-  background: rgba(248, 250, 252, 0.7);
-  font-weight: 800;
+  background: rgba(248, 250, 252, 0.80);
+  font-weight: 900;
   color: rgba(15, 23, 42, 0.75);
 }
 
+.laSummaryState.muted { opacity: 0.85; }
 .laSummaryState.error {
   color: #b42318;
-  background: rgba(254, 242, 242, 0.9);
+  background: rgba(254, 242, 242, 0.95);
   border-color: rgba(239, 68, 68, 0.30);
 }
 
+/* footer */
+.laSummaryFooter {
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.laSummaryFooterHint {
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(15, 23, 42, 0.60);
+}
+
+/* =========================
+   Premium section cards (screen 1)
+   ========================= */
+
+.laSummarySectionCard {
+  position: relative;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14px 40px rgba(2, 6, 23, 0.08);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.laSummarySectionCard::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 4px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.16);
+}
+
+.laSummarySectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  min-width: 0;
+}
+
+.laSummarySectionDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.28);
+  flex: 0 0 auto;
+}
+
+.laSummaryH3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.laSummarySectionBody {
+  font-size: 13px;
+  color: rgba(15, 23, 42, 0.92);
+}
+
+.laSummaryP {
+  margin: 0 0 10px;
+  line-height: 1.65;
+}
+
+.laSummaryUl {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.laSummaryLi {
+  margin: 6px 0;
+  line-height: 1.55;
+}
+
+/* Key-points look (used for Takeaways / case-scenario vibe) */
+.laSummaryUlKeypoints {
+  list-style: disc;
+}
+
+.laSummarySectionCard.scenario {
+  background: linear-gradient(180deg, rgba(139, 28, 28, 0.04), rgba(255, 255, 255, 0.96));
+}
+
+/* Accent palettes */
+.laAccent-neutral .laSummarySectionDot { background: rgba(15, 23, 42, 0.28); }
+.laAccent-neutral::before { background: rgba(15, 23, 42, 0.16); }
+
+.laAccent-keypoints .laSummarySectionDot { background: rgba(139, 28, 28, 0.55); }
+.laAccent-keypoints::before { background: rgba(139, 28, 28, 0.40); }
+
+.laAccent-terms .laSummarySectionDot { background: rgba(59, 130, 246, 0.55); }
+.laAccent-terms::before { background: rgba(59, 130, 246, 0.38); }
+
+.laAccent-takeaways .laSummarySectionDot { background: rgba(245, 158, 11, 0.70); }
+.laAccent-takeaways::before { background: rgba(245, 158, 11, 0.42); }
+
+.laAccent-facts .laSummarySectionDot { background: rgba(34, 197, 94, 0.55); }
+.laAccent-facts::before { background: rgba(34, 197, 94, 0.40); }
+
+.laAccent-issues .laSummarySectionDot { background: rgba(59, 130, 246, 0.55); }
+.laAccent-issues::before { background: rgba(59, 130, 246, 0.40); }
+
+.laAccent-holding .laSummarySectionDot { background: rgba(239, 68, 68, 0.60); }
+.laAccent-holding::before { background: rgba(239, 68, 68, 0.40); }
+
+.laAccent-reasoning .laSummarySectionDot { background: rgba(168, 85, 247, 0.60); }
+.laAccent-reasoning::before { background: rgba(168, 85, 247, 0.40); }
+}
 .laSummaryState.muted {
   opacity: 0.85;
 }
@@ -2009,6 +2164,56 @@ svg.highlight-layer {
 
 .laSummaryState.error{
   color: #b42318;
+}
+/* Keep DocumentReader clean: hide meta blocks */
+.readerAiMetaCard,
+.readerAiSummaryText {
+  display: none !important;
+}
+/* =========================
+   ToC AI Controls polish (screen 2)
+   ========================= */
+
+.readerAiBox {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 10px 28px rgba(2, 6, 23, 0.06);
+}
+
+.readerAiHeaderTitle {
+  font-weight: 950;
+  font-size: 13px;
+  letter-spacing: 0.2px;
+  color: #111827;
+}
+
+.readerAiButtons {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.readerAiButtons .readerOutlineMiniBtn,
+.readerAiButtons button {
+  height: 36px;
+  border-radius: 12px;
+  font-weight: 950;
+}
+
+.readerAiButtons .primary,
+.readerAiButtons .danger {
+  border-color: rgba(139, 28, 28, 0.35);
+  background: rgba(139, 28, 28, 0.08);
+}
+
+@media (max-width: 520px) {
+  .readerAiButtons {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 
