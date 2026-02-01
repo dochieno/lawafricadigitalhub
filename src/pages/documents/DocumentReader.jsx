@@ -305,6 +305,7 @@ export default function DocumentReader() {
   const [sectionSummaryLoading, setSectionSummaryLoading] = useState(false);
   const [sectionSummaryError, setSectionSummaryError] = useState("");
   const [sectionSummaryText, setSectionSummaryText] = useState("");
+  const [sectionSummaryMeta, setSectionSummaryMeta] = useState(null);
   const lastSummaryKeyRef = useRef("");
 
   useEffect(() => {
@@ -706,56 +707,78 @@ export default function DocumentReader() {
     [access, docId, pdfPageOffset]
   );
 
-  const runSectionSummary = useCallback(
-    async (type) => {
-      setSectionSummaryError("");
-      setSectionSummaryText("");
-      setSectionSummaryType(type);
+const runSectionSummary = useCallback(
+  async (type) => {
+    setSectionSummaryError("");
+    setSectionSummaryText("");
+    setSectionSummaryMeta(null);
+    setSectionSummaryType(type);
 
-      if (!selectedTocNode) {
-        setSectionSummaryError("Select a section from the ToC first.");
+    if (!selectedTocNode) {
+      setSectionSummaryError("Select a section from the ToC first.");
+      return;
+    }
+
+    const payload = buildSummaryPayloadFromNode(selectedTocNode, type);
+    if (!payload) {
+      setSectionSummaryError("This ToC section has no page mapping.");
+      return;
+    }
+
+    // Avoid accidental double-hit if user clicks same button quickly
+    const key = `${payload.legalDocumentId}|${payload.tocEntryId ?? ""}|${payload.type}|${payload.startPage}-${payload.endPage}`;
+    if (sectionSummaryLoading && lastSummaryKeyRef.current === key) return;
+    lastSummaryKeyRef.current = key;
+
+    setSectionSummaryLoading(true);
+    try {
+      const res = await api.post(AI_SECTION_SUMMARY_ENDPOINT, payload);
+      const data = res?.data || {};
+
+      const summary = data?.summary ?? data?.Summary ?? "";
+      if (!summary) {
+        setSectionSummaryError("No summary returned.");
         return;
       }
 
-      const payload = buildSummaryPayloadFromNode(selectedTocNode, type);
-      if (!payload) {
-        setSectionSummaryError("This ToC section has no page mapping.");
-        return;
-      }
+      setSectionSummaryText(String(summary));
 
-      // Avoid accidental double-hit if user clicks same button quickly
-      const key = `${payload.legalDocumentId}|${payload.tocEntryId ?? ""}|${payload.type}|${payload.startPage}-${payload.endPage}`;
-      if (sectionSummaryLoading && lastSummaryKeyRef.current === key) return;
-      lastSummaryKeyRef.current = key;
+      // ✅ capture metadata for testing: cache, clamp, char counts, warnings
+      const fromCache = data?.fromCache ?? data?.FromCache ?? false;
 
-      setSectionSummaryLoading(true);
-      try {
-        const res = await api.post(AI_SECTION_SUMMARY_ENDPOINT, payload);
-        const data = res?.data || {};
-        const summary = data?.summary ?? data?.Summary ?? "";
+      const usedStart = data?.startPage ?? data?.StartPage ?? null;
+      const usedEnd = data?.endPage ?? data?.EndPage ?? null;
 
-        if (!summary) {
-          setSectionSummaryError("No summary returned.");
-          return;
-        }
+      const inputCharCount = data?.inputCharCount ?? data?.InputCharCount ?? 0;
 
-        setSectionSummaryText(String(summary));
+      const warnings = data?.warnings ?? data?.Warnings ?? [];
+      const warningsArr = Array.isArray(warnings) ? warnings : [];
 
-        const fromCache = data?.fromCache ?? data?.FromCache ?? false;
-        showToast(fromCache ? "Loaded from cache" : "Summary generated", "success");
-      } catch (err) {
-        console.error("Section summary failed:", err);
-        const msg =
-          err?.response?.data?.message ||
-          err?.response?.data?.error ||
-          "Failed to summarize section. (Check endpoint route + auth)";
-        setSectionSummaryError(msg);
-      } finally {
-        setSectionSummaryLoading(false);
-      }
-    },
-    [buildSummaryPayloadFromNode, selectedTocNode, sectionSummaryLoading]
-  );
+      setSectionSummaryMeta({
+        fromCache,
+        usedPages:
+          usedStart != null || usedEnd != null
+            ? `${usedStart ?? "?"}-${usedEnd ?? "?"}`
+            : `${payload.startPage}-${payload.endPage}`,
+        inputCharCount: Number(inputCharCount) || 0,
+        warnings: warningsArr.map((w) => String(w)),
+      });
+
+      showToast(fromCache ? "Loaded from cache" : "Summary generated", "success");
+    } catch (err) {
+      console.error("Section summary failed:", err);
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        "Failed to summarize section. (Check endpoint route + auth)";
+      setSectionSummaryError(msg);
+    } finally {
+      setSectionSummaryLoading(false);
+    }
+  },
+  [buildSummaryPayloadFromNode, selectedTocNode, sectionSummaryLoading]
+);
+
 
   const onCopySummary = useCallback(async () => {
     if (!sectionSummaryText) return;
@@ -985,88 +1008,127 @@ export default function DocumentReader() {
             </div>
           )}
 
-          {/* =========================================================
-              ✅ Step 3: Minimal AI Summary box (Basic / Extended / Copy)
-              - no heavy UI
-              - only works when a ToC item is selected
-          ========================================================= */}
-          <div
-            style={{
-              marginTop: 12,
-              paddingTop: 10,
-              borderTop: "1px solid rgba(15, 23, 42, 0.12)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>AI · Section summary</div>
+{/* =========================================================
+    ✅ Step 3: Minimal AI Summary box (Basic / Extended / Copy)
+    - no heavy UI
+    - only works when a ToC item is selected
+    - now shows backend meta (warnings + char count) so we can test indexing/extraction
+========================================================= */}
+<div
+  style={{
+    marginTop: 12,
+    paddingTop: 10,
+    borderTop: "1px solid rgba(15, 23, 42, 0.12)",
+  }}
+>
+  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+    <div style={{ fontWeight: 700, fontSize: 13 }}>AI · Section summary</div>
 
-              <button
-                type="button"
-                className="readerOutlineMiniBtn"
-                disabled={!selectedTocNode || !sectionSummaryText}
-                onClick={onCopySummary}
-                title="Copy summary"
-              >
-                Copy
-              </button>
-            </div>
+    <button
+      type="button"
+      className="readerOutlineMiniBtn"
+      disabled={!selectedTocNode || !sectionSummaryText}
+      onClick={onCopySummary}
+      title="Copy summary"
+    >
+      Copy
+    </button>
+  </div>
 
-            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.9 }}>
-              {selectedTocNode ? (
-                <>
-                  <div style={{ fontWeight: 600 }}>{nodeTitle(selectedTocNode)}</div>
-                  <div style={{ opacity: 0.75 }}>Pages: {nodeRightLabel(selectedTocNode) || "—"}</div>
-                </>
-              ) : (
-                <div style={{ opacity: 0.75 }}>Select a ToC section, then choose Basic or Extended.</div>
-              )}
-            </div>
+  <div style={{ marginTop: 8, fontSize: 12, opacity: 0.9 }}>
+    {selectedTocNode ? (
+      <>
+        <div style={{ fontWeight: 600 }}>{nodeTitle(selectedTocNode)}</div>
+        <div style={{ opacity: 0.75 }}>Pages: {nodeRightLabel(selectedTocNode) || "—"}</div>
+      </>
+    ) : (
+      <div style={{ opacity: 0.75 }}>Select a ToC section, then choose Basic or Extended.</div>
+    )}
+  </div>
 
-            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-              <button
-                type="button"
-                className="outline-btn"
-                disabled={!selectedTocNode || sectionSummaryLoading}
-                onClick={() => runSectionSummary("basic")}
-                title="Generate basic summary"
-              >
-                {sectionSummaryLoading && sectionSummaryType === "basic" ? "Basic…" : "Basic"}
-              </button>
+  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+    <button
+      type="button"
+      className="outline-btn"
+      disabled={!selectedTocNode || sectionSummaryLoading}
+      onClick={() => runSectionSummary("basic")}
+      title="Generate basic summary"
+    >
+      {sectionSummaryLoading && sectionSummaryType === "basic" ? "Basic…" : "Basic"}
+    </button>
 
-              <button
-                type="button"
-                className="outline-btn"
-                disabled={!selectedTocNode || sectionSummaryLoading}
-                onClick={() => runSectionSummary("extended")}
-                title="Generate extended summary"
-              >
-                {sectionSummaryLoading && sectionSummaryType === "extended" ? "Extended…" : "Extended"}
-              </button>
-            </div>
+    <button
+      type="button"
+      className="outline-btn"
+      disabled={!selectedTocNode || sectionSummaryLoading}
+      onClick={() => runSectionSummary("extended")}
+      title="Generate extended summary"
+    >
+      {sectionSummaryLoading && sectionSummaryType === "extended" ? "Extended…" : "Extended"}
+    </button>
+  </div>
 
-            {sectionSummaryError ? (
-              <div style={{ marginTop: 10, color: "#b42318", fontSize: 12 }}>{sectionSummaryError}</div>
-            ) : null}
+  {sectionSummaryError ? (
+    <div style={{ marginTop: 10, color: "#b42318", fontSize: 12 }}>{sectionSummaryError}</div>
+  ) : null}
 
-            {sectionSummaryText ? (
-              <div
-                style={{
-                  marginTop: 10,
-                  padding: 10,
-                  borderRadius: 10,
-                  border: "1px solid rgba(15, 23, 42, 0.12)",
-                  background: "rgba(255,255,255,0.7)",
-                  maxHeight: 180,
-                  overflow: "auto",
-                  fontSize: 12,
-                  whiteSpace: "pre-wrap",
-                  lineHeight: 1.45,
-                }}
-              >
-                {sectionSummaryText}
-              </div>
-            ) : null}
-          </div>
+  {sectionSummaryMeta ? (
+    <div
+      style={{
+        marginTop: 10,
+        padding: 10,
+        borderRadius: 10,
+        border: "1px solid rgba(15, 23, 42, 0.12)",
+        background: "rgba(255,255,255,0.55)",
+        fontSize: 12,
+        lineHeight: 1.4,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+        <div>
+          <strong>Used pages:</strong> {sectionSummaryMeta.usedPages}
+        </div>
+        <div>
+          <strong>Input chars:</strong> {sectionSummaryMeta.inputCharCount}
+        </div>
+        <div>
+          <strong>Cache:</strong> {sectionSummaryMeta.fromCache ? "yes" : "no"}
+        </div>
+      </div>
+
+      {sectionSummaryMeta.warnings?.length ? (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>Warnings</div>
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {sectionSummaryMeta.warnings.map((w, i) => (
+              <li key={`${i}-${w}`}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  ) : null}
+
+  {sectionSummaryText ? (
+    <div
+      style={{
+        marginTop: 10,
+        padding: 10,
+        borderRadius: 10,
+        border: "1px solid rgba(15, 23, 42, 0.12)",
+        background: "rgba(255,255,255,0.7)",
+        maxHeight: 180,
+        overflow: "auto",
+        fontSize: 12,
+        whiteSpace: "pre-wrap",
+        lineHeight: 1.45,
+      }}
+    >
+      {sectionSummaryText}
+    </div>
+  ) : null}
+</div>
+
         </div>
 
         {/* Desktop resize handle */}
