@@ -174,7 +174,6 @@
   width:100%;
   max-width: 420px;
 
-  /* glass */
   background: rgba(255,255,255,0.78);
   border: 1px solid rgba(17,24,39,0.10);
   backdrop-filter: blur(14px);
@@ -185,16 +184,13 @@
   text-align:center;
 
   position: relative;
-  isolation: isolate; /* ensures pseudo elements layer nicely */
+  isolation: isolate;
 
-  /* base shadow (depth) */
   box-shadow:
     0 26px 60px rgba(2,6,23,0.16),
     0 8px 18px rgba(2,6,23,0.08);
   overflow: hidden;
 }
-/* 🔹 Top accent bar (matches "What you get" card style) */
-.login-card::marker { content: none; } /* no-op safety */
 
 .login-card .login-top-accent{
   position:absolute;
@@ -205,17 +201,11 @@
   border-top-left-radius: 22px;
   border-top-right-radius: 22px;
 
-  background: linear-gradient(
-    135deg,
-    var(--la-red) 0%,
-    var(--la-red2) 45%,
-    var(--la-teal) 100%
-  );
-
+  background: linear-gradient(135deg, var(--la-red) 0%, var(--la-red2) 45%, var(--la-teal) 100%);
   opacity: 0.95;
   pointer-events:none;
 }
-/* ✅ Premium “under-glow / shadow band” (like your screenshot) */
+
 .login-card::after{
   content:"";
   position:absolute;
@@ -238,24 +228,21 @@
   pointer-events:none;
 }
 
-/* ✅ Gradient “glass rim” border */
 .login-card::before{
   content:"";
   position:absolute;
   inset: 0;
-  padding: 1px; /* border thickness */
+  padding: 1px;
   border-radius: 22px;
   background: linear-gradient(135deg, var(--la-red) 0%, var(--la-red2) 45%, var(--la-teal) 100%);
   opacity: 0.92;
   pointer-events:none;
 
-  /* mask out the center so it becomes only a border */
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
 
-  /* ✅ add standard property to silence warning */
   mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -297,8 +284,8 @@
   box-shadow: 0 0 0 3px rgba(14,165,165,0.18);
 }
 
-/* Button */
-.login-card button{
+/* ✅ IMPORTANT: Only style the MAIN Sign In button (not modal buttons) */
+.login-card > form button{
   width:100%;
   padding: 14px;
   color:#ffffff;
@@ -312,14 +299,15 @@
   transition: transform 0.08s ease, box-shadow .18s ease, filter .18s ease;
 }
 
-.login-card button:hover{
+.login-card > form button:hover{
   transform: translateY(-1px);
   box-shadow: 0 18px 40px rgba(0,0,0,0.18);
   filter: brightness(1.02);
 }
 
-.login-card button:active{ transform: scale(0.99); }
-.login-card button:disabled{
+.login-card > form button:active{ transform: scale(0.99); }
+
+.login-card > form button:disabled{
   opacity: 0.75;
   cursor:not-allowed;
 }
@@ -388,7 +376,7 @@
 }
 
 /* -------------------------
-   Branded Modal
+   Branded Modal (compact)
 -------------------------- */
 .li-modal-overlay{
   position: fixed;
@@ -402,26 +390,28 @@
   -webkit-backdrop-filter: blur(10px);
 }
 
+/* ✅ Compact modal (520 -> 460) */
 .li-modal{
-  width: min(520px, 100%);
+  width: min(460px, 100%);
   background: rgba(255,255,255,0.96);
-  border-radius: 18px;
+  border-radius: 16px;
   border: 1px solid rgba(17,24,39,0.12);
   box-shadow: 0 24px 60px rgba(2,6,23,0.28);
   overflow: hidden;
 }
 
+/* thinner top bar */
 .li-modal-brandbar{
-  height: 5px;
+  height: 4px;
   background: linear-gradient(135deg, var(--la-red) 0%, var(--la-red2) 45%, var(--la-teal) 100%);
 }
 
 .li-modal-head{
-  padding: 14px 14px 10px;
+  padding: 12px 12px 8px;
   display:flex;
   align-items:flex-start;
   justify-content:space-between;
-  gap: 10px;
+  gap: 8px;
   border-bottom: 1px solid rgba(17,24,39,0.10);
 }
 
@@ -429,86 +419,21 @@
   font-weight: 950;
   letter-spacing: -0.2px;
   color: rgba(17,24,39,0.92);
+  font-size: 14px;
 }
 
 .li-modal-sub{
   margin-top: 4px;
-  font-size: 12px;
+  font-size: 11.5px;
   color: rgba(17,24,39,0.65);
   font-weight: 800;
 }
 
+/* ✅ SINGLE clean close button definition (no duplicates) */
 .li-modal-x{
-  width: 38px;
-  height: 38px;
-  border-radius: 14px;
-  border: 1px solid rgba(17,24,39,0.12);
-  background: rgba(17,24,39,0.04);
-  cursor:pointer;
-}
-
-.li-modal-body{
-  padding: 14px;
-}
-
-.li-modal-note{
-  font-size: 13px;
-  color: rgba(17,24,39,0.70);
-  margin-bottom: 10px;
-}
-
-.li-modal-input{
-  width:100%;
-  padding: 12px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(17,24,39,0.14);
-  outline:none;
-  font-size: 13px;
-  margin-bottom: 12px;
-}
-
-.li-modal-input:focus{
-  border-color: rgba(14,165,165,0.60);
-  box-shadow: 0 0 0 4px rgba(14,165,165,0.12);
-}
-
-.li-modal-actions{
-  display:flex;
-  gap: 10px;
-}
-
-.li-modal-primary{
-  flex: 1;
-  padding: 12px 14px;
-  border-radius: 14px;
-  border: none;
-  font-weight: 950;
-  color:#fff;
-  cursor:pointer;
-  background: linear-gradient(135deg, var(--la-red) 0%, var(--la-red2) 55%, var(--la-teal) 100%);
-}
-
-.li-modal-ghost{
-  flex: 1;
-  padding: 12px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(17,24,39,0.14);
-  background: #fff;
-  font-weight: 950;
-  cursor:pointer;
-}
-
-/* Mobile */
-@media (max-width: 900px){
-  .login-layout{ grid-template-columns: 1fr; }
-  .login-info-panel{ display:none; }
-  .login-form-panel{ padding: 18px; }
-  .login-card{ padding: 34px 22px; border-radius: 16px; }
-  .login-card::before{ border-radius: 16px; }
-}.li-modal-x{
-  width: 38px;
-  height: 38px;
-  border-radius: 14px;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
   border: 1px solid rgba(17,24,39,0.12);
   background: rgba(17,24,39,0.04);
   cursor:pointer;
@@ -524,62 +449,69 @@
   transform: translateY(-1px);
 }
 .li-modal-x:active{ transform: scale(0.98); }
-/* ✅ Compact forgot-password modal (premium tight) */
-.li-modal{
-  width: min(460px, 100%);
-  border-radius: 16px;
-}
-
-/* slightly thinner top bar */
-.li-modal-brandbar{
-  height: 4px;
-}
-
-/* tighter header/body padding */
-.li-modal-head{
-  padding: 12px 12px 8px;
-  gap: 8px;
-}
 
 .li-modal-body{
   padding: 12px;
 }
 
-/* tighter typography */
-.li-modal-title{
-  font-size: 14px;
-}
-
-.li-modal-sub{
-  font-size: 11.5px;
-}
-
-/* tighten note + input */
 .li-modal-note{
   font-size: 12.5px;
+  color: rgba(17,24,39,0.70);
   margin-bottom: 8px;
 }
 
 .li-modal-input{
+  width:100%;
   padding: 11px 12px;
   border-radius: 12px;
+  border: 1px solid rgba(17,24,39,0.14);
+  outline:none;
+  font-size: 13px;
   margin-bottom: 8px;
 }
 
-/* smaller close button */
-.li-modal-x{
-  width: 34px;
-  height: 34px;
-  border-radius: 12px;
+.li-modal-input:focus{
+  border-color: rgba(14,165,165,0.60);
+  box-shadow: 0 0 0 4px rgba(14,165,165,0.12);
 }
 
-/* right-aligned text action, tight baseline */
 .li-modal-actions{
-  margin-top: 2px;
+  display:flex;
   gap: 8px;
+  margin-top: 2px;
+}
+
+.li-modal-actions--right{
+  justify-content: flex-end;
 }
 
 .li-modal-textBtn{
+  border: none;
+  background: transparent;
   padding: 6px 4px;
+  font-weight: 950;
   font-size: 12.5px;
+  cursor: pointer;
+  color: var(--la-red2);
+  text-decoration: underline;
+  text-decoration-color: rgba(14,165,165,0.45);
+}
+
+.li-modal-textBtn:hover{
+  filter: brightness(0.95);
+}
+
+.li-modal-textBtn:disabled{
+  opacity: 0.6;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+/* Mobile */
+@media (max-width: 900px){
+  .login-layout{ grid-template-columns: 1fr; }
+  .login-info-panel{ display:none; }
+  .login-form-panel{ padding: 18px; }
+  .login-card{ padding: 34px 22px; border-radius: 16px; }
+  .login-card::before{ border-radius: 16px; }
 }

@@ -23,10 +23,7 @@ function IconScale() {
 function IconReport() {
   return (
     <svg viewBox="0 0 24 24" className="li-ico" aria-hidden="true">
-      <path
-        fill="currentColor"
-        d="M7 3h7l5 5v13c0 1.1-.9 2-2 2H7c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2Zm6 1v5h5"
-      />
+      <path fill="currentColor" d="M7 3h7l5 5v13c0 1.1-.9 2-2 2H7c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2Zm6 1v5h5" />
       <path
         fill="currentColor"
         d="M8 12h8c.6 0 1 .4 1 1s-.4 1-1 1H8c-.6 0-1-.4-1-1s.4-1 1-1Zm0 4h8c.6 0 1 .4 1 1s-.4 1-1 1H8c-.6 0-1-.4-1-1s.4-1 1-1Z"
@@ -56,6 +53,39 @@ function IconJournal() {
         d="M8 8h6c.6 0 1 .4 1 1s-.4 1-1 1H8c-.6 0-1-.4-1-1s.4-1 1-1Zm0 4h6c.6 0 1 .4 1 1s-.4 1-1 1H8c-.6 0-1-.4-1-1s.4-1 1-1Z"
       />
     </svg>
+  );
+}
+
+/**
+ * ✅ IMPORTANT: Modal is OUTSIDE Login()
+ * This prevents remounting on each keystroke (fixes the "type one letter then refocus" bug).
+ */
+function Modal({ title, children, onClose }) {
+  return (
+    <div
+      className="li-modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="li-modal" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="li-modal-brandbar" />
+        <div className="li-modal-head">
+          <div>
+            <div className="li-modal-title">{title}</div>
+            <div className="li-modal-sub">We’ll send a reset link (if the account exists).</div>
+          </div>
+
+          <button type="button" className="li-modal-x" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+
+        <div className="li-modal-body">{children}</div>
+      </div>
+    </div>
   );
 }
 
@@ -111,6 +141,7 @@ export default function Login() {
   useEffect(() => {
     if (!showForgot) return;
 
+    // Defer to next tick so the input exists in the DOM.
     const t = setTimeout(() => resetInputRef.current?.focus(), 0);
 
     const onKeyDown = (e) => {
@@ -294,36 +325,6 @@ export default function Login() {
     }
   }
 
-  function Modal({ title, children, onClose }) {
-    return (
-      <div
-        className="li-modal-overlay"
-        role="dialog"
-        aria-modal="true"
-        onMouseDown={(e) => {
-          if (e.target === e.currentTarget) onClose();
-        }}
-      >
-        <div className="li-modal">
-          <div className="li-modal-brandbar" />
-          <div className="li-modal-head">
-            <div>
-              <div className="li-modal-title">{title}</div>
-              <div className="li-modal-sub">We’ll send a reset link (if the account exists).</div>
-            </div>
-
-            {/* ✅ icon-only close */}
-            <button type="button" className="li-modal-x" onClick={onClose} aria-label="Close">
-              ✕
-            </button>
-          </div>
-
-          <div className="li-modal-body">{children}</div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="login-layout">
       {/* LEFT PANEL */}
@@ -458,7 +459,7 @@ export default function Login() {
             </span>
           </div>
 
-          {/* ✅ Forgot password modal (clean: input + right-aligned text button) */}
+          {/* ✅ Forgot password modal (stable + compact + text action) */}
           {showForgot && (
             <Modal
               title="Reset your password"
@@ -471,7 +472,6 @@ export default function Login() {
                 Enter the email address on your account and we’ll send a reset link (if the account exists).
               </div>
 
-              {/* Use a form so Enter submits, without a huge button */}
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -480,6 +480,7 @@ export default function Login() {
               >
                 <input
                   ref={resetInputRef}
+                  autoFocus
                   type="email"
                   placeholder="Email address"
                   value={resetEmail}
