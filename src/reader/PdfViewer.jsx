@@ -127,6 +127,7 @@ export default function PdfViewer({
   const [page, setPage] = useState(startPage || 1);
 
   // ✅ Always-current page value for external polling (Reader)
+  // Important: keep this ref in sync IMMEDIATELY (not only via effects)
   const currentPageRef = useRef(startPage || 1);
   useEffect(() => {
     currentPageRef.current = page;
@@ -144,7 +145,7 @@ export default function PdfViewer({
   /* ---------------- Reading Progress ---------------- */
   const [resumeLoaded, setResumeLoaded] = useState(false);
   const lastSavedPageRef = useRef(null);
-  const readingStartRef = useRef(0); // set in effect (no Date.now in render)
+  const readingStartRef = useRef(0);
   const pageUpdateTimeoutRef = useRef(null);
 
   const resumeTargetRef = useRef(null);
@@ -239,6 +240,13 @@ export default function PdfViewer({
      RESET WHEN DOCUMENT CHANGES
      ================================================== */
   useEffect(() => {
+    // hard cleanup
+    clearTimeout(pageUpdateTimeoutRef.current);
+    clearTimeout(fallbackIdleTimerRef.current);
+    clearTimeout(snapTimeoutRef.current);
+    if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
+    scrollRafRef.current = null;
+
     defer(() => {
       setNumPages(null);
       setReady(false);
@@ -249,7 +257,9 @@ export default function PdfViewer({
       setSafeMode(false);
       setDocKey((k) => k + 1);
 
-      setPage(startPage || 1);
+      const sp = startPage || 1;
+      setPage(sp);
+      currentPageRef.current = sp;
 
       setResumeLoaded(false);
       pendingJumpRef.current = null;
@@ -355,6 +365,7 @@ export default function PdfViewer({
     defer(() => {
       setRenderLimit((prev) => Math.max(prev, Math.min(target + 6, maxPage)));
       setPage(target);
+      currentPageRef.current = target;
     });
 
     let cancelled = false;
@@ -394,6 +405,7 @@ export default function PdfViewer({
 
       isProgrammaticNavRef.current = true;
       setPage(nextPage);
+      currentPageRef.current = nextPage;
 
       requestAnimationFrame(() => {
         scrollToPage(nextPage, "smooth");
@@ -425,10 +437,13 @@ export default function PdfViewer({
       if (lastSensorPageRef.current === p) return;
       lastSensorPageRef.current = p;
 
+      // ✅ Immediately update ref so Reader polling stays correct even during debounce
+      currentPageRef.current = p;
+
       clearTimeout(pageUpdateTimeoutRef.current);
       pageUpdateTimeoutRef.current = setTimeout(() => {
         setPage((prev) => (prev === p ? prev : p));
-      }, 35);
+      }, 30);
 
       if (
         allowedMaxPage &&
@@ -514,7 +529,6 @@ export default function PdfViewer({
 
     const observer = new IntersectionObserver(
       (entries) => {
-        // Pick most visible
         const visible = entries
           .filter((e) => e.isIntersecting)
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
@@ -613,11 +627,7 @@ export default function PdfViewer({
   useEffect(() => {
     function onKeyDown(e) {
       const tag = document.activeElement?.tagName?.toLowerCase();
-      const typing =
-        tag === "input" ||
-        tag === "textarea" ||
-        document.activeElement?.isContentEditable;
-
+      const typing = tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable;
       if (typing) return;
 
       if (e.key === "ArrowLeft") {
@@ -625,9 +635,7 @@ export default function PdfViewer({
         safeSetPage(Math.max(1, page - 1));
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
-        safeSetPage(
-          Math.min((allowedMaxPage ?? numPages) || 1, page + 1)
-        );
+        safeSetPage(Math.min((allowedMaxPage ?? numPages) || 1, page + 1));
       } else if (e.key === "n" || e.key === "N") {
         e.preventDefault();
         setShowNotes((v) => !v);
@@ -652,16 +660,7 @@ export default function PdfViewer({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [
-    page,
-    numPages,
-    allowedMaxPage,
-    showNoteBox,
-    showNotes,
-    showPageJump,
-    safeSetPage,
-    openPageJump,
-  ]);
+  }, [page, numPages, allowedMaxPage, showNoteBox, showNotes, showPageJump, safeSetPage, openPageJump]);
 
   /* ==================================================
      Highlight capture
@@ -706,10 +705,7 @@ export default function PdfViewer({
       setNoteContent("");
 
       setHighlightMeta({
-        id:
-          typeof crypto !== "undefined" && crypto.randomUUID
-            ? crypto.randomUUID()
-            : String(Date.now()),
+        id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
         page: pageNumber,
         text,
         rects,
@@ -744,6 +740,7 @@ export default function PdfViewer({
 
       isProgrammaticNavRef.current = true;
       setPage(target);
+      currentPageRef.current = target;
 
       requestAnimationFrame(() => {
         setTimeout(() => {
@@ -751,7 +748,6 @@ export default function PdfViewer({
           setTimeout(() => {
             isProgrammaticNavRef.current = false;
 
-            // ✅ Let IO update naturally; fallback only if needed
             clearTimeout(fallbackIdleTimerRef.current);
             fallbackIdleTimerRef.current = setTimeout(() => {
               if (!observerReadyRef.current) scheduleFallbackCompute();
@@ -778,7 +774,7 @@ export default function PdfViewer({
 
     onRegisterApi({
       jumpToPage: (p, behavior) => jumpToPageRef.current?.(p, behavior),
-      getCurrentPage: () => currentPageRef.current, // ✅ always current, no re-register needed
+      getCurrentPage: () => currentPageRef.current,
     });
 
     return () => {
@@ -860,7 +856,7 @@ export default function PdfViewer({
     if (!ready) return;
 
     const cap = Math.min(renderLimit, allowedMaxPage ?? renderLimit);
-    for (let p = 1; p <= cap; p++) applyHighlightsForPage(p);
+    for (let pg = 1; pg <= cap; pg++) applyHighlightsForPage(pg);
   }, [ready, renderLimit, allowedMaxPage, applyHighlightsForPage]);
 
   const hasOverlapOnPage = useCallback(() => false, []);
@@ -1061,11 +1057,9 @@ export default function PdfViewer({
           onScroll={() => {
             if (!ready) return;
 
-            // Let IO lead; only do fallback compute after scroll settles briefly.
             if (!isProgrammaticNavRef.current) {
               clearTimeout(fallbackIdleTimerRef.current);
               fallbackIdleTimerRef.current = setTimeout(() => {
-                // Fallback is useful if IO misses or during partial renders
                 scheduleFallbackCompute();
               }, 140);
             }
@@ -1194,6 +1188,8 @@ export default function PdfViewer({
               initial = Math.min(Math.max(1, initial), allowed);
 
               setPage(initial);
+              currentPageRef.current = initial;
+
               setRenderLimit(Math.min(allowed, Math.max(initial + 6, 10)));
               setLoadPct(100);
               setLoadError("");
@@ -1204,7 +1200,6 @@ export default function PdfViewer({
                 scrollToPage(initial, "auto");
                 setTimeout(() => {
                   isProgrammaticNavRef.current = false;
-                  // allow IO to lead; fallback compute in case IO doesn't fire yet
                   clearTimeout(fallbackIdleTimerRef.current);
                   fallbackIdleTimerRef.current = setTimeout(() => scheduleFallbackCompute(), 160);
                 }, 250);
@@ -1250,7 +1245,6 @@ export default function PdfViewer({
                       }
                       onRenderTextLayerSuccess={() => {
                         applyHighlightsForPage(pageNumber);
-                        // keep a light fallback nudge for early render phases
                         clearTimeout(fallbackIdleTimerRef.current);
                         fallbackIdleTimerRef.current = setTimeout(() => scheduleFallbackCompute(), 120);
                       }}
