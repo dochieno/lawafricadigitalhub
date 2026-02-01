@@ -524,3 +524,28 @@
   transform: translateY(-1px);
 }
 .li-modal-x:active{ transform: scale(0.98); }
+.li-modal-actions--right{
+  justify-content: flex-end;
+}
+
+.li-modal-textBtn{
+  border: none;
+  background: transparent;
+  padding: 8px 6px;
+  font-weight: 950;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--la-red2);
+  text-decoration: underline;
+  text-decoration-color: rgba(14,165,165,0.45);
+}
+
+.li-modal-textBtn:hover{
+  filter: brightness(0.95);
+}
+
+.li-modal-textBtn:disabled{
+  opacity: 0.6;
+  cursor: not-allowed;
+  text-decoration: none;
+}
