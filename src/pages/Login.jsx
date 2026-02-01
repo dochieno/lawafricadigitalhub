@@ -1,5 +1,5 @@
 // src/pages/Login.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import "../styles/login.css";
 import { useAuth } from "../auth/AuthContext";
@@ -77,6 +77,7 @@ export default function Login() {
   const [showForgot, setShowForgot] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
+  const resetInputRef = useRef(null);
 
   // ✅ inline "resend verification email" link loading
   const [resendInlineLoading, setResendInlineLoading] = useState(false);
@@ -105,6 +106,26 @@ export default function Login() {
 
     setBanner({ type: "", text: "" });
   }, [location.search]);
+
+  // ✅ When modal opens: focus input + support ESC close
+  useEffect(() => {
+    if (!showForgot) return;
+
+    const t = setTimeout(() => resetInputRef.current?.focus(), 0);
+
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setShowForgot(false);
+        setResetEmail("");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [showForgot]);
 
   function formatLockoutMessage(rawMessage) {
     const match = rawMessage.match(/until\s(.+)/i);
@@ -159,7 +180,6 @@ export default function Login() {
         return;
       }
 
-      // ✅ generic success (no user enumeration)
       setInfo("If the account exists, a verification email has been sent.");
     } catch {
       setError("Network error. Please try again.");
@@ -197,7 +217,6 @@ export default function Login() {
           return;
         }
 
-        // ✅ Email not verified UX (compact + link)
         if (looksLikeEmailNotVerified(msg)) {
           setError(msg || "Email not verified. Please verify your email before logging in.");
           return;
@@ -275,11 +294,12 @@ export default function Login() {
     }
   }
 
-  // ✅ Branded modal (still simple, no libs)
   function Modal({ title, children, onClose }) {
     return (
       <div
         className="li-modal-overlay"
+        role="dialog"
+        aria-modal="true"
         onMouseDown={(e) => {
           if (e.target === e.currentTarget) onClose();
         }}
@@ -291,6 +311,8 @@ export default function Login() {
               <div className="li-modal-title">{title}</div>
               <div className="li-modal-sub">We’ll send a reset link (if the account exists).</div>
             </div>
+
+            {/* ✅ icon-only close */}
             <button type="button" className="li-modal-x" onClick={onClose} aria-label="Close">
               ✕
             </button>
@@ -314,7 +336,6 @@ export default function Login() {
           <h1 className="li-title">Digital Platform</h1>
           <p className="tagline">Trusted legal knowledge. Anywhere. Anytime.</p>
 
-          {/* ✅ Dark “What you get” card (landing-style, but dark) */}
           <div className="li-what-card">
             <div className="li-what-title">What you get</div>
 
@@ -359,7 +380,6 @@ export default function Login() {
             </div>
 
             <div className="li-what-divider" />
-
             <div className="li-trustline">Used by courts, law firms, universities, and public institutions.</div>
           </div>
         </div>
@@ -372,10 +392,8 @@ export default function Login() {
           <h2>Sign in</h2>
           <p className="subtitle">Access trusted legal publications and resources.</p>
 
-          {/* ✅ Verified banner */}
           {banner?.text && <div className={banner.type === "success" ? "success-box" : "error-box"}>{banner.text}</div>}
 
-          {/* ✅ Error + inline resend link */}
           {error && (
             <div className="error-box">
               {error}
@@ -427,7 +445,6 @@ export default function Login() {
             </button>
           </form>
 
-          {/* ✅ Forgot password below Sign In */}
           <div style={{ marginTop: 12, display: "flex", justifyContent: "center" }}>
             <span
               className="linkish"
@@ -441,7 +458,7 @@ export default function Login() {
             </span>
           </div>
 
-          {/* ✅ Forgot password modal */}
+          {/* ✅ Forgot password modal (clean: input + right-aligned text button) */}
           {showForgot && (
             <Modal
               title="Reset your password"
@@ -454,25 +471,29 @@ export default function Login() {
                 Enter the email address on your account and we’ll send a reset link (if the account exists).
               </div>
 
-              <input
-                type="email"
-                placeholder="Email address"
-                value={resetEmail}
-                onChange={(e) => setResetEmail(e.target.value)}
-                className="li-modal-input"
-              />
+              {/* Use a form so Enter submits, without a huge button */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleRequestPasswordReset();
+                }}
+              >
+                <input
+                  ref={resetInputRef}
+                  type="email"
+                  placeholder="Email address"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  className="li-modal-input"
+                  autoComplete="email"
+                />
 
-              {/* ✅ UPDATED: smaller primary button, aligned right */}
-              <div className="li-modal-actions li-modal-actions--right">
-                <button
-                  type="button"
-                  onClick={handleRequestPasswordReset}
-                  disabled={resetLoading}
-                  className="li-modal-primary li-modal-primary--sm"
-                >
-                  {resetLoading ? "Sending..." : "Send reset link"}
-                </button>
-              </div>
+                <div className="li-modal-actions li-modal-actions--right">
+                  <button type="submit" className="li-modal-textBtn" disabled={resetLoading || !resetEmail.trim()}>
+                    {resetLoading ? "Sending…" : "Send reset link"}
+                  </button>
+                </div>
+              </form>
             </Modal>
           )}
 
