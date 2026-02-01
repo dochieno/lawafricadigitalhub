@@ -1,10 +1,18 @@
-// src/components/reader/SectionSummaryPanel.jsx
 import { useEffect, useMemo } from "react";
 import { parseAiSummary } from "../../reader/ai/parseAiSummary";
 
+function sectionAccent(title) {
+  const t = String(title || "").toLowerCase();
+  if (t.includes("fact")) return "facts";
+  if (t.includes("issue")) return "issues";
+  if (t.includes("holding") || t.includes("decision")) return "holding";
+  if (t.includes("reason")) return "reasoning";
+  if (t.includes("takeaway") || t.includes("key")) return "takeaways";
+  return "default";
+}
+
 export default function SectionSummaryPanel({
   open,
-  logoSrc,
   title,
   type,
   loading,
@@ -20,7 +28,7 @@ export default function SectionSummaryPanel({
 }) {
   const sections = useMemo(() => parseAiSummary(summaryText), [summaryText]);
 
-  // ✅ Premium UX: ESC closes panel (desktop)
+  // ESC closes modal
   useEffect(() => {
     if (!open) return;
 
@@ -38,148 +46,144 @@ export default function SectionSummaryPanel({
   const headerTitle = safeTitle || "Selected section";
 
   return (
-    <aside className="laSummaryPanel" role="dialog" aria-label="AI Summary">
-      <div className="laSummaryPanelHeader">
-        <div className="laSummaryBrand">
-          {logoSrc ? <img className="laSummaryLogo" src={logoSrc} alt="LawAfrica" /> : null}
+    <div className="laSummaryModal" role="dialog" aria-modal="true" aria-label="AI Summary">
+      {/* Backdrop (click to close) */}
+      <button type="button" className="laSummaryBackdrop" aria-label="Close" onClick={onClose} />
 
+      {/* Modal */}
+      <div className={`laSummaryWindow ${expanded ? "expanded" : ""}`}>
+        <div className="laSummaryHeader">
           <div className="laSummaryHeaderText">
             <div className="laSummaryKicker">AI Summary</div>
-
             <div className="laSummaryTitle" title={headerTitle}>
               {headerTitle}
             </div>
-
-            {/* Optional subtle helper label */}
-            {safeTitle ? (
-              <div className="laSummarySubtitle" title={safeTitle}>
-                Section
-              </div>
-            ) : null}
           </div>
+
+          <button type="button" className="laSummaryIconBtn" onClick={onClose} title="Close">
+            ✕
+          </button>
         </div>
 
-        <button type="button" className="laSummaryIconBtn" onClick={onClose} title="Close">
-          ✕
-        </button>
-      </div>
+        <div className="laSummarySubHeader">
+          <div className="laSummaryTypePills">
+            <button
+              type="button"
+              className={`laPill ${type === "basic" ? "active" : ""}`}
+              onClick={() => onSwitchType?.("basic")}
+              disabled={loading}
+              title="Basic summary"
+            >
+              Basic
+            </button>
+            <button
+              type="button"
+              className={`laPill ${type === "extended" ? "active" : ""}`}
+              onClick={() => onSwitchType?.("extended")}
+              disabled={loading}
+              title="Extended summary"
+            >
+              Extended
+            </button>
+          </div>
 
-      <div className="laSummaryPanelSubHeader">
-        <div className="laSummaryTypePills">
-          <button
-            type="button"
-            className={`laPill ${type === "basic" ? "active" : ""}`}
-            onClick={() => onSwitchType?.("basic")}
-            disabled={loading}
-            title="Basic summary"
-          >
-            Basic
+          {meta ? (
+            <div className="laSummaryMetaRow" title="Summary metadata">
+              <span>{meta.fromCache ? "cache" : "fresh"}</span>
+              <span>pages {meta.usedPages || "—"}</span>
+              <span>{meta.inputCharCount ? `${meta.inputCharCount} chars` : ""}</span>
+            </div>
+          ) : (
+            <div className="laSummaryMetaRow muted">Generated summary appears here.</div>
+          )}
+        </div>
+
+        <div className="laSummaryBody">
+          {loading ? (
+            <div className="laSummaryState">Generating {type} summary…</div>
+          ) : error ? (
+            <div className="laSummaryState error">{error}</div>
+          ) : !summaryText ? (
+            <div className="laSummaryState muted">
+              No summary yet. Generate from ToC (Basic/Extended) or click “Regenerate”.
+            </div>
+          ) : (
+            <div className="laSummaryContent">
+              {meta?.warnings?.length ? (
+                <div className="laSummaryWarnings">
+                  <div className="laSummaryWarningsTitle">Warnings</div>
+                  <ul className="laSummaryUl">
+                    {meta.warnings.map((w, i) => (
+                      <li key={`${i}-${w}`} className="laSummaryLi">
+                        {w}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {sections.map((s) => {
+                const accent = sectionAccent(s.title);
+                return (
+                  <section key={s.title} className={`laSumSection laAccent-${accent}`}>
+                    <div className="laSumPillRow">
+                      <span className="laSumDot" aria-hidden="true" />
+                      <span className="laSumPill">{s.title}</span>
+                    </div>
+
+                    <div className="laSumCard">
+                      {s.blocks.map((b, idx) => {
+                        if (b.kind === "ul") {
+                          return (
+                            <ul key={idx} className="laSummaryUl">
+                              {b.items.map((it, i) => (
+                                <li key={`${i}-${it}`} className="laSummaryLi">
+                                  {it}
+                                </li>
+                              ))}
+                            </ul>
+                          );
+                        }
+                        return (
+                          <p key={idx} className="laSummaryP">
+                            {b.text}
+                          </p>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="laSummaryActions">
+          <button type="button" className="laActionBtn" onClick={onCopy} disabled={!summaryText || loading} title="Copy">
+            Copy
           </button>
 
           <button
             type="button"
-            className={`laPill ${type === "extended" ? "active" : ""}`}
-            onClick={() => onSwitchType?.("extended")}
-            disabled={loading}
-            title="Extended summary"
+            className="laActionBtn"
+            onClick={onToggleExpanded}
+            disabled={!summaryText}
+            title={expanded ? "Collapse" : "Expand"}
           >
-            Extended
+            {expanded ? "Collapse" : "Expand"}
+          </button>
+
+          <button
+            type="button"
+            className="laActionBtn primary"
+            onClick={onRegenerate}
+            disabled={loading}
+            title="Regenerate (force)"
+          >
+            {loading ? "Working…" : "Regenerate"}
           </button>
         </div>
-
-        {meta ? (
-          <div className="laSummaryMetaRow" title="Summary metadata">
-            <span>{meta.fromCache ? "cache" : "fresh"}</span>
-            <span>pages {meta.usedPages || "—"}</span>
-            <span>{meta.inputCharCount ? `${meta.inputCharCount} chars` : ""}</span>
-          </div>
-        ) : (
-          <div className="laSummaryMetaRow muted">Generated summary appears here.</div>
-        )}
       </div>
-
-      <div className={`laSummaryBody ${expanded ? "expanded" : ""}`}>
-        {loading ? (
-          <div className="laSummaryState">Generating {type} summary…</div>
-        ) : error ? (
-          <div className="laSummaryState error">{error}</div>
-        ) : !summaryText ? (
-          <div className="laSummaryState muted">
-            No summary yet. Generate from ToC (Basic/Extended) or click “Regenerate”.
-          </div>
-        ) : (
-          <div className="laSummaryContent">
-            {meta?.warnings?.length ? (
-              <div className="laSummaryWarnings">
-                <div className="laSummaryWarningsTitle">Warnings</div>
-                <ul>
-                  {meta.warnings.map((w, i) => (
-                    <li key={`${i}-${w}`}>{w}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            {sections.map((s) => (
-              <section key={s.title} className="laSummarySection">
-                <h3 className="laSummaryH3">{s.title}</h3>
-
-                {s.blocks.map((b, idx) => {
-                  if (b.kind === "ul") {
-                    return (
-                      <ul key={idx} className="laSummaryUl">
-                        {b.items.map((it, i) => (
-                          <li key={`${i}-${it}`} className="laSummaryLi">
-                            {it}
-                          </li>
-                        ))}
-                      </ul>
-                    );
-                  }
-
-                  return (
-                    <p key={idx} className="laSummaryP">
-                      {b.text}
-                    </p>
-                  );
-                })}
-              </section>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="laSummaryActions">
-        <button
-          type="button"
-          className="laActionBtn"
-          onClick={onCopy}
-          disabled={!summaryText || loading}
-          title="Copy"
-        >
-          Copy
-        </button>
-
-        <button
-          type="button"
-          className="laActionBtn"
-          onClick={onToggleExpanded}
-          disabled={!summaryText}
-          title={expanded ? "Collapse" : "Expand"}
-        >
-          {expanded ? "Collapse" : "Expand"}
-        </button>
-
-        <button
-          type="button"
-          className="laActionBtn primary"
-          onClick={onRegenerate}
-          disabled={loading}
-          title="Regenerate (force)"
-        >
-          {loading ? "Working…" : "Regenerate"}
-        </button>
-      </div>
-    </aside>
+    </div>
   );
 }

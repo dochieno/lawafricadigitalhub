@@ -505,13 +505,14 @@ export default function DocumentReader() {
     });
   }, []);
 
-  const expandAll = useCallback(() => {
-    setOutlineExpanded(() => collectAllNodeIds(outline));
-  }, [outline]);
+const toggleExpandCollapseAll = useCallback(() => {
+  const allIds = collectAllNodeIds(outline);
+  setOutlineExpanded((prev) => {
+    const isAllExpanded = prev.size > 0 && prev.size >= allIds.size;
+    return isAllExpanded ? new Set() : allIds;
+  });
+}, [outline]);
 
-  const collapseAll = useCallback(() => {
-    setOutlineExpanded(() => new Set());
-  }, []);
 
   // Persist expanded state per document
   useEffect(() => {
@@ -1308,11 +1309,13 @@ export default function DocumentReader() {
           <div className="readerpage-tocTitle">Table of Contents</div>
 
           <div className="readerOutlineHeaderActions">
-            <button className="readerOutlineMiniBtn" type="button" onClick={expandAll} title="Expand all">
-              Expand
-            </button>
-            <button className="readerOutlineMiniBtn" type="button" onClick={collapseAll} title="Collapse all">
-              Collapse
+            <button
+              className="readerOutlineMiniBtn"
+              type="button"
+              onClick={toggleExpandCollapseAll}
+              title={outlineExpanded.size ? "Collapse all" : "Expand all"}
+            >
+              {outlineExpanded.size ? "Collapse" : "Expand"}
             </button>
 
             <button
@@ -1325,6 +1328,7 @@ export default function DocumentReader() {
               Open summary
             </button>
           </div>
+
 
           <button className="readerpage-tocClose" type="button" onClick={closeOutline} title="Close">
             ✕

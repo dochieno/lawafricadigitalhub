@@ -1513,3 +1513,264 @@ svg.highlight-layer {
     text-align: center;
   }
 }
+/* =========================
+   AI Summary Modal (Popup)
+   ========================= */
+
+.laSummaryModal {
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.laSummaryBackdrop {
+  position: absolute;
+  inset: 0;
+  border: none;
+  background: rgba(15, 23, 42, 0.55);
+  cursor: pointer;
+}
+
+.laSummaryWindow {
+  position: relative;
+  width: min(820px, 96vw);
+  max-height: min(84vh, 760px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.28);
+}
+
+.laSummaryWindow.expanded {
+  width: min(980px, 98vw);
+  max-height: 88vh;
+}
+
+.laSummaryHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.10);
+}
+
+.laSummaryHeaderText {
+  min-width: 0;
+}
+
+.laSummaryKicker {
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(15, 23, 42, 0.65);
+  letter-spacing: 0.2px;
+}
+
+.laSummaryTitle {
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 900;
+  color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 64vw;
+}
+
+.laSummaryIconBtn {
+  appearance: none;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.85);
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.laSummarySubHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(248, 250, 252, 0.75);
+}
+
+.laSummaryTypePills {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.laPill {
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.laPill.active {
+  border-color: rgba(139, 28, 28, 0.35);
+  box-shadow: 0 0 0 3px rgba(139, 28, 28, 0.10);
+}
+
+.laSummaryMetaRow {
+  display: inline-flex;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(15, 23, 42, 0.65);
+  white-space: nowrap;
+}
+
+.laSummaryMetaRow.muted {
+  opacity: 0.75;
+}
+
+.laSummaryBody {
+  flex: 1;
+  overflow: auto;
+  padding: 14px 16px;
+}
+
+.laSummaryState {
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(248, 250, 252, 0.7);
+  font-weight: 800;
+  color: rgba(15, 23, 42, 0.75);
+}
+
+.laSummaryState.error {
+  color: #b42318;
+  background: rgba(254, 242, 242, 0.9);
+  border-color: rgba(239, 68, 68, 0.30);
+}
+
+.laSummaryState.muted {
+  opacity: 0.85;
+}
+
+/* "Report-like" section pills + cards */
+.laSumSection {
+  margin-top: 14px;
+}
+
+.laSumPillRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.85);
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+}
+
+.laSumDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.laSumCard {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 12px 30px rgba(2, 6, 23, 0.08);
+  position: relative;
+}
+
+.laSumCard::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 4px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.15);
+}
+
+/* Accents (like your screenshot) */
+.laAccent-facts .laSumDot { background: rgba(34, 197, 94, 0.55); }
+.laAccent-facts .laSumCard::before { background: rgba(34, 197, 94, 0.45); }
+
+.laAccent-issues .laSumDot { background: rgba(59, 130, 246, 0.55); }
+.laAccent-issues .laSumCard::before { background: rgba(59, 130, 246, 0.40); }
+
+.laAccent-holding .laSumDot { background: rgba(239, 68, 68, 0.55); }
+.laAccent-holding .laSumCard::before { background: rgba(239, 68, 68, 0.35); }
+
+.laAccent-reasoning .laSumDot { background: rgba(168, 85, 247, 0.55); }
+.laAccent-reasoning .laSumCard::before { background: rgba(168, 85, 247, 0.35); }
+
+.laAccent-takeaways .laSumDot { background: rgba(245, 158, 11, 0.65); }
+.laAccent-takeaways .laSumCard::before { background: rgba(245, 158, 11, 0.40); }
+
+.laSummaryP {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(15, 23, 42, 0.90);
+}
+
+.laSummaryUl {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.laSummaryLi {
+  margin: 6px 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(15, 23, 42, 0.90);
+}
+
+/* Footer actions */
+.laSummaryActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(248, 250, 252, 0.75);
+}
+
+.laActionBtn {
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.92);
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-weight: 900;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.laActionBtn.primary {
+  border-color: rgba(139, 28, 28, 0.35);
+  background: rgba(139, 28, 28, 0.08);
+}
+
+.laActionBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
