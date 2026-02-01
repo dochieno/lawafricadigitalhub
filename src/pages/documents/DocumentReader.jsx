@@ -8,7 +8,9 @@ import PdfViewer from "../../reader/PdfViewer";
 import SectionSummaryPanel from "../../components/reader/SectionSummaryPanel";
 import "../../styles/reader.css";
 
-import lawAfricaLogo from "../../assets/brand/lawafrica-logo.png";
+// ✅ If you updated parseAiSummary.js as I gave you earlier, keep this import.
+// If you haven't updated that file yet, comment this import and the usage in onCopySummary.
+import { formatAiSummaryForCopy } from "../../reader/ai/parseAiSummary";
 
 /** ---------------------------
  * Small helpers (pure)
@@ -107,6 +109,45 @@ function collectAllNodeIds(nodes, depth = 0, out = new Set()) {
   return out;
 }
 
+
+//Helper
+
+function stripInlineMetaFromSummary(text) {
+  const raw = String(text || "");
+  if (!raw.trim()) return "";
+
+  // Removes common header/meta lines if they appear at the top of the summary text
+  const lines = raw.split(/\r?\n/);
+  const out = [];
+
+  let skipping = true;
+  for (const line of lines) {
+    const l = line.trim();
+
+    if (skipping) {
+      const isMetaLine =
+        /^used pages\s*:/i.test(l) ||
+        /^input chars\s*:/i.test(l) ||
+        /^cache\s*:/i.test(l) ||
+        /^warnings\s*$/i.test(l) ||
+        /^page range/i.test(l) ||
+        /^input text was truncated/i.test(l);
+
+      // skip blank lines while skipping meta
+      if (!l) continue;
+
+      if (isMetaLine) continue;
+
+      // first non-meta content starts here
+      skipping = false;
+    }
+
+    out.push(line);
+  }
+
+  return out.join("\n").trim();
+}
+
 /**
  * Filter tree by title, keeping ancestor chain for matches.
  * Returns a NEW tree (safe).
@@ -155,18 +196,14 @@ function OutlineTree({ nodes, depth = 0, expanded, activePage, pdfPageOffset, on
 
         const right = nodeRightLabel(n);
 
-        // Raw pages from ToC (printed/page labels)
         const startRaw = nodeStartPage(n);
         const endRaw = nodeEndPage(n);
 
-        // ✅ Assumption: PDF page = printed page + offset
         const startPdf = startRaw != null ? startRaw + pdfPageOffset : null;
         const endPdf = endRaw != null ? endRaw + pdfPageOffset : null;
 
-        // Click target: prefer start page
         const jumpPage = startPdf;
 
-        // ✅ Range-active: active if activePage falls inside [startPdf..endPdf]
         const isActive = (() => {
           const p = Number(activePage);
           if (!Number.isFinite(p) || p <= 0) return false;
@@ -178,8 +215,6 @@ function OutlineTree({ nodes, depth = 0, expanded, activePage, pdfPageOffset, on
           return p === startPdf;
         })();
 
-        // ✅ Inline styles removed:
-        // Previously: style={{ "--outline-depth": depth }}
         const depthClass = `readerOutlineDepth readerOutlineDepth-${Math.min(depth, 12)}`;
 
         return (
@@ -264,7 +299,7 @@ export default function DocumentReader() {
   }
 
   // ---------------------------------------------
-  // ✅ Outline state + PdfViewer API bridge
+  // Outline state + PdfViewer API bridge
   // ---------------------------------------------
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [outline, setOutline] = useState([]);
@@ -294,8 +329,8 @@ export default function DocumentReader() {
   });
 
   // =========================================================
-  // ✅ V2: per-document PDF offset calibration (stored in localStorage)
-  // - printed page -> PDF page conversion uses: pdf = printed + offset
+  // per-document PDF offset calibration (stored in localStorage)
+  // printed page -> PDF page uses: pdf = printed + offset
   // =========================================================
   const OFFSET_KEY = useMemo(
     () => (Number.isFinite(docId) && docId > 0 ? `la_reader_pdf_offset_${docId}` : ""),
@@ -309,7 +344,6 @@ export default function DocumentReader() {
   const [pdfPageOffset, setPdfPageOffset] = useState(0);
   const [offsetVerified, setOffsetVerified] = useState(false);
 
-  // Load offset per doc
   useEffect(() => {
     if (!OFFSET_KEY) return;
     const raw = localStorage.getItem(OFFSET_KEY);
@@ -320,7 +354,6 @@ export default function DocumentReader() {
     setOffsetVerified(vraw === "1");
   }, [OFFSET_KEY, OFFSET_VERIFIED_KEY]);
 
-  // Persist offset
   useEffect(() => {
     if (!OFFSET_KEY) return;
     localStorage.setItem(OFFSET_KEY, String(pdfPageOffset));
@@ -331,29 +364,20 @@ export default function DocumentReader() {
     localStorage.setItem(OFFSET_VERIFIED_KEY, offsetVerified ? "1" : "0");
   }, [OFFSET_VERIFIED_KEY, offsetVerified]);
 
-
-  //here  
-
+  // ✅ Always safe: outlineWidth always exists
   useEffect(() => {
-    // Always safe: outlineWidth always exists
-    document.documentElement.style.setProperty(
-      "--reader-outline-width",
-      `${outlineWidth}px`
-    );
-
-    // Optional cleanup (not strictly needed, but clean)
+    document.documentElement.style.setProperty("--reader-outline-width", `${outlineWidth}px`);
     return () => {
       document.documentElement.style.removeProperty("--reader-outline-width");
     };
   }, [outlineWidth]);
 
   // =========================================================
-  // ✅ V2: Summary panel state
+  // Summary panel state
   // =========================================================
   const [summaryPanelOpen, setSummaryPanelOpen] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
 
-  // ✅ Selected node + AI summary state
   const [selectedTocNode, setSelectedTocNode] = useState(null);
   const [sectionSummaryType, setSectionSummaryType] = useState("basic"); // "basic" | "extended"
   const [sectionSummaryLoading, setSectionSummaryLoading] = useState(false);
@@ -362,15 +386,12 @@ export default function DocumentReader() {
   const [sectionSummaryMeta, setSectionSummaryMeta] = useState(null);
   const lastSummaryKeyRef = useRef("");
 
-  // =========================================================
-  // ✅ Remember last summary per document (localStorage)
-  // =========================================================
+  // Remember last summary per document
   const SUMMARY_LAST_KEY = useMemo(
     () => (Number.isFinite(docId) && docId > 0 ? `la_reader_last_summary_${docId}` : ""),
     [docId]
   );
 
-  // Load last summary when doc opens
   useEffect(() => {
     if (!SUMMARY_LAST_KEY) return;
     const raw = localStorage.getItem(SUMMARY_LAST_KEY);
@@ -385,11 +406,8 @@ export default function DocumentReader() {
     }
   }, [SUMMARY_LAST_KEY]);
 
-  // Persist last summary (whenever summary changes)
   useEffect(() => {
     if (!SUMMARY_LAST_KEY) return;
-
-    // only persist when we have something meaningful
     if (!sectionSummaryText || !sectionSummaryText.trim()) return;
 
     const payload = {
@@ -411,15 +429,12 @@ export default function DocumentReader() {
     localStorage.setItem(SUMMARY_LAST_KEY, JSON.stringify(payload));
   }, [SUMMARY_LAST_KEY, sectionSummaryType, sectionSummaryText, sectionSummaryMeta, selectedTocNode]);
 
-  // =========================================================
-  // ✅ V2: Advanced manual page summary (Printed or PDF mode)
-  // =========================================================
+  // Advanced manual summary
   const [advancedEnabled, setAdvancedEnabled] = useState(false);
   const [pageMode, setPageMode] = useState("printed"); // "printed" | "pdf"
   const [manualStart, setManualStart] = useState("");
   const [manualEnd, setManualEnd] = useState("");
 
-  // Span clamps (client-side; backend also clamps)
   const BASIC_MAX_SPAN = 6;
   const EXTENDED_MAX_SPAN = 12;
 
@@ -442,8 +457,7 @@ export default function DocumentReader() {
   const closeSummaryPanel = useCallback(() => setSummaryPanelOpen(false), []);
   const toggleSummaryExpanded = useCallback(() => setSummaryExpanded((p) => !p), []);
 
-  // ✅ Calibrate offset from a ToC click:
-  // offset = (pdfPage we jump to) - (printed start page from ToC)
+  // Calibrate offset from ToC click
   const calibrateOffsetFromTocNode = useCallback(
     (node, pdfPage) => {
       const printedStart = nodeStartPage(node);
@@ -465,7 +479,7 @@ export default function DocumentReader() {
     [setPdfPageOffset, setOffsetVerified]
   );
 
-  // ✅ Preview clamp + jump (also sets selected node now)
+  // Preview clamp + jump
   const onOutlineClick = useCallback(
     (node, pageNumber) => {
       setSelectedTocNode(node);
@@ -473,7 +487,6 @@ export default function DocumentReader() {
       const p = Number(pageNumber);
       if (!Number.isFinite(p) || p <= 0) return;
 
-      // Preview clamp
       if (!access?.hasFullAccess && Number.isFinite(access?.previewMaxPages)) {
         if (p > access.previewMaxPages) {
           showToast(
@@ -485,10 +498,8 @@ export default function DocumentReader() {
         }
       }
 
-      // Jump
       const ok = viewerApiRef.current?.jumpToPage?.(p, "smooth");
       if (ok) {
-        // ✅ Calibrate offset from this click (safe + per document)
         calibrateOffsetFromTocNode(node, p);
         setOutlineOpen(false);
       }
@@ -505,14 +516,33 @@ export default function DocumentReader() {
     });
   }, []);
 
-const toggleExpandCollapseAll = useCallback(() => {
-  const allIds = collectAllNodeIds(outline);
-  setOutlineExpanded((prev) => {
-    const isAllExpanded = prev.size > 0 && prev.size >= allIds.size;
-    return isAllExpanded ? new Set() : allIds;
-  });
-}, [outline]);
+  // ✅ Correct “all expanded” logic
+  const allNodeIds = useMemo(() => collectAllNodeIds(outline), [outline]);
 
+  const allExpanded = useMemo(() => {
+    if (!allNodeIds.size) return false;
+    for (const idStr of allNodeIds) {
+      if (!outlineExpanded.has(idStr)) return false;
+    }
+    return true;
+  }, [allNodeIds, outlineExpanded]);
+
+  // ✅ One button toggle all (expand/collapse)
+  const toggleExpandCollapseAll = useCallback(() => {
+    if (!outline?.length) return;
+
+    setOutlineExpanded((prev) => {
+      // determine if currently all expanded
+      let isAll = true;
+      for (const idStr of allNodeIds) {
+        if (!prev.has(idStr)) {
+          isAll = false;
+          break;
+        }
+      }
+      return isAll ? new Set() : new Set(allNodeIds);
+    });
+  }, [outline, allNodeIds]);
 
   // Persist expanded state per document
   useEffect(() => {
@@ -521,7 +551,6 @@ const toggleExpandCollapseAll = useCallback(() => {
     localStorage.setItem(OUTLINE_EXPANDED_KEY, JSON.stringify(arr));
   }, [OUTLINE_EXPANDED_KEY, outlineExpanded]);
 
-  // Restore expanded state when doc changes (after outline loads)
   const restoreExpandedForDoc = useCallback(() => {
     if (!OUTLINE_EXPANDED_KEY) return;
     const raw = localStorage.getItem(OUTLINE_EXPANDED_KEY);
@@ -538,7 +567,7 @@ const toggleExpandCollapseAll = useCallback(() => {
     localStorage.setItem(OUTLINE_WIDTH_KEY, String(outlineWidth));
   }, [outlineWidth]);
 
-  // ✅ Active page tracking
+  // Active page tracking
   useEffect(() => {
     const t = window.setInterval(() => {
       const p = viewerApiRef.current?.getCurrentPage?.();
@@ -579,7 +608,7 @@ const toggleExpandCollapseAll = useCallback(() => {
     document.body.classList.remove("readerOutlineResizing");
   }, []);
 
-  // ✅ Always fetch Outline when docId changes
+  // Fetch Outline
   const fetchOutline = useCallback(async () => {
     if (!Number.isFinite(docId) || docId <= 0) return;
 
@@ -624,21 +653,19 @@ const toggleExpandCollapseAll = useCallback(() => {
 
   useEffect(() => {
     if (!Number.isFinite(docId) || docId <= 0) return;
+
     setOutlineQuery("");
     setActivePage(null);
 
-    // reset summary state when doc changes (panel should keep last saved from localStorage, so we only reset errors/loading)
     setSectionSummaryError("");
     setSectionSummaryLoading(false);
     lastSummaryKeyRef.current = "";
 
-    // reset advanced UI
     setAdvancedEnabled(false);
     setPageMode("printed");
     setManualStart("");
     setManualEnd("");
 
-    // close panel on doc switch (prevents weird carry-over)
     setSummaryPanelOpen(false);
     setSummaryExpanded(false);
 
@@ -681,6 +708,7 @@ const toggleExpandCollapseAll = useCallback(() => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Access + Meta load
   useEffect(() => {
     aliveRef.current = true;
     let cancelled = false;
@@ -830,7 +858,7 @@ const toggleExpandCollapseAll = useCallback(() => {
   }, [docId, justPaid, paidProvider]);
 
   // =========================================================
-  // ✅ AI Summary actions (ToC -> payload)
+  // AI Summary actions (ToC -> payload)
   // =========================================================
   const buildSummaryPayloadFromNode = useCallback(
     (node, type, forceRegenerate) => {
@@ -838,7 +866,6 @@ const toggleExpandCollapseAll = useCallback(() => {
 
       const tocEntryId = node?.id ?? node?.Id ?? null;
 
-      // Preferred: just send TocEntryId
       if (tocEntryId) {
         return {
           tocEntryId,
@@ -849,7 +876,6 @@ const toggleExpandCollapseAll = useCallback(() => {
         };
       }
 
-      // Fallback: explicit pages if tocEntryId missing
       const startRaw = nodeStartPage(node);
       if (!startRaw) return null;
 
@@ -884,7 +910,8 @@ const toggleExpandCollapseAll = useCallback(() => {
         return;
       }
 
-      setSectionSummaryText(String(summary));
+      setSectionSummaryText(stripInlineMetaFromSummary(summary));
+
 
       const fromCache = data?.fromCache ?? data?.FromCache ?? false;
       const usedStart = data?.startPage ?? data?.StartPage ?? null;
@@ -929,14 +956,15 @@ const toggleExpandCollapseAll = useCallback(() => {
         return;
       }
 
-      const key = `${payload.legalDocumentId}|${payload.tocEntryId ?? ""}|${payload.type}|${payload.startPage ?? ""}-${payload.endPage ?? ""}|force=${payload.forceRegenerate ? "1" : "0"}`;
+      const key = `${payload.legalDocumentId}|${payload.tocEntryId ?? ""}|${payload.type}|${
+        payload.startPage ?? ""
+      }-${payload.endPage ?? ""}|force=${payload.forceRegenerate ? "1" : "0"}`;
       if (sectionSummaryLoading && lastSummaryKeyRef.current === key) return;
       lastSummaryKeyRef.current = key;
 
       setSectionSummaryLoading(true);
 
       try {
-        // ✅ Use API wrapper
         const data = await summarizeLegalDocSection(payload);
         applySummaryResponse(payload, data);
 
@@ -952,24 +980,23 @@ const toggleExpandCollapseAll = useCallback(() => {
         setSectionSummaryLoading(false);
       }
     },
-    [
-      applySummaryResponse,
-      buildSummaryPayloadFromNode,
-      selectedTocNode,
-      sectionSummaryLoading,
-      setSummaryPanelOpen,
-    ]
+    [applySummaryResponse, buildSummaryPayloadFromNode, selectedTocNode, sectionSummaryLoading]
   );
 
+  // ✅ Copy should match what the panel displays (Overview etc.)
   const onCopySummary = useCallback(async () => {
     if (!sectionSummaryText) return;
-    const ok = await safeCopyToClipboard(sectionSummaryText);
+
+    const textToCopy = typeof formatAiSummaryForCopy === "function"
+      ? formatAiSummaryForCopy(sectionSummaryText)
+      : sectionSummaryText;
+
+    const ok = await safeCopyToClipboard(textToCopy);
     if (ok) showToast("Copied ✅", "success");
     else showToast("Copy failed (browser blocked clipboard)", "error");
   }, [sectionSummaryText]);
 
   const onRegenerateSummary = useCallback(() => {
-    // Regenerate current type, force = true
     runSectionSummary(sectionSummaryType, { force: true, openPanel: true });
   }, [runSectionSummary, sectionSummaryType]);
 
@@ -979,15 +1006,13 @@ const toggleExpandCollapseAll = useCallback(() => {
       if (t === sectionSummaryType) return;
       setSectionSummaryType(t);
 
-      // If we already have summary text, switching type should refresh (not force)
-      // but only if a section is selected.
       if (selectedTocNode) runSectionSummary(t, { force: false, openPanel: true });
     },
     [runSectionSummary, sectionSummaryType, selectedTocNode]
   );
 
   // =========================================================
-  // ✅ V2: Manual range → compute effective PDF pages + run summary
+  // Manual range summary helpers
   // =========================================================
   function parsePositiveInt(raw) {
     const n = Number(String(raw || "").trim());
@@ -1027,13 +1052,7 @@ const toggleExpandCollapseAll = useCallback(() => {
     const b = parsePositiveInt(manualEnd);
     const nr = normalizeRange(a, b);
     if (!nr) {
-      return {
-        ok: false,
-        label: "—",
-        clampNote: "",
-        startPdf: null,
-        endPdf: null,
-      };
+      return { ok: false, label: "—", clampNote: "", startPdf: null, endPdf: null };
     }
 
     let startPdf;
@@ -1061,26 +1080,13 @@ const toggleExpandCollapseAll = useCallback(() => {
     }
 
     if (!Number.isFinite(startPdf) || startPdf <= 0 || !Number.isFinite(endPdf) || endPdf <= 0) {
-      return {
-        ok: false,
-        label: labelPrefix,
-        clampNote: "Computed PDF pages are invalid.",
-        startPdf: null,
-        endPdf: null,
-      };
+      return { ok: false, label: labelPrefix, clampNote: "Computed PDF pages are invalid.", startPdf: null, endPdf: null };
     }
 
     const endPreviewClamped = clampToPreview(endPdf);
-    const previewNote =
-      endPreviewClamped !== endPdf ? `Clamped to preview max page ${access?.previewMaxPages}.` : "";
+    const previewNote = endPreviewClamped !== endPdf ? `Clamped to preview max page ${access?.previewMaxPages}.` : "";
 
-    return {
-      ok: true,
-      label: labelPrefix,
-      clampNote: previewNote,
-      startPdf,
-      endPdf: endPreviewClamped,
-    };
+    return { ok: true, label: labelPrefix, clampNote: previewNote, startPdf, endPdf: endPreviewClamped };
   }, [manualStart, manualEnd, pageMode, offsetVerified, pdfPageOffset, access]);
 
   const runManualSectionSummary = useCallback(
@@ -1118,7 +1124,6 @@ const toggleExpandCollapseAll = useCallback(() => {
         if (spanClamped.clamped && spanClamped.note) localNotes.push(spanClamped.note);
         if (effectiveManual.clampNote) localNotes.push(effectiveManual.clampNote);
 
-        // Apply response (reuse)
         applySummaryResponse(payload, {
           ...data,
           warnings: [...localNotes, ...((data?.warnings ?? data?.Warnings ?? []) || [])],
@@ -1146,7 +1151,7 @@ const toggleExpandCollapseAll = useCallback(() => {
     effectiveManual.endPdf != null &&
     (pageMode !== "printed" || offsetVerified);
 
-  // ✅ Gate UI only on access
+  // Gate UI only on access
   if (loadingAccess) {
     return (
       <div className="reader-shell readerCenter">
@@ -1171,8 +1176,7 @@ const toggleExpandCollapseAll = useCallback(() => {
 
   // HARD BLOCK overlay
   if (blocked) {
-    const canPay =
-      canPurchaseIndividually === true && offer?.allowPublicPurchase === true && offer?.alreadyOwned !== true;
+    const canPay = canPurchaseIndividually === true && offer?.allowPublicPurchase === true && offer?.alreadyOwned !== true;
 
     const primaryLabel = (() => {
       if (!canPurchaseIndividually) return "Purchases disabled";
@@ -1194,8 +1198,7 @@ const toggleExpandCollapseAll = useCallback(() => {
 
             {!canPurchaseIndividually && (
               <div className="readerBlockWarn">
-                {purchaseDisabledReason ||
-                  "Purchases are disabled for institution accounts. Please contact your administrator."}
+                {purchaseDisabledReason || "Purchases are disabled for institution accounts. Please contact your administrator."}
               </div>
             )}
 
@@ -1260,10 +1263,9 @@ const toggleExpandCollapseAll = useCallback(() => {
     <div className="reader-layout" onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp}>
       {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
 
-      {/* ✅ V2 Summary Panel */}
+      {/* ✅ Summary Panel (no logo prop) */}
       <SectionSummaryPanel
         open={summaryPanelOpen}
-        logoSrc={lawAfricaLogo}
         title={selectedTocNode ? nodeTitle(selectedTocNode, "") : "Selected section"}
         type={sectionSummaryType}
         loading={sectionSummaryLoading}
@@ -1288,15 +1290,14 @@ const toggleExpandCollapseAll = useCallback(() => {
           Reader
         </div>
 
-        {/* Quick access to summary panel */}
         <button
           className="readerpage-aiBtn"
           type="button"
           onClick={openSummaryPanel}
           disabled={!sectionSummaryText}
-          title={sectionSummaryText ? "Open AI summary" : "Generate a summary first (ToC → Basic/Extended)"}
+          title={sectionSummaryText ? "Open Summary" : "Generate a summary first (ToC → Basic/Extended)"}
         >
-          AI
+          Summary
         </button>
       </div>
 
@@ -1308,14 +1309,16 @@ const toggleExpandCollapseAll = useCallback(() => {
         <div className="readerpage-tocHeader">
           <div className="readerpage-tocTitle">Table of Contents</div>
 
+          {/* ✅ Compact header actions: icon toggle + Summary */}
           <div className="readerOutlineHeaderActions">
             <button
-              className="readerOutlineMiniBtn"
+              className="readerOutlineIconBtn"
               type="button"
               onClick={toggleExpandCollapseAll}
-              title={outlineExpanded.size ? "Collapse all" : "Expand all"}
+              title={allExpanded ? "Collapse all" : "Expand all"}
+              aria-label={allExpanded ? "Collapse all" : "Expand all"}
             >
-              {outlineExpanded.size ? "Collapse" : "Expand"}
+              {allExpanded ? "▾" : "▸"}
             </button>
 
             <button
@@ -1323,12 +1326,11 @@ const toggleExpandCollapseAll = useCallback(() => {
               type="button"
               onClick={openSummaryPanel}
               disabled={!sectionSummaryText}
-              title={sectionSummaryText ? "Open AI summary panel" : "Generate a summary first"}
+              title={sectionSummaryText ? "Open summary" : "Generate a summary first"}
             >
-              Open summary
+              Summary
             </button>
           </div>
-
 
           <button className="readerpage-tocClose" type="button" onClick={closeOutline} title="Close">
             ✕
@@ -1336,7 +1338,7 @@ const toggleExpandCollapseAll = useCallback(() => {
         </div>
 
         <div className="readerpage-tocBody">
-          {/* Offset status (inline styles removed) */}
+          {/* Offset status */}
           <div className="laInlineOffsetCard">
             <div className="laInlineOffsetRow">
               <div className="laInlineOffsetLeft">
@@ -1378,12 +1380,7 @@ const toggleExpandCollapseAll = useCallback(() => {
               aria-label="Search table of contents"
             />
             {outlineQuery ? (
-              <button
-                type="button"
-                className="readerOutlineClear"
-                onClick={() => setOutlineQuery("")}
-                title="Clear search"
-              >
+              <button type="button" className="readerOutlineClear" onClick={() => setOutlineQuery("")} title="Clear search">
                 ✕
               </button>
             ) : null}
@@ -1434,128 +1431,97 @@ const toggleExpandCollapseAll = useCallback(() => {
             </div>
           )}
 
-          {/* =========================================================
-              ✅ Minimal AI Summary box (fallback quick view)
-              (inline styles removed)
-          ========================================================= */}
-          <div className="laInlineTocSummary">
-            <div className="laInlineTocSummaryTop">
-              <div className="laInlineTocSummaryTitle">AI · Section summary</div>
+{/* ✅ AI summary (controls only — no used-pages / no raw text preview) */}
+<div className="laInlineTocSummary">
+  <div className="laInlineTocSummaryTop">
+    <div className="laInlineTocSummaryTitle">AI · Section summary</div>
 
-              <div className="laInlineTocSummaryTopActions">
-                <button
-                  type="button"
-                  className="readerOutlineMiniBtn"
-                  disabled={!selectedTocNode || !sectionSummaryText}
-                  onClick={onCopySummary}
-                  title="Copy summary"
-                >
-                  Copy
-                </button>
+    <div className="laInlineTocSummaryTopActions">
+      <button
+        type="button"
+        className="readerOutlineMiniBtn"
+        disabled={!sectionSummaryText || sectionSummaryLoading}
+        onClick={onCopySummary}
+        title="Copy summary"
+      >
+        Copy
+      </button>
 
-                <button
-                  type="button"
-                  className="readerOutlineMiniBtn laAccent"
-                  disabled={!sectionSummaryText}
-                  onClick={openSummaryPanel}
-                  title="Open summary panel"
-                >
-                  Open
-                </button>
-              </div>
-            </div>
+      <button
+        type="button"
+        className="readerOutlineMiniBtn laAccent"
+        disabled={!sectionSummaryText}
+        onClick={openSummaryPanel}
+        title={sectionSummaryText ? "Open summary panel" : "Generate a summary first"}
+      >
+        Open
+      </button>
+    </div>
+  </div>
 
-            <div className="laInlineTocSummaryInfo">
-              {selectedTocNode ? (
-                <>
-                  <div className="laInlineTocSummarySection">{nodeTitle(selectedTocNode)}</div>
-                  <div className="laInlineTocSummaryPages">Pages: {nodeRightLabel(selectedTocNode) || "—"}</div>
-                </>
-              ) : (
-                <div className="laInlineMuted">Select a ToC section, then choose Basic or Extended.</div>
-              )}
-            </div>
+  <div className="laInlineTocSummaryInfo">
+    {selectedTocNode ? (
+      <>
+        <div className="laInlineTocSummarySection">{nodeTitle(selectedTocNode)}</div>
+        <div className="laInlineTocSummaryPages">
+          Pages: {nodeRightLabel(selectedTocNode) || "—"}
+        </div>
+      </>
+    ) : (
+      <div className="laInlineMuted">Select a ToC section, then choose Basic or Extended.</div>
+    )}
+  </div>
 
-            <div className="laInlineTocSummaryBtns">
-              <button
-                type="button"
-                className="outline-btn"
-                disabled={!selectedTocNode || sectionSummaryLoading}
-                onClick={() => runSectionSummary("basic", { force: false, openPanel: false })}
-                title="Generate basic summary"
-              >
-                {sectionSummaryLoading && sectionSummaryType === "basic" ? "Basic…" : "Basic"}
-              </button>
+  <div className="laInlineTocSummaryBtns">
+    <button
+      type="button"
+      className="outline-btn"
+      disabled={!selectedTocNode || sectionSummaryLoading}
+      onClick={() => runSectionSummary("basic", { force: false, openPanel: false })}
+      title="Generate basic summary"
+    >
+      {sectionSummaryLoading && sectionSummaryType === "basic" ? "Basic…" : "Basic"}
+    </button>
 
-              <button
-                type="button"
-                className="outline-btn"
-                disabled={!selectedTocNode || sectionSummaryLoading}
-                onClick={() => runSectionSummary("extended", { force: false, openPanel: false })}
-                title="Generate extended summary"
-              >
-                {sectionSummaryLoading && sectionSummaryType === "extended" ? "Extended…" : "Extended"}
-              </button>
+    <button
+      type="button"
+      className="outline-btn"
+      disabled={!selectedTocNode || sectionSummaryLoading}
+      onClick={() => runSectionSummary("extended", { force: false, openPanel: false })}
+      title="Generate extended summary"
+    >
+      {sectionSummaryLoading && sectionSummaryType === "extended" ? "Extended…" : "Extended"}
+    </button>
 
-              <button
-                type="button"
-                className="outline-btn laPrimary"
-                disabled={!selectedTocNode || sectionSummaryLoading}
-                onClick={() => runSectionSummary(sectionSummaryType, { force: true, openPanel: true })}
-                title="Regenerate (force)"
-              >
-                {sectionSummaryLoading ? "Working…" : "Regenerate"}
-              </button>
-            </div>
+    <button
+      type="button"
+      className="outline-btn laPrimary"
+      disabled={!selectedTocNode || sectionSummaryLoading}
+      onClick={() => runSectionSummary(sectionSummaryType, { force: true, openPanel: true })}
+      title="Regenerate (force)"
+    >
+      {sectionSummaryLoading ? "Working…" : "Regenerate"}
+    </button>
+  </div>
 
-            {sectionSummaryError ? <div className="laInlineError">{sectionSummaryError}</div> : null}
+  {sectionSummaryError ? <div className="laInlineError">{sectionSummaryError}</div> : null}
 
-            {sectionSummaryMeta ? (
-              <div className="laInlineMetaCard">
-                <div className="laInlineMetaRow">
-                  <div>
-                    <strong>Used pages:</strong> {sectionSummaryMeta.usedPages}
-                  </div>
-                  <div>
-                    <strong>Input chars:</strong> {sectionSummaryMeta.inputCharCount}
-                  </div>
-                  <div>
-                    <strong>Cache:</strong> {sectionSummaryMeta.fromCache ? "yes" : "no"}
-                  </div>
-                </div>
+  {/* ✅ Optional: a tiny status line (no big text dump) */}
+  {sectionSummaryText ? (
+    <div className="laInlineMuted" style={{ marginTop: 8 }}>
+      Summary ready. Click <strong>Open</strong> to view.
+    </div>
+  ) : null}
+</div>
 
-                {sectionSummaryMeta.warnings?.length ? (
-                  <div className="laInlineWarnings">
-                    <div className="laInlineWarningsTitle">Warnings</div>
-                    <ul className="laInlineWarningsList">
-                      {sectionSummaryMeta.warnings.map((w, i) => (
-                        <li key={`${i}-${w}`}>{w}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
 
-            {sectionSummaryText ? (
-              <div className="laInlineSummaryPreview">{sectionSummaryText}</div>
-            ) : null}
-          </div>
-
-          {/* =========================================================
-              ✅ V2 Advanced summary (manual pages)
-              (inline styles removed)
-          ========================================================= */}
+          {/* Advanced manual */}
           <div className="laInlineAdvanced">
             <div className="laInlineAdvancedHeader">
               <div className="laInlineAdvancedTitle">Advanced summary</div>
 
               <label className="laInlineCheckbox">
-                <input
-                  type="checkbox"
-                  checked={advancedEnabled}
-                  onChange={(e) => setAdvancedEnabled(e.target.checked)}
-                />
+                <input type="checkbox" checked={advancedEnabled} onChange={(e) => setAdvancedEnabled(e.target.checked)} />
                 Use manual page range
               </label>
             </div>
@@ -1564,12 +1530,7 @@ const toggleExpandCollapseAll = useCallback(() => {
               <div className="laInlineAdvancedBody">
                 <div className="laInlineRadios">
                   <label className="laInlineRadio">
-                    <input
-                      type="radio"
-                      name="pageMode"
-                      checked={pageMode === "printed"}
-                      onChange={() => setPageMode("printed")}
-                    />
+                    <input type="radio" name="pageMode" checked={pageMode === "printed"} onChange={() => setPageMode("printed")} />
                     Printed pages (recommended)
                   </label>
 

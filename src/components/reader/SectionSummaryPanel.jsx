@@ -1,15 +1,6 @@
+// src/components/reader/SectionSummaryPanel.jsx
 import { useEffect, useMemo } from "react";
 import { parseAiSummary } from "../../reader/ai/parseAiSummary";
-
-function sectionAccent(title) {
-  const t = String(title || "").toLowerCase();
-  if (t.includes("fact")) return "facts";
-  if (t.includes("issue")) return "issues";
-  if (t.includes("holding") || t.includes("decision")) return "holding";
-  if (t.includes("reason")) return "reasoning";
-  if (t.includes("takeaway") || t.includes("key")) return "takeaways";
-  return "default";
-}
 
 export default function SectionSummaryPanel({
   open,
@@ -18,7 +9,6 @@ export default function SectionSummaryPanel({
   loading,
   error,
   summaryText,
-  meta,
   expanded,
   onToggleExpanded,
   onClose,
@@ -28,7 +18,7 @@ export default function SectionSummaryPanel({
 }) {
   const sections = useMemo(() => parseAiSummary(summaryText), [summaryText]);
 
-  // ESC closes modal
+  // ESC closes
   useEffect(() => {
     if (!open) return;
 
@@ -46,13 +36,10 @@ export default function SectionSummaryPanel({
   const headerTitle = safeTitle || "Selected section";
 
   return (
-    <div className="laSummaryModal" role="dialog" aria-modal="true" aria-label="AI Summary">
-      {/* Backdrop (click to close) */}
-      <button type="button" className="laSummaryBackdrop" aria-label="Close" onClick={onClose} />
-
-      {/* Modal */}
-      <div className={`laSummaryWindow ${expanded ? "expanded" : ""}`}>
-        <div className="laSummaryHeader">
+    <div className="laSummaryOverlay" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
+      <aside className="laSummaryModal" role="dialog" aria-label="AI Summary" aria-modal="true">
+        {/* Header */}
+        <div className="laSummaryPanelHeader">
           <div className="laSummaryHeaderText">
             <div className="laSummaryKicker">AI Summary</div>
             <div className="laSummaryTitle" title={headerTitle}>
@@ -65,7 +52,8 @@ export default function SectionSummaryPanel({
           </button>
         </div>
 
-        <div className="laSummarySubHeader">
+        {/* Type switch (no meta row anymore) */}
+        <div className="laSummaryPanelSubHeader">
           <div className="laSummaryTypePills">
             <button
               type="button"
@@ -76,6 +64,7 @@ export default function SectionSummaryPanel({
             >
               Basic
             </button>
+
             <button
               type="button"
               className={`laPill ${type === "extended" ? "active" : ""}`}
@@ -86,78 +75,51 @@ export default function SectionSummaryPanel({
               Extended
             </button>
           </div>
-
-          {meta ? (
-            <div className="laSummaryMetaRow" title="Summary metadata">
-              <span>{meta.fromCache ? "cache" : "fresh"}</span>
-              <span>pages {meta.usedPages || "—"}</span>
-              <span>{meta.inputCharCount ? `${meta.inputCharCount} chars` : ""}</span>
-            </div>
-          ) : (
-            <div className="laSummaryMetaRow muted">Generated summary appears here.</div>
-          )}
         </div>
 
-        <div className="laSummaryBody">
+        {/* Body */}
+        <div className={`laSummaryBody ${expanded ? "expanded" : ""}`}>
           {loading ? (
             <div className="laSummaryState">Generating {type} summary…</div>
           ) : error ? (
             <div className="laSummaryState error">{error}</div>
           ) : !summaryText ? (
             <div className="laSummaryState muted">
-              No summary yet. Generate from ToC (Basic/Extended) or click “Regenerate”.
+              No summary yet. Select a ToC section and click Basic or Extended.
             </div>
           ) : (
             <div className="laSummaryContent">
-              {meta?.warnings?.length ? (
-                <div className="laSummaryWarnings">
-                  <div className="laSummaryWarningsTitle">Warnings</div>
-                  <ul className="laSummaryUl">
-                    {meta.warnings.map((w, i) => (
-                      <li key={`${i}-${w}`} className="laSummaryLi">
-                        {w}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
+              {sections.map((s) => (
+                <section key={s.title} className="laSummarySection">
+                  {/* ✅ Bold / clearer headers */}
+                  <h3 className="laSummaryH3">{s.title}</h3>
 
-              {sections.map((s) => {
-                const accent = sectionAccent(s.title);
-                return (
-                  <section key={s.title} className={`laSumSection laAccent-${accent}`}>
-                    <div className="laSumPillRow">
-                      <span className="laSumDot" aria-hidden="true" />
-                      <span className="laSumPill">{s.title}</span>
-                    </div>
+                  {s.blocks.map((b, idx) => {
+                    if (b.kind === "ul") {
+                      return (
+                        <ul key={idx} className="laSummaryUl">
+                          {b.items.map((it, i) => (
+                            <li key={`${i}-${it}`} className="laSummaryLi">
+                              {it}
+                            </li>
+                          ))}
+                        </ul>
+                      );
+                    }
 
-                    <div className="laSumCard">
-                      {s.blocks.map((b, idx) => {
-                        if (b.kind === "ul") {
-                          return (
-                            <ul key={idx} className="laSummaryUl">
-                              {b.items.map((it, i) => (
-                                <li key={`${i}-${it}`} className="laSummaryLi">
-                                  {it}
-                                </li>
-                              ))}
-                            </ul>
-                          );
-                        }
-                        return (
-                          <p key={idx} className="laSummaryP">
-                            {b.text}
-                          </p>
-                        );
-                      })}
-                    </div>
-                  </section>
-                );
-              })}
+                    return (
+                      <p key={idx} className="laSummaryP">
+                        {b.text}
+                      </p>
+                    );
+                  })}
+                </section>
+              ))}
             </div>
           )}
         </div>
 
+        {/* Footer actions (only what you want) */}
         <div className="laSummaryActions">
           <button type="button" className="laActionBtn" onClick={onCopy} disabled={!summaryText || loading} title="Copy">
             Copy
@@ -183,7 +145,7 @@ export default function SectionSummaryPanel({
             {loading ? "Working…" : "Regenerate"}
           </button>
         </div>
-      </div>
+      </aside>
     </div>
   );
 }
