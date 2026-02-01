@@ -1,7 +1,9 @@
 /* =========================
-   Reader (2026 Minimal) — CLEANED
+   Reader (2026 Minimal) — CLEANED (FULL)
    - PdfViewer styles (react-pdf + notes + page jump + FAB)
-   - Reader.jsx ToC drawer (mobile bottom sheet + desktop sidebar)
+   - DocumentReader layout + ToC drawer (mobile bottom sheet + desktop sidebar)
+   - Outline UI (search, expand/collapse, resize, depth indentation)
+   - AI mini summary + Advanced summary (moved from inline styles)
    ========================= */
 
 /* Safe fallbacks (keep if you don't define tokens elsewhere) */
@@ -103,6 +105,7 @@
 .icon-btn:hover {
   background: rgba(255, 255, 255, 0.8);
 }
+
 .reader-shell.dark .icon-btn:hover {
   background: rgba(17, 24, 39, 0.78);
 }
@@ -140,10 +143,12 @@
 .reader-scroll::-webkit-scrollbar {
   width: 10px;
 }
+
 .reader-scroll::-webkit-scrollbar-thumb {
   background: rgba(17, 24, 39, 0.14);
   border-radius: 999px;
 }
+
 .reader-shell.dark .reader-scroll::-webkit-scrollbar-thumb {
   background: rgba(229, 231, 235, 0.18);
 }
@@ -199,6 +204,7 @@
   pointer-events: none;
   z-index: 5;
 }
+
 .highlight-layer svg,
 svg.highlight-layer {
   pointer-events: none;
@@ -246,6 +252,7 @@ svg.highlight-layer {
 .fab-btn:hover {
   background: rgba(255, 255, 255, 0.85);
 }
+
 .reader-shell.dark .fab-btn:hover {
   background: rgba(17, 24, 39, 0.8);
 }
@@ -278,7 +285,6 @@ svg.highlight-layer {
 
 /* =========================================================
    Page Jump Popover (PdfViewer)
-   (kept single definition; removed duplicates)
    ========================================================= */
 .pagejump-popover {
   position: absolute;
@@ -434,11 +440,13 @@ svg.highlight-layer {
   gap: 10px;
   margin: 10px 0;
 }
+
 .hl-color-label {
   font-size: 13px;
   opacity: 0.85;
   font-weight: 700;
 }
+
 .hl-color-chip {
   width: 18px;
   height: 18px;
@@ -446,9 +454,11 @@ svg.highlight-layer {
   border: 2px solid rgba(0, 0, 0, 0.15);
   cursor: pointer;
 }
+
 .hl-color-chip.active {
   border-color: rgba(0, 0, 0, 0.55);
 }
+
 .hl-color-chip.yellow { background: rgba(255, 230, 120, 0.85); }
 .hl-color-chip.blue   { background: rgba(120, 190, 255, 0.75); }
 .hl-color-chip.pink   { background: rgba(255, 140, 200, 0.65); }
@@ -470,11 +480,13 @@ svg.highlight-layer {
   font-weight: 900;
   cursor: pointer;
 }
+
 .reader-btn.secondary {
   background: transparent;
   border: 1px solid rgba(161, 18, 18, 0.45);
   color: var(--la-red);
 }
+
 .reader-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
@@ -521,11 +533,13 @@ svg.highlight-layer {
   justify-content: space-between;
   align-items: center;
 }
+
 .notes-header h3 {
   margin: 0;
   font-size: 16px;
   font-weight: 900;
 }
+
 .notes-header button {
   background: transparent;
   border: 1px solid var(--reader-border);
@@ -547,6 +561,7 @@ svg.highlight-layer {
   text-align: center;
   color: var(--reader-muted);
 }
+
 .notes-empty-hint {
   font-size: 13px;
   color: var(--reader-muted);
@@ -557,6 +572,7 @@ svg.highlight-layer {
 .notes-group {
   padding: 10px 0;
 }
+
 .notes-group-title {
   font-weight: 900;
   margin: 10px 0 8px;
@@ -571,6 +587,7 @@ svg.highlight-layer {
   position: relative;
   border: 1px solid rgba(17, 24, 39, 0.08);
 }
+
 .reader-shell.dark .note-item {
   background: rgba(31, 41, 55, 0.65);
   border-color: rgba(255, 255, 255, 0.08);
@@ -587,6 +604,7 @@ svg.highlight-layer {
 .note-item.flash {
   animation: noteFlash 0.9s ease;
 }
+
 @keyframes noteFlash {
   0% { background: rgba(255, 230, 150, 0.45); }
   100% { background: transparent; }
@@ -611,6 +629,7 @@ svg.highlight-layer {
   gap: 10px;
   margin-top: 8px;
 }
+
 .note-actions-inline button {
   background: transparent;
   border: 1px solid var(--reader-border);
@@ -632,6 +651,7 @@ svg.highlight-layer {
   color: var(--reader-ink);
   outline: none;
 }
+
 .reader-shell.dark .note-edit {
   background: rgba(0, 0, 0, 0.25);
 }
@@ -645,6 +665,7 @@ svg.highlight-layer {
   margin-right: 8px;
   vertical-align: middle;
 }
+
 .note-color-dot.yellow { background: rgba(255, 230, 120, 0.95); }
 .note-color-dot.blue   { background: rgba(120, 190, 255, 0.85); }
 .note-color-dot.pink   { background: rgba(255, 140, 200, 0.75); }
@@ -656,6 +677,7 @@ svg.highlight-layer {
   border-radius: 3px;
   cursor: pointer;
 }
+
 .pdf-highlight--yellow { background: rgba(255, 230, 120, 0.65); }
 .pdf-highlight--blue   { background: rgba(120, 190, 255, 0.45); }
 .pdf-highlight--pink   { background: rgba(255, 140, 200, 0.35); }
@@ -665,7 +687,7 @@ svg.highlight-layer {
 .reader-nav { display: none; }
 
 /* =========================================================
-   Preview lock overlay (if used)
+   Preview lock overlay
    ========================================================= */
 .preview-lock-backdrop {
   position: fixed;
@@ -754,265 +776,8 @@ svg.highlight-layer {
 }
 
 /* =========================================================
-   Reader.jsx layout + ToC drawer (the version you’re using)
-   ========================================================= */
-.reader-layout {
-  position: relative;
-  height: 100vh;
-  width: 100%;
-  overflow: hidden;
-  background: #f8fafc;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Mobile topbar */
-.readerpage-topbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.12);
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(10px);
-  z-index: 20;
-}
-
-.readerpage-tocbtn {
-  appearance: none;
-  border: 1px solid rgba(15, 23, 42, 0.18);
-  background: #ffffff;
-  border-radius: 10px;
-  padding: 6px 12px;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.readerpage-tocbtn:hover {
-  background: rgba(15, 23, 42, 0.04);
-}
-
-.readerpage-title {
-  font-size: 14px;
-  font-weight: 800;
-  color: #111827;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-/* Backdrop */
-.readerpage-tocBackdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.35);
-  backdrop-filter: blur(2px);
-  z-index: 40;
-}
-
-/* ToC drawer (mobile bottom sheet) */
-.readerpage-tocDrawer {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-
-  height: 72vh;
-  background: #ffffff;
-  border-radius: 18px 18px 0 0;
-  box-shadow: 0 -18px 48px rgba(2, 6, 23, 0.22);
-
-  transform: translateY(100%);
-  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
-
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-}
-
-.readerpage-tocDrawer.open {
-  transform: translateY(0);
-}
-
-.readerpage-tocHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.12);
-}
-
-.readerpage-tocTitle {
-  font-size: 15px;
-  font-weight: 900;
-  color: #111827;
-}
-
-.readerpage-tocClose {
-  appearance: none;
-  border: none;
-  background: transparent;
-  font-size: 18px;
-  cursor: pointer;
-  padding: 4px;
-}
-
-.readerpage-tocBody {
-  flex: 1;
-  overflow: auto;
-  padding: 8px 6px 12px;
-}
-
-.readerpage-tocState {
-  padding: 20px;
-  text-align: center;
-  font-size: 14px;
-  color: #6b7280;
-  font-weight: 600;
-}
-
-.readerpage-tocState.error {
-  color: #b91c1c;
-}
-
-.readerpage-tocList {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.readerpage-tocItem {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: none;
-  background: transparent;
-
-  text-align: left;
-  cursor: pointer;
-}
-
-.readerpage-tocItem:hover {
-  background: rgba(15, 23, 42, 0.05);
-}
-
-.readerpage-tocItem:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.readerpage-tocItemTitle {
-  font-size: 13.5px;
-  font-weight: 600;
-  color: #111827;
-  line-height: 1.25;
-}
-
-.readerpage-tocItemPage {
-  font-size: 12px;
-  font-weight: 700;
-  color: #6b7280;
-  padding-left: 10px;
-}
-
-/* Main reader content wrapper */
-.readerpage-main {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-/* Desktop: ToC becomes a left sidebar */
-@media (min-width: 1024px) {
-  .reader-layout {
-    flex-direction: row;
-  }
-
-  .readerpage-topbar {
-    display: none;
-  }
-
-  .readerpage-tocBackdrop {
-    display: none;
-  }
-
-  .readerpage-tocDrawer {
-    position: relative;
-    left: auto;
-    right: auto;
-    bottom: auto;
-
-    height: auto;
-    width: 300px;
-    min-width: 280px;
-
-    border-radius: 0;
-    border-right: 1px solid rgba(15, 23, 42, 0.12);
-    box-shadow: none;
-
-    transform: none;
-    transition: none;
-  }
-
-  .readerpage-main {
-    flex: 1;
-  }
-}
-
-/* =========================================================
-   Responsive tweaks
-   ========================================================= */
-@media (max-width: 520px) {
-  .reader-topbar-inner {
-    padding: 10px 10px;
-  }
-
-  .reader-chip {
-    height: 30px;
-    padding: 0 8px;
-  }
-
-  .icon-btn {
-    height: 32px;
-    min-width: 32px;
-    padding: 0 9px;
-  }
-
-  .reader-fab {
-    bottom: 12px;
-  }
-
-  .fab-mid {
-    display: none;
-  }
-
-  .toast {
-    top: 10px;
-    width: min(92vw, 520px);
-    justify-content: center;
-    text-align: center;
-  }
-}
-@media (min-width: 1024px) {
-  .readerpage-tocDrawer {
-    transform: none !important;
-  }
-}
-@media (min-width: 1024px) {
-  .readerpage-tocClose {
-    display: none;
-  }
-}
-/* =========================================================
-   Reader: layout polish + Outline UI (1–5)
+   Reader: helpers + loading states
 ========================================================= */
-
-/* helpers */
 .readerCenter {
   display: grid;
   place-items: center;
@@ -1085,24 +850,244 @@ svg.highlight-layer {
   padding: 6px 10px;
   border-radius: 999px;
   backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 /* =========================================================
-   Outline drawer width & resizing
+   DocumentReader layout + ToC drawer
+   - Mobile: bottom sheet
+   - Desktop: left sidebar (resizable via --reader-outline-width)
 ========================================================= */
-
 .reader-layout {
-  /* default; overridden by inline CSS variable */
+  position: relative;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+
+  background: #f8fafc;
+
+  display: flex;
+  flex-direction: column;
+
+  /* default; JS updates <html> --reader-outline-width */
   --reader-outline-width: 340px;
 }
 
-/* If your drawer is already positioned with a fixed width, this makes it resizable */
-.readerpage-tocDrawer {
-  width: var(--reader-outline-width);
-  max-width: 92vw;
+/* Mobile topbar */
+.readerpage-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 20;
 }
 
-/* Resize handle (desktop only) */
+.readerpage-tocbtn {
+  appearance: none;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.readerpage-tocbtn:hover {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.readerpage-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: #111827;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Backdrop (mobile) */
+.readerpage-tocBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  z-index: 40;
+}
+
+/* ToC drawer (mobile bottom sheet by default) */
+.readerpage-tocDrawer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+
+  height: 72vh;
+  background: #ffffff;
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -18px 48px rgba(2, 6, 23, 0.22);
+
+  transform: translateY(100%);
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+
+.readerpage-tocDrawer.open {
+  transform: translateY(0);
+}
+
+.readerpage-tocHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+}
+
+.readerpage-tocTitle {
+  font-size: 15px;
+  font-weight: 950;
+  color: #111827;
+}
+
+.readerpage-tocClose {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.readerpage-tocBody {
+  flex: 1;
+  overflow: auto;
+  padding: 10px 10px 14px;
+}
+
+.readerpage-tocState {
+  padding: 20px;
+  text-align: center;
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 650;
+}
+
+.readerpage-tocState.error {
+  color: #b91c1c;
+}
+
+.readerpage-tocList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.readerpage-tocItem {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+
+  text-align: left;
+  cursor: pointer;
+}
+
+.readerpage-tocItem:hover {
+  background: rgba(15, 23, 42, 0.05);
+}
+
+.readerpage-tocItem:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.readerpage-tocItemTitle {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: #111827;
+  line-height: 1.25;
+}
+
+.readerpage-tocItemPage {
+  font-size: 12px;
+  font-weight: 850;
+  color: #6b7280;
+  padding-left: 10px;
+}
+
+/* Main reader content wrapper */
+.readerpage-main {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Desktop: ToC becomes a left sidebar */
+@media (min-width: 1024px) {
+  .reader-layout {
+    flex-direction: row;
+  }
+
+  .readerpage-topbar {
+    display: none;
+  }
+
+  .readerpage-tocBackdrop {
+    display: none;
+  }
+
+  .readerpage-tocDrawer {
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+
+    height: 100vh;
+    width: var(--reader-outline-width);
+    min-width: 260px;
+    max-width: 560px;
+
+    border-radius: 0;
+    border-right: 1px solid rgba(15, 23, 42, 0.12);
+    box-shadow: none;
+
+    transform: none;
+    transition: none;
+  }
+
+  .readerpage-tocClose {
+    display: none;
+  }
+
+  .readerpage-main {
+    flex: 1;
+  }
+}
+
+/* Keep drawer “open” on desktop always */
+@media (min-width: 1024px) {
+  .readerpage-tocDrawer {
+    transform: none !important;
+  }
+}
+
+/* =========================================================
+   Outline resize handle (desktop)
+========================================================= */
 .readerOutlineResizeHandle {
   display: none;
 }
@@ -1140,7 +1125,6 @@ svg.highlight-layer {
 /* =========================================================
    Outline header actions + search
 ========================================================= */
-
 .readerOutlineHeaderActions {
   display: inline-flex;
   gap: 6px;
@@ -1163,6 +1147,11 @@ svg.highlight-layer {
   background: rgba(255, 255, 255, 1);
 }
 
+.readerOutlineMiniBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .readerOutlineSearchWrap {
   position: relative;
   padding: 10px 10px 8px;
@@ -1179,7 +1168,7 @@ svg.highlight-layer {
 }
 
 .readerOutlineSearch:focus {
-  border-color: rgba(139, 28, 28, 0.35); /* uses your LawAfrica maroon feel */
+  border-color: rgba(139, 28, 28, 0.35); /* LawAfrica maroon feel */
   box-shadow: 0 0 0 3px rgba(139, 28, 28, 0.10);
 }
 
@@ -1210,11 +1199,10 @@ svg.highlight-layer {
 }
 
 /* =========================================================
-   Outline tree rows (remove inline CSS)
+   Outline tree rows
 ========================================================= */
-
 .readerOutlineRow {
-  margin-left: calc(var(--outline-depth, 0) * 14px);
+  margin-left: calc(var(--outline-depth, 0) * 14px); /* legacy fallback if still used */
 }
 
 .readerOutlineRowInner {
@@ -1254,7 +1242,274 @@ svg.highlight-layer {
   color: #7a1414;
   font-weight: 900;
 }
-/* optional */
-.readerOutlineRow.active-ancestor .readerpage-tocItem {
+
+/* Future-proof: use depth-* classes instead of inline vars */
+.readerOutlineRow.depth-0 { margin-left: 0; }
+.readerOutlineRow.depth-1 { margin-left: 14px; }
+.readerOutlineRow.depth-2 { margin-left: 28px; }
+.readerOutlineRow.depth-3 { margin-left: 42px; }
+.readerOutlineRow.depth-4 { margin-left: 56px; }
+.readerOutlineRow.depth-5 { margin-left: 70px; }
+.readerOutlineRow.depth-6 { margin-left: 84px; }
+.readerOutlineRow.depth-7 { margin-left: 98px; }
+.readerOutlineRow.depth-8 { margin-left: 112px; }
+.readerOutlineRow.depth-9 { margin-left: 126px; }
+.readerOutlineRow.depth-10 { margin-left: 140px; }
+.readerOutlineRow.depth-11 { margin-left: 154px; }
+.readerOutlineRow.depth-12 { margin-left: 168px; }
+
+/* =========================================================
+   ToC: Offset card + AI mini + Advanced summary
+   (moved from inline styles)
+========================================================= */
+
+/* Offset status card */
+.readerOffsetCard {
+  margin-bottom: 10px;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.65);
+  font-size: 12px;
+  line-height: 1.35;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.readerOffsetRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.readerOffsetTip {
+  margin-top: 6px;
+  opacity: 0.8;
+}
+
+/* Mini AI box */
+.readerAiBox {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(15, 23, 42, 0.12);
+}
+
+.readerAiHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.readerAiHeaderTitle {
+  font-weight: 900;
+  font-size: 13px;
+}
+
+.readerAiSelection {
+  margin-top: 8px;
+  font-size: 12px;
   opacity: 0.9;
+}
+
+.readerAiSelectionTitle {
+  font-weight: 800;
+}
+
+.readerAiSelectionMeta {
+  opacity: 0.75;
+  margin-top: 2px;
+}
+
+.readerAiButtons {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.readerAiError {
+  margin-top: 10px;
+  color: #b42318;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Summary meta card */
+.readerAiMetaCard {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.55);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.readerAiMetaRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.readerAiWarnings {
+  margin-top: 8px;
+}
+
+.readerAiWarningsTitle {
+  font-weight: 900;
+  margin-bottom: 4px;
+}
+
+.readerAiWarnings ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+/* Summary text preview */
+.readerAiSummaryText {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.72);
+  max-height: 180px;
+  overflow: auto;
+  font-size: 12px;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+/* Advanced summary section */
+.readerAdvancedBox {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(15, 23, 42, 0.18);
+}
+
+.readerAdvancedHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.readerAdvancedTitle {
+  font-weight: 950;
+  font-size: 13px;
+}
+
+.readerAdvancedToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.readerAdvancedBody {
+  margin-top: 10px;
+}
+
+.readerAdvancedModes {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.readerAdvancedModeLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.readerAdvancedOffsetInfo {
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.readerAdvancedOffsetWarn {
+  margin-top: 6px;
+  color: #b42318;
+  font-weight: 750;
+}
+
+.readerAdvancedRangeGrid {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.readerAdvancedRangeCol {
+  flex: 1;
+}
+
+.readerAdvancedLabel {
+  font-size: 12px;
+  font-weight: 900;
+  margin-bottom: 6px;
+}
+
+.readerAdvancedEffective {
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.readerAdvancedEffectiveNote {
+  margin-top: 4px;
+  color: #b42318;
+}
+
+.readerAdvancedButtons {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.readerAdvancedTip {
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+/* =========================================================
+   Responsive tweaks
+========================================================= */
+@media (max-width: 520px) {
+  .reader-topbar-inner {
+    padding: 10px 10px;
+  }
+
+  .reader-chip {
+    height: 30px;
+    padding: 0 8px;
+  }
+
+  .icon-btn {
+    height: 32px;
+    min-width: 32px;
+    padding: 0 9px;
+  }
+
+  .reader-fab {
+    bottom: 12px;
+  }
+
+  .fab-mid {
+    display: none;
+  }
+
+  .toast {
+    top: 10px;
+    width: min(92vw, 520px);
+    justify-content: center;
+    text-align: center;
+  }
 }

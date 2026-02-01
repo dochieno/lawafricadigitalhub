@@ -3,10 +3,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import api, { checkDocumentAvailability } from "../../api/client";
+import { summarizeLegalDocSection } from "../../api/aiSections";
 import PdfViewer from "../../reader/PdfViewer";
+import SectionSummaryPanel from "../../components/reader/SectionSummaryPanel";
 import "../../styles/reader.css";
 
-const AI_SECTION_SUMMARY_ENDPOINT = "/ai/legal-documents/sections/summarize";
+import lawAfricaLogo from "../../assets/brand/lawafrica-logo.png";
 
 /** ---------------------------
  * Small helpers (pure)
@@ -41,8 +43,7 @@ async function safeCopyToClipboard(text) {
     const ta = document.createElement("textarea");
     ta.value = text;
     ta.setAttribute("readonly", "");
-    ta.style.position = "fixed";
-    ta.style.left = "-9999px";
+    ta.className = "laHiddenTextareaCopy";
     document.body.appendChild(ta);
     ta.select();
     document.execCommand("copy");
@@ -159,7 +160,7 @@ function OutlineTree({ nodes, depth = 0, expanded, activePage, pdfPageOffset, on
         const endRaw = nodeEndPage(n);
 
         // ✅ Assumption: PDF page = printed page + offset
-        const startPdf = startRaw !=null ? startRaw + pdfPageOffset : null;
+        const startPdf = startRaw != null ? startRaw + pdfPageOffset : null;
         const endPdf = endRaw != null ? endRaw + pdfPageOffset : null;
 
         // Click target: prefer start page
@@ -177,8 +178,12 @@ function OutlineTree({ nodes, depth = 0, expanded, activePage, pdfPageOffset, on
           return p === startPdf;
         })();
 
+        // ✅ Inline styles removed:
+        // Previously: style={{ "--outline-depth": depth }}
+        const depthClass = `readerOutlineDepth readerOutlineDepth-${Math.min(depth, 12)}`;
+
         return (
-          <div key={id} className="readerOutlineRow" style={{ "--outline-depth": depth }}>
+          <div key={id} className={`readerOutlineRow ${depthClass}`}>
             <div className="readerOutlineRowInner">
               <button
                 type="button"
@@ -326,6 +331,28 @@ export default function DocumentReader() {
     localStorage.setItem(OFFSET_VERIFIED_KEY, offsetVerified ? "1" : "0");
   }, [OFFSET_VERIFIED_KEY, offsetVerified]);
 
+
+  //here  
+
+  useEffect(() => {
+    // Always safe: outlineWidth always exists
+    document.documentElement.style.setProperty(
+      "--reader-outline-width",
+      `${outlineWidth}px`
+    );
+
+    // Optional cleanup (not strictly needed, but clean)
+    return () => {
+      document.documentElement.style.removeProperty("--reader-outline-width");
+    };
+  }, [outlineWidth]);
+
+  // =========================================================
+  // ✅ V2: Summary panel state
+  // =========================================================
+  const [summaryPanelOpen, setSummaryPanelOpen] = useState(false);
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
+
   // ✅ Selected node + AI summary state
   const [selectedTocNode, setSelectedTocNode] = useState(null);
   const [sectionSummaryType, setSectionSummaryType] = useState("basic"); // "basic" | "extended"
@@ -334,6 +361,55 @@ export default function DocumentReader() {
   const [sectionSummaryText, setSectionSummaryText] = useState("");
   const [sectionSummaryMeta, setSectionSummaryMeta] = useState(null);
   const lastSummaryKeyRef = useRef("");
+
+  // =========================================================
+  // ✅ Remember last summary per document (localStorage)
+  // =========================================================
+  const SUMMARY_LAST_KEY = useMemo(
+    () => (Number.isFinite(docId) && docId > 0 ? `la_reader_last_summary_${docId}` : ""),
+    [docId]
+  );
+
+  // Load last summary when doc opens
+  useEffect(() => {
+    if (!SUMMARY_LAST_KEY) return;
+    const raw = localStorage.getItem(SUMMARY_LAST_KEY);
+    const data = safeJsonParse(raw || "null", null);
+    if (!data) return;
+
+    if (typeof data.summaryText === "string" && data.summaryText.trim()) {
+      setSectionSummaryText(data.summaryText);
+      setSectionSummaryMeta(data.meta || null);
+      setSectionSummaryType(data.type === "extended" ? "extended" : "basic");
+      setSelectedTocNode(data.selectedNode || null);
+    }
+  }, [SUMMARY_LAST_KEY]);
+
+  // Persist last summary (whenever summary changes)
+  useEffect(() => {
+    if (!SUMMARY_LAST_KEY) return;
+
+    // only persist when we have something meaningful
+    if (!sectionSummaryText || !sectionSummaryText.trim()) return;
+
+    const payload = {
+      type: sectionSummaryType,
+      summaryText: sectionSummaryText,
+      meta: sectionSummaryMeta,
+      selectedNode: selectedTocNode
+        ? {
+            id: selectedTocNode?.id ?? selectedTocNode?.Id ?? null,
+            title: nodeTitle(selectedTocNode, ""),
+            pageLabel: nodeRightLabel(selectedTocNode),
+            startPage: nodeStartPage(selectedTocNode),
+            endPage: nodeEndPage(selectedTocNode),
+          }
+        : null,
+      savedAt: new Date().toISOString(),
+    };
+
+    localStorage.setItem(SUMMARY_LAST_KEY, JSON.stringify(payload));
+  }, [SUMMARY_LAST_KEY, sectionSummaryType, sectionSummaryText, sectionSummaryMeta, selectedTocNode]);
 
   // =========================================================
   // ✅ V2: Advanced manual page summary (Printed or PDF mode)
@@ -361,6 +437,10 @@ export default function DocumentReader() {
 
   const openOutline = useCallback(() => setOutlineOpen(true), []);
   const closeOutline = useCallback(() => setOutlineOpen(false), []);
+
+  const openSummaryPanel = useCallback(() => setSummaryPanelOpen(true), []);
+  const closeSummaryPanel = useCallback(() => setSummaryPanelOpen(false), []);
+  const toggleSummaryExpanded = useCallback(() => setSummaryExpanded((p) => !p), []);
 
   // ✅ Calibrate offset from a ToC click:
   // offset = (pdfPage we jump to) - (printed start page from ToC)
@@ -546,11 +626,9 @@ export default function DocumentReader() {
     setOutlineQuery("");
     setActivePage(null);
 
-    // reset summary state when doc changes
-    setSelectedTocNode(null);
+    // reset summary state when doc changes (panel should keep last saved from localStorage, so we only reset errors/loading)
     setSectionSummaryError("");
-    setSectionSummaryText("");
-    setSectionSummaryMeta(null);
+    setSectionSummaryLoading(false);
     lastSummaryKeyRef.current = "";
 
     // reset advanced UI
@@ -558,6 +636,10 @@ export default function DocumentReader() {
     setPageMode("printed");
     setManualStart("");
     setManualEnd("");
+
+    // close panel on doc switch (prevents weird carry-over)
+    setSummaryPanelOpen(false);
+    setSummaryExpanded(false);
 
     fetchOutline();
   }, [docId, fetchOutline]);
@@ -748,11 +830,9 @@ export default function DocumentReader() {
 
   // =========================================================
   // ✅ AI Summary actions (ToC -> payload)
-  // - Preferred: send TocEntryId-only (backend can resolve pages if you implement it)
-  // - Fallback: send explicit start/end (uses calibrated offset)
   // =========================================================
   const buildSummaryPayloadFromNode = useCallback(
-    (node, type) => {
+    (node, type, forceRegenerate) => {
       if (!node) return null;
 
       const tocEntryId = node?.id ?? node?.Id ?? null;
@@ -763,6 +843,7 @@ export default function DocumentReader() {
           tocEntryId,
           legalDocumentId: docId,
           type,
+          forceRegenerate: !!forceRegenerate,
           sectionTitle: nodeTitle(node, ""),
         };
       }
@@ -787,17 +868,53 @@ export default function DocumentReader() {
         type,
         startPage: startPdf,
         endPage: endClamped,
+        forceRegenerate: !!forceRegenerate,
         sectionTitle: nodeTitle(node, ""),
       };
     },
     [access, docId, pdfPageOffset]
   );
 
+  const applySummaryResponse = useCallback(
+    (payload, data) => {
+      const summary = data?.summary ?? data?.Summary ?? "";
+      if (!summary) {
+        setSectionSummaryError("No summary returned.");
+        return;
+      }
+
+      setSectionSummaryText(String(summary));
+
+      const fromCache = data?.fromCache ?? data?.FromCache ?? false;
+      const usedStart = data?.startPage ?? data?.StartPage ?? null;
+      const usedEnd = data?.endPage ?? data?.EndPage ?? null;
+      const inputCharCount = data?.inputCharCount ?? data?.InputCharCount ?? 0;
+
+      const warnings = data?.warnings ?? data?.Warnings ?? [];
+      const warningsArr = Array.isArray(warnings) ? warnings : [];
+
+      setSectionSummaryMeta({
+        fromCache,
+        usedPages:
+          usedStart != null || usedEnd != null
+            ? `${usedStart ?? "?"}-${usedEnd ?? "?"}`
+            : payload.startPage != null || payload.endPage != null
+            ? `${payload.startPage ?? "?"}-${payload.endPage ?? "?"}`
+            : "—",
+        inputCharCount: Number(inputCharCount) || 0,
+        warnings: warningsArr.map((w) => String(w)),
+      });
+
+      showToast(fromCache ? "Loaded from cache" : "Summary generated", "success");
+    },
+    [setSectionSummaryMeta, setSectionSummaryText]
+  );
+
   const runSectionSummary = useCallback(
-    async (type) => {
+    async (type, opts = {}) => {
+      const { force = false, openPanel = false } = opts;
+
       setSectionSummaryError("");
-      setSectionSummaryText("");
-      setSectionSummaryMeta(null);
       setSectionSummaryType(type);
 
       if (!selectedTocNode) {
@@ -805,51 +922,24 @@ export default function DocumentReader() {
         return;
       }
 
-      const payload = buildSummaryPayloadFromNode(selectedTocNode, type);
+      const payload = buildSummaryPayloadFromNode(selectedTocNode, type, force);
       if (!payload) {
         setSectionSummaryError("This ToC section has no usable mapping.");
         return;
       }
 
-      const key = `${payload.legalDocumentId}|${payload.tocEntryId ?? ""}|${payload.type}|${payload.startPage ?? ""}-${payload.endPage ?? ""}`;
+      const key = `${payload.legalDocumentId}|${payload.tocEntryId ?? ""}|${payload.type}|${payload.startPage ?? ""}-${payload.endPage ?? ""}|force=${payload.forceRegenerate ? "1" : "0"}`;
       if (sectionSummaryLoading && lastSummaryKeyRef.current === key) return;
       lastSummaryKeyRef.current = key;
 
       setSectionSummaryLoading(true);
 
       try {
-        const res = await api.post(AI_SECTION_SUMMARY_ENDPOINT, payload);
-        const data = res?.data || {};
+        // ✅ Use API wrapper
+        const data = await summarizeLegalDocSection(payload);
+        applySummaryResponse(payload, data);
 
-        const summary = data?.summary ?? data?.Summary ?? "";
-        if (!summary) {
-          setSectionSummaryError("No summary returned.");
-          return;
-        }
-
-        setSectionSummaryText(String(summary));
-
-        const fromCache = data?.fromCache ?? data?.FromCache ?? false;
-        const usedStart = data?.startPage ?? data?.StartPage ?? null;
-        const usedEnd = data?.endPage ?? data?.EndPage ?? null;
-        const inputCharCount = data?.inputCharCount ?? data?.InputCharCount ?? 0;
-
-        const warnings = data?.warnings ?? data?.Warnings ?? [];
-        const warningsArr = Array.isArray(warnings) ? warnings : [];
-
-        setSectionSummaryMeta({
-          fromCache,
-          usedPages:
-            usedStart != null || usedEnd != null
-              ? `${usedStart ?? "?"}-${usedEnd ?? "?"}`
-              : payload.startPage != null || payload.endPage != null
-              ? `${payload.startPage ?? "?"}-${payload.endPage ?? "?"}`
-              : "—",
-          inputCharCount: Number(inputCharCount) || 0,
-          warnings: warningsArr.map((w) => String(w)),
-        });
-
-        showToast(fromCache ? "Loaded from cache" : "Summary generated", "success");
+        if (openPanel) setSummaryPanelOpen(true);
       } catch (err) {
         console.error("Section summary failed:", err);
         const msg =
@@ -861,7 +951,13 @@ export default function DocumentReader() {
         setSectionSummaryLoading(false);
       }
     },
-    [buildSummaryPayloadFromNode, selectedTocNode, sectionSummaryLoading]
+    [
+      applySummaryResponse,
+      buildSummaryPayloadFromNode,
+      selectedTocNode,
+      sectionSummaryLoading,
+      setSummaryPanelOpen,
+    ]
   );
 
   const onCopySummary = useCallback(async () => {
@@ -870,6 +966,24 @@ export default function DocumentReader() {
     if (ok) showToast("Copied ✅", "success");
     else showToast("Copy failed (browser blocked clipboard)", "error");
   }, [sectionSummaryText]);
+
+  const onRegenerateSummary = useCallback(() => {
+    // Regenerate current type, force = true
+    runSectionSummary(sectionSummaryType, { force: true, openPanel: true });
+  }, [runSectionSummary, sectionSummaryType]);
+
+  const onSwitchSummaryType = useCallback(
+    (nextType) => {
+      const t = nextType === "extended" ? "extended" : "basic";
+      if (t === sectionSummaryType) return;
+      setSectionSummaryType(t);
+
+      // If we already have summary text, switching type should refresh (not force)
+      // but only if a section is selected.
+      if (selectedTocNode) runSectionSummary(t, { force: false, openPanel: true });
+    },
+    [runSectionSummary, sectionSummaryType, selectedTocNode]
+  );
 
   // =========================================================
   // ✅ V2: Manual range → compute effective PDF pages + run summary
@@ -900,82 +1014,77 @@ export default function DocumentReader() {
     };
   }
 
-const effectiveManual = useMemo(() => {
-  function clampToPreview(endPdf) {
-    if (!access?.hasFullAccess && Number.isFinite(access?.previewMaxPages)) {
-      return Math.min(endPdf, access.previewMaxPages);
+  const effectiveManual = useMemo(() => {
+    function clampToPreview(endPdf) {
+      if (!access?.hasFullAccess && Number.isFinite(access?.previewMaxPages)) {
+        return Math.min(endPdf, access.previewMaxPages);
+      }
+      return endPdf;
     }
-    return endPdf;
-  }
 
-  const a = parsePositiveInt(manualStart);
-  const b = parsePositiveInt(manualEnd);
-  const nr = normalizeRange(a, b);
-  if (!nr) {
-    return {
-      ok: false,
-      label: "—",
-      clampNote: "",
-      startPdf: null,
-      endPdf: null,
-    };
-  }
-
-  let startPdf;
-  let endPdf;
-  let labelPrefix;
-
-  if (pageMode === "printed") {
-    if (!offsetVerified) {
+    const a = parsePositiveInt(manualStart);
+    const b = parsePositiveInt(manualEnd);
+    const nr = normalizeRange(a, b);
+    if (!nr) {
       return {
         ok: false,
-        label: `Printed ${nr.start}–${nr.end} (offset not verified)`,
-        clampNote: "Offset not confirmed. Click a ToC item to calibrate.",
+        label: "—",
+        clampNote: "",
         startPdf: null,
         endPdf: null,
       };
     }
 
-    startPdf = nr.start + pdfPageOffset;
-    endPdf = nr.end + pdfPageOffset;
-    labelPrefix = `Printed ${nr.start}–${nr.end} → PDF ${startPdf}–${endPdf}`;
-  } else {
-    startPdf = nr.start;
-    endPdf = nr.end;
-    labelPrefix = `PDF ${startPdf}–${endPdf}`;
-  }
+    let startPdf;
+    let endPdf;
+    let labelPrefix;
 
-  if (!Number.isFinite(startPdf) || startPdf <= 0 || !Number.isFinite(endPdf) || endPdf <= 0) {
+    if (pageMode === "printed") {
+      if (!offsetVerified) {
+        return {
+          ok: false,
+          label: `Printed ${nr.start}–${nr.end} (offset not verified)`,
+          clampNote: "Offset not confirmed. Click a ToC item to calibrate.",
+          startPdf: null,
+          endPdf: null,
+        };
+      }
+
+      startPdf = nr.start + pdfPageOffset;
+      endPdf = nr.end + pdfPageOffset;
+      labelPrefix = `Printed ${nr.start}–${nr.end} → PDF ${startPdf}–${endPdf}`;
+    } else {
+      startPdf = nr.start;
+      endPdf = nr.end;
+      labelPrefix = `PDF ${startPdf}–${endPdf}`;
+    }
+
+    if (!Number.isFinite(startPdf) || startPdf <= 0 || !Number.isFinite(endPdf) || endPdf <= 0) {
+      return {
+        ok: false,
+        label: labelPrefix,
+        clampNote: "Computed PDF pages are invalid.",
+        startPdf: null,
+        endPdf: null,
+      };
+    }
+
+    const endPreviewClamped = clampToPreview(endPdf);
+    const previewNote =
+      endPreviewClamped !== endPdf ? `Clamped to preview max page ${access?.previewMaxPages}.` : "";
+
     return {
-      ok: false,
+      ok: true,
       label: labelPrefix,
-      clampNote: "Computed PDF pages are invalid.",
-      startPdf: null,
-      endPdf: null,
+      clampNote: previewNote,
+      startPdf,
+      endPdf: endPreviewClamped,
     };
-  }
-
-  const endPreviewClamped = clampToPreview(endPdf);
-  const previewNote =
-    endPreviewClamped !== endPdf
-      ? `Clamped to preview max page ${access?.previewMaxPages}.`
-      : "";
-
-  return {
-    ok: true,
-    label: labelPrefix,
-    clampNote: previewNote,
-    startPdf,
-    endPdf: endPreviewClamped,
-  };
-}, [manualStart, manualEnd, pageMode, offsetVerified, pdfPageOffset, access]);
-
+  }, [manualStart, manualEnd, pageMode, offsetVerified, pdfPageOffset, access]);
 
   const runManualSectionSummary = useCallback(
     async (type) => {
       setSectionSummaryError("");
-      setSectionSummaryText("");
-      setSectionSummaryMeta(null);
       setSectionSummaryType(type);
 
       if (!effectiveManual.ok || effectiveManual.startPdf == null || effectiveManual.endPdf == null) {
@@ -991,6 +1100,7 @@ const effectiveManual = useMemo(() => {
         type,
         startPage: spanClamped.startPdf,
         endPage: spanClamped.endPdf,
+        forceRegenerate: false,
         sectionTitle: pageMode === "printed" ? "Manual range (printed pages)" : "Manual range (PDF pages)",
       };
 
@@ -1001,40 +1111,19 @@ const effectiveManual = useMemo(() => {
       setSectionSummaryLoading(true);
 
       try {
-        const res = await api.post(AI_SECTION_SUMMARY_ENDPOINT, payload);
-        const data = res?.data || {};
-
-        const summary = data?.summary ?? data?.Summary ?? "";
-        if (!summary) {
-          setSectionSummaryError("No summary returned.");
-          return;
-        }
-
-        setSectionSummaryText(String(summary));
-
-        const fromCache = data?.fromCache ?? data?.FromCache ?? false;
-        const usedStart = data?.startPage ?? data?.StartPage ?? null;
-        const usedEnd = data?.endPage ?? data?.EndPage ?? null;
-        const inputCharCount = data?.inputCharCount ?? data?.InputCharCount ?? 0;
-
-        const warnings = data?.warnings ?? data?.Warnings ?? [];
-        const warningsArr = Array.isArray(warnings) ? warnings : [];
+        const data = await summarizeLegalDocSection(payload);
 
         const localNotes = [];
         if (spanClamped.clamped && spanClamped.note) localNotes.push(spanClamped.note);
         if (effectiveManual.clampNote) localNotes.push(effectiveManual.clampNote);
 
-        setSectionSummaryMeta({
-          fromCache,
-          usedPages:
-            usedStart != null || usedEnd != null
-              ? `${usedStart ?? "?"}-${usedEnd ?? "?"}`
-              : `${payload.startPage}-${payload.endPage}`,
-          inputCharCount: Number(inputCharCount) || 0,
-          warnings: [...localNotes, ...warningsArr.map((w) => String(w))],
+        // Apply response (reuse)
+        applySummaryResponse(payload, {
+          ...data,
+          warnings: [...localNotes, ...((data?.warnings ?? data?.Warnings ?? []) || [])],
         });
 
-        showToast(fromCache ? "Loaded from cache" : "Summary generated", "success");
+        setSummaryPanelOpen(true);
       } catch (err) {
         console.error("Manual section summary failed:", err);
         const msg =
@@ -1046,7 +1135,7 @@ const effectiveManual = useMemo(() => {
         setSectionSummaryLoading(false);
       }
     },
-    [docId, pageMode, sectionSummaryLoading, effectiveManual]
+    [applySummaryResponse, docId, effectiveManual, pageMode, sectionSummaryLoading]
   );
 
   const canRunManual =
@@ -1136,9 +1225,7 @@ const effectiveManual = useMemo(() => {
                 : "Purchasing is disabled for your institution account. Please contact your administrator."}
             </p>
 
-            {canPay && (
-              <p className="preview-lock-footnote readerTip">Tip: Go to the details page to complete the purchase.</p>
-            )}
+            {canPay && <p className="preview-lock-footnote readerTip">Tip: Go to the details page to complete the purchase.</p>}
           </div>
         </div>
       </div>
@@ -1169,13 +1256,26 @@ const effectiveManual = useMemo(() => {
   const maxPages = access.hasFullAccess ? null : access.previewMaxPages;
 
   return (
-    <div
-      className="reader-layout"
-      style={{ "--reader-outline-width": `${outlineWidth}px` }}
-      onPointerMove={onResizePointerMove}
-      onPointerUp={onResizePointerUp}
-    >
+    <div className="reader-layout" onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp}>
       {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
+
+      {/* ✅ V2 Summary Panel */}
+      <SectionSummaryPanel
+        open={summaryPanelOpen}
+        logoSrc={lawAfricaLogo}
+        title={selectedTocNode ? nodeTitle(selectedTocNode, "") : "Selected section"}
+        type={sectionSummaryType}
+        loading={sectionSummaryLoading}
+        error={sectionSummaryError}
+        summaryText={sectionSummaryText}
+        meta={sectionSummaryMeta}
+        expanded={summaryExpanded}
+        onToggleExpanded={toggleSummaryExpanded}
+        onClose={closeSummaryPanel}
+        onCopy={onCopySummary}
+        onRegenerate={onRegenerateSummary}
+        onSwitchType={onSwitchSummaryType}
+      />
 
       {/* Mobile topbar */}
       <div className="readerpage-topbar">
@@ -1186,6 +1286,17 @@ const effectiveManual = useMemo(() => {
         <div className="readerpage-title" title={`Document ${docId}`}>
           Reader
         </div>
+
+        {/* Quick access to summary panel */}
+        <button
+          className="readerpage-aiBtn"
+          type="button"
+          onClick={openSummaryPanel}
+          disabled={!sectionSummaryText}
+          title={sectionSummaryText ? "Open AI summary" : "Generate a summary first (ToC → Basic/Extended)"}
+        >
+          AI
+        </button>
       </div>
 
       {/* Backdrop (mobile) */}
@@ -1203,6 +1314,16 @@ const effectiveManual = useMemo(() => {
             <button className="readerOutlineMiniBtn" type="button" onClick={collapseAll} title="Collapse all">
               Collapse
             </button>
+
+            <button
+              className="readerOutlineMiniBtn laAccent"
+              type="button"
+              onClick={openSummaryPanel}
+              disabled={!sectionSummaryText}
+              title={sectionSummaryText ? "Open AI summary panel" : "Generate a summary first"}
+            >
+              Open summary
+            </button>
           </div>
 
           <button className="readerpage-tocClose" type="button" onClick={closeOutline} title="Close">
@@ -1211,25 +1332,19 @@ const effectiveManual = useMemo(() => {
         </div>
 
         <div className="readerpage-tocBody">
-          {/* Offset status */}
-          <div
-            style={{
-              marginBottom: 10,
-              padding: 10,
-              borderRadius: 10,
-              border: "1px solid rgba(15, 23, 42, 0.10)",
-              background: "rgba(255,255,255,0.6)",
-              fontSize: 12,
-              lineHeight: 1.35,
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-              <div>
+          {/* Offset status (inline styles removed) */}
+          <div className="laInlineOffsetCard">
+            <div className="laInlineOffsetRow">
+              <div className="laInlineOffsetLeft">
                 <strong>PDF offset:</strong>{" "}
-                <span>
-                  {pdfPageOffset >= 0 ? `+${pdfPageOffset}` : pdfPageOffset} {offsetVerified ? "✅" : "⚠️"}
+                <span className="laInlineOffsetValue">
+                  {pdfPageOffset >= 0 ? `+${pdfPageOffset}` : pdfPageOffset}{" "}
+                  <span className={`laInlineOffsetBadge ${offsetVerified ? "ok" : "warn"}`}>
+                    {offsetVerified ? "verified" : "unverified"}
+                  </span>
                 </span>
               </div>
+
               <button
                 type="button"
                 className="readerOutlineMiniBtn"
@@ -1243,8 +1358,9 @@ const effectiveManual = useMemo(() => {
                 Reset
               </button>
             </div>
-            <div style={{ marginTop: 6, opacity: 0.8 }}>
-              Tip: Click a ToC item to calibrate automatically. (We compute offset = PDF page − printed start page.)
+
+            <div className="laInlineOffsetTip">
+              Tip: Click a ToC item to calibrate automatically. (offset = PDF page − printed start page)
             </div>
           </div>
 
@@ -1315,46 +1431,53 @@ const effectiveManual = useMemo(() => {
           )}
 
           {/* =========================================================
-              ✅ Minimal AI Summary box (Basic / Extended / Copy)
+              ✅ Minimal AI Summary box (fallback quick view)
+              (inline styles removed)
           ========================================================= */}
-          <div
-            style={{
-              marginTop: 12,
-              paddingTop: 10,
-              borderTop: "1px solid rgba(15, 23, 42, 0.12)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>AI · Section summary</div>
+          <div className="laInlineTocSummary">
+            <div className="laInlineTocSummaryTop">
+              <div className="laInlineTocSummaryTitle">AI · Section summary</div>
 
-              <button
-                type="button"
-                className="readerOutlineMiniBtn"
-                disabled={!selectedTocNode || !sectionSummaryText}
-                onClick={onCopySummary}
-                title="Copy summary"
-              >
-                Copy
-              </button>
+              <div className="laInlineTocSummaryTopActions">
+                <button
+                  type="button"
+                  className="readerOutlineMiniBtn"
+                  disabled={!selectedTocNode || !sectionSummaryText}
+                  onClick={onCopySummary}
+                  title="Copy summary"
+                >
+                  Copy
+                </button>
+
+                <button
+                  type="button"
+                  className="readerOutlineMiniBtn laAccent"
+                  disabled={!sectionSummaryText}
+                  onClick={openSummaryPanel}
+                  title="Open summary panel"
+                >
+                  Open
+                </button>
+              </div>
             </div>
 
-            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.9 }}>
+            <div className="laInlineTocSummaryInfo">
               {selectedTocNode ? (
                 <>
-                  <div style={{ fontWeight: 600 }}>{nodeTitle(selectedTocNode)}</div>
-                  <div style={{ opacity: 0.75 }}>Pages: {nodeRightLabel(selectedTocNode) || "—"}</div>
+                  <div className="laInlineTocSummarySection">{nodeTitle(selectedTocNode)}</div>
+                  <div className="laInlineTocSummaryPages">Pages: {nodeRightLabel(selectedTocNode) || "—"}</div>
                 </>
               ) : (
-                <div style={{ opacity: 0.75 }}>Select a ToC section, then choose Basic or Extended.</div>
+                <div className="laInlineMuted">Select a ToC section, then choose Basic or Extended.</div>
               )}
             </div>
 
-            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+            <div className="laInlineTocSummaryBtns">
               <button
                 type="button"
                 className="outline-btn"
                 disabled={!selectedTocNode || sectionSummaryLoading}
-                onClick={() => runSectionSummary("basic")}
+                onClick={() => runSectionSummary("basic", { force: false, openPanel: false })}
                 title="Generate basic summary"
               >
                 {sectionSummaryLoading && sectionSummaryType === "basic" ? "Basic…" : "Basic"}
@@ -1364,30 +1487,28 @@ const effectiveManual = useMemo(() => {
                 type="button"
                 className="outline-btn"
                 disabled={!selectedTocNode || sectionSummaryLoading}
-                onClick={() => runSectionSummary("extended")}
+                onClick={() => runSectionSummary("extended", { force: false, openPanel: false })}
                 title="Generate extended summary"
               >
                 {sectionSummaryLoading && sectionSummaryType === "extended" ? "Extended…" : "Extended"}
               </button>
+
+              <button
+                type="button"
+                className="outline-btn laPrimary"
+                disabled={!selectedTocNode || sectionSummaryLoading}
+                onClick={() => runSectionSummary(sectionSummaryType, { force: true, openPanel: true })}
+                title="Regenerate (force)"
+              >
+                {sectionSummaryLoading ? "Working…" : "Regenerate"}
+              </button>
             </div>
 
-            {sectionSummaryError ? (
-              <div style={{ marginTop: 10, color: "#b42318", fontSize: 12 }}>{sectionSummaryError}</div>
-            ) : null}
+            {sectionSummaryError ? <div className="laInlineError">{sectionSummaryError}</div> : null}
 
             {sectionSummaryMeta ? (
-              <div
-                style={{
-                  marginTop: 10,
-                  padding: 10,
-                  borderRadius: 10,
-                  border: "1px solid rgba(15, 23, 42, 0.12)",
-                  background: "rgba(255,255,255,0.55)",
-                  fontSize: 12,
-                  lineHeight: 1.4,
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+              <div className="laInlineMetaCard">
+                <div className="laInlineMetaRow">
                   <div>
                     <strong>Used pages:</strong> {sectionSummaryMeta.usedPages}
                   </div>
@@ -1400,9 +1521,9 @@ const effectiveManual = useMemo(() => {
                 </div>
 
                 {sectionSummaryMeta.warnings?.length ? (
-                  <div style={{ marginTop: 8 }}>
-                    <div style={{ fontWeight: 700, marginBottom: 4 }}>Warnings</div>
-                    <ul style={{ margin: 0, paddingLeft: 18 }}>
+                  <div className="laInlineWarnings">
+                    <div className="laInlineWarningsTitle">Warnings</div>
+                    <ul className="laInlineWarningsList">
                       {sectionSummaryMeta.warnings.map((w, i) => (
                         <li key={`${i}-${w}`}>{w}</li>
                       ))}
@@ -1413,39 +1534,19 @@ const effectiveManual = useMemo(() => {
             ) : null}
 
             {sectionSummaryText ? (
-              <div
-                style={{
-                  marginTop: 10,
-                  padding: 10,
-                  borderRadius: 10,
-                  border: "1px solid rgba(15, 23, 42, 0.12)",
-                  background: "rgba(255,255,255,0.7)",
-                  maxHeight: 180,
-                  overflow: "auto",
-                  fontSize: 12,
-                  whiteSpace: "pre-wrap",
-                  lineHeight: 1.45,
-                }}
-              >
-                {sectionSummaryText}
-              </div>
+              <div className="laInlineSummaryPreview">{sectionSummaryText}</div>
             ) : null}
           </div>
 
           {/* =========================================================
               ✅ V2 Advanced summary (manual pages)
+              (inline styles removed)
           ========================================================= */}
-          <div
-            style={{
-              marginTop: 14,
-              paddingTop: 12,
-              borderTop: "1px dashed rgba(15, 23, 42, 0.18)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-              <div style={{ fontWeight: 800, fontSize: 13 }}>Advanced summary</div>
+          <div className="laInlineAdvanced">
+            <div className="laInlineAdvancedHeader">
+              <div className="laInlineAdvancedTitle">Advanced summary</div>
 
-              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, cursor: "pointer" }}>
+              <label className="laInlineCheckbox">
                 <input
                   type="checkbox"
                   checked={advancedEnabled}
@@ -1456,9 +1557,9 @@ const effectiveManual = useMemo(() => {
             </div>
 
             {advancedEnabled ? (
-              <div style={{ marginTop: 10 }}>
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 12 }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+              <div className="laInlineAdvancedBody">
+                <div className="laInlineRadios">
+                  <label className="laInlineRadio">
                     <input
                       type="radio"
                       name="pageMode"
@@ -1468,38 +1569,39 @@ const effectiveManual = useMemo(() => {
                     Printed pages (recommended)
                   </label>
 
-                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                  <label className="laInlineRadio">
                     <input type="radio" name="pageMode" checked={pageMode === "pdf"} onChange={() => setPageMode("pdf")} />
                     PDF pages (advanced)
                   </label>
                 </div>
 
                 {pageMode === "printed" ? (
-                  <div style={{ marginTop: 8, fontSize: 12, opacity: 0.9 }}>
+                  <div className="laInlineOffsetInfo">
                     <div>
                       <strong>Offset:</strong>{" "}
                       {Number.isFinite(pdfPageOffset) ? (
                         <span>
-                          {pdfPageOffset >= 0 ? `+${pdfPageOffset}` : pdfPageOffset} {offsetVerified ? "✅" : "⚠️"}
+                          {pdfPageOffset >= 0 ? `+${pdfPageOffset}` : pdfPageOffset}{" "}
+                          <span className={`laInlineOffsetBadge ${offsetVerified ? "ok" : "warn"}`}>
+                            {offsetVerified ? "verified" : "unverified"}
+                          </span>
                         </span>
                       ) : (
-                        <span>not set ⚠️</span>
+                        <span>not set</span>
                       )}
                     </div>
 
                     {!offsetVerified ? (
-                      <div style={{ marginTop: 6, color: "#b42318" }}>
+                      <div className="laInlineWarnText">
                         Offset not confirmed. Click a ToC item to calibrate before running to avoid wrong output.
                       </div>
                     ) : null}
                   </div>
                 ) : null}
 
-                <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
-                      Start {pageMode === "printed" ? "printed" : "PDF"} page
-                    </div>
+                <div className="laInlineManualInputs">
+                  <div className="laInlineManualCol">
+                    <div className="laInlineManualLabel">Start {pageMode === "printed" ? "printed" : "PDF"} page</div>
                     <input
                       className="readerOutlineSearch"
                       inputMode="numeric"
@@ -1509,10 +1611,8 @@ const effectiveManual = useMemo(() => {
                     />
                   </div>
 
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
-                      End {pageMode === "printed" ? "printed" : "PDF"} page
-                    </div>
+                  <div className="laInlineManualCol">
+                    <div className="laInlineManualLabel">End {pageMode === "printed" ? "printed" : "PDF"} page</div>
                     <input
                       className="readerOutlineSearch"
                       inputMode="numeric"
@@ -1523,16 +1623,14 @@ const effectiveManual = useMemo(() => {
                   </div>
                 </div>
 
-                <div style={{ marginTop: 10, fontSize: 12 }}>
-                  <div style={{ opacity: 0.85 }}>
+                <div className="laInlineEffectiveRange">
+                  <div className="laInlineEffectiveText">
                     <strong>Effective range:</strong> <span>{effectiveManual.label}</span>
                   </div>
-                  {effectiveManual.clampNote ? (
-                    <div style={{ marginTop: 4, color: "#b42318" }}>{effectiveManual.clampNote}</div>
-                  ) : null}
+                  {effectiveManual.clampNote ? <div className="laInlineWarnText">{effectiveManual.clampNote}</div> : null}
                 </div>
 
-                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <div className="laInlineManualBtns">
                   <button
                     type="button"
                     className="outline-btn"
@@ -1552,9 +1650,19 @@ const effectiveManual = useMemo(() => {
                   >
                     {sectionSummaryLoading && sectionSummaryType === "extended" ? "Extended…" : "Extended"}
                   </button>
+
+                  <button
+                    type="button"
+                    className="outline-btn laPrimary"
+                    disabled={!canRunManual || sectionSummaryLoading}
+                    onClick={() => runManualSectionSummary(sectionSummaryType)}
+                    title="Open panel after generating"
+                  >
+                    {sectionSummaryLoading ? "Working…" : "Open in panel"}
+                  </button>
                 </div>
 
-                <div style={{ marginTop: 8, fontSize: 12, opacity: 0.75 }}>
+                <div className="laInlineHint">
                   Tip: keep ranges small (Basic ≤ {BASIC_MAX_SPAN} pages, Extended ≤ {EXTENDED_MAX_SPAN} pages). Preview limits still apply.
                 </div>
               </div>
@@ -1605,7 +1713,9 @@ const effectiveManual = useMemo(() => {
                 </button>
               </div>
 
-              <p className="preview-lock-footnote">You can purchase this publication from the details page to unlock full reading access.</p>
+              <p className="preview-lock-footnote">
+                You can purchase this publication from the details page to unlock full reading access.
+              </p>
             </div>
           </div>
         )}
