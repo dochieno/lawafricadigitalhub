@@ -41,6 +41,26 @@ async function adminReorderToc(docId, payload) {
   return res.data;
 }
 
+/** =========================================================
+ *  ✅ Indexing endpoints (Admin)
+ * ========================================================= */
+function adminIndexBase(docId) {
+  const did = assertDocId(docId);
+  return `/admin/legal-documents/${did}/index-text`;
+}
+
+async function adminQueueIndexText(docId, force = false) {
+  const did = assertDocId(docId);
+  const res = await api.post(`${adminIndexBase(did)}?force=${force ? "true" : "false"}`, {});
+  return res.data ?? null;
+}
+
+async function adminGetIndexTextStatus(docId) {
+  const did = assertDocId(docId);
+  const res = await api.get(`${adminIndexBase(did)}/status`);
+  return res.data ?? null;
+}
+
 /** Existing endpoints */
 async function adminGetDocsForDropdown() {
   const res = await api.get(`/legal-documents/admin`);
@@ -420,6 +440,13 @@ export default function AdminTocEditor() {
   const [orderDirty, setOrderDirty] = useState(false);
   const [savingOrder, setSavingOrder] = useState(false);
 
+  // -------------------------
+  // Indexing state (PDF -> LegalDocumentPageTexts)
+  // -------------------------
+  const [indexBusy, setIndexBusy] = useState(false);
+  const [indexStatusBusy, setIndexStatusBusy] = useState(false);
+  const [indexStatus, setIndexStatus] = useState(null);
+
   // drag state
   const dragRef = useRef(null); // { parentId, index, id }
 
@@ -457,6 +484,7 @@ export default function AdminTocEditor() {
       setDrafts(new Map());
       setExpanded(new Set());
       setOrderDirty(false);
+      setIndexStatus(null);
       return;
     }
 
@@ -506,24 +534,79 @@ export default function AdminTocEditor() {
     }
   }, []);
 
+  // -------------------------
+  // Indexing actions
+  // MUST be declared BEFORE effects that reference them
+  // -------------------------
+  const refreshIndexStatus = useCallback(
+    async (idToCheck) => {
+      const did = assertDocId(idToCheck ?? docId);
+      if (!did) {
+        setIndexStatus(null);
+        return;
+      }
+
+      setIndexStatusBusy(true);
+      try {
+        const st = await adminGetIndexTextStatus(did);
+        setIndexStatus(st || null);
+      } catch (e) {
+        // don't hard-fail the whole page; just show message
+        setIndexStatus(null);
+        setError(e?.response?.data?.message || String(e?.message || e));
+      } finally {
+        setIndexStatusBusy(false);
+      }
+    },
+    [docId]
+  );
+
+  const queueIndexNow = useCallback(
+    async (force = false) => {
+      const did = assertDocId(docId);
+      if (!did) return setError("Pick a document first.");
+      if (selectedKind === 2) return setError("This is Kind=Report. Indexing is disabled here for now.");
+
+      setIndexBusy(true);
+      setError("");
+      setInfo("");
+
+      try {
+        await adminQueueIndexText(did, force);
+        setInfo(force ? "✅ Indexing queued (force re-index)." : "✅ Indexing queued.");
+        // Refresh status after a short delay to give worker time to start
+        setTimeout(() => refreshIndexStatus(did), 800);
+      } catch (e) {
+        setError(e?.response?.data?.message || String(e?.message || e));
+      } finally {
+        setIndexBusy(false);
+      }
+    },
+    [docId, selectedKind, refreshIndexStatus]
+  );
+
   useEffect(() => {
     loadDocs();
   }, [loadDocs]);
 
+  async function onReload() {
+    await loadToc(docId);
+    await refreshIndexStatus(docId);
+  }
+
   useEffect(() => {
-    if (docId) loadToc(docId);
-    else {
+    if (docId) {
+      loadToc(docId);
+      refreshIndexStatus(docId);
+    } else {
       setTree([]);
       setSelectedKind(null);
       setDrafts(new Map());
       setExpanded(new Set());
       setOrderDirty(false);
+      setIndexStatus(null);
     }
-  }, [docId, loadToc]);
-
-  async function onReload() {
-    await loadToc(docId);
-  }
+  }, [docId, loadToc, refreshIndexStatus]);
 
   function resetCsvPreview() {
     setCsvFileName("");
@@ -572,9 +655,7 @@ export default function AdminTocEditor() {
       const serverMsg = e?.response?.data?.message;
 
       if (status === 405) {
-        setError(
-          `405 during import. Ensure you're posting to: ${adminTocBase(did)}/import (admin controller).`
-        );
+        setError(`405 during import. Ensure you're posting to: ${adminTocBase(did)}/import (admin controller).`);
       } else {
         setError(serverMsg || String(e?.message || e));
       }
@@ -864,8 +945,7 @@ export default function AdminTocEditor() {
         <div>
           <h1 className="laTocH1">Admin · ToC Editor</h1>
           <div className="laTocSub">
-            Uses <b>GET /api/admin/legal-documents/:id/toc</b> and{" "}
-            <b>POST /api/admin/legal-documents/:id/toc/import</b>.
+            Uses <b>GET /api/admin/legal-documents/:id/toc</b> and <b>POST /api/admin/legal-documents/:id/toc/import</b>.
           </div>
         </div>
 
@@ -897,6 +977,7 @@ export default function AdminTocEditor() {
       {(error || info) && <div className={`laTocAlert ${error ? "err" : "ok"}`}>{error || info}</div>}
 
       <div className="laTocCard">
+        {/* Document picker row */}
         <div className="laTocRow">
           <label className="laTocLabel">Legal Document</label>
 
@@ -914,6 +995,75 @@ export default function AdminTocEditor() {
           <div className="laTocHint">
             Kind: <b>{selectedKind === 1 ? "Standard" : selectedKind === 2 ? "Report" : "—"}</b> (Report is blocked in
             this editor)
+          </div>
+        </div>
+
+        {/* Indexing controls row */}
+        <div className="laTocRow" style={{ alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <label className="laTocLabel">Index Text</label>
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              className="laBtn"
+              type="button"
+              disabled={!docId || selectedKind === 2 || indexBusy}
+              onClick={() => queueIndexNow(false)}
+              title={!docId ? "Pick a document first" : selectedKind === 2 ? "Report docs not supported" : "Queue indexing"}
+            >
+              {indexBusy ? "Queuing…" : "Index now"}
+            </button>
+
+            <button
+              className="laBtn"
+              type="button"
+              disabled={!docId || selectedKind === 2 || indexBusy}
+              onClick={() => {
+                const ok = window.confirm(
+                  "Force re-index? This may delete/overwrite existing extracted pages for this doc."
+                );
+                if (ok) queueIndexNow(true);
+              }}
+              title="Force re-index (rebuild extracted pages)"
+            >
+              Force re-index
+            </button>
+
+            <button
+              className="laBtn"
+              type="button"
+              disabled={!docId || indexStatusBusy}
+              onClick={() => refreshIndexStatus(docId)}
+              title="Refresh status"
+            >
+              {indexStatusBusy ? "Checking…" : "Refresh status"}
+            </button>
+          </div>
+
+          <div className="laTocHint" style={{ minWidth: 260 }}>
+            {indexStatus ? (
+              <>
+                Indexed pages: <b>{indexStatus.indexedPages ?? "—"}</b>
+                {indexStatus.pageCount != null ? (
+                  <>
+                    {" "}
+                    / <b>{indexStatus.pageCount}</b>
+                  </>
+                ) : null}
+                {indexStatus.lastIndexedAt ? (
+                  <>
+                    {" "}
+                    · Last: <b>{new Date(indexStatus.lastIndexedAt).toLocaleString()}</b>
+                  </>
+                ) : (
+                  <>
+                    {" "}
+                    · Last: <b>—</b>
+                  </>
+                )}
+              </>
+            ) : (
+              <>No status loaded yet.</>
+            )}
           </div>
         </div>
 
@@ -1232,7 +1382,9 @@ function AdminEditableNode(props) {
           {hasChildren ? (isOpen ? "▾" : "▸") : "•"}
         </button>
 
-        <div className="laEditDrag" title="Drag to reorder">⠿</div>
+        <div className="laEditDrag" title="Drag to reorder">
+          ⠿
+        </div>
 
         <div className="laEditMain">
           <div className="laEditTopLine">
@@ -1248,11 +1400,7 @@ function AdminEditableNode(props) {
           <div className="laEditFields">
             <div className="laEditField">
               <label>Start</label>
-              <input
-                value={draft.startPage}
-                onChange={(e) => setDraftField(idStr, "startPage", e.target.value)}
-                placeholder="1"
-              />
+              <input value={draft.startPage} onChange={(e) => setDraftField(idStr, "startPage", e.target.value)} placeholder="1" />
             </div>
 
             <div className="laEditField">
@@ -1262,20 +1410,12 @@ function AdminEditableNode(props) {
 
             <div className="laEditField">
               <label>Label</label>
-              <input
-                value={draft.pageLabel}
-                onChange={(e) => setDraftField(idStr, "pageLabel", e.target.value)}
-                placeholder="ix"
-              />
+              <input value={draft.pageLabel} onChange={(e) => setDraftField(idStr, "pageLabel", e.target.value)} placeholder="ix" />
             </div>
 
             <div className="laEditField">
               <label>AnchorId</label>
-              <input
-                value={draft.anchorId}
-                onChange={(e) => setDraftField(idStr, "anchorId", e.target.value)}
-                placeholder="optional"
-              />
+              <input value={draft.anchorId} onChange={(e) => setDraftField(idStr, "anchorId", e.target.value)} placeholder="optional" />
             </div>
 
             <div className="laEditField">
@@ -1297,23 +1437,14 @@ function AdminEditableNode(props) {
 
             <div className="laEditField wide">
               <label>Notes</label>
-              <input
-                value={draft.notes}
-                onChange={(e) => setDraftField(idStr, "notes", e.target.value)}
-                placeholder="optional"
-              />
+              <input value={draft.notes} onChange={(e) => setDraftField(idStr, "notes", e.target.value)} placeholder="optional" />
             </div>
           </div>
 
           <div className="laEditActions">
             {isNew ? (
               <>
-                <button
-                  className="laBtnPrimary"
-                  type="button"
-                  onClick={() => onCreateFromTemp(idStr, parentId)}
-                  disabled={busySave}
-                >
+                <button className="laBtnPrimary" type="button" onClick={() => onCreateFromTemp(idStr, parentId)} disabled={busySave}>
                   {busySave ? "Creating…" : "Create"}
                 </button>
                 <button className="laBtn" type="button" onClick={() => onCancelTemp(idStr)} disabled={busySave}>
