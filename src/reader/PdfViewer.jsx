@@ -124,13 +124,13 @@ export default function PdfViewer({
   onRegisterApi, // parent uses this for ToC click: { jumpToPage }
 }) {
   const [numPages, setNumPages] = useState(null);
-const [page, setPage] = useState(startPage || 1);
+  const [page, setPage] = useState(startPage || 1);
 
-// ✅ Expose "current page" via a ref so the API function stays stable
-const currentPageRef = useRef(startPage || 1);
-useEffect(() => {
-  currentPageRef.current = page;
-}, [page]);
+  // ✅ Always-current page value for external polling (Reader)
+  const currentPageRef = useRef(startPage || 1);
+  useEffect(() => {
+    currentPageRef.current = page;
+  }, [page]);
 
   const [ready, setReady] = useState(false);
   const [highlights, setHighlights] = useState([]);
@@ -143,9 +143,9 @@ useEffect(() => {
 
   /* ---------------- Reading Progress ---------------- */
   const [resumeLoaded, setResumeLoaded] = useState(false);
-const lastSavedPageRef = useRef(null);
-const readingStartRef = useRef(0); // set in effect (no Date.now in render)
-const pageUpdateTimeoutRef = useRef(null);
+  const lastSavedPageRef = useRef(null);
+  const readingStartRef = useRef(0); // set in effect (no Date.now in render)
+  const pageUpdateTimeoutRef = useRef(null);
 
   const resumeTargetRef = useRef(null);
   const resumeAppliedRef = useRef(false);
@@ -184,11 +184,16 @@ const pageUpdateTimeoutRef = useRef(null);
   /* Scroll + observer */
   const scrollRootRef = useRef(null);
   const pageObserverRef = useRef(null);
+
+  // ✅ used to make scroll-based detection fallback-only
+  const observerReadyRef = useRef(false);
+  const fallbackIdleTimerRef = useRef(null);
+
   const snapTimeoutRef = useRef(null);
   const isUserScrollingRef = useRef(false);
 
   const scrollRafRef = useRef(null);
-  const lastScrollComputedPageRef = useRef(null);
+  const lastSensorPageRef = useRef(null);
 
   const pageElsRef = useRef({});
   const previewLimitTriggeredRef = useRef(false);
@@ -198,7 +203,10 @@ const pageUpdateTimeoutRef = useRef(null);
   const fileSource = useMemo(() => getPdfSource(documentId), [documentId]);
 
   const pdfOptions = useMemo(
-    () => (safeMode ? { disableRange: true, disableStream: true } : { disableRange: false, disableStream: false }),
+    () =>
+      safeMode
+        ? { disableRange: true, disableStream: true }
+        : { disableRange: false, disableStream: false },
     [safeMode]
   );
 
@@ -249,6 +257,9 @@ const pageUpdateTimeoutRef = useRef(null);
       resumeAppliedRef.current = false;
 
       previewLimitTriggeredRef.current = false;
+
+      observerReadyRef.current = false;
+      lastSensorPageRef.current = null;
     });
   }, [documentId, startPage]);
 
@@ -278,7 +289,6 @@ const pageUpdateTimeoutRef = useRef(null);
       })
       .catch((err) => {
         if (ctrl.signal.aborted) return;
-        // non-blocking: still allow reader to continue
         console.warn("reading-progress load failed:", err);
         defer(() => setResumeLoaded(true));
       });
@@ -395,14 +405,50 @@ const pageUpdateTimeoutRef = useRef(null);
     [allowedMaxPage, onPreviewLimitReached, scrollToPage]
   );
 
-    useEffect(() => {
-    // set start timestamp after mount / document change
+  useEffect(() => {
     readingStartRef.current = Date.now();
   }, [documentId]);
 
+  /* ==================================================
+     ✅ Unified page commit (prevents observer vs scroll fighting)
+     ================================================== */
+  const commitDetectedPage = useCallback(
+    (detectedPage) => {
+      const p = Number(detectedPage);
+      if (!Number.isFinite(p) || p <= 0) return;
+
+      const maxPage = allowedMaxPage ?? numPages ?? null;
+      if (maxPage && p > maxPage) return;
+
+      if (isProgrammaticNavRef.current) return;
+
+      if (lastSensorPageRef.current === p) return;
+      lastSensorPageRef.current = p;
+
+      clearTimeout(pageUpdateTimeoutRef.current);
+      pageUpdateTimeoutRef.current = setTimeout(() => {
+        setPage((prev) => (prev === p ? prev : p));
+      }, 35);
+
+      if (
+        allowedMaxPage &&
+        p === allowedMaxPage &&
+        typeof onPreviewLimitReached === "function" &&
+        !previewLimitTriggeredRef.current
+      ) {
+        previewLimitTriggeredRef.current = true;
+        onPreviewLimitReached();
+      }
+
+      if (allowedMaxPage && p < allowedMaxPage) {
+        previewLimitTriggeredRef.current = false;
+      }
+    },
+    [allowedMaxPage, numPages, onPreviewLimitReached]
+  );
 
   /* ==================================================
-     Scroll-based current-page detection
+     Scroll-based current-page detection (fallback-only)
      ================================================== */
   const computePageFromScroll = useCallback(() => {
     const root = scrollRootRef.current;
@@ -422,8 +468,8 @@ const pageUpdateTimeoutRef = useRef(null);
       .filter((n) => Number.isFinite(n) && n > 0 && n <= maxPage)
       .sort((a, b) => a - b);
 
-    for (const p of keys) {
-      const el = pageElsRef.current[p];
+    for (const pg of keys) {
+      const el = pageElsRef.current[pg];
       if (!el) continue;
 
       const r = el.getBoundingClientRect();
@@ -433,35 +479,15 @@ const pageUpdateTimeoutRef = useRef(null);
       const dist = Math.abs(r.top - anchorY);
       if (dist < bestDist) {
         bestDist = dist;
-        bestPage = p;
+        bestPage = pg;
       }
     }
 
     if (!bestPage) return;
+    commitDetectedPage(bestPage);
+  }, [allowedMaxPage, numPages, commitDetectedPage]);
 
-    if (bestPage !== lastScrollComputedPageRef.current && !isProgrammaticNavRef.current) {
-      lastScrollComputedPageRef.current = bestPage;
-      clearTimeout(pageUpdateTimeoutRef.current);
-
-      pageUpdateTimeoutRef.current = setTimeout(() => setPage(bestPage), 60);
-
-      if (
-        allowedMaxPage &&
-        bestPage === allowedMaxPage &&
-        typeof onPreviewLimitReached === "function" &&
-        !previewLimitTriggeredRef.current
-      ) {
-        previewLimitTriggeredRef.current = true;
-        onPreviewLimitReached();
-      }
-
-      if (allowedMaxPage && bestPage < allowedMaxPage) {
-        previewLimitTriggeredRef.current = false;
-      }
-    }
-  }, [allowedMaxPage, numPages, onPreviewLimitReached]);
-
-  const scheduleComputePageFromScroll = useCallback(() => {
+  const scheduleFallbackCompute = useCallback(() => {
     if (scrollRafRef.current) return;
 
     scrollRafRef.current = requestAnimationFrame(() => {
@@ -471,7 +497,7 @@ const pageUpdateTimeoutRef = useRef(null);
   }, [computePageFromScroll]);
 
   /* ==================================================
-     INTERSECTION OBSERVER (kept)
+     INTERSECTION OBSERVER (authoritative)
      ================================================== */
   useEffect(() => {
     if (!ready) return;
@@ -484,8 +510,11 @@ const pageUpdateTimeoutRef = useRef(null);
 
     if (pageObserverRef.current) pageObserverRef.current.disconnect();
 
+    observerReadyRef.current = true;
+
     const observer = new IntersectionObserver(
       (entries) => {
+        // Pick most visible
         const visible = entries
           .filter((e) => e.isIntersecting)
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
@@ -494,22 +523,19 @@ const pageUpdateTimeoutRef = useRef(null);
         const current = Number(visible.target.getAttribute("data-page-number"));
         if (!Number.isFinite(current)) return;
 
-        if (!isProgrammaticNavRef.current) {
-          lastScrollComputedPageRef.current = current;
-          clearTimeout(pageUpdateTimeoutRef.current);
-          pageUpdateTimeoutRef.current = setTimeout(() => setPage(current), 40);
-        }
+        commitDetectedPage(current);
       },
       { root, rootMargin: "-10% 0px -55% 0px", threshold: [0.15, 0.35, 0.55] }
     );
 
     pageObserverRef.current = observer;
-    pages.forEach((p) => observer.observe(p));
+    pages.forEach((pEl) => observer.observe(pEl));
 
     return () => {
       observer.disconnect();
+      observerReadyRef.current = false;
     };
-  }, [ready, zoom, renderLimit]);
+  }, [ready, zoom, renderLimit, allowedMaxPage, numPages, commitDetectedPage]);
 
   /* ==================================================
      NOTES: LOAD
@@ -587,7 +613,10 @@ const pageUpdateTimeoutRef = useRef(null);
   useEffect(() => {
     function onKeyDown(e) {
       const tag = document.activeElement?.tagName?.toLowerCase();
-      const typing = tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable;
+      const typing =
+        tag === "input" ||
+        tag === "textarea" ||
+        document.activeElement?.isContentEditable;
 
       if (typing) return;
 
@@ -596,7 +625,9 @@ const pageUpdateTimeoutRef = useRef(null);
         safeSetPage(Math.max(1, page - 1));
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
-        safeSetPage(Math.min((allowedMaxPage ?? numPages) || 1, page + 1));
+        safeSetPage(
+          Math.min((allowedMaxPage ?? numPages) || 1, page + 1)
+        );
       } else if (e.key === "n" || e.key === "N") {
         e.preventDefault();
         setShowNotes((v) => !v);
@@ -621,7 +652,16 @@ const pageUpdateTimeoutRef = useRef(null);
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [page, numPages, allowedMaxPage, showNoteBox, showNotes, showPageJump, safeSetPage, openPageJump]);
+  }, [
+    page,
+    numPages,
+    allowedMaxPage,
+    showNoteBox,
+    showNotes,
+    showPageJump,
+    safeSetPage,
+    openPageJump,
+  ]);
 
   /* ==================================================
      Highlight capture
@@ -666,7 +706,10 @@ const pageUpdateTimeoutRef = useRef(null);
       setNoteContent("");
 
       setHighlightMeta({
-        id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+        id:
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : String(Date.now()),
         page: pageNumber,
         text,
         rects,
@@ -707,33 +750,45 @@ const pageUpdateTimeoutRef = useRef(null);
           scrollToPage(target, behavior);
           setTimeout(() => {
             isProgrammaticNavRef.current = false;
-            scheduleComputePageFromScroll();
+
+            // ✅ Let IO update naturally; fallback only if needed
+            clearTimeout(fallbackIdleTimerRef.current);
+            fallbackIdleTimerRef.current = setTimeout(() => {
+              if (!observerReadyRef.current) scheduleFallbackCompute();
+            }, 160);
           }, 350);
         }, 60);
       });
 
       return true;
     },
-    [allowedMaxPage, numPages, scrollToPage, scheduleComputePageFromScroll]
+    [allowedMaxPage, numPages, scrollToPage, scheduleFallbackCompute]
   );
-      useEffect(() => {
-        if (typeof onRegisterApi !== "function") return;
 
-        onRegisterApi({
-          jumpToPage,
-          getCurrentPage: () => page, // ✅ allows range-active highlighting in ToC
-        });
+  /* ==================================================
+     ✅ Stable API registration for parent Reader
+     ================================================== */
+  const jumpToPageRef = useRef(jumpToPage);
+  useEffect(() => {
+    jumpToPageRef.current = jumpToPage;
+  }, [jumpToPage]);
 
-        return () => {
-          try {
-            onRegisterApi(null);
-          } catch (err) {
-            console.warn("onRegisterApi(null) failed:", err);
-          }
-        };
-      }, [onRegisterApi, jumpToPage, page]);
+  useEffect(() => {
+    if (typeof onRegisterApi !== "function") return;
 
+    onRegisterApi({
+      jumpToPage: (p, behavior) => jumpToPageRef.current?.(p, behavior),
+      getCurrentPage: () => currentPageRef.current, // ✅ always current, no re-register needed
+    });
 
+    return () => {
+      try {
+        onRegisterApi(null);
+      } catch (err) {
+        console.warn("onRegisterApi(null) failed:", err);
+      }
+    };
+  }, [onRegisterApi]);
 
   const focusNote = useCallback(
     (noteId) => {
@@ -786,7 +841,13 @@ const pageUpdateTimeoutRef = useRef(null);
 
       for (const n of pageNotes) {
         if (n.charOffsetStart != null && n.charOffsetEnd != null) {
-          applyHighlightByOffsets(textLayer, n.charOffsetStart, n.charOffsetEnd, n.id, n.highlightColor || "yellow");
+          applyHighlightByOffsets(
+            textLayer,
+            n.charOffsetStart,
+            n.charOffsetEnd,
+            n.id,
+            n.highlightColor || "yellow"
+          );
         }
       }
 
@@ -798,8 +859,8 @@ const pageUpdateTimeoutRef = useRef(null);
   useEffect(() => {
     if (!ready) return;
 
-    const max = Math.min(renderLimit, allowedMaxPage ?? renderLimit);
-    for (let p = 1; p <= max; p++) applyHighlightsForPage(p);
+    const cap = Math.min(renderLimit, allowedMaxPage ?? renderLimit);
+    for (let p = 1; p <= cap; p++) applyHighlightsForPage(p);
   }, [ready, renderLimit, allowedMaxPage, applyHighlightsForPage]);
 
   const hasOverlapOnPage = useCallback(() => false, []);
@@ -863,7 +924,6 @@ const pageUpdateTimeoutRef = useRef(null);
           JSON.stringify(err?.response?.data) ||
           "Failed to save note. Please try again."
       );
-      // still close the modal to match your previous behavior
       resetNoteDraft();
     }
   }
@@ -880,13 +940,11 @@ const pageUpdateTimeoutRef = useRef(null);
       );
     }
 
-    // no finally (eslint), but always reset (same behavior)
     setEditingNoteId(null);
     setEditingContent("");
   }
 
   async function deleteNote(noteId) {
-
     const ok = confirm("Delete this note?");
     if (!ok) return;
 
@@ -930,6 +988,12 @@ const pageUpdateTimeoutRef = useRef(null);
   /* ==================================================
      Render
      ================================================== */
+  const effectiveRenderCap = useMemo(() => {
+    const cap = allowedMaxPage ?? numPages ?? null;
+    if (!cap) return renderLimit;
+    return Math.min(renderLimit, cap);
+  }, [allowedMaxPage, numPages, renderLimit]);
+
   return (
     <div className={`reader-shell ${darkMode ? "dark" : ""}`}>
       {/* Minimal “glass” top bar */}
@@ -997,8 +1061,13 @@ const pageUpdateTimeoutRef = useRef(null);
           onScroll={() => {
             if (!ready) return;
 
+            // Let IO lead; only do fallback compute after scroll settles briefly.
             if (!isProgrammaticNavRef.current) {
-              scheduleComputePageFromScroll();
+              clearTimeout(fallbackIdleTimerRef.current);
+              fallbackIdleTimerRef.current = setTimeout(() => {
+                // Fallback is useful if IO misses or during partial renders
+                scheduleFallbackCompute();
+              }, 140);
             }
 
             isUserScrollingRef.current = true;
@@ -1135,13 +1204,15 @@ const pageUpdateTimeoutRef = useRef(null);
                 scrollToPage(initial, "auto");
                 setTimeout(() => {
                   isProgrammaticNavRef.current = false;
-                  scheduleComputePageFromScroll();
+                  // allow IO to lead; fallback compute in case IO doesn't fire yet
+                  clearTimeout(fallbackIdleTimerRef.current);
+                  fallbackIdleTimerRef.current = setTimeout(() => scheduleFallbackCompute(), 160);
                 }, 250);
               }, 60);
             }}
           >
             {ready &&
-              Array.from({ length: renderLimit }, (_, i) => {
+              Array.from({ length: effectiveRenderCap }, (_, i) => {
                 const pageNumber = i + 1;
 
                 return (
@@ -1179,7 +1250,9 @@ const pageUpdateTimeoutRef = useRef(null);
                       }
                       onRenderTextLayerSuccess={() => {
                         applyHighlightsForPage(pageNumber);
-                        scheduleComputePageFromScroll();
+                        // keep a light fallback nudge for early render phases
+                        clearTimeout(fallbackIdleTimerRef.current);
+                        fallbackIdleTimerRef.current = setTimeout(() => scheduleFallbackCompute(), 120);
                       }}
                     />
                   </div>
@@ -1333,7 +1406,11 @@ const pageUpdateTimeoutRef = useRef(null);
                       if (el) noteRefs.current[note.id] = el;
                     }}
                   >
-                    <div className="note-meta" onClick={() => jumpToPage(note.pageNumber)} style={{ cursor: "pointer" }}>
+                    <div
+                      className="note-meta"
+                      onClick={() => jumpToPage(note.pageNumber)}
+                      style={{ cursor: "pointer" }}
+                    >
                       <span className={`note-color-dot ${note.highlightColor || "yellow"}`} />
                       Page {note.pageNumber ?? "—"}
                     </div>

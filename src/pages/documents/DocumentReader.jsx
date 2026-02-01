@@ -109,9 +109,7 @@ function collectAllNodeIds(nodes, depth = 0, out = new Set()) {
   return out;
 }
 
-
-//Helper
-
+// Helper
 function stripInlineMetaFromSummary(text) {
   const raw = String(text || "");
   if (!raw.trim()) return "";
@@ -314,7 +312,11 @@ export default function DocumentReader() {
   const mountedRef = useRef(false);
   const outlineAbortRef = useRef(null);
 
-  // drawer width (desktop) persisted per browser
+  // ✅ page sync fix: support event-driven updates if PdfViewer exposes them
+  const pageSyncUnsubRef = useRef(null);
+  const pageSyncTimerRef = useRef(null);
+  const lastPageEmitRef = useRef(0);
+
   const OUTLINE_WIDTH_KEY = "la_reader_outline_width";
   const OUTLINE_EXPANDED_KEY = useMemo(
     () => (Number.isFinite(docId) && docId > 0 ? `la_reader_outline_expanded_${docId}` : ""),
@@ -364,7 +366,6 @@ export default function DocumentReader() {
     localStorage.setItem(OFFSET_VERIFIED_KEY, offsetVerified ? "1" : "0");
   }, [OFFSET_VERIFIED_KEY, offsetVerified]);
 
-  // ✅ Always safe: outlineWidth always exists
   useEffect(() => {
     document.documentElement.style.setProperty("--reader-outline-width", `${outlineWidth}px`);
     return () => {
@@ -386,7 +387,6 @@ export default function DocumentReader() {
   const [sectionSummaryMeta, setSectionSummaryMeta] = useState(null);
   const lastSummaryKeyRef = useRef("");
 
-  // Remember last summary per document
   const SUMMARY_LAST_KEY = useMemo(
     () => (Number.isFinite(docId) && docId > 0 ? `la_reader_last_summary_${docId}` : ""),
     [docId]
@@ -443,11 +443,17 @@ export default function DocumentReader() {
     return () => {
       mountedRef.current = false;
       safeAbort(outlineAbortRef.current);
+      try {
+        pageSyncUnsubRef.current?.();
+      } catch {
+        // ignore
+      }
+      pageSyncUnsubRef.current = null;
+      if (pageSyncTimerRef.current) {
+        window.clearInterval(pageSyncTimerRef.current);
+        pageSyncTimerRef.current = null;
+      }
     };
-  }, []);
-
-  const handleRegisterApi = useCallback((apiObj) => {
-    viewerApiRef.current = apiObj;
   }, []);
 
   const openOutline = useCallback(() => setOutlineOpen(true), []);
@@ -456,6 +462,90 @@ export default function DocumentReader() {
   const openSummaryPanel = useCallback(() => setSummaryPanelOpen(true), []);
   const closeSummaryPanel = useCallback(() => setSummaryPanelOpen(false), []);
   const toggleSummaryExpanded = useCallback(() => setSummaryExpanded((p) => !p), []);
+
+  // ✅ page sync “source of truth”: emitActivePage()
+  const emitActivePage = useCallback((p) => {
+    const n = Number(p);
+    if (!Number.isFinite(n) || n <= 0) return;
+
+    // tiny throttle to avoid re-render storms while scrolling
+    const now = Date.now();
+    if (now - lastPageEmitRef.current < 60) return;
+    lastPageEmitRef.current = now;
+
+    setActivePage((prev) => (prev === n ? prev : n));
+  }, []);
+
+  // ✅ PdfViewer API bridge (also installs stronger page-change sync if supported)
+  const handleRegisterApi = useCallback(
+    (apiObj) => {
+      viewerApiRef.current = apiObj;
+
+      // cleanup previous listeners/timers
+      try {
+        pageSyncUnsubRef.current?.();
+      } catch {
+        // ignore
+      }
+      pageSyncUnsubRef.current = null;
+
+      if (pageSyncTimerRef.current) {
+        window.clearInterval(pageSyncTimerRef.current);
+        pageSyncTimerRef.current = null;
+      }
+
+      // 1) Prefer event-driven updates if PdfViewer exposes it.
+      // Supported shapes (we try all, safely):
+      // - apiObj.onPageChange((page)=>{}) -> returns unsubscribe
+      // - apiObj.subscribe("pagechange", (page)=>{}) -> returns unsubscribe
+      // - apiObj.subscribe({ type:"pagechange", handler }) -> returns unsubscribe
+      let unsub = null;
+
+      try {
+        if (typeof apiObj?.onPageChange === "function") {
+          const ret = apiObj.onPageChange((page) => emitActivePage(page));
+          if (typeof ret === "function") unsub = ret;
+        }
+      } catch {
+        // ignore
+      }
+
+      if (!unsub) {
+        try {
+          if (typeof apiObj?.subscribe === "function") {
+            const ret1 = apiObj.subscribe("pagechange", (page) => emitActivePage(page));
+            if (typeof ret1 === "function") unsub = ret1;
+
+            if (!unsub) {
+              const ret2 = apiObj.subscribe({ type: "pagechange", handler: (page) => emitActivePage(page) });
+              if (typeof ret2 === "function") unsub = ret2;
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (unsub) {
+        pageSyncUnsubRef.current = unsub;
+      }
+
+      // 2) Always keep a polling fallback (covers scroll cases where events are not emitted)
+      pageSyncTimerRef.current = window.setInterval(() => {
+        const page = viewerApiRef.current?.getCurrentPage?.();
+        emitActivePage(page);
+      }, 200);
+
+      // initial snapshot
+      try {
+        const page = apiObj?.getCurrentPage?.();
+        emitActivePage(page);
+      } catch {
+        // ignore
+      }
+    },
+    [emitActivePage]
+  );
 
   // Calibrate offset from ToC click
   const calibrateOffsetFromTocNode = useCallback(
@@ -502,9 +592,12 @@ export default function DocumentReader() {
       if (ok) {
         calibrateOffsetFromTocNode(node, p);
         setOutlineOpen(false);
+
+        // force UI page to update immediately after jump
+        emitActivePage(p);
       }
     },
-    [access, calibrateOffsetFromTocNode]
+    [access, calibrateOffsetFromTocNode, emitActivePage]
   );
 
   const toggleOutlineNode = useCallback((idStr) => {
@@ -516,7 +609,6 @@ export default function DocumentReader() {
     });
   }, []);
 
-  // ✅ Correct “all expanded” logic
   const allNodeIds = useMemo(() => collectAllNodeIds(outline), [outline]);
 
   const allExpanded = useMemo(() => {
@@ -527,12 +619,10 @@ export default function DocumentReader() {
     return true;
   }, [allNodeIds, outlineExpanded]);
 
-  // ✅ One button toggle all (expand/collapse)
   const toggleExpandCollapseAll = useCallback(() => {
     if (!outline?.length) return;
 
     setOutlineExpanded((prev) => {
-      // determine if currently all expanded
       let isAll = true;
       for (const idStr of allNodeIds) {
         if (!prev.has(idStr)) {
@@ -562,23 +652,9 @@ export default function DocumentReader() {
     }
   }, [OUTLINE_EXPANDED_KEY]);
 
-  // Persist width
   useEffect(() => {
     localStorage.setItem(OUTLINE_WIDTH_KEY, String(outlineWidth));
   }, [outlineWidth]);
-
-  // Active page tracking
-  useEffect(() => {
-    const t = window.setInterval(() => {
-      const p = viewerApiRef.current?.getCurrentPage?.();
-      const n = Number(p);
-      if (Number.isFinite(n) && n > 0) {
-        setActivePage((prev) => (prev === n ? prev : n));
-      }
-    }, 400);
-
-    return () => window.clearInterval(t);
-  }, []);
 
   // Resizable drawer drag
   const draggingRef = useRef(false);
@@ -912,7 +988,6 @@ export default function DocumentReader() {
 
       setSectionSummaryText(stripInlineMetaFromSummary(summary));
 
-
       const fromCache = data?.fromCache ?? data?.FromCache ?? false;
       const usedStart = data?.startPage ?? data?.StartPage ?? null;
       const usedEnd = data?.endPage ?? data?.EndPage ?? null;
@@ -983,13 +1058,13 @@ export default function DocumentReader() {
     [applySummaryResponse, buildSummaryPayloadFromNode, selectedTocNode, sectionSummaryLoading]
   );
 
-  // ✅ Copy should match what the panel displays (Overview etc.)
   const onCopySummary = useCallback(async () => {
     if (!sectionSummaryText) return;
 
-    const textToCopy = typeof formatAiSummaryForCopy === "function"
-      ? formatAiSummaryForCopy(sectionSummaryText)
-      : sectionSummaryText;
+    const textToCopy =
+      typeof formatAiSummaryForCopy === "function"
+        ? formatAiSummaryForCopy(sectionSummaryText)
+        : sectionSummaryText;
 
     const ok = await safeCopyToClipboard(textToCopy);
     if (ok) showToast("Copied ✅", "success");
@@ -1080,7 +1155,13 @@ export default function DocumentReader() {
     }
 
     if (!Number.isFinite(startPdf) || startPdf <= 0 || !Number.isFinite(endPdf) || endPdf <= 0) {
-      return { ok: false, label: labelPrefix, clampNote: "Computed PDF pages are invalid.", startPdf: null, endPdf: null };
+      return {
+        ok: false,
+        label: labelPrefix,
+        clampNote: "Computed PDF pages are invalid.",
+        startPdf: null,
+        endPdf: null,
+      };
     }
 
     const endPreviewClamped = clampToPreview(endPdf);
@@ -1259,11 +1340,13 @@ export default function DocumentReader() {
 
   const maxPages = access.hasFullAccess ? null : access.previewMaxPages;
 
+  const pageLabel = Number.isFinite(activePage) && activePage > 0 ? `Page ${activePage}` : "—";
+
   return (
     <div className="reader-layout" onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp}>
       {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
 
-      {/* ✅ Summary Panel (no logo prop) */}
+      {/* ✅ Summary Panel */}
       <SectionSummaryPanel
         open={summaryPanelOpen}
         title={selectedTocNode ? nodeTitle(selectedTocNode, "") : "Selected section"}
@@ -1280,25 +1363,38 @@ export default function DocumentReader() {
         onSwitchType={onSwitchSummaryType}
       />
 
-      {/* Mobile topbar */}
+      {/* Topbar (premium-ish layout; CSS later) */}
       <div className="readerpage-topbar">
-        <button className="readerpage-tocbtn" type="button" onClick={openOutline} title="Table of Contents">
-          ☰ ToC
-        </button>
+        <div className="readerTopbarLeft">
+          <button className="readerpage-tocbtn" type="button" onClick={openOutline} title="Table of Contents">
+            ☰ ToC
+          </button>
 
-        <div className="readerpage-title" title={`Document ${docId}`}>
-          Reader
+          <div className="readerTopbarMeta" title={`Document ${docId}`}>
+            <div className="readerpage-title">Reader</div>
+            <div className="readerTopbarSub">
+              <span className="readerTopbarPage">{pageLabel}</span>
+              {!access?.hasFullAccess && Number.isFinite(access?.previewMaxPages) ? (
+                <span className="readerTopbarSep">·</span>
+              ) : null}
+              {!access?.hasFullAccess && Number.isFinite(access?.previewMaxPages) ? (
+                <span className="readerTopbarPreview">Preview up to {access.previewMaxPages}</span>
+              ) : null}
+            </div>
+          </div>
         </div>
 
-        <button
-          className="readerpage-aiBtn"
-          type="button"
-          onClick={openSummaryPanel}
-          disabled={!sectionSummaryText}
-          title={sectionSummaryText ? "Open Summary" : "Generate a summary first (ToC → Basic/Extended)"}
-        >
-          Summary
-        </button>
+        <div className="readerTopbarRight">
+          <button
+            className="readerpage-aiBtn"
+            type="button"
+            onClick={openSummaryPanel}
+            disabled={!sectionSummaryText}
+            title={sectionSummaryText ? "Open Summary" : "Generate a summary first (ToC → Basic/Extended)"}
+          >
+            Summary
+          </button>
+        </div>
       </div>
 
       {/* Backdrop (mobile) */}
@@ -1309,7 +1405,7 @@ export default function DocumentReader() {
         <div className="readerpage-tocHeader">
           <div className="readerpage-tocTitle">Table of Contents</div>
 
-          {/* ✅ Compact header actions: icon toggle + Summary */}
+          {/* ✅ Compact header actions: icon toggle + Summary (no wrap) */}
           <div className="readerOutlineHeaderActions">
             <button
               className="readerOutlineIconBtn"
@@ -1322,7 +1418,7 @@ export default function DocumentReader() {
             </button>
 
             <button
-              className="readerOutlineMiniBtn laAccent"
+              className="readerOutlineMiniBtn laAccent readerOutlineSummaryBtn"
               type="button"
               onClick={openSummaryPanel}
               disabled={!sectionSummaryText}
@@ -1431,89 +1527,85 @@ export default function DocumentReader() {
             </div>
           )}
 
-{/* ✅ AI summary (controls only — no used-pages / no raw text preview) */}
-<div className="laInlineTocSummary">
-  <div className="laInlineTocSummaryTop">
-    <div className="laInlineTocSummaryTitle">AI · Section summary</div>
+          {/* ✅ AI summary (controls only — no used-pages / no raw text preview) */}
+          <div className="laInlineTocSummary">
+            <div className="laInlineTocSummaryTop">
+              <div className="laInlineTocSummaryTitle">AI · Section summary</div>
 
-    <div className="laInlineTocSummaryTopActions">
-      <button
-        type="button"
-        className="readerOutlineMiniBtn"
-        disabled={!sectionSummaryText || sectionSummaryLoading}
-        onClick={onCopySummary}
-        title="Copy summary"
-      >
-        Copy
-      </button>
+              <div className="laInlineTocSummaryTopActions">
+                <button
+                  type="button"
+                  className="readerOutlineMiniBtn"
+                  disabled={!sectionSummaryText || sectionSummaryLoading}
+                  onClick={onCopySummary}
+                  title="Copy summary"
+                >
+                  Copy
+                </button>
 
-      <button
-        type="button"
-        className="readerOutlineMiniBtn laAccent"
-        disabled={!sectionSummaryText}
-        onClick={openSummaryPanel}
-        title={sectionSummaryText ? "Open summary panel" : "Generate a summary first"}
-      >
-        Open
-      </button>
-    </div>
-  </div>
+                <button
+                  type="button"
+                  className="readerOutlineMiniBtn laAccent"
+                  disabled={!sectionSummaryText}
+                  onClick={openSummaryPanel}
+                  title={sectionSummaryText ? "Open summary panel" : "Generate a summary first"}
+                >
+                  Open
+                </button>
+              </div>
+            </div>
 
-  <div className="laInlineTocSummaryInfo">
-    {selectedTocNode ? (
-      <>
-        <div className="laInlineTocSummarySection">{nodeTitle(selectedTocNode)}</div>
-        <div className="laInlineTocSummaryPages">
-          Pages: {nodeRightLabel(selectedTocNode) || "—"}
-        </div>
-      </>
-    ) : (
-      <div className="laInlineMuted">Select a ToC section, then choose Basic or Extended.</div>
-    )}
-  </div>
+            <div className="laInlineTocSummaryInfo">
+              {selectedTocNode ? (
+                <>
+                  <div className="laInlineTocSummarySection">{nodeTitle(selectedTocNode)}</div>
+                  <div className="laInlineTocSummaryPages">Pages: {nodeRightLabel(selectedTocNode) || "—"}</div>
+                </>
+              ) : (
+                <div className="laInlineMuted">Select a ToC section, then choose Basic or Extended.</div>
+              )}
+            </div>
 
-  <div className="laInlineTocSummaryBtns">
-    <button
-      type="button"
-      className="outline-btn"
-      disabled={!selectedTocNode || sectionSummaryLoading}
-      onClick={() => runSectionSummary("basic", { force: false, openPanel: false })}
-      title="Generate basic summary"
-    >
-      {sectionSummaryLoading && sectionSummaryType === "basic" ? "Basic…" : "Basic"}
-    </button>
+            <div className="laInlineTocSummaryBtns">
+              <button
+                type="button"
+                className="outline-btn"
+                disabled={!selectedTocNode || sectionSummaryLoading}
+                onClick={() => runSectionSummary("basic", { force: false, openPanel: false })}
+                title="Generate basic summary"
+              >
+                {sectionSummaryLoading && sectionSummaryType === "basic" ? "Basic…" : "Basic"}
+              </button>
 
-    <button
-      type="button"
-      className="outline-btn"
-      disabled={!selectedTocNode || sectionSummaryLoading}
-      onClick={() => runSectionSummary("extended", { force: false, openPanel: false })}
-      title="Generate extended summary"
-    >
-      {sectionSummaryLoading && sectionSummaryType === "extended" ? "Extended…" : "Extended"}
-    </button>
+              <button
+                type="button"
+                className="outline-btn"
+                disabled={!selectedTocNode || sectionSummaryLoading}
+                onClick={() => runSectionSummary("extended", { force: false, openPanel: false })}
+                title="Generate extended summary"
+              >
+                {sectionSummaryLoading && sectionSummaryType === "extended" ? "Extended…" : "Extended"}
+              </button>
 
-    <button
-      type="button"
-      className="outline-btn laPrimary"
-      disabled={!selectedTocNode || sectionSummaryLoading}
-      onClick={() => runSectionSummary(sectionSummaryType, { force: true, openPanel: true })}
-      title="Regenerate (force)"
-    >
-      {sectionSummaryLoading ? "Working…" : "Regenerate"}
-    </button>
-  </div>
+              <button
+                type="button"
+                className="outline-btn laPrimary"
+                disabled={!selectedTocNode || sectionSummaryLoading}
+                onClick={() => runSectionSummary(sectionSummaryType, { force: true, openPanel: true })}
+                title="Regenerate (force)"
+              >
+                {sectionSummaryLoading ? "Working…" : "Regenerate"}
+              </button>
+            </div>
 
-  {sectionSummaryError ? <div className="laInlineError">{sectionSummaryError}</div> : null}
+            {sectionSummaryError ? <div className="laInlineError">{sectionSummaryError}</div> : null}
 
-  {/* ✅ Optional: a tiny status line (no big text dump) */}
-  {sectionSummaryText ? (
-    <div className="laInlineMuted" style={{ marginTop: 8 }}>
-      Summary ready. Click <strong>Open</strong> to view.
-    </div>
-  ) : null}
-</div>
-
+            {sectionSummaryText ? (
+              <div className="laInlineMuted" style={{ marginTop: 8 }}>
+                Summary ready. Click <strong>Open</strong> to view.
+              </div>
+            ) : null}
+          </div>
 
           {/* Advanced manual */}
           <div className="laInlineAdvanced">
