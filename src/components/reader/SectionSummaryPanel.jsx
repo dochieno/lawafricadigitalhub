@@ -1,6 +1,6 @@
 // src/components/reader/SectionSummaryPanel.jsx
 import { useEffect, useMemo } from "react";
-import { parseAiSummary } from "../../reader/parseAiSummary";
+import { parseAiSummary } from "../../reader/ai/parseAiSummary";
 
 export default function SectionSummaryPanel({
   open,
