@@ -140,15 +140,7 @@ function filterOutlineTree(nodes, query) {
 /** =========================================================
  * OUTLINE TREE (range-active)
  * ========================================================= */
-function OutlineTree({
-  nodes,
-  depth = 0,
-  expanded,
-  activePage,
-  pdfPageOffset,
-  onToggle,
-  onPick,
-}) {
+function OutlineTree({ nodes, depth = 0, expanded, activePage, pdfPageOffset, onToggle, onPick }) {
   const arr = Array.isArray(nodes) ? nodes : [];
 
   return (
@@ -167,7 +159,7 @@ function OutlineTree({
         const endRaw = nodeEndPage(n);
 
         // ✅ Assumption: PDF page = printed page + offset
-        const startPdf = startRaw != null ? startRaw + pdfPageOffset : null;
+        const startPdf = startRaw !=null ? startRaw + pdfPageOffset : null;
         const endPdf = endRaw != null ? endRaw + pdfPageOffset : null;
 
         // Click target: prefer start page
@@ -296,10 +288,45 @@ export default function DocumentReader() {
     return 340;
   });
 
-  // ✅ ASSUMPTION for now (you said offset is ~40)
-  const [pdfPageOffset] = useState(0);
+  // =========================================================
+  // ✅ V2: per-document PDF offset calibration (stored in localStorage)
+  // - printed page -> PDF page conversion uses: pdf = printed + offset
+  // =========================================================
+  const OFFSET_KEY = useMemo(
+    () => (Number.isFinite(docId) && docId > 0 ? `la_reader_pdf_offset_${docId}` : ""),
+    [docId]
+  );
+  const OFFSET_VERIFIED_KEY = useMemo(
+    () => (Number.isFinite(docId) && docId > 0 ? `la_reader_pdf_offset_verified_${docId}` : ""),
+    [docId]
+  );
 
-  // ✅ Step 3 additions: selected node + AI summary state
+  const [pdfPageOffset, setPdfPageOffset] = useState(0);
+  const [offsetVerified, setOffsetVerified] = useState(false);
+
+  // Load offset per doc
+  useEffect(() => {
+    if (!OFFSET_KEY) return;
+    const raw = localStorage.getItem(OFFSET_KEY);
+    const n = Number(raw);
+    setPdfPageOffset(Number.isFinite(n) ? n : 0);
+
+    const vraw = localStorage.getItem(OFFSET_VERIFIED_KEY);
+    setOffsetVerified(vraw === "1");
+  }, [OFFSET_KEY, OFFSET_VERIFIED_KEY]);
+
+  // Persist offset
+  useEffect(() => {
+    if (!OFFSET_KEY) return;
+    localStorage.setItem(OFFSET_KEY, String(pdfPageOffset));
+  }, [OFFSET_KEY, pdfPageOffset]);
+
+  useEffect(() => {
+    if (!OFFSET_VERIFIED_KEY) return;
+    localStorage.setItem(OFFSET_VERIFIED_KEY, offsetVerified ? "1" : "0");
+  }, [OFFSET_VERIFIED_KEY, offsetVerified]);
+
+  // ✅ Selected node + AI summary state
   const [selectedTocNode, setSelectedTocNode] = useState(null);
   const [sectionSummaryType, setSectionSummaryType] = useState("basic"); // "basic" | "extended"
   const [sectionSummaryLoading, setSectionSummaryLoading] = useState(false);
@@ -307,6 +334,18 @@ export default function DocumentReader() {
   const [sectionSummaryText, setSectionSummaryText] = useState("");
   const [sectionSummaryMeta, setSectionSummaryMeta] = useState(null);
   const lastSummaryKeyRef = useRef("");
+
+  // =========================================================
+  // ✅ V2: Advanced manual page summary (Printed or PDF mode)
+  // =========================================================
+  const [advancedEnabled, setAdvancedEnabled] = useState(false);
+  const [pageMode, setPageMode] = useState("printed"); // "printed" | "pdf"
+  const [manualStart, setManualStart] = useState("");
+  const [manualEnd, setManualEnd] = useState("");
+
+  // Span clamps (client-side; backend also clamps)
+  const BASIC_MAX_SPAN = 6;
+  const EXTENDED_MAX_SPAN = 12;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -322,6 +361,29 @@ export default function DocumentReader() {
 
   const openOutline = useCallback(() => setOutlineOpen(true), []);
   const closeOutline = useCallback(() => setOutlineOpen(false), []);
+
+  // ✅ Calibrate offset from a ToC click:
+  // offset = (pdfPage we jump to) - (printed start page from ToC)
+  const calibrateOffsetFromTocNode = useCallback(
+    (node, pdfPage) => {
+      const printedStart = nodeStartPage(node);
+      const pdf = Number(pdfPage);
+      if (!Number.isFinite(pdf) || pdf <= 0) return;
+
+      if (!Number.isFinite(printedStart) || !printedStart || printedStart <= 0) {
+        showToast("Cannot calibrate: this ToC item has no printed start page.", "error");
+        return;
+      }
+
+      const nextOffset = pdf - printedStart;
+      if (!Number.isFinite(nextOffset)) return;
+
+      setPdfPageOffset(nextOffset);
+      setOffsetVerified(true);
+      showToast(`Offset calibrated: ${nextOffset >= 0 ? `+${nextOffset}` : nextOffset}`, "success");
+    },
+    [setPdfPageOffset, setOffsetVerified]
+  );
 
   // ✅ Preview clamp + jump (also sets selected node now)
   const onOutlineClick = useCallback(
@@ -343,10 +405,15 @@ export default function DocumentReader() {
         }
       }
 
+      // Jump
       const ok = viewerApiRef.current?.jumpToPage?.(p, "smooth");
-      if (ok) setOutlineOpen(false);
+      if (ok) {
+        // ✅ Calibrate offset from this click (safe + per document)
+        calibrateOffsetFromTocNode(node, p);
+        setOutlineOpen(false);
+      }
     },
-    [access]
+    [access, calibrateOffsetFromTocNode]
   );
 
   const toggleOutlineNode = useCallback((idStr) => {
@@ -479,11 +546,18 @@ export default function DocumentReader() {
     setOutlineQuery("");
     setActivePage(null);
 
-    // Step 3: reset summary state when doc changes
+    // reset summary state when doc changes
     setSelectedTocNode(null);
     setSectionSummaryError("");
     setSectionSummaryText("");
+    setSectionSummaryMeta(null);
     lastSummaryKeyRef.current = "";
+
+    // reset advanced UI
+    setAdvancedEnabled(false);
+    setPageMode("printed");
+    setManualStart("");
+    setManualEnd("");
 
     fetchOutline();
   }, [docId, fetchOutline]);
@@ -589,7 +663,6 @@ export default function DocumentReader() {
             }
 
             if (accessData?.hasFullAccess) setLocked(false);
-
             if (justPaid) setJustPaid(false);
 
             return;
@@ -603,7 +676,6 @@ export default function DocumentReader() {
             }
 
             if (attempt >= maxAttempts) throw err;
-
             await sleep(delays[Math.min(attempt - 1, delays.length - 1)]);
           }
         }
@@ -675,12 +747,27 @@ export default function DocumentReader() {
   }, [docId, justPaid, paidProvider]);
 
   // =========================================================
-  // ✅ Step 3: AI Summary actions (Basic/Extended + Copy)
+  // ✅ AI Summary actions (ToC -> payload)
+  // - Preferred: send TocEntryId-only (backend can resolve pages if you implement it)
+  // - Fallback: send explicit start/end (uses calibrated offset)
   // =========================================================
   const buildSummaryPayloadFromNode = useCallback(
     (node, type) => {
       if (!node) return null;
 
+      const tocEntryId = node?.id ?? node?.Id ?? null;
+
+      // Preferred: just send TocEntryId
+      if (tocEntryId) {
+        return {
+          tocEntryId,
+          legalDocumentId: docId,
+          type,
+          sectionTitle: nodeTitle(node, ""),
+        };
+      }
+
+      // Fallback: explicit pages if tocEntryId missing
       const startRaw = nodeStartPage(node);
       if (!startRaw) return null;
 
@@ -689,14 +776,13 @@ export default function DocumentReader() {
       const startPdf = startRaw + pdfPageOffset;
       const endPdf = endRaw + pdfPageOffset;
 
-      // If preview, clamp end
       const endClamped =
         !access?.hasFullAccess && Number.isFinite(access?.previewMaxPages)
           ? Math.min(endPdf, access.previewMaxPages)
           : endPdf;
 
       return {
-        tocEntryId: node?.id ?? node?.Id ?? null,
+        tocEntryId: null,
         legalDocumentId: docId,
         type,
         startPage: startPdf,
@@ -707,78 +793,76 @@ export default function DocumentReader() {
     [access, docId, pdfPageOffset]
   );
 
-const runSectionSummary = useCallback(
-  async (type) => {
-    setSectionSummaryError("");
-    setSectionSummaryText("");
-    setSectionSummaryMeta(null);
-    setSectionSummaryType(type);
+  const runSectionSummary = useCallback(
+    async (type) => {
+      setSectionSummaryError("");
+      setSectionSummaryText("");
+      setSectionSummaryMeta(null);
+      setSectionSummaryType(type);
 
-    if (!selectedTocNode) {
-      setSectionSummaryError("Select a section from the ToC first.");
-      return;
-    }
-
-    const payload = buildSummaryPayloadFromNode(selectedTocNode, type);
-    if (!payload) {
-      setSectionSummaryError("This ToC section has no page mapping.");
-      return;
-    }
-
-    // Avoid accidental double-hit if user clicks same button quickly
-    const key = `${payload.legalDocumentId}|${payload.tocEntryId ?? ""}|${payload.type}|${payload.startPage}-${payload.endPage}`;
-    if (sectionSummaryLoading && lastSummaryKeyRef.current === key) return;
-    lastSummaryKeyRef.current = key;
-
-    setSectionSummaryLoading(true);
-    try {
-      const res = await api.post(AI_SECTION_SUMMARY_ENDPOINT, payload);
-      const data = res?.data || {};
-
-      const summary = data?.summary ?? data?.Summary ?? "";
-      if (!summary) {
-        setSectionSummaryError("No summary returned.");
+      if (!selectedTocNode) {
+        setSectionSummaryError("Select a section from the ToC first.");
         return;
       }
 
-      setSectionSummaryText(String(summary));
+      const payload = buildSummaryPayloadFromNode(selectedTocNode, type);
+      if (!payload) {
+        setSectionSummaryError("This ToC section has no usable mapping.");
+        return;
+      }
 
-      // ✅ capture metadata for testing: cache, clamp, char counts, warnings
-      const fromCache = data?.fromCache ?? data?.FromCache ?? false;
+      const key = `${payload.legalDocumentId}|${payload.tocEntryId ?? ""}|${payload.type}|${payload.startPage ?? ""}-${payload.endPage ?? ""}`;
+      if (sectionSummaryLoading && lastSummaryKeyRef.current === key) return;
+      lastSummaryKeyRef.current = key;
 
-      const usedStart = data?.startPage ?? data?.StartPage ?? null;
-      const usedEnd = data?.endPage ?? data?.EndPage ?? null;
+      setSectionSummaryLoading(true);
 
-      const inputCharCount = data?.inputCharCount ?? data?.InputCharCount ?? 0;
+      try {
+        const res = await api.post(AI_SECTION_SUMMARY_ENDPOINT, payload);
+        const data = res?.data || {};
 
-      const warnings = data?.warnings ?? data?.Warnings ?? [];
-      const warningsArr = Array.isArray(warnings) ? warnings : [];
+        const summary = data?.summary ?? data?.Summary ?? "";
+        if (!summary) {
+          setSectionSummaryError("No summary returned.");
+          return;
+        }
 
-      setSectionSummaryMeta({
-        fromCache,
-        usedPages:
-          usedStart != null || usedEnd != null
-            ? `${usedStart ?? "?"}-${usedEnd ?? "?"}`
-            : `${payload.startPage}-${payload.endPage}`,
-        inputCharCount: Number(inputCharCount) || 0,
-        warnings: warningsArr.map((w) => String(w)),
-      });
+        setSectionSummaryText(String(summary));
 
-      showToast(fromCache ? "Loaded from cache" : "Summary generated", "success");
-    } catch (err) {
-      console.error("Section summary failed:", err);
-      const msg =
-        err?.response?.data?.message ||
-        err?.response?.data?.error ||
-        "Failed to summarize section. (Check endpoint route + auth)";
-      setSectionSummaryError(msg);
-    } finally {
-      setSectionSummaryLoading(false);
-    }
-  },
-  [buildSummaryPayloadFromNode, selectedTocNode, sectionSummaryLoading]
-);
+        const fromCache = data?.fromCache ?? data?.FromCache ?? false;
+        const usedStart = data?.startPage ?? data?.StartPage ?? null;
+        const usedEnd = data?.endPage ?? data?.EndPage ?? null;
+        const inputCharCount = data?.inputCharCount ?? data?.InputCharCount ?? 0;
 
+        const warnings = data?.warnings ?? data?.Warnings ?? [];
+        const warningsArr = Array.isArray(warnings) ? warnings : [];
+
+        setSectionSummaryMeta({
+          fromCache,
+          usedPages:
+            usedStart != null || usedEnd != null
+              ? `${usedStart ?? "?"}-${usedEnd ?? "?"}`
+              : payload.startPage != null || payload.endPage != null
+              ? `${payload.startPage ?? "?"}-${payload.endPage ?? "?"}`
+              : "—",
+          inputCharCount: Number(inputCharCount) || 0,
+          warnings: warningsArr.map((w) => String(w)),
+        });
+
+        showToast(fromCache ? "Loaded from cache" : "Summary generated", "success");
+      } catch (err) {
+        console.error("Section summary failed:", err);
+        const msg =
+          err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          "Failed to summarize section. (Check endpoint route + auth)";
+        setSectionSummaryError(String(msg));
+      } finally {
+        setSectionSummaryLoading(false);
+      }
+    },
+    [buildSummaryPayloadFromNode, selectedTocNode, sectionSummaryLoading]
+  );
 
   const onCopySummary = useCallback(async () => {
     if (!sectionSummaryText) return;
@@ -786,6 +870,191 @@ const runSectionSummary = useCallback(
     if (ok) showToast("Copied ✅", "success");
     else showToast("Copy failed (browser blocked clipboard)", "error");
   }, [sectionSummaryText]);
+
+  // =========================================================
+  // ✅ V2: Manual range → compute effective PDF pages + run summary
+  // =========================================================
+  function parsePositiveInt(raw) {
+    const n = Number(String(raw || "").trim());
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+  }
+
+  function normalizeRange(a, b) {
+    if (a == null || b == null) return null;
+    let start = a;
+    let end = b;
+    if (end < start) [start, end] = [end, start];
+    return { start, end };
+  }
+
+  function clampSpan(startPdf, endPdf, type) {
+    const maxSpan = type === "extended" ? EXTENDED_MAX_SPAN : BASIC_MAX_SPAN;
+    const span = endPdf - startPdf + 1;
+    if (span <= maxSpan) return { startPdf, endPdf, clamped: false, note: "" };
+    const nextEnd = startPdf + maxSpan - 1;
+    return {
+      startPdf,
+      endPdf: nextEnd,
+      clamped: true,
+      note: `Range too large (${span} pages). Clamped to ${maxSpan} pages.`,
+    };
+  }
+
+const effectiveManual = useMemo(() => {
+  function clampToPreview(endPdf) {
+    if (!access?.hasFullAccess && Number.isFinite(access?.previewMaxPages)) {
+      return Math.min(endPdf, access.previewMaxPages);
+    }
+    return endPdf;
+  }
+
+  const a = parsePositiveInt(manualStart);
+  const b = parsePositiveInt(manualEnd);
+  const nr = normalizeRange(a, b);
+  if (!nr) {
+    return {
+      ok: false,
+      label: "—",
+      clampNote: "",
+      startPdf: null,
+      endPdf: null,
+    };
+  }
+
+  let startPdf;
+  let endPdf;
+  let labelPrefix;
+
+  if (pageMode === "printed") {
+    if (!offsetVerified) {
+      return {
+        ok: false,
+        label: `Printed ${nr.start}–${nr.end} (offset not verified)`,
+        clampNote: "Offset not confirmed. Click a ToC item to calibrate.",
+        startPdf: null,
+        endPdf: null,
+      };
+    }
+
+    startPdf = nr.start + pdfPageOffset;
+    endPdf = nr.end + pdfPageOffset;
+    labelPrefix = `Printed ${nr.start}–${nr.end} → PDF ${startPdf}–${endPdf}`;
+  } else {
+    startPdf = nr.start;
+    endPdf = nr.end;
+    labelPrefix = `PDF ${startPdf}–${endPdf}`;
+  }
+
+  if (!Number.isFinite(startPdf) || startPdf <= 0 || !Number.isFinite(endPdf) || endPdf <= 0) {
+    return {
+      ok: false,
+      label: labelPrefix,
+      clampNote: "Computed PDF pages are invalid.",
+      startPdf: null,
+      endPdf: null,
+    };
+  }
+
+  const endPreviewClamped = clampToPreview(endPdf);
+  const previewNote =
+    endPreviewClamped !== endPdf
+      ? `Clamped to preview max page ${access?.previewMaxPages}.`
+      : "";
+
+  return {
+    ok: true,
+    label: labelPrefix,
+    clampNote: previewNote,
+    startPdf,
+    endPdf: endPreviewClamped,
+  };
+}, [manualStart, manualEnd, pageMode, offsetVerified, pdfPageOffset, access]);
+
+
+  const runManualSectionSummary = useCallback(
+    async (type) => {
+      setSectionSummaryError("");
+      setSectionSummaryText("");
+      setSectionSummaryMeta(null);
+      setSectionSummaryType(type);
+
+      if (!effectiveManual.ok || effectiveManual.startPdf == null || effectiveManual.endPdf == null) {
+        setSectionSummaryError("Enter a valid page range first.");
+        return;
+      }
+
+      const spanClamped = clampSpan(effectiveManual.startPdf, effectiveManual.endPdf, type);
+
+      const payload = {
+        tocEntryId: null,
+        legalDocumentId: docId,
+        type,
+        startPage: spanClamped.startPdf,
+        endPage: spanClamped.endPdf,
+        sectionTitle: pageMode === "printed" ? "Manual range (printed pages)" : "Manual range (PDF pages)",
+      };
+
+      const key = `${payload.legalDocumentId}|manual|${payload.type}|${payload.startPage}-${payload.endPage}`;
+      if (sectionSummaryLoading && lastSummaryKeyRef.current === key) return;
+      lastSummaryKeyRef.current = key;
+
+      setSectionSummaryLoading(true);
+
+      try {
+        const res = await api.post(AI_SECTION_SUMMARY_ENDPOINT, payload);
+        const data = res?.data || {};
+
+        const summary = data?.summary ?? data?.Summary ?? "";
+        if (!summary) {
+          setSectionSummaryError("No summary returned.");
+          return;
+        }
+
+        setSectionSummaryText(String(summary));
+
+        const fromCache = data?.fromCache ?? data?.FromCache ?? false;
+        const usedStart = data?.startPage ?? data?.StartPage ?? null;
+        const usedEnd = data?.endPage ?? data?.EndPage ?? null;
+        const inputCharCount = data?.inputCharCount ?? data?.InputCharCount ?? 0;
+
+        const warnings = data?.warnings ?? data?.Warnings ?? [];
+        const warningsArr = Array.isArray(warnings) ? warnings : [];
+
+        const localNotes = [];
+        if (spanClamped.clamped && spanClamped.note) localNotes.push(spanClamped.note);
+        if (effectiveManual.clampNote) localNotes.push(effectiveManual.clampNote);
+
+        setSectionSummaryMeta({
+          fromCache,
+          usedPages:
+            usedStart != null || usedEnd != null
+              ? `${usedStart ?? "?"}-${usedEnd ?? "?"}`
+              : `${payload.startPage}-${payload.endPage}`,
+          inputCharCount: Number(inputCharCount) || 0,
+          warnings: [...localNotes, ...warningsArr.map((w) => String(w))],
+        });
+
+        showToast(fromCache ? "Loaded from cache" : "Summary generated", "success");
+      } catch (err) {
+        console.error("Manual section summary failed:", err);
+        const msg =
+          err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          "Failed to summarize manual range. (Check endpoint route + auth)";
+        setSectionSummaryError(String(msg));
+      } finally {
+        setSectionSummaryLoading(false);
+      }
+    },
+    [docId, pageMode, sectionSummaryLoading, effectiveManual]
+  );
+
+  const canRunManual =
+    advancedEnabled &&
+    effectiveManual.ok &&
+    effectiveManual.startPdf != null &&
+    effectiveManual.endPdf != null &&
+    (pageMode !== "printed" || offsetVerified);
 
   // ✅ Gate UI only on access
   if (loadingAccess) {
@@ -942,6 +1211,43 @@ const runSectionSummary = useCallback(
         </div>
 
         <div className="readerpage-tocBody">
+          {/* Offset status */}
+          <div
+            style={{
+              marginBottom: 10,
+              padding: 10,
+              borderRadius: 10,
+              border: "1px solid rgba(15, 23, 42, 0.10)",
+              background: "rgba(255,255,255,0.6)",
+              fontSize: 12,
+              lineHeight: 1.35,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+              <div>
+                <strong>PDF offset:</strong>{" "}
+                <span>
+                  {pdfPageOffset >= 0 ? `+${pdfPageOffset}` : pdfPageOffset} {offsetVerified ? "✅" : "⚠️"}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="readerOutlineMiniBtn"
+                onClick={() => {
+                  setPdfPageOffset(0);
+                  setOffsetVerified(false);
+                  showToast("Offset reset to 0 (not verified)", "success");
+                }}
+                title="Reset offset"
+              >
+                Reset
+              </button>
+            </div>
+            <div style={{ marginTop: 6, opacity: 0.8 }}>
+              Tip: Click a ToC item to calibrate automatically. (We compute offset = PDF page − printed start page.)
+            </div>
+          </div>
+
           <div className="readerOutlineSearchWrap">
             <input
               className="readerOutlineSearch"
@@ -1008,127 +1314,252 @@ const runSectionSummary = useCallback(
             </div>
           )}
 
-{/* =========================================================
-    ✅ Step 3: Minimal AI Summary box (Basic / Extended / Copy)
-    - no heavy UI
-    - only works when a ToC item is selected
-    - now shows backend meta (warnings + char count) so we can test indexing/extraction
-========================================================= */}
-<div
-  style={{
-    marginTop: 12,
-    paddingTop: 10,
-    borderTop: "1px solid rgba(15, 23, 42, 0.12)",
-  }}
->
-  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-    <div style={{ fontWeight: 700, fontSize: 13 }}>AI · Section summary</div>
+          {/* =========================================================
+              ✅ Minimal AI Summary box (Basic / Extended / Copy)
+          ========================================================= */}
+          <div
+            style={{
+              marginTop: 12,
+              paddingTop: 10,
+              borderTop: "1px solid rgba(15, 23, 42, 0.12)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>AI · Section summary</div>
 
-    <button
-      type="button"
-      className="readerOutlineMiniBtn"
-      disabled={!selectedTocNode || !sectionSummaryText}
-      onClick={onCopySummary}
-      title="Copy summary"
-    >
-      Copy
-    </button>
-  </div>
+              <button
+                type="button"
+                className="readerOutlineMiniBtn"
+                disabled={!selectedTocNode || !sectionSummaryText}
+                onClick={onCopySummary}
+                title="Copy summary"
+              >
+                Copy
+              </button>
+            </div>
 
-  <div style={{ marginTop: 8, fontSize: 12, opacity: 0.9 }}>
-    {selectedTocNode ? (
-      <>
-        <div style={{ fontWeight: 600 }}>{nodeTitle(selectedTocNode)}</div>
-        <div style={{ opacity: 0.75 }}>Pages: {nodeRightLabel(selectedTocNode) || "—"}</div>
-      </>
-    ) : (
-      <div style={{ opacity: 0.75 }}>Select a ToC section, then choose Basic or Extended.</div>
-    )}
-  </div>
+            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.9 }}>
+              {selectedTocNode ? (
+                <>
+                  <div style={{ fontWeight: 600 }}>{nodeTitle(selectedTocNode)}</div>
+                  <div style={{ opacity: 0.75 }}>Pages: {nodeRightLabel(selectedTocNode) || "—"}</div>
+                </>
+              ) : (
+                <div style={{ opacity: 0.75 }}>Select a ToC section, then choose Basic or Extended.</div>
+              )}
+            </div>
 
-  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-    <button
-      type="button"
-      className="outline-btn"
-      disabled={!selectedTocNode || sectionSummaryLoading}
-      onClick={() => runSectionSummary("basic")}
-      title="Generate basic summary"
-    >
-      {sectionSummaryLoading && sectionSummaryType === "basic" ? "Basic…" : "Basic"}
-    </button>
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button
+                type="button"
+                className="outline-btn"
+                disabled={!selectedTocNode || sectionSummaryLoading}
+                onClick={() => runSectionSummary("basic")}
+                title="Generate basic summary"
+              >
+                {sectionSummaryLoading && sectionSummaryType === "basic" ? "Basic…" : "Basic"}
+              </button>
 
-    <button
-      type="button"
-      className="outline-btn"
-      disabled={!selectedTocNode || sectionSummaryLoading}
-      onClick={() => runSectionSummary("extended")}
-      title="Generate extended summary"
-    >
-      {sectionSummaryLoading && sectionSummaryType === "extended" ? "Extended…" : "Extended"}
-    </button>
-  </div>
+              <button
+                type="button"
+                className="outline-btn"
+                disabled={!selectedTocNode || sectionSummaryLoading}
+                onClick={() => runSectionSummary("extended")}
+                title="Generate extended summary"
+              >
+                {sectionSummaryLoading && sectionSummaryType === "extended" ? "Extended…" : "Extended"}
+              </button>
+            </div>
 
-  {sectionSummaryError ? (
-    <div style={{ marginTop: 10, color: "#b42318", fontSize: 12 }}>{sectionSummaryError}</div>
-  ) : null}
+            {sectionSummaryError ? (
+              <div style={{ marginTop: 10, color: "#b42318", fontSize: 12 }}>{sectionSummaryError}</div>
+            ) : null}
 
-  {sectionSummaryMeta ? (
-    <div
-      style={{
-        marginTop: 10,
-        padding: 10,
-        borderRadius: 10,
-        border: "1px solid rgba(15, 23, 42, 0.12)",
-        background: "rgba(255,255,255,0.55)",
-        fontSize: 12,
-        lineHeight: 1.4,
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-        <div>
-          <strong>Used pages:</strong> {sectionSummaryMeta.usedPages}
-        </div>
-        <div>
-          <strong>Input chars:</strong> {sectionSummaryMeta.inputCharCount}
-        </div>
-        <div>
-          <strong>Cache:</strong> {sectionSummaryMeta.fromCache ? "yes" : "no"}
-        </div>
-      </div>
+            {sectionSummaryMeta ? (
+              <div
+                style={{
+                  marginTop: 10,
+                  padding: 10,
+                  borderRadius: 10,
+                  border: "1px solid rgba(15, 23, 42, 0.12)",
+                  background: "rgba(255,255,255,0.55)",
+                  fontSize: 12,
+                  lineHeight: 1.4,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                  <div>
+                    <strong>Used pages:</strong> {sectionSummaryMeta.usedPages}
+                  </div>
+                  <div>
+                    <strong>Input chars:</strong> {sectionSummaryMeta.inputCharCount}
+                  </div>
+                  <div>
+                    <strong>Cache:</strong> {sectionSummaryMeta.fromCache ? "yes" : "no"}
+                  </div>
+                </div>
 
-      {sectionSummaryMeta.warnings?.length ? (
-        <div style={{ marginTop: 8 }}>
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>Warnings</div>
-          <ul style={{ margin: 0, paddingLeft: 18 }}>
-            {sectionSummaryMeta.warnings.map((w, i) => (
-              <li key={`${i}-${w}`}>{w}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-    </div>
-  ) : null}
+                {sectionSummaryMeta.warnings?.length ? (
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 4 }}>Warnings</div>
+                    <ul style={{ margin: 0, paddingLeft: 18 }}>
+                      {sectionSummaryMeta.warnings.map((w, i) => (
+                        <li key={`${i}-${w}`}>{w}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
-  {sectionSummaryText ? (
-    <div
-      style={{
-        marginTop: 10,
-        padding: 10,
-        borderRadius: 10,
-        border: "1px solid rgba(15, 23, 42, 0.12)",
-        background: "rgba(255,255,255,0.7)",
-        maxHeight: 180,
-        overflow: "auto",
-        fontSize: 12,
-        whiteSpace: "pre-wrap",
-        lineHeight: 1.45,
-      }}
-    >
-      {sectionSummaryText}
-    </div>
-  ) : null}
-</div>
+            {sectionSummaryText ? (
+              <div
+                style={{
+                  marginTop: 10,
+                  padding: 10,
+                  borderRadius: 10,
+                  border: "1px solid rgba(15, 23, 42, 0.12)",
+                  background: "rgba(255,255,255,0.7)",
+                  maxHeight: 180,
+                  overflow: "auto",
+                  fontSize: 12,
+                  whiteSpace: "pre-wrap",
+                  lineHeight: 1.45,
+                }}
+              >
+                {sectionSummaryText}
+              </div>
+            ) : null}
+          </div>
 
+          {/* =========================================================
+              ✅ V2 Advanced summary (manual pages)
+          ========================================================= */}
+          <div
+            style={{
+              marginTop: 14,
+              paddingTop: 12,
+              borderTop: "1px dashed rgba(15, 23, 42, 0.18)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <div style={{ fontWeight: 800, fontSize: 13 }}>Advanced summary</div>
+
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={advancedEnabled}
+                  onChange={(e) => setAdvancedEnabled(e.target.checked)}
+                />
+                Use manual page range
+              </label>
+            </div>
+
+            {advancedEnabled ? (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 12 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                    <input
+                      type="radio"
+                      name="pageMode"
+                      checked={pageMode === "printed"}
+                      onChange={() => setPageMode("printed")}
+                    />
+                    Printed pages (recommended)
+                  </label>
+
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                    <input type="radio" name="pageMode" checked={pageMode === "pdf"} onChange={() => setPageMode("pdf")} />
+                    PDF pages (advanced)
+                  </label>
+                </div>
+
+                {pageMode === "printed" ? (
+                  <div style={{ marginTop: 8, fontSize: 12, opacity: 0.9 }}>
+                    <div>
+                      <strong>Offset:</strong>{" "}
+                      {Number.isFinite(pdfPageOffset) ? (
+                        <span>
+                          {pdfPageOffset >= 0 ? `+${pdfPageOffset}` : pdfPageOffset} {offsetVerified ? "✅" : "⚠️"}
+                        </span>
+                      ) : (
+                        <span>not set ⚠️</span>
+                      )}
+                    </div>
+
+                    {!offsetVerified ? (
+                      <div style={{ marginTop: 6, color: "#b42318" }}>
+                        Offset not confirmed. Click a ToC item to calibrate before running to avoid wrong output.
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
+                      Start {pageMode === "printed" ? "printed" : "PDF"} page
+                    </div>
+                    <input
+                      className="readerOutlineSearch"
+                      inputMode="numeric"
+                      value={manualStart}
+                      onChange={(e) => setManualStart(e.target.value)}
+                      placeholder={pageMode === "printed" ? "e.g. 41" : "e.g. 81"}
+                    />
+                  </div>
+
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
+                      End {pageMode === "printed" ? "printed" : "PDF"} page
+                    </div>
+                    <input
+                      className="readerOutlineSearch"
+                      inputMode="numeric"
+                      value={manualEnd}
+                      onChange={(e) => setManualEnd(e.target.value)}
+                      placeholder={pageMode === "printed" ? "e.g. 46" : "e.g. 86"}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 10, fontSize: 12 }}>
+                  <div style={{ opacity: 0.85 }}>
+                    <strong>Effective range:</strong> <span>{effectiveManual.label}</span>
+                  </div>
+                  {effectiveManual.clampNote ? (
+                    <div style={{ marginTop: 4, color: "#b42318" }}>{effectiveManual.clampNote}</div>
+                  ) : null}
+                </div>
+
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <button
+                    type="button"
+                    className="outline-btn"
+                    disabled={!canRunManual || sectionSummaryLoading}
+                    onClick={() => runManualSectionSummary("basic")}
+                    title="Generate basic summary"
+                  >
+                    {sectionSummaryLoading && sectionSummaryType === "basic" ? "Basic…" : "Basic"}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="outline-btn"
+                    disabled={!canRunManual || sectionSummaryLoading}
+                    onClick={() => runManualSectionSummary("extended")}
+                    title="Generate extended summary"
+                  >
+                    {sectionSummaryLoading && sectionSummaryType === "extended" ? "Extended…" : "Extended"}
+                  </button>
+                </div>
+
+                <div style={{ marginTop: 8, fontSize: 12, opacity: 0.75 }}>
+                  Tip: keep ranges small (Basic ≤ {BASIC_MAX_SPAN} pages, Extended ≤ {EXTENDED_MAX_SPAN} pages). Preview limits still apply.
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
 
         {/* Desktop resize handle */}
@@ -1157,8 +1588,7 @@ const runSectionSummary = useCallback(
             <div className="preview-lock-card">
               <h2>Preview limit reached</h2>
               <p>
-                You’re reading a preview of this publication. To continue beyond page {access.previewMaxPages}, you’ll
-                need full access.
+                You’re reading a preview of this publication. To continue beyond page {access.previewMaxPages}, you’ll need full access.
               </p>
 
               <div className="preview-lock-actions">
@@ -1175,9 +1605,7 @@ const runSectionSummary = useCallback(
                 </button>
               </div>
 
-              <p className="preview-lock-footnote">
-                You can purchase this publication from the details page to unlock full reading access.
-              </p>
+              <p className="preview-lock-footnote">You can purchase this publication from the details page to unlock full reading access.</p>
             </div>
           </div>
         )}
