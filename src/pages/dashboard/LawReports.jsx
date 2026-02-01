@@ -32,8 +32,6 @@ function IcArrowLeft(props) {
   );
 }
 
-
-
 function IcCase(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
@@ -74,18 +72,8 @@ function IcArrowRight(props) {
 function IcCalendar(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <path
-        d="M7 3v3M17 3v3"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-      <path
-        d="M4.5 9h15"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
+      <path d="M7 3v3M17 3v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M4.5 9h15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
       <path
         d="M6.5 6h11A2.5 2.5 0 0 1 20 8.5v11A2.5 2.5 0 0 1 17.5 22h-11A2.5 2.5 0 0 1 4 19.5v-11A2.5 2.5 0 0 1 6.5 6Z"
         stroke="currentColor"
@@ -103,18 +91,8 @@ function IcGavel(props) {
         strokeWidth="1.8"
         strokeLinejoin="round"
       />
-      <path
-        d="M3 21l7-7"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-      <path
-        d="M9 15l3 3"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
+      <path d="M3 21l7-7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M9 15l3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
       <path
         d="M10.5 13.5l5.5-5.5"
         stroke="currentColor"
@@ -127,16 +105,8 @@ function IcGavel(props) {
 function IcPin(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <path
-        d="M12 22s7-6.2 7-12a7 7 0 10-14 0c0 5.8 7 12 7 12z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
-      <path
-        d="M12 13.2a3.2 3.2 0 110-6.4 3.2 3.2 0 010 6.4z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
+      <path d="M12 22s7-6.2 7-12a7 7 0 10-14 0c0 5.8 7 12 7 12z" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M12 13.2a3.2 3.2 0 110-6.4 3.2 3.2 0 010 6.4z" stroke="currentColor" strokeWidth="1.8" />
     </svg>
   );
 }
@@ -148,12 +118,7 @@ function IcUser(props) {
         stroke="currentColor"
         strokeWidth="1.8"
       />
-      <path
-        d="M4.5 21a7.5 7.5 0 0 1 15 0"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
+      <path d="M4.5 21a7.5 7.5 0 0 1 15 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
@@ -189,21 +154,17 @@ function stripHtmlToText(html) {
   const s = String(html || "");
   if (!s) return "";
 
-  // remove script/style blocks
   const noScripts = s
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ");
 
-  // preserve some structure before stripping tags
   const withBreaks = noScripts
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/p>\s*/gi, "\n\n")
     .replace(/<\/div>\s*/gi, "\n");
 
-  // strip remaining tags
   const noTags = withBreaks.replace(/<\/?[^>]+>/g, " ");
 
-  // decode common entities
   return noTags
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
@@ -216,7 +177,6 @@ function stripHtmlToText(html) {
 }
 
 function cleanPreview(text) {
-  // 🔑 NEW: strip HTML first
   const t = stripHtmlToText(text)
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
@@ -274,7 +234,8 @@ export default function LawReports() {
   const [decisionOptions, setDecisionOptions] = useState([]); // [{value,label,count}]
 
   // UX
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // initial load
+  const [searching, setSearching] = useState(false); // subsequent filter typing
   const [error, setError] = useState("");
 
   const [toast, setToast] = useState(null);
@@ -283,10 +244,8 @@ export default function LawReports() {
     setTimeout(() => setToast(null), 2500);
   }
 
-  // Filters/search/sort
+  // Filters/search/sort (draft inputs)
   const [q, setQ] = useState("");
-  const debouncedQ = useDebounce(q, 300);
-
   const [reportNumber, setReportNumber] = useState("");
   const [parties, setParties] = useState("");
   const [citation, setCitation] = useState("");
@@ -295,17 +254,53 @@ export default function LawReports() {
   const [courtType, setCourtType] = useState("");
   const [townOrPostCode, setTownOrPostCode] = useState("");
 
-  // ✅ IMPORTANT: store selected values as INT strings (backend parses int or name)
+  // ✅ store selected values as INT strings
   const [caseType, setCaseType] = useState(""); // "" or "1".."6"
   const [decisionType, setDecisionType] = useState(""); // "" or enum int
 
   const [sortBy, setSortBy] = useState("year_desc");
 
-  // Pagination (both modes now)
+  // Pagination (both modes)
   const [page, setPage] = useState(1);
-  const pageSize = 9; // ✅ 3 columns × 3 rows
+  const pageSize = 9; // 3×3
 
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // ------------------------------------------------------------
+  // Debounce ALL filters as one bundle (prevents over-triggering)
+  // ------------------------------------------------------------
+  const filters = useMemo(
+    () => ({
+      q,
+      reportNumber,
+      parties,
+      citation,
+      year,
+      courtType,
+      townOrPostCode,
+      caseType,
+      decisionType,
+      sortBy,
+      mode,
+    }),
+    [q, reportNumber, parties, citation, year, courtType, townOrPostCode, caseType, decisionType, sortBy, mode]
+  );
+
+  const debouncedFilters = useDebounce(filters, 300);
+
+  // Reset to page 1 ONLY when debounced filters change (not on every keystroke)
+  const lastDebouncedKeyRef = useRef("");
+  useEffect(() => {
+    const key = JSON.stringify({
+      ...debouncedFilters,
+      // page excluded intentionally
+    });
+
+    if (lastDebouncedKeyRef.current && lastDebouncedKeyRef.current !== key) {
+      setPage(1);
+    }
+    lastDebouncedKeyRef.current = key;
+  }, [debouncedFilters]);
 
   function resetFilters() {
     setQ("");
@@ -323,7 +318,7 @@ export default function LawReports() {
   }
 
   // ------------------------------------------------------------
-  // ✅ Load dropdown options: case types + decision types
+  // Load dropdown options
   // ------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
@@ -377,29 +372,35 @@ export default function LawReports() {
 
   // ------------------------------------------------------------
   // Main load: server search OR client fallback
+  // Uses debouncedFilters so typing doesn't thrash UI
   // ------------------------------------------------------------
+  const firstLoadRef = useRef(true);
+
   useEffect(() => {
     let cancelled = false;
 
     async function run() {
       try {
-        setLoading(true);
         setError("");
 
-        if (mode === "server") {
+        // show "Loading..." only once (first load); after that show subtle "searching"
+        if (firstLoadRef.current) setLoading(true);
+        else setSearching(true);
+
+        const f = debouncedFilters;
+
+        if (f.mode === "server") {
           const params = {
-            q: debouncedQ?.trim() || undefined,
-            reportNumber: reportNumber.trim() || undefined,
-            parties: parties.trim() || undefined,
-            citation: citation.trim() || undefined,
-            year: year ? Number(year) : undefined,
-            courtType: courtType || undefined,
-            townOrPostCode: townOrPostCode || undefined,
-
-            caseType: caseType || undefined,
-            decisionType: decisionType || undefined,
-
-            sort: sortBy || "year_desc",
+            q: f.q?.trim() || undefined,
+            reportNumber: f.reportNumber.trim() || undefined,
+            parties: f.parties.trim() || undefined,
+            citation: f.citation.trim() || undefined,
+            year: f.year ? Number(f.year) : undefined,
+            courtType: f.courtType || undefined,
+            townOrPostCode: f.townOrPostCode || undefined,
+            caseType: f.caseType || undefined,
+            decisionType: f.decisionType || undefined,
+            sort: f.sortBy || "year_desc",
             page,
             pageSize,
           };
@@ -433,7 +434,11 @@ export default function LawReports() {
         console.error(err);
         if (!cancelled) setError("We couldn’t load Law Reports right now. Please try again.");
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setSearching(false);
+          firstLoadRef.current = false;
+        }
       }
     }
 
@@ -441,21 +446,7 @@ export default function LawReports() {
     return () => {
       cancelled = true;
     };
-
-  }, [
-    mode,
-    debouncedQ,
-    reportNumber,
-    parties,
-    citation,
-    year,
-    courtType,
-    townOrPostCode,
-    caseType,
-    decisionType,
-    sortBy,
-    page,
-  ]);
+  }, [debouncedFilters, page]);
 
   // ------------------------------------------------------------
   // Client-mode enrichment (only needed in client mode)
@@ -502,9 +493,7 @@ export default function LawReports() {
           return s;
         });
 
-        const results = await Promise.allSettled(
-          batch.map((id) => api.get(`/legal-documents/${id}`))
-        );
+        const results = await Promise.allSettled(batch.map((id) => api.get(`/legal-documents/${id}`)));
 
         if (cancelled) return;
 
@@ -540,8 +529,7 @@ export default function LawReports() {
   }, [mode, reports, detailsMap]);
 
   // ------------------------------------------------------------
-  // Client filtering (still supported)
-  // NOTE: client filter expects labels, not ints.
+  // Client filtering (client mode only)
   // ------------------------------------------------------------
   const selectedCaseLabel = useMemo(() => {
     if (!caseType) return "";
@@ -558,14 +546,14 @@ export default function LawReports() {
   const visibleClientAll = useMemo(() => {
     if (mode !== "client") return mergedReports;
 
-    const query = normalize(debouncedQ);
-    const rn = normalize(reportNumber);
-    const p = normalize(parties);
-    const c = normalize(citation);
+    const query = normalize(debouncedFilters.q);
+    const rn = normalize(debouncedFilters.reportNumber);
+    const p = normalize(debouncedFilters.parties);
+    const c = normalize(debouncedFilters.citation);
 
-    const yearNum = year ? Number(year) : null;
-    const courtNorm = normalize(courtType);
-    const townNorm = normalize(townOrPostCode);
+    const yearNum = debouncedFilters.year ? Number(debouncedFilters.year) : null;
+    const courtNorm = normalize(debouncedFilters.courtType);
+    const townNorm = normalize(debouncedFilters.townOrPostCode);
 
     const caseNorm = normalize(selectedCaseLabel || "");
     const decisionNorm = normalize(selectedDecisionLabel || "");
@@ -574,7 +562,6 @@ export default function LawReports() {
       const meta = extractReportMeta(r);
 
       const matchesQ = !query || getReportSearchHaystack(r).includes(query);
-
       const matchesReportNumber = !rn || normalize(meta.reportNumber).includes(rn);
       const matchesParties = !p || normalize(meta.parties).includes(p);
       const matchesCitation = !c || normalize(meta.citation).includes(c);
@@ -613,34 +600,20 @@ export default function LawReports() {
       return Number.isFinite(t) ? t : -1;
     };
 
-    if (sortBy === "year_asc") items.sort((a, b) => getYear(a) - getYear(b));
-    else if (sortBy === "year_desc") items.sort((a, b) => getYear(b) - getYear(a));
-    else if (sortBy === "reportno_asc")
-      items.sort((a, b) => String(getReportNo(a)).localeCompare(String(getReportNo(b))));
-    else if (sortBy === "parties_asc")
-      items.sort((a, b) => String(getParties(a)).localeCompare(String(getParties(b))));
-    else if (sortBy === "date_desc") items.sort((a, b) => getDate(b) - getDate(a));
+    const s = debouncedFilters.sortBy;
+    if (s === "year_asc") items.sort((a, b) => getYear(a) - getYear(b));
+    else if (s === "year_desc") items.sort((a, b) => getYear(b) - getYear(a));
+    else if (s === "reportno_asc") items.sort((a, b) => String(getReportNo(a)).localeCompare(String(getReportNo(b))));
+    else if (s === "parties_asc") items.sort((a, b) => String(getParties(a)).localeCompare(String(getParties(b))));
+    else if (s === "date_desc") items.sort((a, b) => getDate(b) - getDate(a));
 
     return items;
-  }, [
-    mode,
-    mergedReports,
-    debouncedQ,
-    reportNumber,
-    parties,
-    citation,
-    year,
-    courtType,
-    townOrPostCode,
-    selectedCaseLabel,
-    selectedDecisionLabel,
-    sortBy,
-  ]);
+  }, [mode, mergedReports, debouncedFilters, selectedCaseLabel, selectedDecisionLabel]);
 
   const visibleAll = mode === "client" ? visibleClientAll : reports;
 
   // ------------------------------------------------------------
-  // ✅ Pagination for BOTH modes
+  // Pagination for BOTH modes
   // ------------------------------------------------------------
   const totalPages = useMemo(() => {
     if (mode === "server") return Math.max(1, Math.ceil((total || 0) / pageSize));
@@ -648,7 +621,7 @@ export default function LawReports() {
   }, [mode, total, pageSize, visibleAll]);
 
   useEffect(() => {
-    // Keep page in bounds when filters shrink results
+    // Keep page in bounds when results shrink
     setPage((p) => Math.min(Math.max(1, p), totalPages));
   }, [totalPages]);
 
@@ -659,13 +632,12 @@ export default function LawReports() {
   }, [mode, visibleAll, page, pageSize]);
 
   // ------------------------------------------------------------
-  // ✅ IMPORTANT FIX: availability/access require LegalDocumentId
+  // Access + availability require LegalDocumentId
   // ------------------------------------------------------------
   function getDocIdForRow(r) {
     return mode === "server" ? r?.legalDocumentId : r?.id;
   }
 
-  // Access checks
   useEffect(() => {
     let cancelled = false;
 
@@ -691,9 +663,7 @@ export default function LawReports() {
           return s;
         });
 
-        const results = await Promise.allSettled(
-          batch.map((docId) => api.get(`/legal-documents/${docId}/access`))
-        );
+        const results = await Promise.allSettled(batch.map((docId) => api.get(`/legal-documents/${docId}/access`)));
 
         if (cancelled) return;
 
@@ -721,7 +691,6 @@ export default function LawReports() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, isInst, isPublic, mode]);
 
-  // Availability checks
   useEffect(() => {
     let cancelled = false;
 
@@ -742,9 +711,7 @@ export default function LawReports() {
           return s;
         });
 
-        const results = await Promise.allSettled(
-          batch.map((docId) => api.get(`/legal-documents/${docId}/availability`))
-        );
+        const results = await Promise.allSettled(batch.map((docId) => api.get(`/legal-documents/${docId}/availability`)));
 
         if (cancelled) return;
 
@@ -826,15 +793,8 @@ export default function LawReports() {
   }
 
   function getExcerptForRow(r) {
-    if (mode === "server") {
-      return truncateText(cleanPreview(r?.previewText || ""), 100);
-    }
-    // client mode can also carry html in meta.content/excerpt
+    if (mode === "server") return truncateText(cleanPreview(r?.previewText || ""), 100);
     return truncateText(cleanPreview(makeReportExcerpt(r, 260)), 100);
-  }
-
-  function setPageToFirst() {
-    setPage(1);
   }
 
   function buildTags(meta) {
@@ -852,11 +812,7 @@ export default function LawReports() {
 
   return (
     <div className="lr-wrap lr-theme">
-      {toast && (
-        <div className={`lr-toast ${toast.type === "error" ? "error" : ""}`}>
-          {toast.message}
-        </div>
-      )}
+      {toast && <div className={`lr-toast ${toast.type === "error" ? "error" : ""}`}>{toast.message}</div>}
 
       <div className="lr-hero">
         <div
@@ -874,8 +830,8 @@ export default function LawReports() {
             </div>
             <h1 className="lr-hero-title">Law Reports</h1>
             <p className="lr-hero-sub" style={{ maxWidth: "none" }}>
-              Access authoritative judicial decisions that set legal precedent. Filter by key
-              criteria and preview short excerpts to quickly identify relevant judgments.
+              Access authoritative judicial decisions that set legal precedent. Filter by key criteria and preview short
+              excerpts to quickly identify relevant judgments.
             </p>
           </div>
 
@@ -901,6 +857,7 @@ export default function LawReports() {
       </div>
 
       <div className="lr-body">
+        {/* ✅ Keep results visible; only show the big loading on first load */}
         {loading && <div className="lr-loading">Loading Law Reports…</div>}
 
         {!loading && error && (
@@ -916,27 +873,23 @@ export default function LawReports() {
           <div className="lr-grid">
             {/* Filters */}
             <aside className="lr-panel">
-              <div className="lr-panel-title">Search & Filters</div>
+              <div className="lr-panel-title">
+                Search & Filters
+                {searching ? <span className="lr-soft" style={{ marginLeft: 10 }}>• searching…</span> : null}
+              </div>
 
               <div className="lr-field">
                 <div className="lr-label">Quick search</div>
                 <input
                   className="lr-input"
                   value={q}
-                  onChange={(e) => {
-                    setQ(e.target.value);
-                    setPageToFirst();
-                  }}
+                  onChange={(e) => setQ(e.target.value)}
                   placeholder="Report no, parties, citation, year, court, town/post code…"
                 />
               </div>
 
               <div className="lr-field">
-                <button
-                  className="lr-card-btn"
-                  onClick={() => setShowAdvanced((v) => !v)}
-                  style={{ width: "100%" }}
-                >
+                <button className="lr-card-btn" onClick={() => setShowAdvanced((v) => !v)} style={{ width: "100%" }}>
                   {showAdvanced ? "Hide" : "Show"} advanced fields
                 </button>
               </div>
@@ -948,10 +901,7 @@ export default function LawReports() {
                     <input
                       className="lr-input"
                       value={reportNumber}
-                      onChange={(e) => {
-                        setReportNumber(e.target.value);
-                        setPageToFirst();
-                      }}
+                      onChange={(e) => setReportNumber(e.target.value)}
                       placeholder="e.g. HCK027…"
                     />
                   </div>
@@ -961,10 +911,7 @@ export default function LawReports() {
                     <input
                       className="lr-input"
                       value={parties}
-                      onChange={(e) => {
-                        setParties(e.target.value);
-                        setPageToFirst();
-                      }}
+                      onChange={(e) => setParties(e.target.value)}
                       placeholder="e.g. Mwabonje v Sarova…"
                     />
                   </div>
@@ -974,10 +921,7 @@ export default function LawReports() {
                     <input
                       className="lr-input"
                       value={citation}
-                      onChange={(e) => {
-                        setCitation(e.target.value);
-                        setPageToFirst();
-                      }}
+                      onChange={(e) => setCitation(e.target.value)}
                       placeholder="e.g. [2016] LLR (HCK)…"
                     />
                   </div>
@@ -990,24 +934,14 @@ export default function LawReports() {
                   <input
                     className="lr-input"
                     value={year}
-                    onChange={(e) => {
-                      setYear(e.target.value.replace(/[^\d]/g, "").slice(0, 4));
-                      setPageToFirst();
-                    }}
+                    onChange={(e) => setYear(e.target.value.replace(/[^\d]/g, "").slice(0, 4))}
                     placeholder="e.g. 2016"
                   />
                 </div>
 
                 <div className="lr-field">
                   <div className="lr-label">Sort</div>
-                  <select
-                    className="lr-select"
-                    value={sortBy}
-                    onChange={(e) => {
-                      setSortBy(e.target.value);
-                      setPageToFirst();
-                    }}
-                  >
+                  <select className="lr-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
                     <option value="year_desc">Year (new → old)</option>
                     <option value="year_asc">Year (old → new)</option>
                     <option value="date_desc">Judgment date (new → old)</option>
@@ -1017,17 +951,9 @@ export default function LawReports() {
                 </div>
               </div>
 
-              {/* Decision */}
               <div className="lr-field">
                 <div className="lr-label">Decision</div>
-                <select
-                  className="lr-select"
-                  value={decisionType}
-                  onChange={(e) => {
-                    setDecisionType(e.target.value);
-                    setPageToFirst();
-                  }}
-                >
+                <select className="lr-select" value={decisionType} onChange={(e) => setDecisionType(e.target.value)}>
                   <option value="">All</option>
                   {computedDecisionOptions.map((d) => (
                     <option key={String(d.value)} value={String(d.value)}>
@@ -1038,17 +964,9 @@ export default function LawReports() {
                 </select>
               </div>
 
-              {/* Case Type */}
               <div className="lr-field">
                 <div className="lr-label">Case Type</div>
-                <select
-                  className="lr-select"
-                  value={caseType}
-                  onChange={(e) => {
-                    setCaseType(e.target.value);
-                    setPageToFirst();
-                  }}
-                >
+                <select className="lr-select" value={caseType} onChange={(e) => setCaseType(e.target.value)}>
                   <option value="">All</option>
                   {computedCaseOptions.map((ct) => (
                     <option key={String(ct.value)} value={String(ct.value)}>
@@ -1061,28 +979,12 @@ export default function LawReports() {
 
               <div className="lr-field">
                 <div className="lr-label">Court Type</div>
-                <input
-                  className="lr-input"
-                  value={courtType}
-                  onChange={(e) => {
-                    setCourtType(e.target.value);
-                    setPageToFirst();
-                  }}
-                  placeholder="e.g. High Court / ELRC"
-                />
+                <input className="lr-input" value={courtType} onChange={(e) => setCourtType(e.target.value)} placeholder="e.g. High Court / ELRC" />
               </div>
 
               <div className="lr-field">
                 <div className="lr-label">Town / Post Code</div>
-                <input
-                  className="lr-input"
-                  value={townOrPostCode}
-                  onChange={(e) => {
-                    setTownOrPostCode(e.target.value);
-                    setPageToFirst();
-                  }}
-                  placeholder="e.g. Mombasa / 00100"
-                />
+                <input className="lr-input" value={townOrPostCode} onChange={(e) => setTownOrPostCode(e.target.value)} placeholder="e.g. Mombasa / 00100" />
               </div>
 
               <div className="lr-panel-actions">
@@ -1101,17 +1003,16 @@ export default function LawReports() {
                 <div className="lr-count">
                   {mode === "server" ? (
                     <>
-                      Showing <strong>{reports.length}</strong> of <strong>{total}</strong> report
-                      {total === 1 ? "" : "s"} • Page <strong>{page}</strong>/{totalPages}
+                      Showing <strong>{reports.length}</strong> of <strong>{total}</strong> report{total === 1 ? "" : "s"} • Page{" "}
+                      <strong>{page}</strong>/{totalPages}
+                      {searching ? <span className="lr-soft"> • searching…</span> : null}
                     </>
                   ) : (
                     <>
-                      Showing <strong>{visibleAll.length}</strong> report
-                      {visibleAll.length === 1 ? "" : "s"} • Page{" "}
+                      Showing <strong>{visibleAll.length}</strong> report{visibleAll.length === 1 ? "" : "s"} • Page{" "}
                       <strong>{page}</strong>/{totalPages}
-                      {detailsLoadingIds.size > 0 ? (
-                        <span className="lr-soft"> • loading details…</span>
-                      ) : null}
+                      {detailsLoadingIds.size > 0 ? <span className="lr-soft"> • loading details…</span> : null}
+                      {searching ? <span className="lr-soft"> • searching…</span> : null}
                     </>
                   )}
                 </div>
@@ -1152,7 +1053,6 @@ export default function LawReports() {
                     const excerpt = getExcerptForRow(r);
 
                     const docId = getDocIdForRow(r);
-
                     const access = accessMap[docId];
                     const hasFullAccess = !!access?.hasFullAccess;
                     const accessLoading = accessLoadingIds.has(docId);
@@ -1168,12 +1068,11 @@ export default function LawReports() {
 
                     const hasContent = inferredHasContent;
                     const isPremiumRow = !!r.isPremium;
-                    const showIncluded =
-                      isPremiumRow && (isInst || isPublic) && !accessLoading && hasFullAccess;
 
+                    const showIncluded = isPremiumRow && (isInst || isPublic) && !accessLoading && hasFullAccess;
                     const canReadMore = hasContent;
 
-                    // ✅ Reader expects LawReportId in both modes
+                    // Reader expects LawReportId in both modes
                     const detailsId = r.id;
 
                     const tags = buildTags(meta);
@@ -1196,21 +1095,14 @@ export default function LawReports() {
                         }}
                       >
                         <div className="lr-card2-top">
-                          <div className="lr-card2-title">
-                            {meta.parties || meta.title || "Untitled report"}
-                          </div>
+                          <div className="lr-card2-title">{meta.parties || meta.title || "Untitled report"}</div>
 
                           <div className="lr-badges">
-                            {isPremiumRow ? (
-                              <span className="lr-badge premium">Premium</span>
-                            ) : (
-                              <span className="lr-badge">Free</span>
-                            )}
+                            {isPremiumRow ? <span className="lr-badge premium">Premium</span> : <span className="lr-badge">Free</span>}
                             {showIncluded && <span className="lr-badge included">Included</span>}
                           </div>
                         </div>
 
-                        {/* compact tags */}
                         <div className="lr-tags">
                           {shown.map((t, idx) => (
                             <span key={`${r.id}-t-${idx}`} className="lr-tag">
@@ -1224,7 +1116,6 @@ export default function LawReports() {
                           ) : null}
                         </div>
 
-                        {/* mini meta line with icons */}
                         {mode === "client" ? (
                           (() => {
                             const mh = makeReportMiniHeader(r);
