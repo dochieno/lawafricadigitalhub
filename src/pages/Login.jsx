@@ -10,6 +10,10 @@ import { useAuth } from "../auth/AuthContext";
 const API_BASE = (import.meta?.env?.VITE_API_BASE_URL || "http://localhost:7033").replace(/\/$/, "");
 const API = `${API_BASE}/api`;
 
+// ✅ Must match TwoFactorSetup.jsx (so it can recover session)
+const LS_LOGIN_USERNAME = "la_login_username";
+const LS_LOGIN_PASSWORD = "la_login_password";
+
 function IconScale() {
   return (
     <svg viewBox="0 0 24 24" className="li-ico" aria-hidden="true">
@@ -26,7 +30,7 @@ function IconReport() {
       <path fill="currentColor" d="M7 3h7l5 5v13c0 1.1-.9 2-2 2H7c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2Zm6 1v5h5" />
       <path
         fill="currentColor"
-        d="M8 12h8c.6 0 1 .4 1 1s-.4 1-1 1H8c-.6 0-1-.4-1-1s.4-1 1-1Zm0 4h8c.6 0 1 .4 1 1s-.4 1-1 1H8c-.6 0-1-.4-1-1s.4-1 1-1Z"
+        d="M8 12h8c.6 0 1 .4 1 1s-.4 1-1 1H8c-.6 0-1-.4-1-1s.4-1 1-1Zm0 4h8c.6 0 1 .4 1 1s-.4 1-1 1H8c-.6 0-1-.4-1-1s.4 1 1-1Z"
       />
     </svg>
   );
@@ -36,7 +40,7 @@ function IconComment() {
     <svg viewBox="0 0 24 24" className="li-ico" aria-hidden="true">
       <path
         fill="currentColor"
-        d="M4 4h16c1.1 0 2 .9 2 2v10c0 1.1-.9 2-2 2H8l-4 3v-3H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2Zm3 5h10c.6 0 1 .4 1 1s-.4 1-1 1H7c-.6 0-1-.4-1-1s.4-1 1-1Zm0 4h7c.6 0 1 .4 1 1s-.4 1-1 1H7c-.6 0-1-.4-1-1s.4-1 1-1Z"
+        d="M4 4h16c1.1 0 2 .9 2 2v10c0 1.1-.9 2-2 2H8l-4 3v-3H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2Zm3 5h10c.6 0 1 .4 1 1s-.4 1-1 1H7c-.6 0-1-.4-1-1s.4-1 1-1Zm0 4h7c.6 0 1 .4 1 1s-.4 1-1 1H7c-.6 0-1-.4-1-1s.4 1 1-1Z"
       />
     </svg>
   );
@@ -50,7 +54,7 @@ function IconJournal() {
       />
       <path
         fill="currentColor"
-        d="M8 8h6c.6 0 1 .4 1 1s-.4 1-1 1H8c-.6 0-1-.4-1-1s.4-1 1-1Zm0 4h6c.6 0 1 .4 1 1s-.4 1-1 1H8c-.6 0-1-.4-1-1s.4-1 1-1Z"
+        d="M8 8h6c.6 0 1 .4 1 1s-.4 1-1 1H8c-.6 0-1-.4-1-1s.4-1 1-1Zm0 4h6c.6 0 1 .4 1 1s-.4 1-1 1H8c-.6 0-1-.4-1-1s.4 1 1-1Z"
       />
     </svg>
   );
@@ -100,6 +104,9 @@ export default function Login() {
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // ✅ NEW: redirect toast state (small info message before redirect)
+  const [redirecting2FA, setRedirecting2FA] = useState(false);
+
   // ✅ Email verified redirect banner
   const [banner, setBanner] = useState({ type: "", text: "" });
 
@@ -137,7 +144,7 @@ export default function Login() {
     setBanner({ type: "", text: "" });
   }, [location.search]);
 
-  // ✅ NEW: If we navigated here from ResetPassword -> "Request new reset link", open modal automatically
+  // ✅ If we navigated here from ResetPassword -> "Request new reset link", open modal automatically
   useEffect(() => {
     if (location?.state?.openForgotPassword) {
       setError("");
@@ -150,11 +157,16 @@ export default function Login() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location?.state]);
 
+  // ✅ If user edits, cancel the "redirecting" state (prevents sticky disabled state)
+  useEffect(() => {
+    if (redirecting2FA) setRedirecting2FA(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [username, password]);
+
   // ✅ When modal opens: focus input + support ESC close
   useEffect(() => {
     if (!showForgot) return;
 
-    // Defer to next tick so the input exists in the DOM.
     const t = setTimeout(() => resetInputRef.current?.focus(), 0);
 
     const onKeyDown = (e) => {
@@ -190,6 +202,45 @@ export default function Login() {
   function looksLikeEmailNotVerified(msg) {
     const m = String(msg || "").toLowerCase();
     return m.includes("verify your email") || m.includes("email not verified");
+  }
+
+  // ✅ Detect “complete 2FA setup…” message
+  function looksLike2FASetupRequired(msg) {
+    const m = String(msg || "").toLowerCase();
+    return (
+      (m.includes("2fa") && m.includes("setup") && (m.includes("complete") || m.includes("before logging in"))) ||
+      m.includes("complete 2fa setup") ||
+      m.includes("please complete 2fa setup")
+    );
+  }
+
+  function goToTwoFactorSetup({ autoResend = false } = {}) {
+    const u = (username || "").trim();
+    const p = password || "";
+
+    // ✅ store so TwoFactorSetup can recover even if state is lost
+    try {
+      if (u) localStorage.setItem(LS_LOGIN_USERNAME, u);
+      if (p) localStorage.setItem(LS_LOGIN_PASSWORD, p);
+    } catch {
+      // ignore
+    }
+
+    // ✅ show small message briefly so it doesn't feel like a "random redirect"
+    setRedirecting2FA(true);
+    setError("");
+    setInfo("Redirecting you to 2FA setup…");
+
+    setTimeout(() => {
+      navigate("/twofactor-setup", {
+        replace: true,
+        state: {
+          username: u,
+          password: p,
+          autoFetchSetupToken: !!autoResend,
+        },
+      });
+    }, 650);
   }
 
   async function handleInlineResendVerification() {
@@ -261,6 +312,12 @@ export default function Login() {
           return;
         }
 
+        // ✅ AUTO-OPEN 2FA setup (with small redirect message)
+        if (looksLike2FASetupRequired(msg)) {
+          goToTwoFactorSetup({ autoResend: true });
+          return;
+        }
+
         if (looksLikeEmailNotVerified(msg)) {
           setError(msg || "Email not verified. Please verify your email before logging in.");
           return;
@@ -271,7 +328,16 @@ export default function Login() {
       }
 
       if (data?.requires2FASetup) {
-        navigate("/twofactor-setup", { state: { username, password }, replace: true });
+        // ✅ also auto-open setup from success payload
+        setRedirecting2FA(true);
+        setError("");
+        setInfo("Redirecting you to 2FA setup…");
+        setTimeout(() => {
+          navigate("/twofactor-setup", {
+            replace: true,
+            state: { username, password, autoFetchSetupToken: true },
+          });
+        }, 650);
         return;
       }
 
@@ -406,7 +472,9 @@ export default function Login() {
           <h2>Sign in</h2>
           <p className="subtitle">Access trusted legal publications and resources.</p>
 
-          {banner?.text && <div className={banner.type === "success" ? "success-box" : "error-box"}>{banner.text}</div>}
+          {banner?.text && (
+            <div className={banner.type === "success" ? "success-box" : "error-box"}>{banner.text}</div>
+          )}
 
           {error && (
             <div className="error-box">
@@ -435,7 +503,7 @@ export default function Login() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              handleLogin();
+              if (!redirecting2FA) handleLogin();
             }}
           >
             <input
@@ -444,6 +512,7 @@ export default function Login() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
+              disabled={redirecting2FA}
             />
 
             <input
@@ -452,10 +521,11 @@ export default function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
+              disabled={redirecting2FA}
             />
 
-            <button type="submit" disabled={loading} style={{ marginTop: 10 }}>
-              {loading ? "Signing in..." : "Sign In"}
+            <button type="submit" disabled={loading || redirecting2FA} style={{ marginTop: 10 }}>
+              {loading ? "Signing in..." : redirecting2FA ? "Redirecting..." : "Sign In"}
             </button>
           </form>
 
