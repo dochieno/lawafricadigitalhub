@@ -137,6 +137,19 @@ export default function Login() {
     setBanner({ type: "", text: "" });
   }, [location.search]);
 
+  // ✅ NEW: If we navigated here from ResetPassword -> "Request new reset link", open modal automatically
+  useEffect(() => {
+    if (location?.state?.openForgotPassword) {
+      setError("");
+      setInfo("");
+      setShowForgot(true);
+
+      // Clear the state so refresh / future nav doesn't keep reopening modal
+      navigate("/login", { replace: true, state: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location?.state]);
+
   // ✅ When modal opens: focus input + support ESC close
   useEffect(() => {
     if (!showForgot) return;
@@ -459,7 +472,7 @@ export default function Login() {
             </span>
           </div>
 
-          {/* ✅ Forgot password modal (stable + compact + text action) */}
+          {/* ✅ Forgot password modal */}
           {showForgot && (
             <Modal
               title="Reset your password"
@@ -489,8 +502,23 @@ export default function Login() {
                   autoComplete="email"
                 />
 
+                {/* ✅ Small + right aligned button */}
                 <div className="li-modal-actions li-modal-actions--right">
-                  <button type="submit" className="li-modal-textBtn" disabled={resetLoading || !resetEmail.trim()}>
+                  <button
+                    type="submit"
+                    disabled={resetLoading || !resetEmail.trim()}
+                    style={{
+                      width: "auto",
+                      padding: "9px 12px",
+                      borderRadius: 12,
+                      border: "1px solid rgba(17,24,39,0.14)",
+                      background: "rgba(17,24,39,0.04)",
+                      color: "rgba(17,24,39,0.82)",
+                      fontWeight: 900,
+                      fontSize: 12.5,
+                      cursor: resetLoading || !resetEmail.trim() ? "not-allowed" : "pointer",
+                    }}
+                  >
                     {resetLoading ? "Sending…" : "Send reset link"}
                   </button>
                 </div>

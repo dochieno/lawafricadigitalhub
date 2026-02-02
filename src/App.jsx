@@ -40,7 +40,6 @@ import Library from "./pages/dashboard/Library";
 import AdminTrials from "./pages/dashboard/admin/AdminTrials";
 import "./styles/lawAfricaBrand.css";
 
-
 // ✅ Home -> Global Admin dashboard (charts) only for Global Admin
 import GlobalAdminHomeSwitch from "./pages/dashboard/GlobalAdminHomeSwitch";
 
@@ -74,7 +73,11 @@ export default function App() {
           {/* ===================== */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
+
+          {/* ✅ Reset password (support both with/without trailing slash) */}
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/reset-password/" element={<ResetPassword />} />
+
           <Route path="/register" element={<Register />} />
           <Route path="/twofactor" element={<TwoFactor />} />
           <Route path="/twofactor-setup" element={<TwoFactorSetup />} />
@@ -117,23 +120,18 @@ export default function App() {
             <Route path="explore" element={<Explore />} />
             <Route path="library" element={<Library />} />
 
-              {/* ✅ Law Reports */}
-              <Route path="law-reports" element={<LawReports />} />
-              <Route path="law-reports/:id" element={<LawReportReader />} />
+            {/* ✅ Law Reports */}
+            <Route path="law-reports" element={<LawReports />} />
+            <Route path="law-reports/:id" element={<LawReportReader />} />
 
-              {/* ✅ AI Test (protected, inside AppShell) */}
-
-              <Route path="security" element={<SecurityDashboard />} />
+            <Route path="security" element={<SecurityDashboard />} />
 
             {/* ===================== */}
             {/* APPROVALS */}
             {/* ===================== */}
             <Route element={<AdminOrInstitutionAdminRoute />}>
               <Route path="approvals" element={<InstitutionApprovalDashboard />} />
-              <Route
-                path="approvals/subscription-requests"
-                element={<AdminSubscriptionRequests />}
-              />
+              <Route path="approvals/subscription-requests" element={<AdminSubscriptionRequests />} />
               <Route path="approvals/members" element={<InstitutionMembersAdmin />} />
             </Route>
 
@@ -149,29 +147,14 @@ export default function App() {
               <Route path="admin/llr-services/import" element={<AdminLLRImport />} />
               <Route path="ai-test" element={<AiSummaryTest />} />
               <Route path="/dashboard/dev/content-blocks" element={<DevContentBlocksTest />} />
-              <Route
-                path="admin/llr-services/:legalDocumentId/content"
-                element={<AdminReportContent />}
-              />
+              <Route path="admin/llr-services/:legalDocumentId/content" element={<AdminReportContent />} />
 
-              <Route
-                path="admin/institution-subscriptions"
-                element={<AdminInstitutionSubscriptions />}
-              />
-              <Route
-                path="admin/institution-bundle-subscriptions"
-                element={<AdminInstitutionBundleSubscriptions />}
-              />
+              <Route path="admin/institution-subscriptions" element={<AdminInstitutionSubscriptions />} />
+              <Route path="admin/institution-bundle-subscriptions" element={<AdminInstitutionBundleSubscriptions />} />
               <Route path="admin/trials" element={<AdminTrials />} />
               <Route path="admin/institution-admins" element={<AdminInstitutionAdmins />} />
-              <Route
-                path="admin/content-products/:productId/documents"
-                element={<AdminProductDocuments />}
-              />
-              <Route
-                path="admin/institutions/:id/users"
-                element={<AdminInstitutionUsers />}
-              />
+              <Route path="admin/content-products/:productId/documents" element={<AdminProductDocuments />} />
+              <Route path="admin/institutions/:id/users" element={<AdminInstitutionUsers />} />
               <Route path="admin/users" element={<AdminUsers />} />
 
               {/* ===================== */}
@@ -179,10 +162,7 @@ export default function App() {
               {/* ===================== */}
               <Route path="admin/finance/invoices" element={<AdminInvoices />} />
               <Route path="admin/finance/invoices/:id" element={<AdminInvoiceDetail />} />
-              <Route
-                path="admin/finance/invoice-settings"
-                element={<AdminInvoiceSettings />}
-              />
+              <Route path="admin/finance/invoice-settings" element={<AdminInvoiceSettings />} />
               <Route path="admin/finance/vat-rates" element={<AdminVATRates />} />
               <Route path="admin/finance/payments" element={<AdminPayments />} />
             </Route>
