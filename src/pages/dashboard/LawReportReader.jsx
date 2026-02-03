@@ -5,7 +5,6 @@ import api from "../../api/client";
 import { getAuthClaims } from "../../auth/auth";
 import "../../styles/lawReportReader.css";
 
-
 function isInstitutionUser() {
   const c = getAuthClaims();
   return !!(c?.institutionId && c?.institutionId > 0);
@@ -21,8 +20,9 @@ function isPublicUser() {
 function isProbablyHtml(s) {
   const x = String(s || "").trim();
   if (!x) return false;
-  // very conservative: real tags, not just "<" in text
-  return /<\/?(p|br|div|span|h1|h2|h3|h4|ul|ol|li|table|thead|tbody|tr|td|th|blockquote)\b/i.test(x);
+  return /<\/?(p|br|div|span|h1|h2|h3|h4|ul|ol|li|table|thead|tbody|tr|td|th|blockquote)\b/i.test(
+    x
+  );
 }
 
 function isGlobalAdminUser() {
@@ -65,8 +65,6 @@ function formatDate(d) {
   return dt.toISOString().slice(0, 10);
 }
 
-
-
 function getApiErrorMessage(err, fallback = "Request failed.") {
   const data = err?.response?.data;
 
@@ -87,7 +85,7 @@ function getApiErrorMessage(err, fallback = "Request failed.") {
   return fallback;
 }
 
-//Related cases
+// Related cases (DB)
 async function fetchRelatedLawReports(id, take = 8) {
   const res = await api.get(`/law-reports/${Number(id)}/related`, {
     params: { take },
@@ -95,9 +93,8 @@ async function fetchRelatedLawReports(id, take = 8) {
   return res.data ?? [];
 }
 
-
 // ----------------------
-// Case content formatting (NEW)
+// Case content formatting
 // ----------------------
 function normalizeText(s) {
   return String(s || "")
@@ -112,7 +109,6 @@ function splitIntoParagraphs(text) {
   const t = normalizeText(text);
   if (!t) return [];
 
-  // If text already has paragraph breaks, keep them
   const hasParaBreaks = /\n\s*\n/.test(t);
   if (hasParaBreaks) {
     return t
@@ -121,7 +117,6 @@ function splitIntoParagraphs(text) {
       .filter(Boolean);
   }
 
-  // Heuristic: insert breaks before common section headings & some patterns
   const headings = [
     "JUDGMENT",
     "INTRODUCTION",
@@ -143,20 +138,15 @@ function splitIntoParagraphs(text) {
 
   let x = t;
 
-
-  // Break before headings that appear as words in the blob
   for (const h of headings) {
     const re = new RegExp(`\\s(${h})\\s`, "g");
     x = x.replace(re, `\n\n$1 `);
   }
 
-  // Break before numbered points (1., 2., 3.) and lettered points (a), (b)
   x = x
     .replace(/\s(\d{1,2}\.)\s/g, "\n\n$1 ")
     .replace(/\s(\([a-z]\))\s/g, "\n\n$1 ");
 
-  // Break at sentence boundaries when there is a clear “new section” vibe:
-  // (this is conservative; avoids over-splitting)
   x = x.replace(/([.?!])\s+(The issues in dispute are:)/g, "$1\n\n$2");
 
   return x
@@ -167,12 +157,14 @@ function splitIntoParagraphs(text) {
 
 function isLikelyHeadingParagraph(p) {
   const s = String(p || "").trim();
-
-  // Pure uppercase short lines (e.g., "ANALYSIS", "DETERMINATION")
   if (s.length <= 40 && /^[A-Z\s]+$/.test(s) && /[A-Z]/.test(s)) return true;
 
-  // Title-case headings like "Judgment", "Introduction"
-  if (s.length <= 40 && /^(Judgment|Introduction|Background|Facts|Issues?|Held|Analysis|Determination|Orders?|Conclusion)\b/.test(s))
+  if (
+    s.length <= 40 &&
+    /^(Judgment|Introduction|Background|Facts|Issues?|Held|Analysis|Determination|Orders?|Conclusion)\b/.test(
+      s
+    )
+  )
     return true;
 
   return false;
@@ -205,41 +197,32 @@ function AiSummaryRichText({ text }) {
     .replace(/\r\n/g, "\n")
     .split("\n");
 
-  // Detect headings like "Title:", "Facts:", "Issues:", "Holding/Decision:", etc
   const isHeadingLine = (s) =>
     /^(title|digest|court|facts|issue|issues|summary|held|holding\/decision|holding|decision|reasoning|analysis|key points?|key takeaways?|takeaways)\s*:/i.test(
       String(s || "").trim()
     );
 
-  // Detect bullets: "-", "•", "*", "–"
   const isBulletLine = (s) => /^\s*[-•*–]\s+/.test(String(s || ""));
 
-  // Normalize section key for styling
   function normalizeSectionKey(labelTrim) {
     const raw = String(labelTrim || "").trim().toLowerCase();
-    // "holding/decision" -> "holding-decision"
     return raw.replace(/\s*\/\s*/g, "-").replace(/\s+/g, "-");
   }
 
   let currentSection = null;
   const blocks = [];
   let i = 0;
-
-  // If we see a "Key Points:" / "Key Takeaways:" heading,
-  // wrap the next bullet list into a <details> with cards.
   let pendingKeyPoints = null;
 
   while (i < lines.length) {
     const raw = lines[i];
     const s = String(raw || "").trim();
 
-    // Skip extra blank lines
     if (!s) {
       i += 1;
       continue;
     }
 
-    // Heading line
     if (isHeadingLine(s)) {
       const [label, ...rest] = s.split(":");
       const labelTrim = label.trim();
@@ -251,7 +234,6 @@ function AiSummaryRichText({ text }) {
       const isTitle = /^title$/i.test(labelTrim);
       const isKeyPoints = /^(key points?|key takeaways?|takeaways)$/i.test(labelTrim);
 
-      // Title block (premium)
       if (isTitle) {
         blocks.push(
           <div className="lrrAiTitleBlock" key={`t-${i}`}>
@@ -263,19 +245,16 @@ function AiSummaryRichText({ text }) {
         continue;
       }
 
-      // Key Points handled separately (wrap next bullets)
       if (isKeyPoints) {
         pendingKeyPoints = { label: labelTrim, value, sectionKey: "key-points" };
         i += 1;
         continue;
       }
 
-      // Normal heading pill
       blocks.push(
         <div className="lrrAiBlock" key={`h-${i}`} data-section={sectionKey}>
           <div className="lrrAiH">
-            {labelTrim}:
-            {value ? <span className="lrrAiHVal"> {value}</span> : null}
+            {labelTrim}:{value ? <span className="lrrAiHVal"> {value}</span> : null}
           </div>
         </div>
       );
@@ -284,7 +263,6 @@ function AiSummaryRichText({ text }) {
       continue;
     }
 
-    // Bullet list
     if (isBulletLine(raw)) {
       const items = [];
       while (i < lines.length && isBulletLine(lines[i])) {
@@ -293,7 +271,6 @@ function AiSummaryRichText({ text }) {
         i += 1;
       }
 
-      // If previous heading was "Key Takeaways/Key Points", wrap as collapsible cards
       if (pendingKeyPoints) {
         const kp = pendingKeyPoints;
         pendingKeyPoints = null;
@@ -319,7 +296,6 @@ function AiSummaryRichText({ text }) {
         continue;
       }
 
-      // Normal bullet list (section-styled)
       blocks.push(
         <ul className="lrrAiUl" data-section={currentSection || undefined} key={`ul-${i}`}>
           {items.map((t, idx) => (
@@ -333,7 +309,6 @@ function AiSummaryRichText({ text }) {
       continue;
     }
 
-    // Paragraph block (consume until blank line or heading or bullets)
     const para = [];
     while (
       i < lines.length &&
@@ -354,38 +329,42 @@ function AiSummaryRichText({ text }) {
 
   return <div className="lrrAiRich">{blocks}</div>;
 }
-function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel,onOpenRelated }) {
+
+// ----------------------
+// AI Summary Panel
+// ----------------------
+function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel, onOpenRelated }) {
   const [type, setType] = useState("basic"); // basic | extended
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const didAutoGenRef = useRef(false);
+
   // Phase 4 — Cross-Case Intelligence (Related cases)
-  const [relatedCases, setRelatedCases] = useState([]); // [{ title, court, year, citation, url }]
+  const [relatedCases, setRelatedCases] = useState([]);
   const [relatedCasesLoading, setRelatedCasesLoading] = useState(false);
   const [relatedCasesError, setRelatedCasesError] = useState("");
 
-  // NEW: UX helpers
-  const [sourceLabel, setSourceLabel] = useState(""); // "Cached" | "Generated" | ""
-  const [toast, setToast] = useState(""); // lightweight feedback
+  // UX helpers
+  const [sourceLabel, setSourceLabel] = useState("");
+  const [toast, setToast] = useState("");
 
-  //AI
   // Phase 5 — Chat with LegalAI (per-case)
-    const [chatOpen, setChatOpen] = useState(false);
-    const [chatLoading, setChatLoading] = useState(false);
-    const [chatError, setChatError] = useState("");
-    const [chatInput, setChatInput] = useState("");
-    const [chatMsgs, setChatMsgs] = useState([
-      {
-        role: "assistant",
-        content:
-          "Ask me anything about this case: issues, holding, reasoning, relevant statutes, and how it compares to similar cases.",
-      },
-    ]);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState("");
+  const [chatInput, setChatInput] = useState("");
+  const [chatMsgs, setChatMsgs] = useState([
+    {
+      role: "assistant",
+      content:
+        "Ask me anything about this case: issues, holding, reasoning, relevant statutes, and how it compares to similar cases.",
+    },
+  ]);
 
- function addMsg(role, content) {
-  setChatMsgs((prev) => [...prev, { role, content }]);
-}
+  function addMsg(role, content) {
+    setChatMsgs((prev) => [...prev, { role, content }]);
+  }
 
   const canRun = useMemo(
     () => Number.isFinite(Number(lawReportId)) && Number(lawReportId) > 0,
@@ -395,12 +374,12 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel,onOpenRe
   function isCacheMiss(err) {
     return err?.response?.status === 404;
   }
-  
+
   async function generateSummary({ force = false } = {}) {
-    const res = await api.post(
-      `/ai/law-reports/${Number(lawReportId)}/summary`,
-      { type, forceRegenerate: force }
-    );
+    const res = await api.post(`/ai/law-reports/${Number(lawReportId)}/summary`, {
+      type,
+      forceRegenerate: force,
+    });
     return res.data?.data ?? res.data;
   }
 
@@ -410,7 +389,6 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel,onOpenRe
     flash._t = window.setTimeout(() => setToast(""), 1400);
   }
 
-//AI Related Cases Helper
   function normalizeAiCase(x) {
     return {
       jurisdiction: x?.jurisdiction || x?.country || x?.region || "",
@@ -424,35 +402,38 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel,onOpenRe
     };
   }
 
-  //Fetch with AI
   async function fetchAiRelatedCases() {
-  if (!canRun) return;
+    if (!canRun) return;
 
-  setRelatedCasesLoading(true);
-  setRelatedCasesError("");
+    setRelatedCasesLoading(true);
+    setRelatedCasesError("");
 
-  try {
-    const res = await api.post(
-      `/ai/law-reports/${Number(lawReportId)}/related-cases`,
-      {}, // no body
-      {
-        params: { takeKenya: 2, takeForeign: 2 }, // ✅ your requirement
-      }
-    );
+    try {
+      const res = await api.post(
+        `/ai/law-reports/${Number(lawReportId)}/related-cases`,
+        {},
+        { params: { takeKenya: 2, takeForeign: 2 } }
+      );
 
-    const payload = res.data?.items ?? res.data?.data?.items ?? res.data?.data ?? res.data;
-    const items = Array.isArray(payload) ? payload : Array.isArray(payload?.items) ? payload.items : [];
-    const normalized = items.map(normalizeAiCase);
-    setRelatedCases(normalized);
-    if (!items.length) setRelatedCasesError("No suggestions returned.");
-    else flash("Related cases loaded.");
-  } catch (e) {
-    setRelatedCases([]);
-    setRelatedCasesError(getApiErrorMessage(e, "Failed to fetch AI related cases."));
-  } finally {
-    setRelatedCasesLoading(false);
+      const payload = res.data?.items ?? res.data?.data?.items ?? res.data?.data ?? res.data;
+      const items = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.items)
+          ? payload.items
+          : [];
+
+      const normalized = items.map(normalizeAiCase);
+      setRelatedCases(normalized);
+
+      if (!items.length) setRelatedCasesError("No suggestions returned.");
+      else flash("Related cases loaded.");
+    } catch (e) {
+      setRelatedCases([]);
+      setRelatedCasesError(getApiErrorMessage(e, "Failed to fetch AI related cases."));
+    } finally {
+      setRelatedCasesLoading(false);
+    }
   }
-}
 
   async function onCopySummary() {
     const text = String(result?.summary || "").trim();
@@ -481,12 +462,9 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel,onOpenRe
     }
   }
 
-  
-
   useEffect(() => {
     if (!canRun) return;
 
-    // reset "auto-generate once" guard each time report/type changes
     didAutoGenRef.current = false;
     setSourceLabel("");
     setToast("");
@@ -500,7 +478,6 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel,onOpenRe
       setLoading(true);
       setError("");
       try {
-        // 1) Try cached first (GET)
         const res = await api.get(`/ai/law-reports/${Number(lawReportId)}/summary`, {
           params: { type },
         });
@@ -512,7 +489,6 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel,onOpenRe
       } catch (err) {
         if (cancelled) return;
 
-        // 2) If cache miss (404), auto-generate ONCE (POST), then show it
         if (isCacheMiss(err) && !didAutoGenRef.current) {
           didAutoGenRef.current = true;
           try {
@@ -528,7 +504,6 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel,onOpenRe
             setError(getApiErrorMessage(genErr, "Failed to generate AI summary."));
           }
         } else {
-          // 3) Other errors (401/403/500/etc.)
           setResult(null);
           setSourceLabel("");
           setError(getApiErrorMessage(err, "No cached summary found yet."));
@@ -548,102 +523,115 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel,onOpenRe
 
   return (
     <section className="lrrAi">
-  <div className="lrrAiTop">
-  <div className="lrrAiTitleRow">
-    <div className="lrrAiTitle">LegalAI Summary</div>
+      <div className="lrrAiTop">
+        <div className="lrrAiTitleRow">
+          <div className="lrrAiTitle">LegalAI Summary</div>
 
-    {sourceLabel ? (
-      <span className="lrrAiBadge" title="Where this result came from">
-        {sourceLabel}
-      </span>
-    ) : (
-      <span className="lrrAiBadge">AI generated</span>
-    )}
+          {sourceLabel ? (
+            <span className="lrrAiBadge" title="Where this result came from">
+              {sourceLabel}
+            </span>
+          ) : (
+            <span className="lrrAiBadge">AI generated</span>
+          )}
 
-    {/* Icon actions – LegalAI tab only */}
-    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      {/* Copy */}
-      <button
-        type="button"
-        className="lrrAiUpgradeBtn ghost"
-        disabled={loading || !result}
-        onClick={onCopySummary}
-        title="Copy summary"
-        aria-label="Copy summary"
-      >
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <rect x="9" y="9" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.6" />
-          <rect x="5" y="5" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.6" />
-        </svg>
-      </button>
+          <div className="lrrAiIconRow">
+            <button
+              type="button"
+              className="lrrAiUpgradeBtn ghost"
+              disabled={loading || !result}
+              onClick={onCopySummary}
+              title="Copy summary"
+              aria-label="Copy summary"
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <rect
+                  x="9"
+                  y="9"
+                  width="10"
+                  height="10"
+                  rx="2"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                />
+                <rect
+                  x="5"
+                  y="5"
+                  width="10"
+                  height="10"
+                  rx="2"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                />
+              </svg>
+            </button>
 
-      {/* Summarize / Regenerate */}
-      <button
-        type="button"
-        className="lrrAiUpgradeBtn"
-        disabled={loading || !canRun}
-        onClick={onRegenerate}
-        title="Summarize / regenerate"
-        aria-label="Summarize / regenerate"
-      >
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="M12 2l1.2 4.2L17.4 8l-4.2 1.2L12 13.4l-1.2-4.2L6.6 8l4.2-1.8L12 2z"
-            stroke="currentColor"
-            strokeWidth="1.6"
-          />
-          <path
-            d="M5 20c2.5-2.2 5.2-3.3 8-3.3s5.5 1.1 8 3.3"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-          />
-        </svg>
-      </button>
-      <button
-        type="button"
-        className={`lrrAiUpgradeBtn ${chatOpen ? "ghost" : ""}`}
-        onClick={() => setChatOpen((v) => !v)}
-        title="Chat with LegalAI"
-        aria-label="Chat with LegalAI"
-      >
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="M4 5.5C4 4.1 5.1 3 6.5 3h11C19.9 3 21 4.1 21 5.5v7C21 13.9 19.9 15 18.5 15H11l-4.5 4V15H6.5C5.1 15 4 13.9 4 12.5v-7z"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M7.5 7.5h10M7.5 10.5h7"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-          />
-        </svg>
-      </button>
-    </div>
-  </div>
+            <button
+              type="button"
+              className="lrrAiUpgradeBtn"
+              disabled={loading || !canRun}
+              onClick={onRegenerate}
+              title="Summarize / regenerate"
+              aria-label="Summarize / regenerate"
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M12 2l1.2 4.2L17.4 8l-4.2 1.2L12 13.4l-1.2-4.2L6.6 8l4.2-1.8L12 2z"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                />
+                <path
+                  d="M5 20c2.5-2.2 5.2-3.3 8-3.3s5.5 1.1 8 3.3"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
 
-  <div className="lrrAiHeadnote">
-    <div className="lrrAiHeadnoteTitle">{digestTitle || "—"}</div>
-    <div className="lrrAiHeadnoteMeta">{courtLabel || "—"}</div>
-    <div className="lrrAiHeadnoteRule" />
-  </div>
+            <button
+              type="button"
+              className={`lrrAiUpgradeBtn ${chatOpen ? "ghost" : ""}`}
+              onClick={() => setChatOpen((v) => !v)}
+              title="Chat with LegalAI"
+              aria-label="Chat with LegalAI"
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M4 5.5C4 4.1 5.1 3 6.5 3h11C19.9 3 21 4.1 21 5.5v7C21 13.9 19.9 15 18.5 15H11l-4.5 4V15H6.5C5.1 15 4 13.9 4 12.5v-7z"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M7.5 7.5h10M7.5 10.5h7"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
 
-  {/* Tiny toast (copy feedback, etc.) */}
-  {toast ? <div className="lrrAiToast">{toast}</div> : null}
-</div>
+        <div className="lrrAiHeadnote">
+          <div className="lrrAiHeadnoteTitle">{digestTitle || "—"}</div>
+          <div className="lrrAiHeadnoteMeta">{courtLabel || "—"}</div>
+          <div className="lrrAiHeadnoteRule" />
+        </div>
+
+        {toast ? <div className="lrrAiToast">{toast}</div> : null}
+      </div>
 
       {error ? <div className="lrrAiError">{error}</div> : null}
 
       {result ? (
         <div className="lrrAiResult">
-          {/* ✅ Upgrade prompt: Basic -> Extended (user-triggered) */}
           {!isExtended ? (
             <div className="lrrAiUpgrade">
               <div className="lrrAiUpgradeText">
-                Need more depth? Generate an <b>Extended</b> analysis (more detailed; will be token-gated later).
+                Need more depth? Generate an <b>Extended</b> analysis (more detailed; will be token-gated
+                later).
               </div>
 
               <button
@@ -677,285 +665,244 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel,onOpenRe
           <div className="lrrAiBody">
             <AiSummaryRichText text={result.summary || ""} />
           </div>
+
           {chatOpen ? (
-  <div className="lrr2Panel" style={{ marginTop: 12 }}>
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-      <div>
-        <div style={{ fontWeight: 800 }}>Chat with LegalAI</div>
-        <div style={{ opacity: 0.75, fontSize: 13 }}>
-          Ask about issues, holdings, reasoning, and related/persuasive cases.
-        </div>
-      </div>
+            <div className="lrr2Panel lrr2Panel--tight lrr2ChatPanel">
+              <div className="lrr2PanelHead">
+                <div className="lrr2PanelHeadLeft">
+                  <div className="lrr2PanelTitle">Chat with LegalAI</div>
+                  <div className="lrr2PanelSub">
+                    Ask about issues, holdings, reasoning, and related/persuasive cases.
+                  </div>
+                </div>
 
-      <button
-        type="button"
-        className="lrr2Btn"
-        onClick={() => {
-          setChatMsgs((prev) =>
-            prev.length > 1
-              ? [
-                  prev[0],
-                  {
-                    role: "assistant",
-                    content:
-                      "Cleared. Ask a new question about this case.",
-                  },
-                ]
-              : prev
-          );
-          setChatError("");
-          setChatInput("");
-        }}
-        title="Clear chat"
-      >
-        Clear
-      </button>
-    </div>
-      <div
-        style={{
-          marginTop: 10,
-          borderRadius: 14,
-          border: "1px solid rgba(255,255,255,0.12)",
-          background: "rgba(0,0,0,0.06)",
-          padding: 12,
-          maxHeight: 320,
-          overflow: "auto",
-        }}
-      >
-        {chatMsgs.map((m, idx) => (
-          <div
-            key={idx}
-            style={{
-              display: "flex",
-              justifyContent: m.role === "user" ? "flex-end" : "flex-start",
-              marginBottom: 10,
-            }}
-          >
-            <div
-              style={{
-                maxWidth: "86%",
-                padding: "10px 12px",
-                borderRadius: 14,
-                fontSize: 13,
-                lineHeight: 1.45,
-                whiteSpace: "pre-wrap",
-                border: "1px solid rgba(255,255,255,0.10)",
-                background: m.role === "user" ? "rgba(161,24,30,0.14)" : "rgba(255,255,255,0.08)",
-                fontWeight: 650,
-              }}
-            >
-              {m.content}
-            </div>
-          </div>
-        ))}
-      </div>
+                <button
+                  type="button"
+                  className="lrr2Btn"
+                  onClick={() => {
+                    setChatMsgs((prev) =>
+                      prev.length > 1
+                        ? [
+                            prev[0],
+                            {
+                              role: "assistant",
+                              content: "Cleared. Ask a new question about this case.",
+                            },
+                          ]
+                        : prev
+                    );
+                    setChatError("");
+                    setChatInput("");
+                  }}
+                  title="Clear chat"
+                >
+                  Clear
+                </button>
+              </div>
 
-      {chatError ? <div style={{ marginTop: 10, opacity: 0.9 }}>{chatError}</div> : null}
+              <div className="lrr2ChatBox" role="log" aria-label="Chat messages">
+                {chatMsgs.map((m, idx) => (
+                  <div
+                    key={idx}
+                    className={`lrr2ChatRow ${m.role === "user" ? "isUser" : "isAi"}`}
+                  >
+                    <div className={`lrr2ChatBubble ${m.role === "user" ? "isUser" : "isAi"}`}>
+                      {m.content}
+                    </div>
+                  </div>
+                ))}
+              </div>
 
-      <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <input
-          className="lrr2SearchInput"
-          value={chatInput}
-          onChange={(e) => setChatInput(e.target.value)}
-          placeholder="Ask LegalAI… e.g. What were the key issues and the holding?"
-          style={{ flex: 1, minWidth: 240 }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              document.getElementById("lrrChatSendBtn")?.click();
-            }
-          }}
-        />
+              {chatError ? <div className="lrr2PanelError">{chatError}</div> : null}
 
-        <button
-          id="lrrChatSendBtn"
-          type="button"
-          className="lrr2Btn primary"
-          disabled={chatLoading || !String(chatInput || "").trim()}
-          onClick={async () => {
-            if (!canRun) return;
-            const msg = String(chatInput || "").trim();
-            if (!msg) return;
+              <div className="lrr2ChatComposer">
+                <input
+                  className="lrr2SearchInput lrr2ChatInput"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Ask LegalAI… e.g. What were the key issues and the holding?"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      document.getElementById("lrrChatSendBtn")?.click();
+                    }
+                  }}
+                />
 
-            setChatInput("");
-            setChatError("");
-            addMsg("user", msg);
+                <button
+                  id="lrrChatSendBtn"
+                  type="button"
+                  className="lrr2Btn primary"
+                  disabled={chatLoading || !String(chatInput || "").trim()}
+                  onClick={async () => {
+                    if (!canRun) return;
+                    const msg = String(chatInput || "").trim();
+                    if (!msg) return;
 
-            try {
-              setChatLoading(true);
+                    setChatInput("");
+                    setChatError("");
+                    addMsg("user", msg);
 
-              // ✅ API call (we'll confirm endpoint in Step 3D)
-              const history = chatMsgs.slice(-8).map((m) => ({ role: m.role, content: m.content }));
+                    try {
+                      setChatLoading(true);
+                      const history = chatMsgs
+                        .slice(-8)
+                        .map((m) => ({ role: m.role, content: m.content }));
 
-              const res = await api.post(`/ai/law-reports/${Number(lawReportId)}/chat`, {
-                message: msg,
-                history,
-              });
+                      const res = await api.post(`/ai/law-reports/${Number(lawReportId)}/chat`, {
+                        message: msg,
+                        history,
+                      });
 
-              const reply =
-                res.data?.reply ||
-                res.data?.data?.reply ||
-                res.data?.message ||
-                res.data?.data?.message ||
-                res.data?.content ||
-                res.data?.data?.content ||
-                "";
+                      const reply =
+                        res.data?.reply ||
+                        res.data?.data?.reply ||
+                        res.data?.message ||
+                        res.data?.data?.message ||
+                        res.data?.content ||
+                        res.data?.data?.content ||
+                        "";
 
-              addMsg("assistant", String(reply || "No response returned."));
-            } catch (e) {
-              setChatError(getApiErrorMessage(e, "Chat failed."));
-              addMsg("assistant", "Sorry — I couldn’t complete that request. Please try again.");
-            } finally {
-              setChatLoading(false);
-            }
-          }}
-          title="Send"
-        >
-          {chatLoading ? "Sending…" : "Send"}
-        </button>
-      </div>
-    </div>
-  ) : null}
-        {/* Phase 4 — AI Related Cases (Enhancement-only) */}
-        <div className="lrr2Panel" style={{ marginTop: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-            <div>
-              <div style={{ fontWeight: 800 }}>AI Related Cases</div>
-              <div style={{ opacity: 0.75, fontSize: 13 }}>
-                Enhancement only · returns <b>2 Kenya</b> and <b>2 Outside Kenya</b>. Always verify citations.
+                      addMsg("assistant", String(reply || "No response returned."));
+                    } catch (e) {
+                      setChatError(getApiErrorMessage(e, "Chat failed."));
+                      addMsg("assistant", "Sorry — I couldn’t complete that request. Please try again.");
+                    } finally {
+                      setChatLoading(false);
+                    }
+                  }}
+                  title="Send"
+                >
+                  {chatLoading ? "Sending…" : "Send"}
+                </button>
               </div>
             </div>
-
-            <button
-              type="button"
-              className="lrr2Btn"
-              disabled={relatedCasesLoading}
-              onClick={fetchAiRelatedCases}
-              title="Find AI related cases"
-            >
-              {relatedCasesLoading ? "Finding…" : "Find related"}
-            </button>
-          </div>
-
-          {relatedCasesError ? (
-            <div style={{ marginTop: 10, opacity: 0.9 }}>{relatedCasesError}</div>
           ) : null}
 
-          {!relatedCasesLoading && !relatedCasesError && relatedCases.length === 0 ? (
-            <div style={{ marginTop: 10, opacity: 0.75 }}>
-              No AI related cases loaded yet. Click <b>Find related</b>.
+          {/* Phase 4 — AI Related Cases */}
+          <div className="lrr2Panel lrr2Panel--tight lrr2AiRelatedPanel">
+            <div className="lrr2PanelHead">
+              <div className="lrr2PanelHeadLeft">
+                <div className="lrr2PanelTitle">AI Related Cases</div>
+                <div className="lrr2PanelSub">
+                  Enhancement only · returns <b>2 Kenya</b> and <b>2 Outside Kenya</b>. Always verify
+                  citations.
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="lrr2Btn"
+                disabled={relatedCasesLoading}
+                onClick={fetchAiRelatedCases}
+                title="Find AI related cases"
+              >
+                {relatedCasesLoading ? "Finding…" : "Find related"}
+              </button>
             </div>
-          ) : null}
 
-          {relatedCases.length > 0 ? (
-            <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
-              {(() => {
-                const kenya = relatedCases.filter(
-                  (x) => String(x?.jurisdiction || "").toLowerCase() === "kenya"
-                );
-                const foreign = relatedCases.filter(
-                  (x) => String(x?.jurisdiction || "").toLowerCase() !== "kenya"
-                );
+            {relatedCasesError ? <div className="lrr2PanelError">{relatedCasesError}</div> : null}
 
-                const renderItem = (c, idx) => {
-                  const title = c?.title || `Related case ${idx + 1}`;
-                  const cite = c?.citation || "";
-                  const court = c?.court || "";
-                  const year = c?.year ? String(c.year) : "";
-                  const meta = [court, year].filter(Boolean).join(" • ");
-                  const rid = Number(c?.lawReportId || 0);
-                  const url = c?.url || "";
-                  const note = c?.note || "";
+            {!relatedCasesLoading && !relatedCasesError && relatedCases.length === 0 ? (
+              <div className="lrr2PanelEmpty">
+                No AI related cases loaded yet. Click <b>Find related</b>.
+              </div>
+            ) : null}
 
-                  // Prefer internal navigation if LawReportId looks valid
-                  const canOpenInternal = Number.isFinite(rid) && rid > 0;
+            {relatedCases.length > 0 ? (
+              <div className="lrr2RelatedGrid">
+                {(() => {
+                  const kenya = relatedCases.filter(
+                    (x) => String(x?.jurisdiction || "").toLowerCase() === "kenya"
+                  );
+                  const foreign = relatedCases.filter(
+                    (x) => String(x?.jurisdiction || "").toLowerCase() !== "kenya"
+                  );
 
-                  return (
-                    <div
-                      key={`${title}-${idx}`}
-                      style={{
-                        padding: 12,
-                        borderRadius: 14,
-                        border: "1px solid rgba(255,255,255,0.12)",
-                        background: "rgba(0,0,0,0.08)",
-                      }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                        <div style={{ minWidth: 260 }}>
-                          <div style={{ fontWeight: 900, lineHeight: 1.25 }}>{title}</div>
-                          {meta ? <div style={{ marginTop: 4, fontSize: 12, opacity: 0.78 }}>{meta}</div> : null}
+                  const renderItem = (c, idx) => {
+                    const title = c?.title || `Related case ${idx + 1}`;
+                    const cite = c?.citation || "";
+                    const court = c?.court || "";
+                    const year = c?.year ? String(c.year) : "";
+                    const meta = [court, year].filter(Boolean).join(" • ");
+                    const rid = Number(c?.lawReportId || 0);
+                    const url = c?.url || "";
+                    const note = c?.note || "";
+                    const canOpenInternal = Number.isFinite(rid) && rid > 0;
+
+                    return (
+                      <div key={`${title}-${idx}`} className="lrr2RelatedCard">
+                        <div className="lrr2RelatedTop">
+                          <div className="lrr2RelatedTitleWrap">
+                            <div className="lrr2RelatedTitle">{title}</div>
+                            {meta ? <div className="lrr2RelatedMeta">{meta}</div> : null}
+                          </div>
+
+                          <div className="lrr2RelatedTags">
+                            {cite ? <span className="lrr2Tag">{cite}</span> : null}
+                            {String(c?.jurisdiction || "").toLowerCase() !== "kenya" ? (
+                              <span className="lrr2Tag soft">Persuasive</span>
+                            ) : null}
+                          </div>
                         </div>
 
-                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                          {cite ? <span className="lrr2Tag">{cite}</span> : null}
-                          {String(c?.jurisdiction || "").toLowerCase() !== "kenya" ? (
-                            <span className="lrr2Tag soft">Persuasive</span>
+                        {note ? <div className="lrr2RelatedNote">{note}</div> : null}
+
+                        <div className="lrr2RelatedActions">
+                          {canOpenInternal ? (
+                            <button
+                              type="button"
+                              className="lrr2Btn"
+                              onClick={() => onOpenRelated?.(rid)}
+                              title="Open in LawAfrica"
+                            >
+                              Open in LawAfrica
+                            </button>
+                          ) : null}
+
+                          {!canOpenInternal && url ? (
+                            <a className="lrr2Btn" href={url} target="_blank" rel="noreferrer">
+                              Open reference
+                            </a>
                           ) : null}
                         </div>
                       </div>
+                    );
+                  };
 
-                      {note ? (
-                        <div style={{ marginTop: 8, fontSize: 12, opacity: 0.85, fontWeight: 700 }}>
-                          {note}
-                        </div>
-                      ) : null}
-
-                      <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                      {canOpenInternal ? (
-                        <button
-                          type="button"
-                          className="lrr2Btn"
-                          onClick={() => onOpenRelated?.(rid)}
-                          title="Open in LawAfrica"
-                        >
-                          Open in LawAfrica
-                        </button>
-                      ) : null}
-
-                        {!canOpenInternal && url ? (
-                          <a className="lrr2Btn" href={url} target="_blank" rel="noreferrer">
-                            Open reference
-                          </a>
-                        ) : null}
+                  return (
+                    <>
+                      <div className="lrr2RelatedSection">
+                        <div className="lrr2RelatedSectionTitle">Kenya</div>
+                        {kenya.length ? (
+                          <div className="lrr2RelatedStack">{kenya.map(renderItem)}</div>
+                        ) : (
+                          <div className="lrr2RelatedNone">No Kenya suggestions returned.</div>
+                        )}
                       </div>
-                    </div>
+
+                      <div className="lrr2RelatedSection">
+                        <div className="lrr2RelatedSectionTitle">Outside Kenya</div>
+                        {foreign.length ? (
+                          <div className="lrr2RelatedStack">{foreign.map(renderItem)}</div>
+                        ) : (
+                          <div className="lrr2RelatedNone">No foreign suggestions returned.</div>
+                        )}
+                      </div>
+                    </>
                   );
-                };
-
-                return (
-                  <>
-                    <div>
-                      <div style={{ fontWeight: 800, marginBottom: 8 }}>Kenya</div>
-                      {kenya.length ? (
-                        <div style={{ display: "grid", gap: 10 }}>{kenya.map(renderItem)}</div>
-                      ) : (
-                        <div style={{ opacity: 0.75 }}>No Kenya suggestions returned.</div>
-                      )}
-                    </div>
-
-                    <div style={{ marginTop: 6 }}>
-                      <div style={{ fontWeight: 800, marginBottom: 8 }}>Outside Kenya</div>
-                      {foreign.length ? (
-                        <div style={{ display: "grid", gap: 10 }}>{foreign.map(renderItem)}</div>
-                      ) : (
-                        <div style={{ opacity: 0.75 }}>No foreign suggestions returned.</div>
-                      )}
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          ) : null}
-        </div>
+                })()}
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : loading ? null : (
         <div className="lrrAiTip">No summary available yet.</div>
       )}
 
       <div className="lrrAiFooterNote">
-        *** This summary is automatically generated by LegalAI and may be cached for performance.
-        Always verify critical details against the full case text —{" "}
-        <b>{isExtended ? "Extended" : "Basic"}</b>.
+        *** This summary is automatically generated by LegalAI and may be cached for performance. Always
+        verify critical details against the full case text — <b>{isExtended ? "Extended" : "Basic"}</b>.
       </div>
     </section>
   );
@@ -972,23 +919,21 @@ export default function LawReportReader() {
   const isInst = isInstitutionUser();
   const isPublic = isPublicUser();
   const isAdmin = isGlobalAdminUser();
-  // Transcript toggle
+
   const [contentOpen, setContentOpen] = useState(true);
 
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // gating
   const [hasContent, setHasContent] = useState(true);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
 
   const [access, setAccess] = useState(null);
   const [accessLoading, setAccessLoading] = useState(false);
 
-  // UI state: "content" or "ai"
   const [view, setView] = useState("content");
-  // Related cases (DB-only)
+
   const [relatedDb, setRelatedDb] = useState([]);
   const [relatedDbLoading, setRelatedDbLoading] = useState(false);
   const [relatedDbError, setRelatedDbError] = useState("");
@@ -996,8 +941,6 @@ export default function LawReportReader() {
   const [fontScale, setFontScale] = useState(1); // 0.9 - 1.2
   const [readingTheme, setReadingTheme] = useState("paper"); // paper | sepia | dark
   const [serif, setSerif] = useState(true);
-
-  
 
   // Search
   const [q, setQ] = useState("");
@@ -1007,59 +950,71 @@ export default function LawReportReader() {
   const [openResults, setOpenResults] = useState(false);
   const searchAbortRef = useRef({ cancelled: false });
 
-  // Search dropdown close helpers
   const searchBoxRef = useRef(null);
   const searchInputRef = useRef(null);
 
   // Reading progress
-const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const progressBarRef = useRef(null);
 
-useEffect(() => {
-  function onScroll() {
-    const el = document.documentElement;
-    const scrollTop = el.scrollTop || document.body.scrollTop;
-    const scrollHeight = el.scrollHeight || document.body.scrollHeight;
-    const clientHeight = el.clientHeight || window.innerHeight;
-    const max = Math.max(1, scrollHeight - clientHeight);
-    setProgress(Math.min(1, Math.max(0, scrollTop / max)));
-  }
-  
+  // Map fontScale to a class (no inline styles)
+  const fsClass = useMemo(() => {
+    const n = Math.round(fontScale * 100); // 90..120
+    const clamped = Math.max(90, Math.min(120, n));
+    return `lrr2Fs-${clamped}`;
+  }, [fontScale]);
 
-  onScroll();
-  window.addEventListener("scroll", onScroll, { passive: true });
-  return () => window.removeEventListener("scroll", onScroll);
-}, []);
+  const fontClass = serif ? "lrr2FontSerif" : "lrr2FontSans";
 
-
-  //Related Cases:
-useEffect(() => {
-  let cancelled = false;
-
-  async function loadRelatedDb() {
-    if (view !== "content") return; // ✅ only when Transcript tab
-    if (!Number.isFinite(reportId) || reportId <= 0) return;
-
-    try {
-      setRelatedDbLoading(true);
-      setRelatedDbError("");
-      const list = await fetchRelatedLawReports(reportId, 8);
-      if (!cancelled) setRelatedDb(Array.isArray(list) ? list : []);
-    } catch (e) {
-      if (!cancelled) {
-        setRelatedDb([]);
-        setRelatedDbError(getApiErrorMessage(e, "Failed to load related cases."));
-      }
-    } finally {
-      if (!cancelled) setRelatedDbLoading(false);
+  useEffect(() => {
+    function onScroll() {
+      const el = document.documentElement;
+      const scrollTop = el.scrollTop || document.body.scrollTop;
+      const scrollHeight = el.scrollHeight || document.body.scrollHeight;
+      const clientHeight = el.clientHeight || window.innerHeight;
+      const max = Math.max(1, scrollHeight - clientHeight);
+      const p = Math.min(1, Math.max(0, scrollTop / max));
+      setProgress(p);
     }
-  }
 
-  loadRelatedDb();
-  return () => {
-    cancelled = true;
-  };
-}, [reportId, view]);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
+  useEffect(() => {
+    if (!progressBarRef.current) return;
+    progressBarRef.current.style.transform = `scaleX(${progress})`;
+  }, [progress]);
+
+  // Related DB cases only in Transcript tab
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRelatedDb() {
+      if (view !== "content") return;
+      if (!Number.isFinite(reportId) || reportId <= 0) return;
+
+      try {
+        setRelatedDbLoading(true);
+        setRelatedDbError("");
+        const list = await fetchRelatedLawReports(reportId, 8);
+        if (!cancelled) setRelatedDb(Array.isArray(list) ? list : []);
+      } catch (e) {
+        if (!cancelled) {
+          setRelatedDb([]);
+          setRelatedDbError(getApiErrorMessage(e, "Failed to load related cases."));
+        }
+      } finally {
+        if (!cancelled) setRelatedDbLoading(false);
+      }
+    }
+
+    loadRelatedDb();
+    return () => {
+      cancelled = true;
+    };
+  }, [reportId, view]);
 
   useEffect(() => {
     if (!openResults) return;
@@ -1119,14 +1074,13 @@ useEffect(() => {
     };
   }, [reportId]);
 
-  // Availability + access checks (based on LegalDocumentId) — DO NOT CHANGE LOGIC
+  // Availability + access checks — DO NOT CHANGE LOGIC
   useEffect(() => {
     let cancelled = false;
 
     async function check() {
       if (!report?.legalDocumentId) return;
 
-      // ✅ Global admin bypass
       if (isAdmin) {
         if (!cancelled) {
           setHasContent(true);
@@ -1137,7 +1091,6 @@ useEffect(() => {
         return;
       }
 
-      // ✅ If ContentText exists, treat as available and skip /availability
       const textHasContent = !!String(report?.contentText || "").trim();
       if (textHasContent) {
         if (!cancelled) {
@@ -1151,13 +1104,12 @@ useEffect(() => {
           const ok = !!r?.data?.hasContent;
           if (!cancelled) setHasContent(ok);
         } catch {
-          if (!cancelled) setHasContent(true); // fail-open
+          if (!cancelled) setHasContent(true);
         } finally {
           if (!cancelled) setAvailabilityLoading(false);
         }
       }
 
-      // Access: only needed for premium + public/institution flows
       if (report?.isPremium && (isInst || isPublic)) {
         try {
           setAccessLoading(true);
@@ -1189,11 +1141,9 @@ useEffect(() => {
       ((hasContent || textHasContent) &&
         (!report.isPremium || hasFullAccess || (!isInst && !isPublic))));
 
-  // ----------------------
-  // Search (debounced) — uses your controller: GET /api/law-reports/search
-  // ----------------------
+  // Search (debounced)
   useEffect(() => {
-    const abortState = searchAbortRef.current; // ✅ capture once
+    const abortState = searchAbortRef.current;
     abortState.cancelled = false;
 
     const term = String(q || "").trim();
@@ -1248,9 +1198,6 @@ useEffect(() => {
     navigate(`/dashboard/law-reports/${rid}`);
   }
 
-  // ----------------------
-  // Returns
-  // ----------------------
   if (loading) {
     return (
       <div className="lrr2Wrap">
@@ -1302,11 +1249,7 @@ useEffect(() => {
   const llrNo = report.reportNumber || report.llrNo || report.llrNumber || String(reportId);
 
   return (
-    <div
-      className="lrr2Wrap"
-      data-theme={readingTheme}
-    >
-      {/* Top header + search */}
+    <div className="lrr2Wrap" data-theme={readingTheme}>
       <header className="lrr2Header">
         <div className="lrr2HeaderTop">
           <div className="lrr2Brand">Law Africa Law Reports-Case File (Transcript)</div>
@@ -1349,10 +1292,7 @@ useEffect(() => {
                   const rid = Number(r?.id);
                   const rtitle = r?.parties || r?.title || `Report #${rid || idx + 1}`;
 
-                  // Left meta line (citation / report no)
                   const leftMeta = r?.citation || r?.reportNumber || "";
-
-                  // Right-side compact meta
                   const year = r?.year ? String(r.year) : "";
                   const court = r?.courtTypeLabel || r?.court || "";
                   const decision = r?.decisionTypeLabel || "";
@@ -1386,478 +1326,469 @@ useEffect(() => {
           </div>
         </div>
       </header>
+
       <div className="lrr2Progress" aria-hidden="true">
-  <div className="lrr2ProgressBar" style={{ transform: `scaleX(${progress})` }} />
-</div>
+        <div className="lrr2ProgressBar" ref={progressBarRef} />
+      </div>
 
-    <button
-      type="button"
-      className="lrr2ToTop"
-      onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-      title="Back to top"
-    >
-      ↑
-    </button>
+      <button
+        type="button"
+        className="lrr2ToTop"
+        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        title="Back to top"
+      >
+        ↑
+      </button>
 
-      {/* Big title line */}
-
-      {/* Two columns: meta table + actions (ONLY these two cards live inside this grid) */}
       <div className="lrr2TopGrid">
         <section className="lrr2MetaCard">
-        <div className="lrr2MetaChips">
-          {llrNo ? (
-            <button className="lrr2MetaChip" data-tip="LLR Number">
-              <span className="lrr2MetaIcon">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" strokeWidth="1.6" />
-                  <path d="M8 9h8M8 13h6" stroke="currentColor" strokeWidth="1.6" />
-                </svg>
-              </span>
-              {llrNo}
-            </button>
-          ) : null}
+          <div className="lrr2MetaChips">
+            {llrNo ? (
+              <button className="lrr2MetaChip" data-tip="LLR Number">
+                <span className="lrr2MetaIcon">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <rect
+                      x="4"
+                      y="4"
+                      width="16"
+                      height="16"
+                      rx="3"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                    />
+                    <path d="M8 9h8M8 13h6" stroke="currentColor" strokeWidth="1.6" />
+                  </svg>
+                </span>
+                {llrNo}
+              </button>
+            ) : null}
 
-          {report.caseNumber ? (
-            <button className="lrr2MetaChip" data-tip="Case Number">
-              <span className="lrr2MetaIcon">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M7 7h10v10H7z" stroke="currentColor" strokeWidth="1.6" />
-                  <path d="M9 11h6M9 14h4" stroke="currentColor" strokeWidth="1.6" />
-                </svg>
-              </span>
-              {report.caseNumber}
-            </button>
-          ) : null}
+            {report.caseNumber ? (
+              <button className="lrr2MetaChip" data-tip="Case Number">
+                <span className="lrr2MetaIcon">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M7 7h10v10H7z" stroke="currentColor" strokeWidth="1.6" />
+                    <path d="M9 11h6M9 14h4" stroke="currentColor" strokeWidth="1.6" />
+                  </svg>
+                </span>
+                {report.caseNumber}
+              </button>
+            ) : null}
 
-          {report.court ? (
-            <button className="lrr2MetaChip" data-tip="Court">
-              <span className="lrr2MetaIcon">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M4 10h16" stroke="currentColor" strokeWidth="1.6" />
-                  <path d="M6 10V6h12v4" stroke="currentColor" strokeWidth="1.6" />
-                  <path d="M6 18h12" stroke="currentColor" strokeWidth="1.6" />
-                </svg>
-              </span>
-              {report.court}
-            </button>
-          ) : null}
+            {report.court ? (
+              <button className="lrr2MetaChip" data-tip="Court">
+                <span className="lrr2MetaIcon">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M4 10h16" stroke="currentColor" strokeWidth="1.6" />
+                    <path d="M6 10V6h12v4" stroke="currentColor" strokeWidth="1.6" />
+                    <path d="M6 18h12" stroke="currentColor" strokeWidth="1.6" />
+                  </svg>
+                </span>
+                {report.court}
+              </button>
+            ) : null}
 
-          {report.country ? (
-            <button className="lrr2MetaChip" data-tip="Country">
-              <span className="lrr2MetaIcon">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" />
-                  <path d="M3 12h18M12 3a15 15 0 0 1 0 18" stroke="currentColor" strokeWidth="1.4" />
-                </svg>
-              </span>
-              {report.country}
-            </button>
-          ) : null}
+            {report.country ? (
+              <button className="lrr2MetaChip" data-tip="Country">
+                <span className="lrr2MetaIcon">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" />
+                    <path
+                      d="M3 12h18M12 3a15 15 0 0 1 0 18"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                    />
+                  </svg>
+                </span>
+                {report.country}
+              </button>
+            ) : null}
 
-          {report.decisionTypeLabel ? (
-            <button className="lrr2MetaChip" data-tip="Decision Type">
-              <span className="lrr2MetaIcon">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M12 3v18M5 12h14" stroke="currentColor" strokeWidth="1.6" />
-                </svg>
-              </span>
-              {report.decisionTypeLabel}
-            </button>
-          ) : null}
+            {report.decisionTypeLabel ? (
+              <button className="lrr2MetaChip" data-tip="Decision Type">
+                <span className="lrr2MetaIcon">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M12 3v18M5 12h14" stroke="currentColor" strokeWidth="1.6" />
+                  </svg>
+                </span>
+                {report.decisionTypeLabel}
+              </button>
+            ) : null}
 
-          {report.judges ? (
-            <button className="lrr2MetaChip" data-tip="Judge(s)">
-              <span className="lrr2MetaIcon">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="8" r="3" stroke="currentColor" strokeWidth="1.6" />
-                  <path d="M5 20c1.5-4 12.5-4 14 0" stroke="currentColor" strokeWidth="1.6" />
-                </svg>
-              </span>
-              {report.judges}
-            </button>
-          ) : null}
+            {report.judges ? (
+              <button className="lrr2MetaChip" data-tip="Judge(s)">
+                <span className="lrr2MetaIcon">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="8" r="3" stroke="currentColor" strokeWidth="1.6" />
+                    <path
+                      d="M5 20c1.5-4 12.5-4 14 0"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                    />
+                  </svg>
+                </span>
+                {report.judges}
+              </button>
+            ) : null}
 
-          {report.decisionDate ? (
-            <button className="lrr2MetaChip" data-tip="Decision Date">
-              <span className="lrr2MetaIcon">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" strokeWidth="1.6" />
-                  <path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" strokeWidth="1.6" />
-                </svg>
-              </span>
-              {formatDate(report.decisionDate)}
-            </button>
-          ) : null}
+            {report.decisionDate ? (
+              <button className="lrr2MetaChip" data-tip="Decision Date">
+                <span className="lrr2MetaIcon">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <rect
+                      x="4"
+                      y="5"
+                      width="16"
+                      height="15"
+                      rx="2"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                    />
+                    <path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" strokeWidth="1.6" />
+                  </svg>
+                </span>
+                {formatDate(report.decisionDate)}
+              </button>
+            ) : null}
 
-          <button
-          type="button"
-          className="lrr2MetaChip"
-          title="Copy title"
-          onClick={() => navigator.clipboard?.writeText(`${title}`)}
-        >
-          Copy title
-        </button>
-
-        {report?.citation ? (
-          <button
-            type="button"
-            className="lrr2MetaChip"
-            title="Copy citation"
-            onClick={() => navigator.clipboard?.writeText(String(report.citation))}
-          >
-            Copy citation
-          </button>
-        ) : null}
-
-          {/* subtle status hints */}
-
-        </div>
-        {!isAdmin && accessLoading ? (
-          <span className="lrr2MetaHint" data-tip="Checking subscription access">
-            checking access…
-          </span>
-        ) : null}
-        </section>
-      <section className="lrr2ActionsCard">
-        <div className="lrr2ActionBtns">
-          {/* Tools have moved to the Transcript tab area */}
-          <div className="lrr2ActionsHint">
-            Use the tabs below to switch between <b>Transcript</b> and <b>LegalAI Summary</b>.
-          </div>
-        </div>
-      </section>
-      </div>
-
-      {/* Unified content area (THIS MUST be OUTSIDE lrr2TopGrid) */}
-      {/* Tabs bar (UI only — uses existing state) */}
-    <div className="lrr2Tabs" role="tablist" aria-label="Reader tabs">
-      <button
-        type="button"
-        role="tab"
-        aria-selected={view === "content"}
-        className={`lrr2Tab ${view === "content" ? "isActive" : ""}`}
-        onClick={() => {
-          setView("content");
-          setContentOpen(true);
-        }}
-      >
-        Transcript
-      </button>
-
-      <button
-        type="button"
-        role="tab"
-        aria-selected={view === "ai"}
-        className={`lrr2Tab ${view === "ai" ? "isActive" : ""}`}
-        onClick={() => {
-          setView("ai");
-          setContentOpen(false);
-        }}
-      >
-        LegalAI Summary
-        <span className="lrr2TabBadge">AI</span>
-      </button>
-    </div>
-    <section className="lrr2Content">
-      {view === "ai" ? (
-        <LawReportAiSummaryPanel
-          lawReportId={reportId}
-          digestTitle={title}
-          courtLabel={report?.court || ""}
-          onOpenRelated={(rid) => navigate(`/dashboard/law-reports/${rid}`)}
-        />
-      ): !textHasContent ? (
-        <div className="lrr2Empty">This report has no content yet.</div>
-      ) : (
-        
-<article className="lrr2Article">
-  <div className="lrr2TranscriptTools">
-
-    {/* Case actions now live under the Transcript tab */}
-    <div className="lrr2CaseActions">
-      <button
-        type="button"
-        className="lrr2Btn primary"
-        onClick={() => {
-          setView("content");
-          setContentOpen(true);
-        }}
-        title="View case content"
-      >
-        View Case Content
-      </button>
-
-      <button
-        type="button"
-        className="lrr2Btn"
-        onClick={() => setContentOpen((v) => !v)}
-        title={contentOpen ? "Hide case content" : "Show case content"}
-      >
-        {contentOpen ? "Hide Case Content" : "Show Case Content"}
-      </button>
-    </div>
-
-    {/* Reader tools */}
-    <div className="lrr2ReaderBar">
-      {/* Left group: typography */}
-      <div className="lrr2ReaderCluster">
-        <button
-          type="button"
-          className="lrr2IconBtn"
-          onClick={() =>
-            setFontScale((v) => Math.max(0.9, Number((v - 0.05).toFixed(2))))
-          }
-          title="Decrease text size"
-          aria-label="Decrease text size"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M5 18h2.2l1.2-3h5.2l1.2 3H17L12.9 6h-1.8L5 18z"
-              stroke="currentColor"
-              strokeWidth="1.6"
-            />
-            <path
-              d="M9.2 13.2h4l-2-5-2 5z"
-              stroke="currentColor"
-              strokeWidth="1.6"
-            />
-            <path
-              d="M18 10h4"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-            />
-          </svg>
-          <span className="lrr2IconBtnText">A−</span>
-        </button>
-
-        <button
-          type="button"
-          className="lrr2IconBtn"
-          onClick={() =>
-            setFontScale((v) => Math.min(1.2, Number((v + 0.05).toFixed(2))))
-          }
-          title="Increase text size"
-          aria-label="Increase text size"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M5 18h2.2l1.2-3h5.2l1.2 3H17L12.9 6h-1.8L5 18z"
-              stroke="currentColor"
-              strokeWidth="1.6"
-            />
-            <path
-              d="M9.2 13.2h4l-2-5-2 5z"
-              stroke="currentColor"
-              strokeWidth="1.6"
-            />
-            <path
-              d="M20 8v6"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-            />
-            <path
-              d="M17 11h6"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-            />
-          </svg>
-          <span className="lrr2IconBtnText">A+</span>
-        </button>
-
-        <button
-          type="button"
-          className={`lrr2IconBtn ${serif ? "isOn" : ""}`}
-          onClick={() => setSerif((v) => !v)}
-          title={serif ? "Serif font (on)" : "Serif font (off)"}
-          aria-label="Toggle serif font"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M7 18h10"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-            />
-            <path
-              d="M9 18V6h6v12"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M8 6h8"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-            />
-          </svg>
-          <span className="lrr2IconBtnText">Serif</span>
-        </button>
-      </div>
-
-      {/* Right group: theme pills */}
-      <div className="lrr2ReaderCluster">
-        <button
-          type="button"
-          className={`lrr2IconBtn ${readingTheme === "paper" ? "isOn" : ""}`}
-          onClick={() => setReadingTheme("paper")}
-          title="Paper theme"
-          aria-label="Paper theme"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M7 3h7l3 3v15H7V3z" stroke="currentColor" strokeWidth="1.6" />
-            <path d="M14 3v4h4" stroke="currentColor" strokeWidth="1.6" />
-            <path
-              d="M9 11h6M9 15h6"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-            />
-          </svg>
-          <span className="lrr2IconBtnText">Paper</span>
-        </button>
-
-        <button
-          type="button"
-          className={`lrr2IconBtn ${readingTheme === "sepia" ? "isOn" : ""}`}
-          onClick={() => setReadingTheme("sepia")}
-          title="Sepia theme"
-          aria-label="Sepia theme"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M7 3h10v18H7V3z" stroke="currentColor" strokeWidth="1.6" />
-            <path
-              d="M9 8h6M9 12h6M9 16h5"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-            />
-            <path
-              d="M5.5 6.5c1.2-1.2 2.7-2 4.5-2"
-              stroke="currentColor"
-              strokeWidth="1.2"
-              opacity=".7"
-            />
-          </svg>
-          <span className="lrr2IconBtnText">Sepia</span>
-        </button>
-
-        <button
-          type="button"
-          className={`lrr2IconBtn ${readingTheme === "dark" ? "isOn" : ""}`}
-          onClick={() => setReadingTheme("dark")}
-          title="Dark theme"
-          aria-label="Dark theme"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinejoin="round"
-            />
-          </svg>
-          <span className="lrr2IconBtnText">Dark</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <div
-    className={`lrr2Collapse ${contentOpen ? "open" : "closed"} lrr2Theme-${readingTheme}`}
-    style={{
-      fontSize: `${fontScale}em`,
-      fontFamily: serif
-        ? 'ui-serif, Georgia, "Times New Roman", Times, serif'
-        : 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
-    }}
-  >
-    {isProbablyHtml(rawContent) ? (
-      <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: rawContent }} />
-    ) : (
-      <CaseContentFormatted text={rawContent} />
-    )}
-  </div>
-  {/* ✅ Related cases under Transcript (DB-only) */}
-{/* ✅ Related cases under Transcript (DB-only) */}
-{contentOpen && (
-  <div className="lrr2Panel" style={{ marginTop: 12 }}>
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-      <div>
-        <div style={{ fontWeight: 700 }}>Related cases (in our database)</div>
-        <div style={{ opacity: 0.75, fontSize: 13 }}>
-          Similar court / type / parties (fast match).
-        </div>
-      </div>
-
-      <button
-        type="button"
-        className="lrr2Btn"
-        disabled={relatedDbLoading}
-        onClick={async () => {
-          try {
-            setRelatedDbLoading(true);
-            setRelatedDbError("");
-            const list = await fetchRelatedLawReports(reportId, 8);
-            setRelatedDb(Array.isArray(list) ? list : []);
-          } catch (e) {
-            setRelatedDb([]);
-            setRelatedDbError(getApiErrorMessage(e, "Failed to load related cases."));
-          } finally {
-            setRelatedDbLoading(false);
-          }
-        }}
-        title="Refresh related cases"
-      >
-        {relatedDbLoading ? "Loading…" : "Refresh"}
-      </button>
-    </div>
-
-    {relatedDbError ? (
-      <div style={{ marginTop: 10, opacity: 0.85 }}>{relatedDbError}</div>
-    ) : relatedDbLoading ? (
-      <div style={{ marginTop: 10, opacity: 0.75 }}>Loading related cases…</div>
-    ) : relatedDb.length === 0 ? (
-      <div style={{ marginTop: 10, opacity: 0.75 }}>No related cases found.</div>
-    ) : (
-      <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
-        {relatedDb.map((r, idx) => {
-          const rid = Number(r?.id);
-          const titleText = r?.title || r?.parties || `Report #${rid || idx + 1}`;
-          const meta = [r?.courtTypeLabel, r?.caseTypeLabel, r?.decisionTypeLabel, r?.year]
-            .filter(Boolean)
-            .join(" • ");
-          const right = r?.citation || "";
-
-          return (
             <button
               type="button"
-              key={rid || idx}
-              className="lrr2SearchItem"
-              onClick={() => rid && navigate(`/dashboard/law-reports/${rid}`)}
-              title={titleText}
-              style={{ textAlign: "left" }}
+              className="lrr2MetaChip"
+              title="Copy title"
+              onClick={() => navigator.clipboard?.writeText(`${title}`)}
             >
-              <div className="lrr2SearchItemLeft">
-                <div className="lrr2SearchItemTitle">{titleText}</div>
-                {meta ? <div className="lrr2SearchItemMeta">{meta}</div> : null}
-              </div>
-              <div className="lrr2SearchItemRight">
-                {right ? <span className="lrr2Tag">{right}</span> : null}
-              </div>
+              Copy title
             </button>
-          );
-        })}
+
+            {report?.citation ? (
+              <button
+                type="button"
+                className="lrr2MetaChip"
+                title="Copy citation"
+                onClick={() => navigator.clipboard?.writeText(String(report.citation))}
+              >
+                Copy citation
+              </button>
+            ) : null}
+          </div>
+
+          {!isAdmin && accessLoading ? (
+            <span className="lrr2MetaHint" data-tip="Checking subscription access">
+              checking access…
+            </span>
+          ) : null}
+        </section>
+
+        <section className="lrr2ActionsCard">
+          <div className="lrr2ActionBtns">
+            <div className="lrr2ActionsHint">
+              Use the tabs below to switch between <b>Transcript</b> and <b>LegalAI Summary</b>.
+            </div>
+          </div>
+        </section>
       </div>
-    )}
-  </div>
-)}
-</article>
-      )}
-    </section>
+
+      <div className="lrr2Tabs" role="tablist" aria-label="Reader tabs">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === "content"}
+          className={`lrr2Tab ${view === "content" ? "isActive" : ""}`}
+          onClick={() => {
+            setView("content");
+            setContentOpen(true);
+          }}
+        >
+          Transcript
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === "ai"}
+          className={`lrr2Tab ${view === "ai" ? "isActive" : ""}`}
+          onClick={() => {
+            setView("ai");
+            setContentOpen(false);
+          }}
+        >
+          LegalAI Summary
+          <span className="lrr2TabBadge">AI</span>
+        </button>
+      </div>
+
+      <section className="lrr2Content">
+        {view === "ai" ? (
+          <LawReportAiSummaryPanel
+            lawReportId={reportId}
+            digestTitle={title}
+            courtLabel={report?.court || ""}
+            onOpenRelated={(rid) => navigate(`/dashboard/law-reports/${rid}`)}
+          />
+        ) : !textHasContent ? (
+          <div className="lrr2Empty">This report has no content yet.</div>
+        ) : (
+          <article className="lrr2Article">
+            <div className="lrr2TranscriptTools">
+              <div className="lrr2CaseActions">
+                <button
+                  type="button"
+                  className="lrr2Btn primary"
+                  onClick={() => {
+                    setView("content");
+                    setContentOpen(true);
+                  }}
+                  title="View case content"
+                >
+                  View Case Content
+                </button>
+
+                <button
+                  type="button"
+                  className="lrr2Btn"
+                  onClick={() => setContentOpen((v) => !v)}
+                  title={contentOpen ? "Hide case content" : "Show case content"}
+                >
+                  {contentOpen ? "Hide Case Content" : "Show Case Content"}
+                </button>
+              </div>
+
+              <div className="lrr2ReaderBar">
+                <div className="lrr2ReaderCluster">
+                  <button
+                    type="button"
+                    className="lrr2IconBtn"
+                    onClick={() =>
+                      setFontScale((v) => Math.max(0.9, Number((v - 0.05).toFixed(2))))
+                    }
+                    title="Decrease text size"
+                    aria-label="Decrease text size"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path
+                        d="M5 18h2.2l1.2-3h5.2l1.2 3H17L12.9 6h-1.8L5 18z"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                      />
+                      <path d="M9.2 13.2h4l-2-5-2 5z" stroke="currentColor" strokeWidth="1.6" />
+                      <path
+                        d="M18 10h4"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <span className="lrr2IconBtnText">A−</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="lrr2IconBtn"
+                    onClick={() =>
+                      setFontScale((v) => Math.min(1.2, Number((v + 0.05).toFixed(2))))
+                    }
+                    title="Increase text size"
+                    aria-label="Increase text size"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path
+                        d="M5 18h2.2l1.2-3h5.2l1.2 3H17L12.9 6h-1.8L5 18z"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                      />
+                      <path d="M9.2 13.2h4l-2-5-2 5z" stroke="currentColor" strokeWidth="1.6" />
+                      <path
+                        d="M20 8v6"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M17 11h6"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <span className="lrr2IconBtnText">A+</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`lrr2IconBtn ${serif ? "isOn" : ""}`}
+                    onClick={() => setSerif((v) => !v)}
+                    title={serif ? "Serif font (on)" : "Serif font (off)"}
+                    aria-label="Toggle serif font"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M7 18h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                      <path
+                        d="M9 18V6h6v12"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinejoin="round"
+                      />
+                      <path d="M8 6h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                    </svg>
+                    <span className="lrr2IconBtnText">Serif</span>
+                  </button>
+                </div>
+
+                <div className="lrr2ReaderCluster">
+                  <button
+                    type="button"
+                    className={`lrr2IconBtn ${readingTheme === "paper" ? "isOn" : ""}`}
+                    onClick={() => setReadingTheme("paper")}
+                    title="Paper theme"
+                    aria-label="Paper theme"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M7 3h7l3 3v15H7V3z" stroke="currentColor" strokeWidth="1.6" />
+                      <path d="M14 3v4h4" stroke="currentColor" strokeWidth="1.6" />
+                      <path
+                        d="M9 11h6M9 15h6"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <span className="lrr2IconBtnText">Paper</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`lrr2IconBtn ${readingTheme === "sepia" ? "isOn" : ""}`}
+                    onClick={() => setReadingTheme("sepia")}
+                    title="Sepia theme"
+                    aria-label="Sepia theme"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M7 3h10v18H7V3z" stroke="currentColor" strokeWidth="1.6" />
+                      <path
+                        d="M9 8h6M9 12h6M9 16h5"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M5.5 6.5c1.2-1.2 2.7-2 4.5-2"
+                        stroke="currentColor"
+                        strokeWidth="1.2"
+                        opacity=".7"
+                      />
+                    </svg>
+                    <span className="lrr2IconBtnText">Sepia</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`lrr2IconBtn ${readingTheme === "dark" ? "isOn" : ""}`}
+                    onClick={() => setReadingTheme("dark")}
+                    title="Dark theme"
+                    aria-label="Dark theme"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path
+                        d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <span className="lrr2IconBtnText">Dark</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className={[
+                "lrr2Collapse",
+                contentOpen ? "open" : "closed",
+                `lrr2Theme-${readingTheme}`,
+                fsClass,
+                fontClass,
+              ].join(" ")}
+            >
+              {isProbablyHtml(rawContent) ? (
+                <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: rawContent }} />
+              ) : (
+                <CaseContentFormatted text={rawContent} />
+              )}
+            </div>
+
+            {contentOpen && (
+              <div className="lrr2Panel lrr2Panel--tight lrr2DbRelatedPanel">
+                <div className="lrr2PanelHead">
+                  <div className="lrr2PanelHeadLeft">
+                    <div className="lrr2PanelTitle">Related cases (in our database)</div>
+                    <div className="lrr2PanelSub">Similar court / type / parties (fast match).</div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="lrr2Btn"
+                    disabled={relatedDbLoading}
+                    onClick={async () => {
+                      try {
+                        setRelatedDbLoading(true);
+                        setRelatedDbError("");
+                        const list = await fetchRelatedLawReports(reportId, 8);
+                        setRelatedDb(Array.isArray(list) ? list : []);
+                      } catch (e) {
+                        setRelatedDb([]);
+                        setRelatedDbError(getApiErrorMessage(e, "Failed to load related cases."));
+                      } finally {
+                        setRelatedDbLoading(false);
+                      }
+                    }}
+                    title="Refresh related cases"
+                  >
+                    {relatedDbLoading ? "Loading…" : "Refresh"}
+                  </button>
+                </div>
+
+                {relatedDbError ? (
+                  <div className="lrr2PanelError">{relatedDbError}</div>
+                ) : relatedDbLoading ? (
+                  <div className="lrr2PanelEmpty">Loading related cases…</div>
+                ) : relatedDb.length === 0 ? (
+                  <div className="lrr2PanelEmpty">No related cases found.</div>
+                ) : (
+                  <div className="lrr2DbRelatedList">
+                    {relatedDb.map((r, idx) => {
+                      const rid = Number(r?.id);
+                      const titleText = r?.title || r?.parties || `Report #${rid || idx + 1}`;
+                      const meta = [r?.courtTypeLabel, r?.caseTypeLabel, r?.decisionTypeLabel, r?.year]
+                        .filter(Boolean)
+                        .join(" • ");
+                      const right = r?.citation || "";
+
+                      return (
+                        <button
+                          type="button"
+                          key={rid || idx}
+                          className="lrr2SearchItem lrr2SearchItem--row"
+                          onClick={() => rid && navigate(`/dashboard/law-reports/${rid}`)}
+                          title={titleText}
+                        >
+                          <div className="lrr2SearchItemLeft">
+                            <div className="lrr2SearchItemTitle">{titleText}</div>
+                            {meta ? <div className="lrr2SearchItemMeta">{meta}</div> : null}
+                          </div>
+                          <div className="lrr2SearchItemRight">
+                            {right ? <span className="lrr2Tag">{right}</span> : null}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </article>
+        )}
+      </section>
     </div>
   );
 }
