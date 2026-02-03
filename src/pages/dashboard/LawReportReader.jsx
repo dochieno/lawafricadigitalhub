@@ -1328,7 +1328,7 @@ export default function LawReportReader() {
       </button>
 
       {/* ✅ Meta + Quick panel */}
-      <div className="lrr2TopGrid">
+      <div className="lrr2TopGrid lrr2TopGrid--single">
         <section className="lrr2MetaCard">
           <div className="lrr2MetaGrid">
             <div className="lrr2MetaRow">
