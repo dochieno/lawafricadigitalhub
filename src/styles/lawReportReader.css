@@ -1422,3 +1422,138 @@
   .lrr2StatusRow { grid-template-columns: 1fr auto; }
   .lrr2StatusRow .lrr2StatusBtn { grid-column: 1 / -1; }
 }
+/* =========================================================
+   PREMIUM META PANEL (single column / branded)
+   Add at bottom of file
+========================================================= */
+
+/* Force the top area to be a single full-width column */
+.lrr2TopGrid--single {
+  grid-template-columns: 1fr !important;
+}
+
+/* Make meta card premium + branded */
+.lrr2MetaCard {
+  position: relative;
+  padding: 16px;
+  overflow: hidden;
+}
+
+/* Premium gradient ring */
+.lrr2MetaCard::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: var(--radius);
+  background: linear-gradient(
+    135deg,
+    rgba(161, 24, 30, 0.38),
+    rgba(14, 165, 165, 0.18),
+    rgba(15, 23, 42, 0.14)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+}
+
+/* Soft brand glow */
+.lrr2MetaCard::after {
+  content: "";
+  position: absolute;
+  width: 520px;
+  height: 280px;
+  left: -260px;
+  top: -190px;
+  background: radial-gradient(circle, rgba(161, 24, 30, 0.14), transparent 60%);
+  pointer-events: none;
+}
+
+/* Better spacing for meta rows */
+.lrr2MetaGrid {
+  display: grid;
+  gap: 12px;
+  position: relative;
+  z-index: 1;
+}
+
+.lrr2MetaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+/* The meta “chips” (your JSX uses lrr2MetaTag) */
+.lrr2MetaTag {
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 10px 12px;
+  font-weight: 750;
+  font-size: 13px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+}
+
+.lrr2MetaTag:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  border-color: color-mix(in srgb, var(--border) 70%, rgba(161, 24, 30, 0.18));
+}
+
+.lrr2MetaIcon svg {
+  width: 18px;
+  height: 18px;
+  opacity: 0.9;
+}
+
+/* Copy buttons (your JSX uses lrr2MetaAction) */
+.lrr2MetaAction {
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 13px;
+  line-height: 1;
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+}
+
+.lrr2MetaAction:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  border-color: color-mix(in srgb, var(--border) 70%, rgba(161, 24, 30, 0.18));
+}
+
+.lrr2MetaAction:active {
+  transform: translateY(0px);
+}
+
+/* Dark theme tweaks for chip backgrounds */
+.lrr2Wrap[data-theme="dark"] .lrr2MetaTag,
+.lrr2Wrap[data-theme="dark"] .lrr2MetaAction {
+  background: color-mix(in srgb, rgba(15, 23, 42, 0.72) 80%, transparent);
+}
+
+/* Mobile: keep it clean */
+@media (max-width: 640px) {
+  .lrr2MetaCard { padding: 14px; }
+  .lrr2MetaTag, .lrr2MetaAction { width: auto; max-width: 100%; }
+}

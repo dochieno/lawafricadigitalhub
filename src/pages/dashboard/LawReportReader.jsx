@@ -1448,55 +1448,6 @@ export default function LawReportReader() {
             </div>
           </div>
         </section>
-
-        <section className="lrr2ActionsCard">
-          <div className="lrr2StatusTop">
-            <div className="lrr2StatusTitle">Quick panel</div>
-
-            <div className="lrr2StatusPills">
-              <span className={`lrr2StatusPill ${view === "content" ? "isOn" : ""}`}>Transcript</span>
-              <span className={`lrr2StatusPill ${view === "ai" ? "isOn" : ""}`}>LegalAI</span>
-            </div>
-          </div>
-
-          <div className="lrr2StatusRows">
-            <div className="lrr2StatusRow">
-              <span className="lrr2StatusK">Transcript</span>
-              <span className={`lrr2StatusV ${contentOpen ? "isGood" : ""}`}>{contentOpen ? "Open" : "Hidden"}</span>
-              <button
-                type="button"
-                className="lrr2StatusBtn"
-                onClick={() => {
-                  setView("content");
-                  setContentOpen((v) => !v);
-                }}
-                title={contentOpen ? "Hide transcript" : "Show transcript"}
-              >
-                {contentOpen ? "Hide" : "Show"}
-              </button>
-            </div>
-
-            <div className="lrr2StatusRow">
-              <span className="lrr2StatusK">AI summary</span>
-              <span className={`lrr2StatusV ${view === "ai" ? "isGood" : ""}`}>{view === "ai" ? "Visible" : "Not open"}</span>
-              <button
-                type="button"
-                className="lrr2StatusBtn"
-                onClick={() => {
-                  setView("ai");
-                  setContentOpen(false);
-                }}
-                title="Open LegalAI Summary"
-              >
-                Open
-              </button>
-            </div>
-          </div>
-
-          <div className="lrr2StatusNote">
-            Tip: Clicking <b>Transcript</b> again will toggle show/hide.
-          </div>
-        </section>
       </div>
 
       {/* Tabs */}
