@@ -1495,12 +1495,20 @@ export default function LawReportReader() {
           aria-selected={view === "content"}
           className={`lrr2Tab ${view === "content" ? "isActive" : ""}`}
           onClick={() => {
-            setView("content");
-            setContentOpen(true);
+            // If already on transcript, toggle content open/close
+            if (view === "content") {
+              setContentOpen((v) => !v);
+            } else {
+              // If coming from AI tab, switch to transcript and open it
+              setView("content");
+              setContentOpen(true);
+            }
           }}
+          title={view === "content" ? (contentOpen ? "Hide transcript" : "Show transcript") : "Transcript"}
         >
           Transcript
         </button>
+
 
         <button
           type="button"
@@ -1530,28 +1538,6 @@ export default function LawReportReader() {
         ) : (
           <article className="lrr2Article">
             <div className="lrr2TranscriptTools">
-              <div className="lrr2CaseActions">
-                <button
-                  type="button"
-                  className="lrr2Btn primary"
-                  onClick={() => {
-                    setView("content");
-                    setContentOpen(true);
-                  }}
-                  title="View case content"
-                >
-                  View Case Content
-                </button>
-
-                <button
-                  type="button"
-                  className="lrr2Btn"
-                  onClick={() => setContentOpen((v) => !v)}
-                  title={contentOpen ? "Hide case content" : "Show case content"}
-                >
-                  {contentOpen ? "Hide Case Content" : "Show Case Content"}
-                </button>
-              </div>
 
               <div className="lrr2ReaderBar">
                 <div className="lrr2ReaderCluster">
