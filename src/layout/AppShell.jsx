@@ -107,11 +107,6 @@ export default function AppShell() {
                 🧪 Content Blocks Tester
               </NavLink>
             )}
-
-            <NavLink to="/dashboard/ai-test" className="nav-link nav-child">
-              AI Summary Test
-            </NavLink>
-
             <NavLink to="/dashboard/security" className="nav-link">
               Security
             </NavLink>
