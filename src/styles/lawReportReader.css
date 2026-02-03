@@ -1,6 +1,24 @@
 /* src/styles/lawReportReader.css */
 
 /* =========================================================
+   0) Global polish (focus, selection, motion)
+========================================================= */
+.lrr2Wrap {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.lrr2Wrap ::selection {
+  background: rgba(161, 24, 30, 0.18);
+}
+@media (prefers-reduced-motion: reduce) {
+  .lrr2Wrap * {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* =========================================================
    1) Root wrapper + theme tokens
 ========================================================= */
 .lrr2Wrap {
@@ -28,6 +46,10 @@
   /* page (transcript) */
   --pageBg: rgba(255, 255, 255, 0.92);
   --pageInk: rgba(15, 23, 42, 0.92);
+
+  /* focus */
+  --focusRing: 0 0 0 4px rgba(161, 24, 30, 0.12);
+  --focusBorder: rgba(161, 24, 30, 0.38);
 
   min-height: 100vh;
   padding: 18px 16px 56px;
@@ -57,6 +79,10 @@
   --surface2: rgba(255, 248, 235, 0.78);
   --pageBg: rgba(250, 245, 235, 0.92);
   --pageInk: rgba(20, 18, 14, 0.92);
+
+  --focusRing: 0 0 0 4px rgba(161, 24, 30, 0.10);
+  --focusBorder: rgba(161, 24, 30, 0.34);
+
   background:
     radial-gradient(1200px 600px at 20% -10%, rgba(161, 24, 30, 0.06), transparent 55%),
     radial-gradient(900px 520px at 100% 0%, rgba(62, 41, 25, 0.08), transparent 50%),
@@ -71,6 +97,12 @@
   --surface2: rgba(15, 23, 42, 0.56);
   --pageBg: rgba(2, 6, 23, 0.70);
   --pageInk: rgba(226, 232, 240, 0.92);
+
+  --shadow: 0 14px 48px rgba(0, 0, 0, 0.28);
+  --shadow2: 0 12px 36px rgba(0, 0, 0, 0.26);
+
+  --focusRing: 0 0 0 4px rgba(226, 232, 240, 0.10);
+  --focusBorder: rgba(226, 232, 240, 0.30);
 
   background:
     radial-gradient(1200px 600px at 20% -10%, rgba(161, 24, 30, 0.16), transparent 55%),
@@ -142,11 +174,32 @@
 }
 
 /* =========================================================
-   4) Header + search
+   4) Header + search (✅ improved compact header behavior)
 ========================================================= */
 .lrr2Header {
   margin-top: 0;
   padding: 14px 14px 12px;
+  position: sticky;
+  top: 10px;
+  z-index: 80;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.lrr2Wrap[data-theme="paper"] .lrr2Header,
+.lrr2Wrap[data-theme="sepia"] .lrr2Header {
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+}
+
+.lrr2Wrap[data-theme="dark"] .lrr2Header {
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+}
+
+/* ✅ compact class from JSX: headerCompact */
+.lrr2Header.isCompact {
+  padding: 10px 12px 10px;
+  box-shadow: var(--shadow2);
+  border-color: color-mix(in srgb, var(--border) 75%, rgba(161, 24, 30, 0.10));
 }
 
 .lrr2HeaderTop {
@@ -164,6 +217,10 @@
   color: var(--ink);
 }
 
+.lrr2Header.isCompact .lrr2Brand {
+  font-size: 16px;
+}
+
 .lrr2LinkBtn {
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface) 82%, transparent);
@@ -179,11 +236,20 @@
   background: color-mix(in srgb, var(--surface) 95%, transparent);
   border-color: color-mix(in srgb, var(--border) 70%, rgba(161, 24, 30, 0.18));
 }
+.lrr2LinkBtn:focus-visible {
+  outline: none;
+  border-color: var(--focusBorder);
+  box-shadow: var(--focusRing);
+}
 
 .lrr2SearchRow {
   margin-top: 12px;
   display: grid;
   gap: 8px;
+}
+
+.lrr2Header.isCompact .lrr2SearchRow {
+  margin-top: 10px;
 }
 
 .lrr2SearchLabel {
@@ -200,6 +266,31 @@
   flex-wrap: wrap;
 }
 
+/* ✅ lead icon/text inside search box (exists in JSX) */
+.lrr2SearchLead {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+}
+.lrr2SearchLead svg {
+  width: 18px;
+  height: 18px;
+  opacity: 0.9;
+}
+@media (max-width: 640px) {
+  .lrr2SearchLead {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
 .lrr2SearchInput {
   flex: 1;
   min-width: 260px;
@@ -212,9 +303,12 @@
   font-weight: 650; /* ✅ not bold */
 }
 .lrr2SearchInput:focus {
-  border-color: rgba(161, 24, 30, 0.35);
-  box-shadow: 0 0 0 4px rgba(161, 24, 30, 0.10);
+  border-color: var(--focusBorder);
+  box-shadow: var(--focusRing);
   background: color-mix(in srgb, var(--surface) 96%, transparent);
+}
+.lrr2SearchInput::placeholder {
+  color: color-mix(in srgb, var(--muted) 85%, transparent);
 }
 
 .lrr2SearchBtn {
@@ -226,9 +320,9 @@
   cursor: pointer;
   font-weight: 850;
   min-width: 110px;
-  transition: transform .12s ease, opacity .12s ease;
+  transition: transform .12s ease, opacity .12s ease, filter .12s ease;
 }
-.lrr2SearchBtn:hover { transform: translateY(-1px); }
+.lrr2SearchBtn:hover { transform: translateY(-1px); filter: brightness(1.02); }
 .lrr2SearchBtn:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* dark mode search button visibility fix */
@@ -250,14 +344,27 @@
   top: calc(100% + 10px);
   left: 0;
   right: 0;
-  z-index: 50;
+  z-index: 100;
   border-radius: 16px;
   border: 1px solid var(--border);
   background: var(--surface);
   box-shadow: var(--shadow2);
   overflow: hidden;
-  max-height: 360px;
+  max-height: min(360px, 52vh);
   overflow-y: auto;
+}
+
+/* nicer scrollbar (webkit) */
+.lrr2SearchDropdown::-webkit-scrollbar,
+.lrr2ChatBox::-webkit-scrollbar {
+  width: 10px;
+}
+.lrr2SearchDropdown::-webkit-scrollbar-thumb,
+.lrr2ChatBox::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 
 .lrr2SearchErr {
@@ -283,6 +390,11 @@
 }
 .lrr2SearchItem:hover {
   background: rgba(15, 23, 42, 0.04);
+}
+.lrr2SearchItem:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgba(161, 24, 30, 0.22);
+  background: rgba(161, 24, 30, 0.06);
 }
 
 .lrr2SearchItemLeft { min-width: 0; flex: 1; }
@@ -357,9 +469,20 @@
   transform: translateY(-2px);
   background: color-mix(in srgb, var(--surface) 96%, transparent);
 }
+.lrr2ToTop:focus-visible {
+  outline: none;
+  border-color: var(--focusBorder);
+  box-shadow: var(--focusRing);
+}
+@media (max-width: 640px) {
+  .lrr2ToTop {
+    right: 12px;
+    bottom: 12px;
+  }
+}
 
 /* =========================================================
-   6) Top grid (meta + actions)
+   6) Top grid (meta + actions)  ✅ matches JSX (.lrr2MetaGrid/.lrr2MetaTag)
 ========================================================= */
 .lrr2TopGrid {
   display: grid;
@@ -390,24 +513,29 @@
   .lrr2ActionsCard { position: static; top: auto; }
 }
 
-/* Meta chips */
-.lrr2MetaChips {
-  display: flex;
-  flex-wrap: wrap;
+/* ✅ Meta layout used in updated JSX */
+.lrr2MetaGrid {
+  display: grid;
   gap: 10px;
-  align-items: flex-start;
+}
+.lrr2MetaRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
-.lrr2MetaChip {
+/* ✅ Meta tags used in JSX */
+.lrr2MetaTag {
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface) 86%, transparent);
   color: var(--ink);
   border-radius: 999px;
   padding: 10px 12px;
-  font-weight: 750; /* ✅ not heavy */
+  font-weight: 750;
   font-size: 13px;
   line-height: 1;
-  cursor: pointer;
+  cursor: default;
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -415,12 +543,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  transition: transform .12s ease, background .12s ease, border-color .12s ease;
-}
-.lrr2MetaChip:hover {
-  transform: translateY(-1px);
-  background: color-mix(in srgb, var(--surface) 96%, transparent);
-  border-color: color-mix(in srgb, var(--border) 70%, rgba(161, 24, 30, 0.18));
 }
 
 .lrr2MetaIcon svg {
@@ -429,11 +551,40 @@
   opacity: 0.9;
 }
 
+/* ✅ Actions in JSX (.lrr2MetaAction buttons) */
+.lrr2MetaAction {
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  color: var(--ink);
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 800;
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+}
+.lrr2MetaAction:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  border-color: color-mix(in srgb, var(--border) 70%, rgba(161, 24, 30, 0.18));
+}
+.lrr2MetaAction:focus-visible {
+  outline: none;
+  border-color: var(--focusBorder);
+  box-shadow: var(--focusRing);
+}
+
+.lrr2MetaHint {
+  display: inline-block;
+  color: var(--muted);
+  font-weight: 650;
+  font-size: 12px;
+}
+
 /* Optional tooltip (data-tip) */
-.lrr2MetaChip[data-tip],
+.lrr2MetaTag[data-tip],
 .lrr2MetaHint[data-tip] { position: relative; }
 
-.lrr2MetaChip[data-tip]::after,
+.lrr2MetaTag[data-tip]::after,
 .lrr2MetaHint[data-tip]::after {
   content: attr(data-tip);
   position: absolute;
@@ -451,9 +602,9 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.12s ease, transform 0.12s ease;
-  z-index: 80;
+  z-index: 120;
 }
-.lrr2MetaChip[data-tip]::before,
+.lrr2MetaTag[data-tip]::before,
 .lrr2MetaHint[data-tip]::before {
   content: "";
   position: absolute;
@@ -465,12 +616,12 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.12s ease;
-  z-index: 80;
+  z-index: 120;
 }
-.lrr2MetaChip[data-tip]:hover::after,
-.lrr2MetaChip[data-tip]:hover::before,
-.lrr2MetaChip[data-tip]:focus-visible::after,
-.lrr2MetaChip[data-tip]:focus-visible::before,
+.lrr2MetaTag[data-tip]:hover::after,
+.lrr2MetaTag[data-tip]:hover::before,
+.lrr2MetaTag[data-tip]:focus-visible::after,
+.lrr2MetaTag[data-tip]:focus-visible::before,
 .lrr2MetaHint[data-tip]:hover::after,
 .lrr2MetaHint[data-tip]:hover::before,
 .lrr2MetaHint[data-tip]:focus-visible::after,
@@ -479,31 +630,87 @@
   transform: translateX(-50%) translateY(-2px);
 }
 
-.lrr2MetaHint {
-  display: inline-block;
-  margin-top: 10px;
+/* Actions right card (quick panel) */
+.lrr2StatusTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.lrr2StatusTitle {
+  font-weight: 950;
+  letter-spacing: -0.01em;
+}
+.lrr2StatusPills {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.lrr2StatusPill {
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+.lrr2StatusPill.isOn {
+  background: rgba(14, 165, 165, 0.12);
+  border-color: rgba(14, 165, 165, 0.24);
+  color: var(--ink);
+}
+.lrr2StatusRows {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+.lrr2StatusRow {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+}
+.lrr2StatusK { font-weight: 850; }
+.lrr2StatusV { font-weight: 750; color: var(--muted); }
+.lrr2StatusV.isGood { color: var(--ink); }
+
+.lrr2StatusBtn {
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  color: var(--ink);
+  padding: 8px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 800;
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+}
+.lrr2StatusBtn:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  border-color: color-mix(in srgb, var(--border) 70%, rgba(161, 24, 30, 0.18));
+}
+.lrr2StatusBtn:focus-visible {
+  outline: none;
+  border-color: var(--focusBorder);
+  box-shadow: var(--focusRing);
+}
+.lrr2StatusNote {
+  margin-top: 12px;
   color: var(--muted);
   font-weight: 650;
   font-size: 12px;
 }
 
-/* Actions right card text */
-.lrr2ActionsHint {
-  font-weight: 650; /* ✅ not bold */
-  color: var(--muted);
-  line-height: 1.45;
-}
-
-.lrr2ActionBtns {
-  display: grid;
-  gap: 10px;
-}
-
 /* =========================================================
-   7) Tabs (✅ FIX ALIGNMENT)
+   7) Tabs (alignment + touch targets)
 ========================================================= */
 .lrr2Tabs {
-  /* ✅ aligns perfectly with header/meta/content width rhythm */
   margin-top: 12px;
 
   padding: 6px;
@@ -512,7 +719,6 @@
   background: var(--surface);
   box-shadow: var(--shadow);
 
-  /* ✅ was inline-flex (caused “floating” look). Now fills container row. */
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -527,8 +733,6 @@
   border-radius: 999px;
   padding: 10px 14px;
   cursor: pointer;
-
-  /* ✅ not overly bold, but still “tab heading” */
   font-weight: 800;
 
   display: inline-flex;
@@ -539,6 +743,10 @@
 .lrr2Tab:hover {
   background: rgba(15, 23, 42, 0.05);
   transform: translateY(-1px);
+}
+.lrr2Tab:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgba(161, 24, 30, 0.22);
 }
 .lrr2Tab.isActive {
   background: rgba(161, 24, 30, 0.10);
@@ -594,6 +802,11 @@
   background: color-mix(in srgb, var(--surface) 96%, transparent);
   border-color: color-mix(in srgb, var(--border) 70%, rgba(161, 24, 30, 0.18));
 }
+.lrr2Btn:focus-visible {
+  outline: none;
+  border-color: var(--focusBorder);
+  box-shadow: var(--focusRing);
+}
 .lrr2Btn.primary {
   background: linear-gradient(135deg, var(--la-red), var(--la-red2));
   color: #fff;
@@ -639,6 +852,11 @@
   transform: translateY(-1px);
   background: color-mix(in srgb, var(--surface) 96%, transparent);
   border-color: color-mix(in srgb, var(--border) 70%, rgba(161, 24, 30, 0.18));
+}
+.lrr2IconBtn:focus-visible {
+  outline: none;
+  border-color: var(--focusBorder);
+  box-shadow: var(--focusRing);
 }
 .lrr2IconBtn.isOn {
   background: rgba(14, 165, 165, 0.10);
@@ -707,8 +925,8 @@
 
 /* Transcript formatting */
 .lrr2CaseFmt { line-height: 1.8; max-width: 78ch; margin: 0 auto; }
-.lrr2CaseH { margin: 18px 0 8px; font-weight: 950; letter-spacing: -0.01em; } /* heading */
-.lrr2CaseP { margin: 10px 0; font-weight: 450; } /* ✅ normal body */
+.lrr2CaseH { margin: 18px 0 8px; font-weight: 950; letter-spacing: -0.01em; }
+.lrr2CaseP { margin: 10px 0; font-weight: 450; }
 
 /* If HTML content is used */
 .lrr2Html { line-height: 1.75; }
@@ -746,13 +964,21 @@
 }
 
 .lrr2PanelHeadLeft { min-width: 260px; }
-.lrr2PanelTitle { font-weight: 950; letter-spacing: -0.01em; } /* heading */
-.lrr2PanelSub { margin-top: 4px; font-size: 13px; color: var(--muted); font-weight: 650; } /* ✅ */
+.lrr2PanelTitle { font-weight: 950; letter-spacing: -0.01em; }
+.lrr2PanelSub { margin-top: 4px; font-size: 13px; color: var(--muted); font-weight: 650; }
 .lrr2PanelError { margin-top: 10px; color: #b91c1c; font-weight: 700; }
 .lrr2PanelEmpty { margin-top: 10px; color: var(--muted); font-weight: 650; }
 
 /* DB related list */
 .lrr2DbRelatedList { margin-top: 10px; display: grid; gap: 8px; }
+.lrr2SearchItem--row {
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+}
+.lrr2SearchItem--row:hover {
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+}
 
 /* =========================================================
    11) AI Summary
@@ -788,7 +1014,6 @@
   font-weight: 900;
 }
 
-/* The top-right icon buttons reuse .lrrAiUpgradeBtn */
 .lrrAiIconRow { display:flex; gap:8px; align-items:center; }
 
 .lrrAiToast {
@@ -827,7 +1052,7 @@
 .lrrAiHeadnoteMeta {
   margin-top: 4px;
   color: var(--muted);
-  font-weight: 650; /* ✅ */
+  font-weight: 650;
   font-size: 13px;
 }
 .lrrAiHeadnoteRule {
@@ -852,7 +1077,7 @@
   background: rgba(15, 23, 42, 0.06);
   border-color: var(--border);
 }
-.lrrAiUpgradeText { font-weight: 650; color: var(--ink); } /* ✅ not bold */
+.lrrAiUpgradeText { font-weight: 650; color: var(--ink); }
 
 .lrrAiUpgradeBtn {
   border: 1px solid rgba(161, 24, 30, 0.25);
@@ -870,6 +1095,11 @@
 }
 .lrrAiUpgradeBtn svg { width: 18px; height: 18px; }
 .lrrAiUpgradeBtn:hover { transform: translateY(-1px); filter: brightness(1.03); }
+.lrrAiUpgradeBtn:focus-visible {
+  outline: none;
+  border-color: var(--focusBorder);
+  box-shadow: var(--focusRing);
+}
 .lrrAiUpgradeBtn:disabled { opacity: 0.65; cursor: not-allowed; transform: none; }
 
 .lrrAiUpgradeBtn.ghost {
@@ -919,13 +1149,13 @@
 }
 
 .lrrAiBlock { margin-top: 12px; }
-.lrrAiH { font-weight: 950; letter-spacing: -0.01em; } /* heading */
-.lrrAiHVal { color: var(--muted); font-weight: 650; } /* ✅ */
-.lrrAiP { margin-top: 8px; font-weight: 450; color: var(--ink); } /* ✅ body */
+.lrrAiH { font-weight: 950; letter-spacing: -0.01em; }
+.lrrAiHVal { color: var(--muted); font-weight: 650; }
+.lrrAiP { margin-top: 8px; font-weight: 450; color: var(--ink); }
 
 /* Bullets */
 .lrrAiUl { margin-top: 8px; padding-left: 18px; }
-.lrrAiLi { margin: 6px 0; font-weight: 450; } /* ✅ */
+.lrrAiLi { margin: 6px 0; font-weight: 450; }
 
 /* Key points details (collapsible) */
 .lrrKp {
@@ -937,14 +1167,14 @@
 }
 .lrrKpSummary {
   cursor: pointer;
-  font-weight: 900; /* heading */
+  font-weight: 900;
   color: var(--ink);
 }
 .lrrKpHint { color: var(--muted); font-weight: 650; }
 .lrrKpVal { color: var(--muted); font-weight: 650; }
 
 /* =========================================================
-   11.1) ✅ Premium Key Points cards (gradient border + shadow)
+   11.1) Premium Key Points cards
 ========================================================= */
 .lrrAiUl.isKeyPointsCards {
   list-style: none;
@@ -960,7 +1190,7 @@
   border-radius: 16px;
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   box-shadow: 0 12px 26px rgba(2, 6, 23, 0.06);
-  font-weight: 450; /* ✅ body */
+  font-weight: 450;
   line-height: 1.55;
   overflow: hidden;
 }
@@ -985,10 +1215,9 @@
   mask-composite: exclude;
   pointer-events: none;
   mask:
-  linear-gradient(#000 0 0) content-box,
-  linear-gradient(#000 0 0);
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
 }
-
 
 /* subtle glow top-left */
 .lrrAiUl.isKeyPointsCards .lrrAiLi::after {
@@ -1005,6 +1234,8 @@
 /* =========================================================
    12) Chat panel
 ========================================================= */
+.lrr2ChatPanel { margin-top: 12px; }
+
 .lrr2ChatBox {
   margin-top: 10px;
   border-radius: 16px;
@@ -1027,7 +1258,7 @@
   line-height: 1.45;
   white-space: pre-wrap;
   border: 1px solid rgba(255, 255, 255, 0.10);
-  font-weight: 450; /* ✅ body */
+  font-weight: 450;
 }
 .lrr2ChatBubble.isUser {
   background: rgba(161, 24, 30, 0.14);
@@ -1052,8 +1283,10 @@
 }
 
 /* =========================================================
-   12.1) ✅ AI Related Cases formatting (cards + grid)
+   12.1) AI Related Cases formatting (cards + grid)
 ========================================================= */
+.lrr2AiRelatedPanel { margin-top: 12px; }
+
 .lrr2RelatedGrid {
   margin-top: 10px;
   display: grid;
@@ -1121,8 +1354,8 @@
   mask-composite: exclude;
   pointer-events: none;
   mask:
-  linear-gradient(#000 0 0) content-box,
-  linear-gradient(#000 0 0);
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
 }
 
 .lrr2RelatedTop {
@@ -1155,14 +1388,10 @@
   max-width: 48%;
 }
 
-.lrr2Tag.soft {
-  background: rgba(15, 23, 42, 0.06);
-}
-
 .lrr2RelatedNote {
   margin-top: 10px;
   color: var(--muted);
-  font-weight: 450; /* ✅ body */
+  font-weight: 450;
   line-height: 1.5;
 }
 
@@ -1188,5 +1417,8 @@
   .lrr2Wrap { padding: 14px 12px 40px; }
   .lrr2Brand { font-size: 16px; }
   .lrr2SearchInput { min-width: 0; width: 100%; }
+  .lrr2SearchBtn { width: 100%; min-width: 0; }
   .lrr2SearchItemRight { max-width: 100%; justify-content: flex-start; }
+  .lrr2StatusRow { grid-template-columns: 1fr auto; }
+  .lrr2StatusRow .lrr2StatusBtn { grid-column: 1 / -1; }
 }

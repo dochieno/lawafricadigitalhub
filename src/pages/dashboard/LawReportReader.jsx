@@ -545,24 +545,8 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel, onOpenR
               aria-label="Copy summary"
             >
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <rect
-                  x="9"
-                  y="9"
-                  width="10"
-                  height="10"
-                  rx="2"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                />
-                <rect
-                  x="5"
-                  y="5"
-                  width="10"
-                  height="10"
-                  rx="2"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                />
+                <rect x="9" y="9" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.6" />
+                <rect x="5" y="5" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.6" />
               </svg>
             </button>
 
@@ -630,8 +614,7 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel, onOpenR
           {!isExtended ? (
             <div className="lrrAiUpgrade">
               <div className="lrrAiUpgradeText">
-                Need more depth? Generate an <b>Extended</b> analysis (more detailed; will be token-gated
-                later).
+                Need more depth? Generate an <b>Extended</b> analysis (more detailed; will be token-gated later).
               </div>
 
               <button
@@ -671,9 +654,7 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel, onOpenR
               <div className="lrr2PanelHead">
                 <div className="lrr2PanelHeadLeft">
                   <div className="lrr2PanelTitle">Chat with LegalAI</div>
-                  <div className="lrr2PanelSub">
-                    Ask about issues, holdings, reasoning, and related/persuasive cases.
-                  </div>
+                  <div className="lrr2PanelSub">Ask about issues, holdings, reasoning, and related/persuasive cases.</div>
                 </div>
 
                 <button
@@ -702,13 +683,8 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel, onOpenR
 
               <div className="lrr2ChatBox" role="log" aria-label="Chat messages">
                 {chatMsgs.map((m, idx) => (
-                  <div
-                    key={idx}
-                    className={`lrr2ChatRow ${m.role === "user" ? "isUser" : "isAi"}`}
-                  >
-                    <div className={`lrr2ChatBubble ${m.role === "user" ? "isUser" : "isAi"}`}>
-                      {m.content}
-                    </div>
+                  <div key={idx} className={`lrr2ChatRow ${m.role === "user" ? "isUser" : "isAi"}`}>
+                    <div className={`lrr2ChatBubble ${m.role === "user" ? "isUser" : "isAi"}`}>{m.content}</div>
                   </div>
                 ))}
               </div>
@@ -745,9 +721,7 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel, onOpenR
 
                     try {
                       setChatLoading(true);
-                      const history = chatMsgs
-                        .slice(-8)
-                        .map((m) => ({ role: m.role, content: m.content }));
+                      const history = chatMsgs.slice(-8).map((m) => ({ role: m.role, content: m.content }));
 
                       const res = await api.post(`/ai/law-reports/${Number(lawReportId)}/chat`, {
                         message: msg,
@@ -785,8 +759,7 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel, onOpenR
               <div className="lrr2PanelHeadLeft">
                 <div className="lrr2PanelTitle">AI Related Cases</div>
                 <div className="lrr2PanelSub">
-                  Enhancement only · returns <b>2 Kenya</b> and <b>2 Outside Kenya</b>. Always verify
-                  citations.
+                  Enhancement only · returns <b>2 Kenya</b> and <b>2 Outside Kenya</b>. Always verify citations.
                 </div>
               </div>
 
@@ -812,12 +785,8 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel, onOpenR
             {relatedCases.length > 0 ? (
               <div className="lrr2RelatedGrid">
                 {(() => {
-                  const kenya = relatedCases.filter(
-                    (x) => String(x?.jurisdiction || "").toLowerCase() === "kenya"
-                  );
-                  const foreign = relatedCases.filter(
-                    (x) => String(x?.jurisdiction || "").toLowerCase() !== "kenya"
-                  );
+                  const kenya = relatedCases.filter((x) => String(x?.jurisdiction || "").toLowerCase() === "kenya");
+                  const foreign = relatedCases.filter((x) => String(x?.jurisdiction || "").toLowerCase() !== "kenya");
 
                   const renderItem = (c, idx) => {
                     const title = c?.title || `Related case ${idx + 1}`;
@@ -901,8 +870,8 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel, onOpenR
       )}
 
       <div className="lrrAiFooterNote">
-        *** This summary is automatically generated by LegalAI and may be cached for performance. Always
-        verify critical details against the full case text — <b>{isExtended ? "Extended" : "Basic"}</b>.
+        *** This summary is automatically generated by LegalAI and may be cached for performance. Always verify critical
+        details against the full case text — <b>{isExtended ? "Extended" : "Basic"}</b>.
       </div>
     </section>
   );
@@ -957,6 +926,9 @@ export default function LawReportReader() {
   const [progress, setProgress] = useState(0);
   const progressBarRef = useRef(null);
 
+  // ✅ Compact header detection
+  const [headerCompact, setHeaderCompact] = useState(false);
+
   // Map fontScale to a class (no inline styles)
   const fsClass = useMemo(() => {
     const n = Math.round(fontScale * 100); // 90..120
@@ -975,6 +947,9 @@ export default function LawReportReader() {
       const max = Math.max(1, scrollHeight - clientHeight);
       const p = Math.min(1, Math.max(0, scrollTop / max));
       setProgress(p);
+
+      // ✅ Compact header after user scrolls a bit
+      setHeaderCompact(scrollTop > 120);
     }
 
     onScroll();
@@ -1138,8 +1113,7 @@ export default function LawReportReader() {
   const canRead =
     !!report &&
     (isAdmin ||
-      ((hasContent || textHasContent) &&
-        (!report.isPremium || hasFullAccess || (!isInst && !isPublic))));
+      ((hasContent || textHasContent) && (!report.isPremium || hasFullAccess || (!isInst && !isPublic))));
 
   // Search (debounced)
   useEffect(() => {
@@ -1250,7 +1224,7 @@ export default function LawReportReader() {
 
   return (
     <div className="lrr2Wrap" data-theme={readingTheme}>
-      <header className="lrr2Header">
+      <header className={`lrr2Header ${headerCompact ? "isCompact" : ""}`}>
         <div className="lrr2HeaderTop">
           <div className="lrr2Brand">Law Africa Law Reports-Case File (Transcript)</div>
 
@@ -1261,10 +1235,22 @@ export default function LawReportReader() {
           </div>
         </div>
 
+        {/* ✅ Compact search row */}
         <div className="lrr2SearchRow">
-          <div className="lrr2SearchLabel">Case Search</div>
-
           <div className="lrr2SearchBox" ref={searchBoxRef}>
+            <div className="lrr2SearchLead" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="1.6" />
+                <path
+                  d="M16.5 16.5L21 21"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <span>Case search</span>
+            </div>
+
             <input
               ref={searchInputRef}
               className="lrr2SearchInput"
@@ -1275,6 +1261,7 @@ export default function LawReportReader() {
                 if (searchResults.length || searchErr) setOpenResults(true);
               }}
             />
+
             <button
               type="button"
               className="lrr2SearchBtn"
@@ -1322,7 +1309,7 @@ export default function LawReportReader() {
           </div>
 
           <div className="lrr2SearchHint">
-            Usage: To find cases, type in search terms in the textbox above e.g. distressed tenant
+            Tip: Type 2+ characters — e.g. <b>distressed tenant</b>
           </div>
         </div>
       </header>
@@ -1340,154 +1327,179 @@ export default function LawReportReader() {
         ↑
       </button>
 
+      {/* ✅ Meta + Quick panel */}
       <div className="lrr2TopGrid">
         <section className="lrr2MetaCard">
-          <div className="lrr2MetaChips">
-            {llrNo ? (
-              <button className="lrr2MetaChip" data-tip="LLR Number">
-                <span className="lrr2MetaIcon">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <rect
-                      x="4"
-                      y="4"
-                      width="16"
-                      height="16"
-                      rx="3"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                    />
-                    <path d="M8 9h8M8 13h6" stroke="currentColor" strokeWidth="1.6" />
-                  </svg>
-                </span>
-                {llrNo}
-              </button>
-            ) : null}
+          <div className="lrr2MetaGrid">
+            <div className="lrr2MetaRow">
+              {llrNo ? (
+                <div className="lrr2MetaTag" data-tip="LLR Number">
+                  <span className="lrr2MetaIcon">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" strokeWidth="1.6" />
+                      <path d="M8 9h8M8 13h6" stroke="currentColor" strokeWidth="1.6" />
+                    </svg>
+                  </span>
+                  {llrNo}
+                </div>
+              ) : null}
 
-            {report.caseNumber ? (
-              <button className="lrr2MetaChip" data-tip="Case Number">
-                <span className="lrr2MetaIcon">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d="M7 7h10v10H7z" stroke="currentColor" strokeWidth="1.6" />
-                    <path d="M9 11h6M9 14h4" stroke="currentColor" strokeWidth="1.6" />
-                  </svg>
-                </span>
-                {report.caseNumber}
-              </button>
-            ) : null}
+              {report.caseNumber ? (
+                <div className="lrr2MetaTag" data-tip="Case Number">
+                  <span className="lrr2MetaIcon">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <path d="M7 7h10v10H7z" stroke="currentColor" strokeWidth="1.6" />
+                      <path d="M9 11h6M9 14h4" stroke="currentColor" strokeWidth="1.6" />
+                    </svg>
+                  </span>
+                  {report.caseNumber}
+                </div>
+              ) : null}
 
-            {report.court ? (
-              <button className="lrr2MetaChip" data-tip="Court">
-                <span className="lrr2MetaIcon">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d="M4 10h16" stroke="currentColor" strokeWidth="1.6" />
-                    <path d="M6 10V6h12v4" stroke="currentColor" strokeWidth="1.6" />
-                    <path d="M6 18h12" stroke="currentColor" strokeWidth="1.6" />
-                  </svg>
-                </span>
-                {report.court}
-              </button>
-            ) : null}
+              {report.court ? (
+                <div className="lrr2MetaTag" data-tip="Court">
+                  <span className="lrr2MetaIcon">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <path d="M4 10h16" stroke="currentColor" strokeWidth="1.6" />
+                      <path d="M6 10V6h12v4" stroke="currentColor" strokeWidth="1.6" />
+                      <path d="M6 18h12" stroke="currentColor" strokeWidth="1.6" />
+                    </svg>
+                  </span>
+                  {report.court}
+                </div>
+              ) : null}
 
-            {report.country ? (
-              <button className="lrr2MetaChip" data-tip="Country">
-                <span className="lrr2MetaIcon">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" />
-                    <path
-                      d="M3 12h18M12 3a15 15 0 0 1 0 18"
-                      stroke="currentColor"
-                      strokeWidth="1.4"
-                    />
-                  </svg>
-                </span>
-                {report.country}
-              </button>
-            ) : null}
+              {report.decisionTypeLabel ? (
+                <div className="lrr2MetaTag" data-tip="Decision Type">
+                  <span className="lrr2MetaIcon">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <path d="M12 3v18M5 12h14" stroke="currentColor" strokeWidth="1.6" />
+                    </svg>
+                  </span>
+                  {report.decisionTypeLabel}
+                </div>
+              ) : null}
 
-            {report.decisionTypeLabel ? (
-              <button className="lrr2MetaChip" data-tip="Decision Type">
-                <span className="lrr2MetaIcon">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d="M12 3v18M5 12h14" stroke="currentColor" strokeWidth="1.6" />
-                  </svg>
-                </span>
-                {report.decisionTypeLabel}
-              </button>
-            ) : null}
+              {report.decisionDate ? (
+                <div className="lrr2MetaTag" data-tip="Decision Date">
+                  <span className="lrr2MetaIcon">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" strokeWidth="1.6" />
+                      <path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" strokeWidth="1.6" />
+                    </svg>
+                  </span>
+                  {formatDate(report.decisionDate)}
+                </div>
+              ) : null}
+            </div>
 
-            {report.judges ? (
-              <button className="lrr2MetaChip" data-tip="Judge(s)">
-                <span className="lrr2MetaIcon">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="8" r="3" stroke="currentColor" strokeWidth="1.6" />
-                    <path
-                      d="M5 20c1.5-4 12.5-4 14 0"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                    />
-                  </svg>
-                </span>
-                {report.judges}
-              </button>
-            ) : null}
+            <div className="lrr2MetaRow">
+              {report.judges ? (
+                <div className="lrr2MetaTag" data-tip="Judge(s)">
+                  <span className="lrr2MetaIcon">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="8" r="3" stroke="currentColor" strokeWidth="1.6" />
+                      <path d="M5 20c1.5-4 12.5-4 14 0" stroke="currentColor" strokeWidth="1.6" />
+                    </svg>
+                  </span>
+                  {report.judges}
+                </div>
+              ) : null}
 
-            {report.decisionDate ? (
-              <button className="lrr2MetaChip" data-tip="Decision Date">
-                <span className="lrr2MetaIcon">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <rect
-                      x="4"
-                      y="5"
-                      width="16"
-                      height="15"
-                      rx="2"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                    />
-                    <path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" strokeWidth="1.6" />
-                  </svg>
-                </span>
-                {formatDate(report.decisionDate)}
-              </button>
-            ) : null}
+              {report.country ? (
+                <div className="lrr2MetaTag" data-tip="Country">
+                  <span className="lrr2MetaIcon">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" />
+                      <path d="M3 12h18M12 3a15 15 0 0 1 0 18" stroke="currentColor" strokeWidth="1.4" />
+                    </svg>
+                  </span>
+                  {report.country}
+                </div>
+              ) : null}
 
-            <button
-              type="button"
-              className="lrr2MetaChip"
-              title="Copy title"
-              onClick={() => navigator.clipboard?.writeText(`${title}`)}
-            >
-              Copy title
-            </button>
-
-            {report?.citation ? (
               <button
                 type="button"
-                className="lrr2MetaChip"
-                title="Copy citation"
-                onClick={() => navigator.clipboard?.writeText(String(report.citation))}
+                className="lrr2MetaAction"
+                data-action="true"
+                title="Copy title"
+                onClick={() => navigator.clipboard?.writeText(`${title}`)}
               >
-                Copy citation
+                Copy title
               </button>
-            ) : null}
-          </div>
 
-          {!isAdmin && accessLoading ? (
-            <span className="lrr2MetaHint" data-tip="Checking subscription access">
-              checking access…
-            </span>
-          ) : null}
+              {report?.citation ? (
+                <button
+                  type="button"
+                  className="lrr2MetaAction"
+                  data-action="true"
+                  title="Copy citation"
+                  onClick={() => navigator.clipboard?.writeText(String(report.citation))}
+                >
+                  Copy citation
+                </button>
+              ) : null}
+
+              {!isAdmin && accessLoading ? (
+                <span className="lrr2MetaHint" data-tip="Checking subscription access">
+                  checking access…
+                </span>
+              ) : null}
+            </div>
+          </div>
         </section>
 
         <section className="lrr2ActionsCard">
-          <div className="lrr2ActionBtns">
-            <div className="lrr2ActionsHint">
-              Use the tabs below to switch between <b>Transcript</b> and <b>LegalAI Summary</b>.
+          <div className="lrr2StatusTop">
+            <div className="lrr2StatusTitle">Quick panel</div>
+
+            <div className="lrr2StatusPills">
+              <span className={`lrr2StatusPill ${view === "content" ? "isOn" : ""}`}>Transcript</span>
+              <span className={`lrr2StatusPill ${view === "ai" ? "isOn" : ""}`}>LegalAI</span>
             </div>
+          </div>
+
+          <div className="lrr2StatusRows">
+            <div className="lrr2StatusRow">
+              <span className="lrr2StatusK">Transcript</span>
+              <span className={`lrr2StatusV ${contentOpen ? "isGood" : ""}`}>{contentOpen ? "Open" : "Hidden"}</span>
+              <button
+                type="button"
+                className="lrr2StatusBtn"
+                onClick={() => {
+                  setView("content");
+                  setContentOpen((v) => !v);
+                }}
+                title={contentOpen ? "Hide transcript" : "Show transcript"}
+              >
+                {contentOpen ? "Hide" : "Show"}
+              </button>
+            </div>
+
+            <div className="lrr2StatusRow">
+              <span className="lrr2StatusK">AI summary</span>
+              <span className={`lrr2StatusV ${view === "ai" ? "isGood" : ""}`}>{view === "ai" ? "Visible" : "Not open"}</span>
+              <button
+                type="button"
+                className="lrr2StatusBtn"
+                onClick={() => {
+                  setView("ai");
+                  setContentOpen(false);
+                }}
+                title="Open LegalAI Summary"
+              >
+                Open
+              </button>
+            </div>
+          </div>
+
+          <div className="lrr2StatusNote">
+            Tip: Clicking <b>Transcript</b> again will toggle show/hide.
           </div>
         </section>
       </div>
 
+      {/* Tabs */}
       <div className="lrr2Tabs" role="tablist" aria-label="Reader tabs">
         <button
           type="button"
@@ -1495,11 +1507,9 @@ export default function LawReportReader() {
           aria-selected={view === "content"}
           className={`lrr2Tab ${view === "content" ? "isActive" : ""}`}
           onClick={() => {
-            // If already on transcript, toggle content open/close
             if (view === "content") {
               setContentOpen((v) => !v);
             } else {
-              // If coming from AI tab, switch to transcript and open it
               setView("content");
               setContentOpen(true);
             }
@@ -1508,7 +1518,6 @@ export default function LawReportReader() {
         >
           Transcript
         </button>
-
 
         <button
           type="button"
@@ -1538,15 +1547,12 @@ export default function LawReportReader() {
         ) : (
           <article className="lrr2Article">
             <div className="lrr2TranscriptTools">
-
               <div className="lrr2ReaderBar">
                 <div className="lrr2ReaderCluster">
                   <button
                     type="button"
                     className="lrr2IconBtn"
-                    onClick={() =>
-                      setFontScale((v) => Math.max(0.9, Number((v - 0.05).toFixed(2))))
-                    }
+                    onClick={() => setFontScale((v) => Math.max(0.9, Number((v - 0.05).toFixed(2))))}
                     title="Decrease text size"
                     aria-label="Decrease text size"
                   >
@@ -1557,12 +1563,7 @@ export default function LawReportReader() {
                         strokeWidth="1.6"
                       />
                       <path d="M9.2 13.2h4l-2-5-2 5z" stroke="currentColor" strokeWidth="1.6" />
-                      <path
-                        d="M18 10h4"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      />
+                      <path d="M18 10h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                     </svg>
                     <span className="lrr2IconBtnText">A−</span>
                   </button>
@@ -1570,9 +1571,7 @@ export default function LawReportReader() {
                   <button
                     type="button"
                     className="lrr2IconBtn"
-                    onClick={() =>
-                      setFontScale((v) => Math.min(1.2, Number((v + 0.05).toFixed(2))))
-                    }
+                    onClick={() => setFontScale((v) => Math.min(1.2, Number((v + 0.05).toFixed(2))))}
                     title="Increase text size"
                     aria-label="Increase text size"
                   >
@@ -1583,18 +1582,8 @@ export default function LawReportReader() {
                         strokeWidth="1.6"
                       />
                       <path d="M9.2 13.2h4l-2-5-2 5z" stroke="currentColor" strokeWidth="1.6" />
-                      <path
-                        d="M20 8v6"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      />
-                      <path
-                        d="M17 11h6"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      />
+                      <path d="M20 8v6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                      <path d="M17 11h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                     </svg>
                     <span className="lrr2IconBtnText">A+</span>
                   </button>
@@ -1608,12 +1597,7 @@ export default function LawReportReader() {
                   >
                     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                       <path d="M7 18h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                      <path
-                        d="M9 18V6h6v12"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinejoin="round"
-                      />
+                      <path d="M9 18V6h6v12" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
                       <path d="M8 6h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                     </svg>
                     <span className="lrr2IconBtnText">Serif</span>
@@ -1631,12 +1615,7 @@ export default function LawReportReader() {
                     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                       <path d="M7 3h7l3 3v15H7V3z" stroke="currentColor" strokeWidth="1.6" />
                       <path d="M14 3v4h4" stroke="currentColor" strokeWidth="1.6" />
-                      <path
-                        d="M9 11h6M9 15h6"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                      />
+                      <path d="M9 11h6M9 15h6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
                     </svg>
                     <span className="lrr2IconBtnText">Paper</span>
                   </button>
@@ -1650,12 +1629,7 @@ export default function LawReportReader() {
                   >
                     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                       <path d="M7 3h10v18H7V3z" stroke="currentColor" strokeWidth="1.6" />
-                      <path
-                        d="M9 8h6M9 12h6M9 16h5"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                      />
+                      <path d="M9 8h6M9 12h6M9 16h5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
                       <path
                         d="M5.5 6.5c1.2-1.2 2.7-2 4.5-2"
                         stroke="currentColor"
@@ -1762,9 +1736,7 @@ export default function LawReportReader() {
                             <div className="lrr2SearchItemTitle">{titleText}</div>
                             {meta ? <div className="lrr2SearchItemMeta">{meta}</div> : null}
                           </div>
-                          <div className="lrr2SearchItemRight">
-                            {right ? <span className="lrr2Tag">{right}</span> : null}
-                          </div>
+                          <div className="lrr2SearchItemRight">{right ? <span className="lrr2Tag">{right}</span> : null}</div>
                         </button>
                       );
                     })}
