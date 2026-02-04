@@ -1764,3 +1764,221 @@
 .lrr2LockInlineActions{
   margin-left: auto;
 }
+/* =========================================================
+   Premium gating — inline notice + mid-article break
+   (shows only when showTranscriptGate is true)
+========================================================= */
+
+.lrr2GateInlineNotice {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 12px 14px;
+  margin: 12px 0 10px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.06);
+}
+
+[data-theme="dark"] .lrr2GateInlineNotice {
+  background: rgba(2, 6, 23, 0.55);
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
+.lrr2GateInlineIcon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: rgba(112, 40, 64, 0.12);
+  flex: 0 0 auto;
+}
+
+.lrr2GateInlineBody {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.lrr2GateInlineTitle {
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  color: rgba(15, 23, 42, 0.92);
+}
+
+[data-theme="dark"] .lrr2GateInlineTitle {
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.lrr2GateInlineMsg {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: rgba(15, 23, 42, 0.72);
+}
+
+[data-theme="dark"] .lrr2GateInlineMsg {
+  color: rgba(226, 232, 240, 0.72);
+}
+
+.lrr2GateInlineReason {
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: rgba(112, 40, 64, 0.92);
+  font-weight: 700;
+}
+
+[data-theme="dark"] .lrr2GateInlineReason {
+  color: rgba(251, 182, 206, 0.9);
+}
+
+.lrr2GateInlineActions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+/* Mid-article lock break */
+.lrr2GateMidBreak {
+  margin: 18px 0 6px;
+  padding: 0;
+}
+
+.lrr2GateMidRule {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(15, 23, 42, 0),
+    rgba(15, 23, 42, 0.18),
+    rgba(15, 23, 42, 0)
+  );
+  margin: 16px 0;
+}
+
+[data-theme="dark"] .lrr2GateMidRule {
+  background: linear-gradient(
+    90deg,
+    rgba(226, 232, 240, 0),
+    rgba(226, 232, 240, 0.18),
+    rgba(226, 232, 240, 0)
+  );
+}
+
+.lrr2GateMidCard {
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.96);
+  padding: 14px 14px 12px;
+  box-shadow: 0 14px 32px rgba(2, 6, 23, 0.08);
+}
+
+[data-theme="dark"] .lrr2GateMidCard {
+  background: rgba(2, 6, 23, 0.55);
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
+.lrr2GateMidTop {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.lrr2GateMidLock {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: rgba(112, 40, 64, 0.12);
+  flex: 0 0 auto;
+}
+
+.lrr2GateMidText {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.lrr2GateMidTitle {
+  font-weight: 900;
+  font-size: 16px;
+  letter-spacing: -0.015em;
+  color: rgba(15, 23, 42, 0.94);
+}
+
+[data-theme="dark"] .lrr2GateMidTitle {
+  color: rgba(226, 232, 240, 0.94);
+}
+
+.lrr2GateMidMsg {
+  margin-top: 6px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: rgba(15, 23, 42, 0.74);
+}
+
+[data-theme="dark"] .lrr2GateMidMsg {
+  color: rgba(226, 232, 240, 0.72);
+}
+
+.lrr2GateMidReason {
+  margin-top: 6px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: rgba(112, 40, 64, 0.92);
+}
+
+[data-theme="dark"] .lrr2GateMidReason {
+  color: rgba(251, 182, 206, 0.9);
+}
+
+.lrr2GateMidBullets {
+  margin: 10px 0 0;
+  padding: 0 0 0 16px;
+  color: rgba(15, 23, 42, 0.72);
+  font-size: 13px;
+}
+
+[data-theme="dark"] .lrr2GateMidBullets {
+  color: rgba(226, 232, 240, 0.7);
+}
+
+.lrr2GateMidBullets li {
+  margin: 6px 0;
+}
+
+.lrr2GateMidActions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 12px;
+}
+
+/* Make gated transcripts feel intentionally “ended” */
+.lrr2Collapse.isPreviewGated {
+  position: relative;
+}
+
+/* On small screens, stack the notice actions nicely */
+@media (max-width: 680px) {
+  .lrr2GateInlineNotice {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .lrr2GateInlineActions {
+    justify-content: flex-end;
+  }
+
+  .lrr2GateMidActions {
+    justify-content: stretch;
+  }
+
+  .lrr2GateMidActions .lrr2Btn {
+    width: 100%;
+  }
+}

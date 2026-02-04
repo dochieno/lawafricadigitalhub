@@ -51,7 +51,6 @@ function isGlobalAdminUser() {
 // Helpers
 // ----------------------
 function unwrapApi(res) {
-  // Handles: { data: {...} } OR { data: { data: {...} } } OR raw payload
   const d = res?.data;
   return d?.data ?? d;
 }
@@ -67,8 +66,6 @@ function pickFirstNumber(...vals) {
   return null;
 }
 
-//Additional Helpers:
-
 function getHasFullAccess(access) {
   return access?.hasFullAccess === true || access?.data?.hasFullAccess === true;
 }
@@ -76,13 +73,11 @@ function getHasFullAccess(access) {
 function getIsAiAllowed(report, access, isAdmin) {
   if (isAdmin) return true;
   if (!report) return false;
-  if (!report.isPremium) return true; // non-premium -> AI allowed
-  return getHasFullAccess(access);    // premium -> only subscribers
+  if (!report.isPremium) return true;
+  return getHasFullAccess(access);
 }
 
-
 function getAccessPreviewPolicy(access) {
-  // Accepts different backend naming styles safely
   const maxChars = pickFirstNumber(
     access?.previewMaxChars,
     access?.PreviewMaxChars,
@@ -97,7 +92,6 @@ function getAccessPreviewPolicy(access) {
     access?.data?.PreviewMaxParagraphs
   );
 
-  // sensible defaults if backend doesn’t send any preview policy
   return {
     maxChars: maxChars ?? 5000,
     maxParas: maxParas ?? 22,
@@ -146,52 +140,12 @@ function getAccessCtas(access) {
 function htmlToText(html) {
   const s = String(html || "");
   if (!s.trim()) return "";
-  // Prefer DOMParser in browser
   try {
     const doc = new DOMParser().parseFromString(s, "text/html");
     return (doc?.body?.textContent || "").replace(/\s+/g, " ").trim();
   } catch {
-    // fallback regex strip
     return s.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
   }
-}
-
-function SubscribeGateOverlay({ access, onGo }) {
-  const ctas = getAccessCtas(access);
-
-  return (
-    <div className="lrr2GateSticky" role="note" aria-label="Subscription required">
-      <div className="lrr2GateFade" aria-hidden="true" />
-      <div className="lrr2GateCard">
-        <div className="lrr2GateLeft">
-          <div className="lrr2GateTitle">Subscribe to unlock full access</div>
-          <div className="lrr2GateMsg">{ctas.msg}</div>
-        </div>
-
-        <div className="lrr2GateActions">
-          {ctas.secondaryUrl ? (
-            <button
-              type="button"
-              className="lrr2Btn"
-              onClick={() => onGo(ctas.secondaryUrl)}
-              title={ctas.secondaryLabel}
-            >
-              {ctas.secondaryLabel}
-            </button>
-          ) : null}
-
-          <button
-            type="button"
-            className="lrr2Btn primary"
-            onClick={() => onGo(ctas.primaryUrl)}
-            title={ctas.primaryLabel}
-          >
-            {ctas.primaryLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 function formatDate(d) {
@@ -313,7 +267,6 @@ function isLikelyHeadingParagraph(p) {
 
 function CaseContentFormatted({ text }) {
   const paras = useMemo(() => splitIntoParagraphs(text), [text]);
-
   if (!paras.length) return null;
 
   return (
@@ -333,6 +286,212 @@ function CaseContentFormatted({ text }) {
   );
 }
 
+// ----------------------
+// Gating UI pieces (NEW)
+// ----------------------
+function AccessReasonLabel(access) {
+  const raw =
+    access?.reason ||
+    access?.Reason ||
+    access?.data?.reason ||
+    access?.data?.Reason ||
+    "";
+
+  const t = String(raw || "").toLowerCase();
+
+  if (t.includes("institution") && t.includes("seat")) return "Your institution has reached its seat limit.";
+  if (t.includes("institution") && t.includes("inactive")) return "Your institution subscription is inactive.";
+  if (t.includes("expired")) return "Your subscription is expired.";
+  if (t.includes("trial")) return "Your trial does not include Law Reports access.";
+  return "";
+}
+
+function SubscribeGateInlineNotice({ access, onGo }) {
+  const ctas = getAccessCtas(access);
+  const reason = AccessReasonLabel(access);
+
+  return (
+    <div className="lrr2GateInlineNotice" role="note" aria-label="Subscription required">
+      <div className="lrr2GateInlineIcon" aria-hidden="true">
+        🔒
+      </div>
+
+      <div className="lrr2GateInlineBody">
+        <div className="lrr2GateInlineTitle">Subscribe to continue reading</div>
+        <div className="lrr2GateInlineMsg">
+          {ctas.msg}
+          {reason ? <div className="lrr2GateInlineReason">{reason}</div> : null}
+        </div>
+      </div>
+
+      <div className="lrr2GateInlineActions">
+        {ctas.secondaryUrl ? (
+          <button type="button" className="lrr2Btn" onClick={() => onGo(ctas.secondaryUrl)}>
+            {ctas.secondaryLabel}
+          </button>
+        ) : null}
+        <button type="button" className="lrr2Btn primary" onClick={() => onGo(ctas.primaryUrl)}>
+          {ctas.primaryLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SubscribeGateMidBreak({ access, onGo }) {
+  const ctas = getAccessCtas(access);
+  const reason = AccessReasonLabel(access);
+
+  return (
+    <div className="lrr2GateMidBreak" role="note" aria-label="Preview ended">
+      <div className="lrr2GateMidRule" aria-hidden="true" />
+      <div className="lrr2GateMidCard">
+        <div className="lrr2GateMidTop">
+          <div className="lrr2GateMidLock" aria-hidden="true">
+            🔒
+          </div>
+          <div className="lrr2GateMidText">
+            <div className="lrr2GateMidTitle">Preview ended</div>
+            <div className="lrr2GateMidMsg">
+              You’ve reached the free preview limit for this premium law report. Subscribe to unlock the full transcript.
+              {reason ? <div className="lrr2GateMidReason">{reason}</div> : null}
+            </div>
+
+            <ul className="lrr2GateMidBullets">
+              <li>Read the full judgment end-to-end</li>
+              <li>Use LegalAI tools (summary, issues, holdings)</li>
+              <li>Access related cases and citation helpers</li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="lrr2GateMidActions">
+          {ctas.secondaryUrl ? (
+            <button type="button" className="lrr2Btn" onClick={() => onGo(ctas.secondaryUrl)}>
+              {ctas.secondaryLabel}
+            </button>
+          ) : null}
+
+          <button type="button" className="lrr2Btn primary" onClick={() => onGo(ctas.primaryUrl)}>
+            {ctas.primaryLabel}
+          </button>
+        </div>
+      </div>
+      <div className="lrr2GateMidRule" aria-hidden="true" />
+    </div>
+  );
+}
+
+// Sticky overlay (existing)
+function SubscribeGateOverlay({ access, onGo }) {
+  const ctas = getAccessCtas(access);
+
+  return (
+    <div className="lrr2GateSticky" role="note" aria-label="Subscription required">
+      <div className="lrr2GateFade" aria-hidden="true" />
+      <div className="lrr2GateCard">
+        <div className="lrr2GateLeft">
+          <div className="lrr2GateTitle">Subscribe to unlock full access</div>
+          <div className="lrr2GateMsg">{ctas.msg}</div>
+        </div>
+
+        <div className="lrr2GateActions">
+          {ctas.secondaryUrl ? (
+            <button
+              type="button"
+              className="lrr2Btn"
+              onClick={() => onGo(ctas.secondaryUrl)}
+              title={ctas.secondaryLabel}
+            >
+              {ctas.secondaryLabel}
+            </button>
+          ) : null}
+
+          <button
+            type="button"
+            className="lrr2Btn primary"
+            onClick={() => onGo(ctas.primaryUrl)}
+            title={ctas.primaryLabel}
+          >
+            {ctas.primaryLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PremiumLockHero({ access, onGo }) {
+  const ctas = getAccessCtas(access);
+  const reason = AccessReasonLabel(access);
+
+  return (
+    <div className="lrr2LockHero" role="note" aria-label="Premium content locked">
+      <div className="lrr2LockHeroIcon" aria-hidden="true">
+        🔒
+      </div>
+
+      <div className="lrr2LockHeroBody">
+        <div className="lrr2LockHeroTitle">Full transcript restricted</div>
+        <div className="lrr2LockHeroMsg">
+          You’re viewing a limited preview of this premium law report.
+          {reason ? <div className="lrr2LockHeroReason">{reason}</div> : null}
+        </div>
+
+        <ul className="lrr2LockHeroBenefits">
+          <li>Unlimited full case transcript access</li>
+          <li>LegalAI summary, key issues, and holdings</li>
+          <li>Related cases and citation tools</li>
+        </ul>
+
+        <div className="lrr2LockHeroActions">
+          {ctas.secondaryUrl ? (
+            <button type="button" className="lrr2Btn" onClick={() => onGo(ctas.secondaryUrl)}>
+              {ctas.secondaryLabel}
+            </button>
+          ) : null}
+
+          <button type="button" className="lrr2Btn primary" onClick={() => onGo(ctas.primaryUrl)}>
+            {ctas.primaryLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AiLockedPanel({ access, onGo }) {
+  const ctas = getAccessCtas(access);
+
+  return (
+    <div className="lrr2Panel lrr2Panel--tight">
+      <div className="lrr2PanelHead">
+        <div className="lrr2PanelHeadLeft">
+          <div className="lrr2PanelTitle">LegalAI Summary</div>
+          <div className="lrr2PanelSub">Available to subscribers only.</div>
+        </div>
+      </div>
+
+      <div className="lrr2LockInline">
+        <div className="lrr2LockInlineIcon">🤖</div>
+        <div className="lrr2LockInlineText">
+          <div className="lrr2LockInlineTitle">Upgrade to use LegalAI</div>
+          <div className="lrr2LockInlineMsg">
+            Summaries, key issues, holdings, and AI related cases are restricted to active subscribers.
+          </div>
+        </div>
+
+        <div className="lrr2LockInlineActions">
+          <button type="button" className="lrr2Btn primary" onClick={() => onGo(ctas.primaryUrl)}>
+            {ctas.primaryLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// AI Summary Panel (UNCHANGED from your snippet EXCEPT not included here)
 function AiSummaryRichText({ text }) {
   const lines = String(text || "")
     .replace(/\r\n/g, "\n")
@@ -663,464 +822,364 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel, onOpenR
 
   const isExtended = String(result?.type ?? type).toLowerCase() === "extended";
 
-return (
-  <section className="lrrAi">
-    {!enabled ? (
-      <div className="lrr2Empty">LegalAI is available to subscribers only.</div>
-    ) : (
-      <>
-        <div className="lrrAiTop">
-          <div className="lrrAiTitleRow">
-            <div className="lrrAiTitle">LegalAI Summary</div>
+  return (
+    <section className="lrrAi">
+      {!enabled ? (
+        <div className="lrr2Empty">LegalAI is available to subscribers only.</div>
+      ) : (
+        <>
+          <div className="lrrAiTop">
+            <div className="lrrAiTitleRow">
+              <div className="lrrAiTitle">LegalAI Summary</div>
 
-            {sourceLabel ? (
-              <span className="lrrAiBadge" title="Where this result came from">
-                {sourceLabel}
-              </span>
-            ) : (
-              <span className="lrrAiBadge">AI generated</span>
-            )}
+              {sourceLabel ? (
+                <span className="lrrAiBadge" title="Where this result came from">
+                  {sourceLabel}
+                </span>
+              ) : (
+                <span className="lrrAiBadge">AI generated</span>
+              )}
 
-            <div className="lrrAiIconRow">
-              <button
-                type="button"
-                className="lrrAiUpgradeBtn ghost"
-                disabled={loading || !result}
-                onClick={onCopySummary}
-                title="Copy summary"
-                aria-label="Copy summary"
-              >
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <rect x="9" y="9" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.6" />
-                  <rect x="5" y="5" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.6" />
-                </svg>
-              </button>
-
-              <button
-                type="button"
-                className="lrrAiUpgradeBtn"
-                disabled={loading || !canRun}
-                onClick={onRegenerate}
-                title="Summarize / regenerate"
-                aria-label="Summarize / regenerate"
-              >
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path
-                    d="M12 2l1.2 4.2L17.4 8l-4.2 1.2L12 13.4l-1.2-4.2L6.6 8l4.2-1.8L12 2z"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                  />
-                  <path
-                    d="M5 20c2.5-2.2 5.2-3.3 8-3.3s5.5 1.1 8 3.3"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
-
-              <button
-                type="button"
-                className={`lrrAiUpgradeBtn ${chatOpen ? "ghost" : ""}`}
-                onClick={() => setChatOpen((v) => !v)}
-                title="Chat with LegalAI"
-                aria-label="Chat with LegalAI"
-              >
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path
-                    d="M4 5.5C4 4.1 5.1 3 6.5 3h11C19.9 3 21 4.1 21 5.5v7C21 13.9 19.9 15 18.5 15H11l-4.5 4V15H6.5C5.1 15 4 13.9 4 12.5v-7z"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M7.5 7.5h10M7.5 10.5h7"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <div className="lrrAiHeadnote">
-            <div className="lrrAiHeadnoteTitle">{digestTitle || "—"}</div>
-            <div className="lrrAiHeadnoteMeta">{courtLabel || "—"}</div>
-            <div className="lrrAiHeadnoteRule" />
-          </div>
-
-          {toast ? <div className="lrrAiToast">{toast}</div> : null}
-        </div>
-
-        {error ? <div className="lrrAiError">{error}</div> : null}
-
-        {result ? (
-          <div className="lrrAiResult">
-            {!isExtended ? (
-              <div className="lrrAiUpgrade">
-                <div className="lrrAiUpgradeText">
-                  Need more depth? Generate an <b>Extended</b> analysis (more detailed; will be token-gated later).
-                </div>
+              <div className="lrrAiIconRow">
+                <button
+                  type="button"
+                  className="lrrAiUpgradeBtn ghost"
+                  disabled={loading || !result}
+                  onClick={onCopySummary}
+                  title="Copy summary"
+                  aria-label="Copy summary"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <rect x="9" y="9" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.6" />
+                    <rect x="5" y="5" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.6" />
+                  </svg>
+                </button>
 
                 <button
                   type="button"
                   className="lrrAiUpgradeBtn"
-                  disabled={loading}
-                  onClick={() => setType("extended")}
-                  title="Generate extended summary"
+                  disabled={loading || !canRun}
+                  onClick={onRegenerate}
+                  title="Summarize / regenerate"
+                  aria-label="Summarize / regenerate"
                 >
-                  Generate Extended
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M12 2l1.2 4.2L17.4 8l-4.2 1.2L12 13.4l-1.2-4.2L6.6 8l4.2-1.8L12 2z"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                    />
+                    <path
+                      d="M5 20c2.5-2.2 5.2-3.3 8-3.3s5.5 1.1 8 3.3"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                    />
+                  </svg>
                 </button>
-              </div>
-            ) : (
-              <div className="lrrAiUpgrade isExtended">
-                <div className="lrrAiUpgradeText">
-                  You’re viewing the <b>Extended</b> analysis.
-                </div>
 
                 <button
                   type="button"
-                  className="lrrAiUpgradeBtn ghost"
-                  disabled={loading}
-                  onClick={() => setType("basic")}
-                  title="Back to basic summary"
+                  className={`lrrAiUpgradeBtn ${chatOpen ? "ghost" : ""}`}
+                  onClick={() => setChatOpen((v) => !v)}
+                  title="Chat with LegalAI"
+                  aria-label="Chat with LegalAI"
                 >
-                  Back to Basic
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M4 5.5C4 4.1 5.1 3 6.5 3h11C19.9 3 21 4.1 21 5.5v7C21 13.9 19.9 15 18.5 15H11l-4.5 4V15H6.5C5.1 15 4 13.9 4 12.5v-7z"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M7.5 7.5h10M7.5 10.5h7"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                    />
+                  </svg>
                 </button>
               </div>
-            )}
-
-            <div className="lrrAiBody">
-              <AiSummaryRichText text={result.summary || ""} />
             </div>
 
-            {chatOpen ? (
-              <div className="lrr2Panel lrr2Panel--tight lrr2ChatPanel">
+            <div className="lrrAiHeadnote">
+              <div className="lrrAiHeadnoteTitle">{digestTitle || "—"}</div>
+              <div className="lrrAiHeadnoteMeta">{courtLabel || "—"}</div>
+              <div className="lrrAiHeadnoteRule" />
+            </div>
+
+            {toast ? <div className="lrrAiToast">{toast}</div> : null}
+          </div>
+
+          {error ? <div className="lrrAiError">{error}</div> : null}
+
+          {result ? (
+            <div className="lrrAiResult">
+              {!isExtended ? (
+                <div className="lrrAiUpgrade">
+                  <div className="lrrAiUpgradeText">
+                    Need more depth? Generate an <b>Extended</b> analysis (more detailed; will be token-gated later).
+                  </div>
+
+                  <button
+                    type="button"
+                    className="lrrAiUpgradeBtn"
+                    disabled={loading}
+                    onClick={() => setType("extended")}
+                    title="Generate extended summary"
+                  >
+                    Generate Extended
+                  </button>
+                </div>
+              ) : (
+                <div className="lrrAiUpgrade isExtended">
+                  <div className="lrrAiUpgradeText">
+                    You’re viewing the <b>Extended</b> analysis.
+                  </div>
+
+                  <button
+                    type="button"
+                    className="lrrAiUpgradeBtn ghost"
+                    disabled={loading}
+                    onClick={() => setType("basic")}
+                    title="Back to basic summary"
+                  >
+                    Back to Basic
+                  </button>
+                </div>
+              )}
+
+              <div className="lrrAiBody">
+                <AiSummaryRichText text={result.summary || ""} />
+              </div>
+
+              {chatOpen ? (
+                <div className="lrr2Panel lrr2Panel--tight lrr2ChatPanel">
+                  <div className="lrr2PanelHead">
+                    <div className="lrr2PanelHeadLeft">
+                      <div className="lrr2PanelTitle">Chat with LegalAI</div>
+                      <div className="lrr2PanelSub">
+                        Ask about issues, holdings, reasoning, and related/persuasive cases.
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="lrr2Btn"
+                      onClick={() => {
+                        setChatMsgs((prev) =>
+                          prev.length > 1
+                            ? [
+                                prev[0],
+                                { role: "assistant", content: "Cleared. Ask a new question about this case." },
+                              ]
+                            : prev
+                        );
+                        setChatError("");
+                        setChatInput("");
+                      }}
+                      title="Clear chat"
+                    >
+                      Clear
+                    </button>
+                  </div>
+
+                  <div className="lrr2ChatBox" role="log" aria-label="Chat messages">
+                    {chatMsgs.map((m, idx) => (
+                      <div key={idx} className={`lrr2ChatRow ${m.role === "user" ? "isUser" : "isAi"}`}>
+                        <div className={`lrr2ChatBubble ${m.role === "user" ? "isUser" : "isAi"}`}>{m.content}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {chatError ? <div className="lrr2PanelError">{chatError}</div> : null}
+
+                  <div className="lrr2ChatComposer">
+                    <input
+                      className="lrr2SearchInput lrr2ChatInput"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      placeholder="Ask LegalAI… e.g. What were the key issues and the holding?"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          document.getElementById("lrrChatSendBtn")?.click();
+                        }
+                      }}
+                    />
+
+                    <button
+                      id="lrrChatSendBtn"
+                      type="button"
+                      className="lrr2Btn primary"
+                      disabled={chatLoading || !String(chatInput || "").trim()}
+                      onClick={async () => {
+                        if (!canRun) return;
+                        const msg = String(chatInput || "").trim();
+                        if (!msg) return;
+
+                        setChatInput("");
+                        setChatError("");
+                        addMsg("user", msg);
+
+                        try {
+                          setChatLoading(true);
+                          const history = chatMsgs.slice(-8).map((m) => ({ role: m.role, content: m.content }));
+
+                          const res = await api.post(`/ai/law-reports/${Number(lawReportId)}/chat`, {
+                            message: msg,
+                            history,
+                          });
+
+                          const payload = unwrapApi(res);
+                          const reply =
+                            payload?.reply ||
+                            payload?.message ||
+                            payload?.content ||
+                            res.data?.reply ||
+                            res.data?.message ||
+                            res.data?.content ||
+                            "";
+
+                          addMsg("assistant", String(reply || "No response returned."));
+                        } catch (e) {
+                          setChatError(getApiErrorMessage(e, "Chat failed."));
+                          addMsg("assistant", "Sorry — I couldn’t complete that request. Please try again.");
+                        } finally {
+                          setChatLoading(false);
+                        }
+                      }}
+                      title="Send"
+                    >
+                      {chatLoading ? "Sending…" : "Send"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="lrr2Panel lrr2Panel--tight lrr2AiRelatedPanel">
                 <div className="lrr2PanelHead">
                   <div className="lrr2PanelHeadLeft">
-                    <div className="lrr2PanelTitle">Chat with LegalAI</div>
+                    <div className="lrr2PanelTitle">AI Related Cases</div>
                     <div className="lrr2PanelSub">
-                      Ask about issues, holdings, reasoning, and related/persuasive cases.
+                      Enhancement only · returns <b>2 Kenya</b> and <b>2 Outside Kenya</b>. Always verify citations.
                     </div>
                   </div>
 
                   <button
                     type="button"
                     className="lrr2Btn"
-                    onClick={() => {
-                      setChatMsgs((prev) =>
-                        prev.length > 1
-                          ? [
-                              prev[0],
-                              {
-                                role: "assistant",
-                                content: "Cleared. Ask a new question about this case.",
-                              },
-                            ]
-                          : prev
-                      );
-                      setChatError("");
-                      setChatInput("");
-                    }}
-                    title="Clear chat"
+                    disabled={relatedCasesLoading}
+                    onClick={fetchAiRelatedCases}
+                    title="Find AI related cases"
                   >
-                    Clear
+                    {relatedCasesLoading ? "Finding…" : "Find related"}
                   </button>
                 </div>
 
-                <div className="lrr2ChatBox" role="log" aria-label="Chat messages">
-                  {chatMsgs.map((m, idx) => (
-                    <div key={idx} className={`lrr2ChatRow ${m.role === "user" ? "isUser" : "isAi"}`}>
-                      <div className={`lrr2ChatBubble ${m.role === "user" ? "isUser" : "isAi"}`}>{m.content}</div>
-                    </div>
-                  ))}
-                </div>
+                {relatedCasesError ? <div className="lrr2PanelError">{relatedCasesError}</div> : null}
 
-                {chatError ? <div className="lrr2PanelError">{chatError}</div> : null}
-
-                <div className="lrr2ChatComposer">
-                  <input
-                    className="lrr2SearchInput lrr2ChatInput"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    placeholder="Ask LegalAI… e.g. What were the key issues and the holding?"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        document.getElementById("lrrChatSendBtn")?.click();
-                      }
-                    }}
-                  />
-
-                  <button
-                    id="lrrChatSendBtn"
-                    type="button"
-                    className="lrr2Btn primary"
-                    disabled={chatLoading || !String(chatInput || "").trim()}
-                    onClick={async () => {
-                      if (!canRun) return;
-                      const msg = String(chatInput || "").trim();
-                      if (!msg) return;
-
-                      setChatInput("");
-                      setChatError("");
-                      addMsg("user", msg);
-
-                      try {
-                        setChatLoading(true);
-                        const history = chatMsgs.slice(-8).map((m) => ({ role: m.role, content: m.content }));
-
-                        const res = await api.post(`/ai/law-reports/${Number(lawReportId)}/chat`, {
-                          message: msg,
-                          history,
-                        });
-
-                        const payload = unwrapApi(res);
-                        const reply =
-                          payload?.reply ||
-                          payload?.message ||
-                          payload?.content ||
-                          res.data?.reply ||
-                          res.data?.message ||
-                          res.data?.content ||
-                          "";
-
-                        addMsg("assistant", String(reply || "No response returned."));
-                      } catch (e) {
-                        setChatError(getApiErrorMessage(e, "Chat failed."));
-                        addMsg("assistant", "Sorry — I couldn’t complete that request. Please try again.");
-                      } finally {
-                        setChatLoading(false);
-                      }
-                    }}
-                    title="Send"
-                  >
-                    {chatLoading ? "Sending…" : "Send"}
-                  </button>
-                </div>
-              </div>
-            ) : null}
-
-            {/* Phase 4 — AI Related Cases */}
-            <div className="lrr2Panel lrr2Panel--tight lrr2AiRelatedPanel">
-              <div className="lrr2PanelHead">
-                <div className="lrr2PanelHeadLeft">
-                  <div className="lrr2PanelTitle">AI Related Cases</div>
-                  <div className="lrr2PanelSub">
-                    Enhancement only · returns <b>2 Kenya</b> and <b>2 Outside Kenya</b>. Always verify citations.
+                {!relatedCasesLoading && !relatedCasesError && relatedCases.length === 0 ? (
+                  <div className="lrr2PanelEmpty">
+                    No AI related cases loaded yet. Click <b>Find related</b>.
                   </div>
-                </div>
+                ) : null}
 
-                <button
-                  type="button"
-                  className="lrr2Btn"
-                  disabled={relatedCasesLoading}
-                  onClick={fetchAiRelatedCases}
-                  title="Find AI related cases"
-                >
-                  {relatedCasesLoading ? "Finding…" : "Find related"}
-                </button>
-              </div>
+                {relatedCases.length > 0 ? (
+                  <div className="lrr2RelatedGrid">
+                    {(() => {
+                      const kenya = relatedCases.filter((x) => String(x?.jurisdiction || "").toLowerCase() === "kenya");
+                      const foreign = relatedCases.filter(
+                        (x) => String(x?.jurisdiction || "").toLowerCase() !== "kenya"
+                      );
 
-              {relatedCasesError ? <div className="lrr2PanelError">{relatedCasesError}</div> : null}
+                      const renderItem = (c, idx) => {
+                        const title = c?.title || `Related case ${idx + 1}`;
+                        const cite = c?.citation || "";
+                        const court = c?.court || "";
+                        const year = c?.year ? String(c.year) : "";
+                        const meta = [court, year].filter(Boolean).join(" • ");
+                        const rid = Number(c?.lawReportId || 0);
+                        const url = c?.url || "";
+                        const note = c?.note || "";
+                        const canOpenInternal = Number.isFinite(rid) && rid > 0;
 
-              {!relatedCasesLoading && !relatedCasesError && relatedCases.length === 0 ? (
-                <div className="lrr2PanelEmpty">
-                  No AI related cases loaded yet. Click <b>Find related</b>.
-                </div>
-              ) : null}
+                        return (
+                          <div key={`${title}-${idx}`} className="lrr2RelatedCard">
+                            <div className="lrr2RelatedTop">
+                              <div className="lrr2RelatedTitleWrap">
+                                <div className="lrr2RelatedTitle">{title}</div>
+                                {meta ? <div className="lrr2RelatedMeta">{meta}</div> : null}
+                              </div>
 
-              {relatedCases.length > 0 ? (
-                <div className="lrr2RelatedGrid">
-                  {(() => {
-                    const kenya = relatedCases.filter(
-                      (x) => String(x?.jurisdiction || "").toLowerCase() === "kenya"
-                    );
-                    const foreign = relatedCases.filter(
-                      (x) => String(x?.jurisdiction || "").toLowerCase() !== "kenya"
-                    );
-
-                    const renderItem = (c, idx) => {
-                      const title = c?.title || `Related case ${idx + 1}`;
-                      const cite = c?.citation || "";
-                      const court = c?.court || "";
-                      const year = c?.year ? String(c.year) : "";
-                      const meta = [court, year].filter(Boolean).join(" • ");
-                      const rid = Number(c?.lawReportId || 0);
-                      const url = c?.url || "";
-                      const note = c?.note || "";
-                      const canOpenInternal = Number.isFinite(rid) && rid > 0;
-
-                      return (
-                        <div key={`${title}-${idx}`} className="lrr2RelatedCard">
-                          <div className="lrr2RelatedTop">
-                            <div className="lrr2RelatedTitleWrap">
-                              <div className="lrr2RelatedTitle">{title}</div>
-                              {meta ? <div className="lrr2RelatedMeta">{meta}</div> : null}
+                              <div className="lrr2RelatedTags">
+                                {cite ? <span className="lrr2Tag">{cite}</span> : null}
+                                {String(c?.jurisdiction || "").toLowerCase() !== "kenya" ? (
+                                  <span className="lrr2Tag soft">Persuasive</span>
+                                ) : null}
+                              </div>
                             </div>
 
-                            <div className="lrr2RelatedTags">
-                              {cite ? <span className="lrr2Tag">{cite}</span> : null}
-                              {String(c?.jurisdiction || "").toLowerCase() !== "kenya" ? (
-                                <span className="lrr2Tag soft">Persuasive</span>
+                            {note ? <div className="lrr2RelatedNote">{note}</div> : null}
+
+                            <div className="lrr2RelatedActions">
+                              {canOpenInternal ? (
+                                <button type="button" className="lrr2Btn" onClick={() => onOpenRelated?.(rid)}>
+                                  Open in LawAfrica
+                                </button>
+                              ) : null}
+
+                              {!canOpenInternal && url ? (
+                                <a className="lrr2Btn" href={url} target="_blank" rel="noreferrer">
+                                  Open reference
+                                </a>
                               ) : null}
                             </div>
                           </div>
+                        );
+                      };
 
-                          {note ? <div className="lrr2RelatedNote">{note}</div> : null}
-
-                          <div className="lrr2RelatedActions">
-                            {canOpenInternal ? (
-                              <button
-                                type="button"
-                                className="lrr2Btn"
-                                onClick={() => onOpenRelated?.(rid)}
-                                title="Open in LawAfrica"
-                              >
-                                Open in LawAfrica
-                              </button>
-                            ) : null}
-
-                            {!canOpenInternal && url ? (
-                              <a className="lrr2Btn" href={url} target="_blank" rel="noreferrer">
-                                Open reference
-                              </a>
-                            ) : null}
+                      return (
+                        <>
+                          <div className="lrr2RelatedSection">
+                            <div className="lrr2RelatedSectionTitle">Kenya</div>
+                            {kenya.length ? (
+                              <div className="lrr2RelatedStack">{kenya.map(renderItem)}</div>
+                            ) : (
+                              <div className="lrr2RelatedNone">No Kenya suggestions returned.</div>
+                            )}
                           </div>
-                        </div>
+
+                          <div className="lrr2RelatedSection">
+                            <div className="lrr2RelatedSectionTitle">Outside Kenya</div>
+                            {foreign.length ? (
+                              <div className="lrr2RelatedStack">{foreign.map(renderItem)}</div>
+                            ) : (
+                              <div className="lrr2RelatedNone">No foreign suggestions returned.</div>
+                            )}
+                          </div>
+                        </>
                       );
-                    };
-
-                    return (
-                      <>
-                        <div className="lrr2RelatedSection">
-                          <div className="lrr2RelatedSectionTitle">Kenya</div>
-                          {kenya.length ? (
-                            <div className="lrr2RelatedStack">{kenya.map(renderItem)}</div>
-                          ) : (
-                            <div className="lrr2RelatedNone">No Kenya suggestions returned.</div>
-                          )}
-                        </div>
-
-                        <div className="lrr2RelatedSection">
-                          <div className="lrr2RelatedSectionTitle">Outside Kenya</div>
-                          {foreign.length ? (
-                            <div className="lrr2RelatedStack">{foreign.map(renderItem)}</div>
-                          ) : (
-                            <div className="lrr2RelatedNone">No foreign suggestions returned.</div>
-                          )}
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-              ) : null}
+                    })()}
+                  </div>
+                ) : null}
+              </div>
             </div>
+          ) : loading ? null : (
+            <div className="lrrAiTip">No summary available yet.</div>
+          )}
+
+          <div className="lrrAiFooterNote">
+            *** This summary is automatically generated by LegalAI and may be cached for performance. Always verify
+            critical details against the full case text — <b>{isExtended ? "Extended" : "Basic"}</b>.
           </div>
-        ) : loading ? null : (
-          <div className="lrrAiTip">No summary available yet.</div>
-        )}
-
-        <div className="lrrAiFooterNote">
-          *** This summary is automatically generated by LegalAI and may be cached for performance. Always verify
-          critical details against the full case text — <b>{isExtended ? "Extended" : "Basic"}</b>.
-        </div>
-      </>
-    )}
-  </section>
-);
-
-}
-
-// ----------------------
-// Reader
-// ----------------------
-
-function AccessReasonLabel(access) {
-  const raw =
-    access?.reason ||
-    access?.Reason ||
-    access?.data?.reason ||
-    access?.data?.Reason ||
-    "";
-
-  const t = String(raw || "").toLowerCase();
-
-  if (t.includes("institution") && t.includes("seat")) return "Your institution has reached its seat limit.";
-  if (t.includes("institution") && t.includes("inactive")) return "Your institution subscription is inactive.";
-  if (t.includes("expired")) return "Your subscription is expired.";
-  if (t.includes("trial")) return "Your trial does not include Law Reports access.";
-  return "";
-}
-
-function PremiumLockHero({ access, onGo }) {
-  const ctas = getAccessCtas(access);
-  const reason = AccessReasonLabel(access);
-
-  return (
-    <div className="lrr2LockHero" role="note" aria-label="Premium content locked">
-      <div className="lrr2LockHeroIcon" aria-hidden="true">🔒</div>
-
-      <div className="lrr2LockHeroBody">
-        <div className="lrr2LockHeroTitle">Full transcript restricted</div>
-        <div className="lrr2LockHeroMsg">
-          You’re viewing a limited preview of this premium law report.
-          {reason ? <div className="lrr2LockHeroReason">{reason}</div> : null}
-        </div>
-
-        <ul className="lrr2LockHeroBenefits">
-          <li>Unlimited full case transcript access</li>
-          <li>LegalAI summary, key issues, and holdings</li>
-          <li>Related cases and citation tools</li>
-        </ul>
-
-        <div className="lrr2LockHeroActions">
-          {ctas.secondaryUrl ? (
-            <button type="button" className="lrr2Btn" onClick={() => onGo(ctas.secondaryUrl)}>
-              {ctas.secondaryLabel}
-            </button>
-          ) : null}
-
-          <button type="button" className="lrr2Btn primary" onClick={() => onGo(ctas.primaryUrl)}>
-            {ctas.primaryLabel}
-          </button>
-        </div>
-      </div>
-    </div>
+        </>
+      )}
+    </section>
   );
 }
 
-function AiLockedPanel({ access, onGo }) {
-  const ctas = getAccessCtas(access);
-
-  return (
-    <div className="lrr2Panel lrr2Panel--tight">
-      <div className="lrr2PanelHead">
-        <div className="lrr2PanelHeadLeft">
-          <div className="lrr2PanelTitle">LegalAI Summary</div>
-          <div className="lrr2PanelSub">Available to subscribers only.</div>
-        </div>
-      </div>
-
-      <div className="lrr2LockInline">
-        <div className="lrr2LockInlineIcon">🤖</div>
-        <div className="lrr2LockInlineText">
-          <div className="lrr2LockInlineTitle">Upgrade to use LegalAI</div>
-          <div className="lrr2LockInlineMsg">
-            Summaries, key issues, holdings, and AI related cases are restricted to active subscribers.
-          </div>
-        </div>
-
-        <div className="lrr2LockInlineActions">
-          <button type="button" className="lrr2Btn primary" onClick={() => onGo(ctas.primaryUrl)}>
-            {ctas.primaryLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function LawReportReader() {
   const { id } = useParams();
@@ -1153,8 +1212,8 @@ export default function LawReportReader() {
   const [relatedDbLoading, setRelatedDbLoading] = useState(false);
   const [relatedDbError, setRelatedDbError] = useState("");
 
-  const [fontScale, setFontScale] = useState(1); // 0.9 - 1.2
-  const [readingTheme, setReadingTheme] = useState("paper"); // paper | sepia | dark
+  const [fontScale, setFontScale] = useState(1);
+  const [readingTheme, setReadingTheme] = useState("paper");
   const [serif, setSerif] = useState(true);
 
   // Search
@@ -1166,19 +1225,18 @@ export default function LawReportReader() {
 
   const searchBoxRef = useRef(null);
   const searchInputRef = useRef(null);
-  const searchCtlRef = useRef(null); // AbortController
+  const searchCtlRef = useRef(null);
   const searchReqIdRef = useRef(0);
 
   // Reading progress
   const [progress, setProgress] = useState(0);
   const progressBarRef = useRef(null);
 
-  // ✅ Compact header detection
+  // Compact header
   const [headerCompact, setHeaderCompact] = useState(false);
 
-  // Map fontScale to a class (no inline styles)
   const fsClass = useMemo(() => {
-    const n = Math.round(fontScale * 100); // 90..120
+    const n = Math.round(fontScale * 100);
     const clamped = Math.max(90, Math.min(120, n));
     return `lrr2Fs-${clamped}`;
   }, [fontScale]);
@@ -1194,8 +1252,6 @@ export default function LawReportReader() {
       const max = Math.max(1, scrollHeight - clientHeight);
       const p = Math.min(1, Math.max(0, scrollTop / max));
       setProgress(p);
-
-      // ✅ Compact header after user scrolls a bit
       setHeaderCompact(scrollTop > 120);
     }
 
@@ -1209,7 +1265,6 @@ export default function LawReportReader() {
     progressBarRef.current.style.transform = `scaleX(${progress})`;
   }, [progress]);
 
-  // Close dropdown on outside click / Esc
   useEffect(() => {
     if (!openResults) return;
 
@@ -1234,22 +1289,20 @@ export default function LawReportReader() {
     };
   }, [openResults]);
 
-  // ✅ Cmd/Ctrl + K focuses the search input (premium shortcut)
-    useEffect(() => {
-      function onKey(e) {
-        const isMac = navigator.platform.toLowerCase().includes("mac");
-        const hot = (isMac ? e.metaKey : e.ctrlKey) && String(e.key || "").toLowerCase() === "k";
-        if (hot) {
-          e.preventDefault();
-          setOpenResults(true);
-          searchInputRef.current?.focus?.();
-        }
+  useEffect(() => {
+    function onKey(e) {
+      const isMac = navigator.platform.toLowerCase().includes("mac");
+      const hot = (isMac ? e.metaKey : e.ctrlKey) && String(e.key || "").toLowerCase() === "k";
+      if (hot) {
+        e.preventDefault();
+        setOpenResults(true);
+        searchInputRef.current?.focus?.();
       }
+    }
 
-  window.addEventListener("keydown", onKey);
-  return () => window.removeEventListener("keydown", onKey);
-}, []);
-
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Related DB cases only in Transcript tab
   useEffect(() => {
@@ -1280,7 +1333,7 @@ export default function LawReportReader() {
     };
   }, [reportId, view]);
 
-  // Load report (unwrap fixed)
+  // Load report
   useEffect(() => {
     let cancelled = false;
 
@@ -1295,7 +1348,6 @@ export default function LawReportReader() {
 
         setReport(payload ?? null);
       } catch (e) {
-
         console.error(e);
         if (!cancelled) setError(getApiErrorMessage(e, "We couldn’t load this report right now. Please try again."));
       } finally {
@@ -1303,7 +1355,6 @@ export default function LawReportReader() {
       }
     }
 
-    // reset on id change
     setReport(null);
     setHasContent(true);
     setAccess(null);
@@ -1321,7 +1372,7 @@ export default function LawReportReader() {
     };
   }, [reportId]);
 
-  // Availability + access checks — DO NOT CHANGE LOGIC (but unwrap fixed)
+  // Availability + access checks — DO NOT CHANGE LOGIC
   useEffect(() => {
     let cancelled = false;
 
@@ -1382,25 +1433,22 @@ export default function LawReportReader() {
   }, [report, isInst, isPublic, isAdmin]);
 
   /* ======================================================
-     ✅ IMPORTANT: These MUST live INSIDE the component
+     IMPORTANT: These MUST live INSIDE the component
   ====================================================== */
   const rawContent = useMemo(() => String(report?.contentText || ""), [report?.contentText]);
   const textHasContent = !!rawContent.trim();
 
-  // ✅ include admin safety too
-const hasFullAccess = useMemo(() => getHasFullAccess(access), [access]);
-const aiAllowed = useMemo(() => getIsAiAllowed(report, access, isAdmin), [report, access, isAdmin]);
+  const hasFullAccess = useMemo(() => getHasFullAccess(access), [access]);
+  const aiAllowed = useMemo(() => getIsAiAllowed(report, access, isAdmin), [report, access, isAdmin]);
 
-  // ✅ Gate only premium transcripts when user lacks full access
-const shouldGateTranscript = useMemo(() => {
-  if (!report) return false;
-  if (!report.isPremium) return false;
-  return true; // ALL premium transcripts are gated unless full access
-}, [report]);
+  const shouldGateTranscript = useMemo(() => {
+    if (!report) return false;
+    if (!report.isPremium) return false;
+    return true;
+  }, [report]);
 
   const previewPolicy = useMemo(() => getAccessPreviewPolicy(access), [access]);
 
-  // If HTML content + gated preview, render as formatted text preview to avoid broken tags.
   const gateSourceText = useMemo(() => {
     if (!rawContent) return "";
     return isProbablyHtml(rawContent) ? htmlToText(rawContent) : rawContent;
@@ -1448,6 +1496,11 @@ const shouldGateTranscript = useMemo(() => {
     };
   }, [shouldGateTranscript, hasFullAccess, textHasContent, rawContent, gateSourceText, previewPolicy]);
 
+  // ✅ EXACT condition requested
+  const showTranscriptGate = useMemo(() => {
+    return !!(report?.isPremium && !hasFullAccess && preview.gated && preview.reachedLimit);
+  }, [report?.isPremium, hasFullAccess, preview?.gated, preview?.reachedLimit]);
+
   const canRead =
     !!report &&
     (isAdmin ||
@@ -1457,7 +1510,6 @@ const shouldGateTranscript = useMemo(() => {
   useEffect(() => {
     const term = String(q || "").trim();
 
-    // cancel any in-flight search
     try {
       searchCtlRef.current?.abort?.();
     } catch {
@@ -1495,7 +1547,6 @@ const shouldGateTranscript = useMemo(() => {
         setSearchResults(items);
         setOpenResults(true);
       } catch (e) {
-        // ignore aborts
         const aborted =
           e?.name === "CanceledError" ||
           e?.name === "AbortError" ||
@@ -1525,6 +1576,12 @@ const shouldGateTranscript = useMemo(() => {
     setSearchErr("");
     navigate(`/dashboard/law-reports/${rid}`);
   }
+
+  const goCta = (url) => {
+    if (!url) return;
+    if (String(url).startsWith("http")) window.open(url, "_blank", "noreferrer");
+    else navigate(url);
+  };
 
   if (loading) {
     return (
@@ -1589,7 +1646,6 @@ const shouldGateTranscript = useMemo(() => {
           </div>
         </div>
 
-        {/* ✅ Compact search row */}
         <div className="lrr2SearchRow">
           <div className="lrr2SearchBox" ref={searchBoxRef}>
             <div className="lrr2SearchLead" aria-hidden="true">
@@ -1682,7 +1738,6 @@ const shouldGateTranscript = useMemo(() => {
         ↑
       </button>
 
-      {/* ✅ Meta + Quick panel */}
       <div className="lrr2TopGrid lrr2TopGrid--single">
         <section className="lrr2MetaCard">
           <div className="lrr2MetaGrid">
@@ -1805,7 +1860,6 @@ const shouldGateTranscript = useMemo(() => {
         </section>
       </div>
 
-      {/* Tabs */}
       <div className="lrr2Tabs" role="tablist" aria-label="Reader tabs">
         <button
           type="button"
@@ -1854,23 +1908,22 @@ const shouldGateTranscript = useMemo(() => {
         )}
       </div>
 
-
-    <section className="lrr2Content">
-      {view === "ai" ? (
-        aiAllowed ? (
-          <LawReportAiSummaryPanel
-            lawReportId={reportId}
-            digestTitle={title}
-            courtLabel={report?.court || ""}
-            onOpenRelated={(rid) => navigate(`/dashboard/law-reports/${rid}`)}
-            enabled={isAdmin || hasFullAccess}
-          />
+      <section className="lrr2Content">
+        {view === "ai" ? (
+          aiAllowed ? (
+            <LawReportAiSummaryPanel
+              lawReportId={reportId}
+              digestTitle={title}
+              courtLabel={report?.court || ""}
+              onOpenRelated={(rid) => navigate(`/dashboard/law-reports/${rid}`)}
+              enabled={isAdmin || hasFullAccess}
+            />
+          ) : (
+            <AiLockedPanel access={access} onGo={goCta} />
+          )
+        ) : !textHasContent ? (
+          <div className="lrr2Empty">This report has no content yet.</div>
         ) : (
-          <AiLockedPanel access={access} onGo={(url) => (String(url).startsWith("http") ? window.open(url, "_blank") : navigate(url))} />
-        )
-      ) : !textHasContent ? (
-        <div className="lrr2Empty">This report has no content yet.</div>
-      ) : (
           <article className="lrr2Article">
             <div className="lrr2TranscriptTools">
               <div className="lrr2ReaderBar">
@@ -1882,15 +1935,6 @@ const shouldGateTranscript = useMemo(() => {
                     title="Decrease text size"
                     aria-label="Decrease text size"
                   >
-                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path
-                        d="M5 18h2.2l1.2-3h5.2l1.2 3H17L12.9 6h-1.8L5 18z"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                      />
-                      <path d="M9.2 13.2h4l-2-5-2 5z" stroke="currentColor" strokeWidth="1.6" />
-                      <path d="M18 10h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                    </svg>
                     <span className="lrr2IconBtnText">A−</span>
                   </button>
 
@@ -1901,16 +1945,6 @@ const shouldGateTranscript = useMemo(() => {
                     title="Increase text size"
                     aria-label="Increase text size"
                   >
-                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path
-                        d="M5 18h2.2l1.2-3h5.2l1.2 3H17L12.9 6h-1.8L5 18z"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                      />
-                      <path d="M9.2 13.2h4l-2-5-2 5z" stroke="currentColor" strokeWidth="1.6" />
-                      <path d="M20 8v6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                      <path d="M17 11h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                    </svg>
                     <span className="lrr2IconBtnText">A+</span>
                   </button>
 
@@ -1921,11 +1955,6 @@ const shouldGateTranscript = useMemo(() => {
                     title={serif ? "Serif font (on)" : "Serif font (off)"}
                     aria-label="Toggle serif font"
                   >
-                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="M7 18h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                      <path d="M9 18V6h6v12" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-                      <path d="M8 6h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                    </svg>
                     <span className="lrr2IconBtnText">Serif</span>
                   </button>
                 </div>
@@ -1938,11 +1967,6 @@ const shouldGateTranscript = useMemo(() => {
                     title="Paper theme"
                     aria-label="Paper theme"
                   >
-                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="M7 3h7l3 3v15H7V3z" stroke="currentColor" strokeWidth="1.6" />
-                      <path d="M14 3v4h4" stroke="currentColor" strokeWidth="1.6" />
-                      <path d="M9 11h6M9 15h6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                    </svg>
                     <span className="lrr2IconBtnText">Paper</span>
                   </button>
 
@@ -1953,16 +1977,6 @@ const shouldGateTranscript = useMemo(() => {
                     title="Sepia theme"
                     aria-label="Sepia theme"
                   >
-                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="M7 3h10v18H7V3z" stroke="currentColor" strokeWidth="1.6" />
-                      <path d="M9 8h6M9 12h6M9 16h5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                      <path
-                        d="M5.5 6.5c1.2-1.2 2.7-2 4.5-2"
-                        stroke="currentColor"
-                        strokeWidth="1.2"
-                        opacity=".7"
-                      />
-                    </svg>
                     <span className="lrr2IconBtnText">Sepia</span>
                   </button>
 
@@ -1973,14 +1987,6 @@ const shouldGateTranscript = useMemo(() => {
                     title="Dark theme"
                     aria-label="Dark theme"
                   >
-                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path
-                        d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
                     <span className="lrr2IconBtnText">Dark</span>
                   </button>
                 </div>
@@ -1988,14 +1994,15 @@ const shouldGateTranscript = useMemo(() => {
             </div>
 
             {report?.isPremium && !hasFullAccess ? (
-              <PremiumLockHero
-                access={access}
-                onGo={(url) => {
-                  if (!url) return;
-                  if (String(url).startsWith("http")) window.open(url, "_blank", "noreferrer");
-                  else navigate(url);
-                }}
-              />
+              <PremiumLockHero access={access} onGo={goCta} />
+            ) : null}
+
+            {/* =========================================================
+               ✅ NEW: Inline notice INSIDE transcript area (Requirement #1)
+               Shows only when: report.isPremium && !hasFullAccess && preview.gated && preview.reachedLimit
+            ========================================================= */}
+            {contentOpen && showTranscriptGate ? (
+              <SubscribeGateInlineNotice access={access} onGo={goCta} />
             ) : null}
 
             <div
@@ -2005,7 +2012,7 @@ const shouldGateTranscript = useMemo(() => {
                 `lrr2Theme-${readingTheme}`,
                 fsClass,
                 fontClass,
-                preview.gated && preview.reachedLimit ? "isPreviewGated" : "",
+                showTranscriptGate ? "isPreviewGated" : "",
               ].join(" ")}
             >
               {preview.renderAsHtml ? (
@@ -2013,17 +2020,18 @@ const shouldGateTranscript = useMemo(() => {
               ) : (
                 <CaseContentFormatted text={preview.text} />
               )}
+
+              {/* =========================================================
+                 ✅ NEW: Mid-article lock break AFTER preview (Requirement #2)
+              ========================================================= */}
+              {contentOpen && showTranscriptGate ? (
+                <SubscribeGateMidBreak access={access} onGo={goCta} />
+              ) : null}
             </div>
 
-            {contentOpen && preview.gated && preview.reachedLimit ? (
-              <SubscribeGateOverlay
-                access={access}
-                onGo={(url) => {
-                  if (!url) return;
-                  if (String(url).startsWith("http")) window.open(url, "_blank", "noreferrer");
-                  else navigate(url);
-                }}
-              />
+            {/* Existing sticky CTA overlay (keep) */}
+            {contentOpen && showTranscriptGate ? (
+              <SubscribeGateOverlay access={access} onGo={goCta} />
             ) : null}
 
             {contentOpen && (
