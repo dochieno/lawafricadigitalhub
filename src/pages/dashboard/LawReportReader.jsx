@@ -1,13 +1,10 @@
 // src/pages/dashboard/LawReportReader.jsx
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../../api/client";
 import { getAuthClaims } from "../../auth/auth";
 import "../../styles/lawReportReader.css";
 
-/* =========================
-   Auth helpers
-========================= */
 function isInstitutionUser() {
   const c = getAuthClaims();
   return !!(c?.institutionId && c?.institutionId > 0);
@@ -50,9 +47,9 @@ function isGlobalAdminUser() {
   );
 }
 
-/* =========================
-   Generic helpers
-========================= */
+// ----------------------
+// Helpers
+// ----------------------
 function unwrapApi(res) {
   const d = res?.data;
   return d?.data ?? d;
@@ -80,9 +77,10 @@ function getReportLegalDocumentId(report) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-/* =========================
-   Preview gating helpers
-========================= */
+
+// ----------------------
+// Preview gating helpers (Law Reports transcript)
+// ----------------------
 function pickFirstNumber(...vals) {
   for (const v of vals) {
     const n = Number(v);
@@ -93,6 +91,21 @@ function pickFirstNumber(...vals) {
 
 function getHasFullAccess(access) {
   return access?.hasFullAccess === true || access?.data?.hasFullAccess === true;
+}
+
+function getIsAiAllowed(report, access, isAdmin) {
+  if (isAdmin) return true;
+  if (!report) return false;
+
+  const premium =
+    report?.isPremium ??
+    report?.IsPremium ??
+    report?.premium ??
+    report?.Premium ??
+    false;
+
+  if (!premium) return true; // non-premium → AI allowed
+  return getHasFullAccess(access); // premium → subscribers only
 }
 
 
@@ -202,20 +215,16 @@ function isProbablyHtml(s) {
   );
 }
 
-/* =========================
-   Related cases (DB)
-========================= */
+// Related cases (DB)
 async function fetchRelatedLawReports(id, take = 8) {
-  const res = await api.get(`/law-reports/${Number(id)}/related`, {
-    params: { take },
-  });
+  const res = await api.get(`/law-reports/${Number(id)}/related`, { params: { take } });
   const payload = unwrapApi(res);
   return payload ?? [];
 }
 
-/* =========================
-   Case content formatting
-========================= */
+// ----------------------
+// Case content formatting
+// ----------------------
 function normalizeText(s) {
   return String(s || "")
     .replace(/\r\n/g, "\n")
@@ -309,9 +318,9 @@ function CaseContentFormatted({ text }) {
   );
 }
 
-/* =========================
-   Gating UI pieces
-========================= */
+// ----------------------
+// Gating UI pieces (NEW)
+// ----------------------
 function AccessReasonLabel(access) {
   const raw =
     access?.reason ||
@@ -322,10 +331,8 @@ function AccessReasonLabel(access) {
 
   const t = String(raw || "").toLowerCase();
 
-  if (t.includes("institution") && t.includes("seat"))
-    return "Your institution has reached its seat limit.";
-  if (t.includes("institution") && t.includes("inactive"))
-    return "Your institution subscription is inactive.";
+  if (t.includes("institution") && t.includes("seat")) return "Your institution has reached its seat limit.";
+  if (t.includes("institution") && t.includes("inactive")) return "Your institution subscription is inactive.";
   if (t.includes("expired")) return "Your subscription is expired.";
   if (t.includes("trial")) return "Your trial does not include Law Reports access.";
   return "";
@@ -407,6 +414,7 @@ function SubscribeGateMidBreak({ access, onGo }) {
   );
 }
 
+// Sticky overlay (existing)
 function SubscribeGateOverlay({ access, onGo }) {
   const ctas = getAccessCtas(access);
 
@@ -515,9 +523,7 @@ function AiLockedPanel({ access, onGo }) {
   );
 }
 
-/* =========================
-   AI Summary formatting
-========================= */
+// AI Summary Panel (UNCHANGED from your snippet EXCEPT not included here)
 function AiSummaryRichText({ text }) {
   const lines = String(text || "")
     .replace(/\r\n/g, "\n")
@@ -656,29 +662,26 @@ function AiSummaryRichText({ text }) {
   return <div className="lrrAiRich">{blocks}</div>;
 }
 
-/* =========================
-   AI Summary Panel
-========================= */
-function LawReportAiSummaryPanel({
-  lawReportId,
-  digestTitle,
-  courtLabel,
-  onOpenRelated,
-  enabled = true,
-}) {
+// ----------------------
+// AI Summary Panel
+// ----------------------
+function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel, onOpenRelated, enabled = true }) {
   const [type, setType] = useState("basic"); // basic | extended
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const didAutoGenRef = useRef(false);
 
+  // Phase 4 — Cross-Case Intelligence (Related cases)
   const [relatedCases, setRelatedCases] = useState([]);
   const [relatedCasesLoading, setRelatedCasesLoading] = useState(false);
   const [relatedCasesError, setRelatedCasesError] = useState("");
 
+  // UX helpers
   const [sourceLabel, setSourceLabel] = useState("");
   const [toast, setToast] = useState("");
 
+  // Phase 5 — Chat with LegalAI (per-case)
   const [chatOpen, setChatOpen] = useState(false);
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState("");
@@ -695,24 +698,23 @@ function LawReportAiSummaryPanel({
     setChatMsgs((prev) => [...prev, { role, content }]);
   }
 
-  const canRun = useMemo(() => {
-    return enabled && Number.isFinite(Number(lawReportId)) && Number(lawReportId) > 0;
-  }, [enabled, lawReportId]);
+  const canRun = useMemo(
+    () => enabled && Number.isFinite(Number(lawReportId)) && Number(lawReportId) > 0,
+    [enabled, lawReportId]
+  );
 
   function isCacheMiss(err) {
     return err?.response?.status === 404;
   }
 
-const generateSummary = useCallback(
-  async ({ force = false } = {}) => {
+  async function generateSummary({ force = false } = {}) {
     const res = await api.post(`/ai/law-reports/${Number(lawReportId)}/summary`, {
       type,
       forceRegenerate: force,
     });
-    return unwrapApi(res);
-  },
-  [lawReportId, type]
-);
+    const payload = unwrapApi(res);
+    return payload;
+  }
 
   function flash(msg) {
     setToast(msg);
@@ -847,7 +849,8 @@ const generateSummary = useCallback(
     return () => {
       cancelled = true;
     };
-}, [canRun, type, lawReportId, generateSummary]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canRun, type, lawReportId]);
 
   const isExtended = String(result?.type ?? type).toLowerCase() === "extended";
 
@@ -866,7 +869,7 @@ const generateSummary = useCallback(
                   {sourceLabel}
                 </span>
               ) : (
-                <span className="lrrAiBadge">AI</span>
+                <span className="lrrAiBadge">AI generated</span>
               )}
 
               <div className="lrrAiIconRow">
@@ -1118,9 +1121,7 @@ const generateSummary = useCallback(
                 {relatedCases.length > 0 ? (
                   <div className="lrr2RelatedGrid">
                     {(() => {
-                      const kenya = relatedCases.filter(
-                        (x) => String(x?.jurisdiction || "").toLowerCase() === "kenya"
-                      );
+                      const kenya = relatedCases.filter((x) => String(x?.jurisdiction || "").toLowerCase() === "kenya");
                       const foreign = relatedCases.filter(
                         (x) => String(x?.jurisdiction || "").toLowerCase() !== "kenya"
                       );
@@ -1211,9 +1212,7 @@ const generateSummary = useCallback(
   );
 }
 
-/* =========================
-   Page
-========================= */
+
 export default function LawReportReader() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -1266,110 +1265,7 @@ export default function LawReportReader() {
   const progressBarRef = useRef(null);
 
   // Compact header
-  const [headerCompact, setHeaderCompact] = useState(false);
-
-  /* ======================================================
-     ✅ IMPORTANT: Derived values MUST be declared BEFORE effects that use them.
-     This fixes:
-     - "isPremium is not defined"
-     - "Cannot access 'X' before initialization"
-  ====================================================== */
-  const rawContent = useMemo(() => String(report?.contentText || ""), [report?.contentText]);
-  const textHasContent = !!rawContent.trim();
-
-  const legalDocumentId = useMemo(() => getReportLegalDocumentId(report), [report]);
-  const isPremium = useMemo(() => getReportIsPremium(report), [report]);
-
-  const hasFullAccess = useMemo(() => getHasFullAccess(access), [access]);
-
-
-  // ✅ Gate transcript only for premium, non-admin, and typical user types
-  const shouldGateTranscript = useMemo(() => {
-    if (!report) return false;
-    if (!isPremium) return false;
-    if (isAdmin) return false;
-    // If you want to gate everyone, remove the (isInst || isPublic) check:
-    return isInst || isPublic;
-  }, [report, isPremium, isAdmin, isInst, isPublic]);
-
-  const previewPolicy = useMemo(() => getAccessPreviewPolicy(access), [access]);
-
-  const gateSourceText = useMemo(() => {
-    if (!rawContent) return "";
-    return isProbablyHtml(rawContent) ? htmlToText(rawContent) : rawContent;
-  }, [rawContent]);
-
-  const preview = useMemo(() => {
-    const gating = shouldGateTranscript && !hasFullAccess && textHasContent;
-
-    if (!gating) {
-      return {
-        gated: false,
-        reachedLimit: false,
-        renderAsHtml: isProbablyHtml(rawContent),
-        html: rawContent,
-        text: rawContent,
-      };
-    }
-
-    const paras = splitIntoParagraphs(gateSourceText);
-    const maxParas = previewPolicy.maxParas;
-    const maxChars = previewPolicy.maxChars;
-
-    let reached = false;
-    let previewText = "";
-
-    if (paras.length > 0) {
-      const slice = paras.slice(0, Math.max(1, maxParas));
-      previewText = slice.join("\n\n");
-      if (paras.length > maxParas) reached = true;
-    } else {
-      previewText = normalizeText(gateSourceText);
-    }
-
-    if (previewText.length > maxChars) {
-      previewText = previewText.slice(0, maxChars).trimEnd();
-      reached = true;
-    }
-
-    return {
-      gated: true,
-      reachedLimit: reached,
-      renderAsHtml: false,
-      html: "",
-      text: previewText,
-    };
-  }, [
-    shouldGateTranscript,
-    hasFullAccess,
-    textHasContent,
-    rawContent,
-    gateSourceText,
-    previewPolicy,
-  ]);
-
-  // ✅ EXACT condition: show message when preview ended
-const showTranscriptGate = useMemo(() => {
-  return !!(isPremiumLockedForUser && preview.gated && preview.reachedLimit);
-}, [isPremiumLockedForUser, preview.gated, preview.reachedLimit]);
-
-// Premium access context
-const isPremiumLockedForUser = useMemo(() => {
-  // Only enforce lock for normal logged-in categories you’re checking (public/institution),
-  // admin bypasses.
-  if (isAdmin) return false;
-  if (!isPremium) return false;
-  return (isInst || isPublic) && !hasFullAccess;
-}, [isAdmin, isPremium, isInst, isPublic, hasFullAccess]);
-
-// AI tab should be enabled ONLY when user has access
-const aiTabEnabled = useMemo(() => {
-  if (isAdmin) return true;
-  if (!isPremium) return true;
-  // Avoid flicker while access is loading: keep it locked until access confirms.
-  if (accessLoading) return false;
-  return hasFullAccess;
-}, [isAdmin, isPremium, accessLoading, hasFullAccess]);
+  const [headerCompact, setHeaderCompact] = useState(false);  
 
   const fsClass = useMemo(() => {
     const n = Math.round(fontScale * 100);
@@ -1379,9 +1275,6 @@ const aiTabEnabled = useMemo(() => {
 
   const fontClass = serif ? "lrr2FontSerif" : "lrr2FontSans";
 
-  /* =========================
-     Scroll progress
-  ========================= */
   useEffect(() => {
     function onScroll() {
       const el = document.documentElement;
@@ -1431,8 +1324,7 @@ const aiTabEnabled = useMemo(() => {
   useEffect(() => {
     function onKey(e) {
       const isMac = navigator.platform.toLowerCase().includes("mac");
-      const hot =
-        (isMac ? e.metaKey : e.ctrlKey) && String(e.key || "").toLowerCase() === "k";
+      const hot = (isMac ? e.metaKey : e.ctrlKey) && String(e.key || "").toLowerCase() === "k";
       if (hot) {
         e.preventDefault();
         setOpenResults(true);
@@ -1444,9 +1336,7 @@ const aiTabEnabled = useMemo(() => {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  /* =========================
-     Related DB cases
-  ========================= */
+  // Related DB cases only in Transcript tab
   useEffect(() => {
     let cancelled = false;
 
@@ -1475,9 +1365,7 @@ const aiTabEnabled = useMemo(() => {
     };
   }, [reportId, view]);
 
-  /* =========================
-     Load report
-  ========================= */
+  // Load report
   useEffect(() => {
     let cancelled = false;
 
@@ -1493,8 +1381,7 @@ const aiTabEnabled = useMemo(() => {
         setReport(payload ?? null);
       } catch (e) {
         console.error(e);
-        if (!cancelled)
-          setError(getApiErrorMessage(e, "We couldn’t load this report right now. Please try again."));
+        if (!cancelled) setError(getApiErrorMessage(e, "We couldn’t load this report right now. Please try again."));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -1517,17 +1404,12 @@ const aiTabEnabled = useMemo(() => {
     };
   }, [reportId]);
 
-  /* =========================
-     Availability + access checks — DO NOT CHANGE LOGIC (kept)
-     ✅ BUT fixed ordering/guards so it doesn't crash.
-  ========================= */
+  // Availability + access checks — DO NOT CHANGE LOGIC
   useEffect(() => {
     let cancelled = false;
 
     async function check() {
-      // If no linked legal document id, we can’t check access/availability.
-      // Don’t crash; just fall back to showing content if present.
-      if (!legalDocumentId) return;
+if (!legalDocumentId) return;
 
       if (isAdmin) {
         if (!cancelled) {
@@ -1549,15 +1431,10 @@ const aiTabEnabled = useMemo(() => {
       } else {
         try {
           setAvailabilityLoading(true);
-          const r = await api.get(`/legal-documents/${legalDocumentId}/availability`);
+        const r = await api.get(`/legal-documents/${legalDocumentId}/availability`);
 
           const payload = unwrapApi(r);
-          const ok = !!(
-            payload?.hasContent ??
-            payload?.data?.hasContent ??
-            payload?.available ??
-            payload?.has_file
-          );
+          const ok = !!(payload?.hasContent ?? payload?.data?.hasContent ?? payload?.available ?? payload?.has_file);
           if (!cancelled) setHasContent(!!ok);
         } catch {
           if (!cancelled) setHasContent(true);
@@ -1566,7 +1443,8 @@ const aiTabEnabled = useMemo(() => {
         }
       }
 
-      if (isPremium && (isInst || isPublic)) {
+if (isPremium && (isInst || isPublic)) {
+
         try {
           setAccessLoading(true);
           const r = await api.get(`/legal-documents/${legalDocumentId}/access`);
@@ -1586,11 +1464,86 @@ const aiTabEnabled = useMemo(() => {
     return () => {
       cancelled = true;
     };
-  }, [report, legalDocumentId, isPremium, isInst, isPublic, isAdmin]);
+ }, [report, legalDocumentId, isPremium, isInst, isPublic, isAdmin]);
 
-  /* =========================
-     Search (debounced)
-  ========================= */
+  /* ======================================================
+     IMPORTANT: These MUST live INSIDE the component
+  ====================================================== */
+  const rawContent = useMemo(() => String(report?.contentText || ""), [report?.contentText]);
+  const textHasContent = !!rawContent.trim();
+  const legalDocumentId = useMemo(() => getReportLegalDocumentId(report), [report]);
+  const isPremium = useMemo(() => getReportIsPremium(report), [report]);
+
+
+  const hasFullAccess = useMemo(() => getHasFullAccess(access), [access]);
+  const aiAllowed = useMemo(() => getIsAiAllowed(report, access, isAdmin), [report, access, isAdmin]);
+
+  const shouldGateTranscript = useMemo(() => {
+    if (!report) return false;
+    if (!report.isPremium) return false;
+    return true;
+  }, [report]);
+
+  const previewPolicy = useMemo(() => getAccessPreviewPolicy(access), [access]);
+
+  const gateSourceText = useMemo(() => {
+    if (!rawContent) return "";
+    return isProbablyHtml(rawContent) ? htmlToText(rawContent) : rawContent;
+  }, [rawContent]);
+
+  const preview = useMemo(() => {
+    const gating = shouldGateTranscript && !hasFullAccess && textHasContent;
+
+    if (!gating) {
+      return {
+        gated: false,
+        reachedLimit: false,
+        renderAsHtml: isProbablyHtml(rawContent),
+        html: rawContent,
+        text: rawContent,
+      };
+    }
+
+    const paras = splitIntoParagraphs(gateSourceText);
+    const maxParas = previewPolicy.maxParas;
+    const maxChars = previewPolicy.maxChars;
+
+    let reached = false;
+    let previewText = "";
+
+    if (paras.length > 0) {
+      const slice = paras.slice(0, Math.max(1, maxParas));
+      previewText = slice.join("\n\n");
+      if (paras.length > maxParas) reached = true;
+    } else {
+      previewText = normalizeText(gateSourceText);
+    }
+
+    if (previewText.length > maxChars) {
+      previewText = previewText.slice(0, maxChars).trimEnd();
+      reached = true;
+    }
+
+    return {
+      gated: true,
+      reachedLimit: reached,
+      renderAsHtml: false,
+      html: "",
+      text: previewText,
+    };
+  }, [shouldGateTranscript, hasFullAccess, textHasContent, rawContent, gateSourceText, previewPolicy]);
+
+  // ✅ EXACT condition requested
+  const showTranscriptGate = useMemo(() => {
+    return !!(report?.isPremium && !hasFullAccess && preview.gated && preview.reachedLimit);
+  }, [report?.isPremium, hasFullAccess, preview?.gated, preview?.reachedLimit]);
+
+  const canRead =
+    !!report &&
+    (isAdmin ||
+      ((hasContent || textHasContent) && (!report.isPremium || hasFullAccess || (!isInst && !isPublic))));
+
+  // Search (debounced + AbortController + unwrap fixed)
   useEffect(() => {
     const term = String(q || "").trim();
 
@@ -1626,11 +1579,7 @@ const aiTabEnabled = useMemo(() => {
         if (reqId !== searchReqIdRef.current) return;
 
         const payload = unwrapApi(res);
-        const items = Array.isArray(payload?.items)
-          ? payload.items
-          : Array.isArray(payload)
-            ? payload
-            : [];
+        const items = Array.isArray(payload?.items) ? payload.items : Array.isArray(payload) ? payload : [];
 
         setSearchResults(items);
         setOpenResults(true);
@@ -1671,18 +1620,6 @@ const aiTabEnabled = useMemo(() => {
     else navigate(url);
   };
 
-  /* =========================
-     Read permission
-     ✅ matches your previous intent but uses normalized `isPremium`.
-  ========================= */
-  const canRead =
-    !!report &&
-    (isAdmin ||
-      ((hasContent || textHasContent) && (!isPremium || hasFullAccess || (!isInst && !isPublic))));
-
-  /* =========================
-     Render
-  ========================= */
   if (loading) {
     return (
       <div className="lrr2Wrap">
@@ -1731,8 +1668,7 @@ const aiTabEnabled = useMemo(() => {
   }
 
   const title = report.parties || report.title || "Law Report";
-  const llrNo =
-    report.reportNumber || report.llrNo || report.llrNumber || String(reportId);
+  const llrNo = report.reportNumber || report.llrNo || report.llrNumber || String(reportId);
 
   return (
     <div className="lrr2Wrap" data-theme={readingTheme}>
@@ -1752,12 +1688,7 @@ const aiTabEnabled = useMemo(() => {
             <div className="lrr2SearchLead" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none">
                 <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="1.6" />
-                <path
-                  d="M16.5 16.5L21 21"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                />
+                <path d="M16.5 16.5L21 21" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
               </svg>
               <span>Case search</span>
             </div>
@@ -1983,10 +1914,11 @@ const aiTabEnabled = useMemo(() => {
           title={view === "content" ? (contentOpen ? "Hide transcript" : "Show transcript") : "Transcript"}
         >
           Transcript
-          {isPremium && !hasFullAccess ? <span className="lrr2TabBadge lock">Locked</span> : null}
+        {isPremium && !hasFullAccess ? <span className="lrr2TabBadge lock">Locked</span> : null}
+
         </button>
 
-        {aiTabEnabled ? (
+        {aiAllowed ? (
           <button
             type="button"
             role="tab"
@@ -2005,29 +1937,29 @@ const aiTabEnabled = useMemo(() => {
             role="tab"
             aria-selected={false}
             className="lrr2Tab isDisabled"
+            onClick={() => {}}
             disabled
             title="LegalAI is available to subscribers only"
           >
             LegalAI Summary <span className="lrr2TabBadge lock">Locked</span>
           </button>
         )}
-
       </div>
 
       <section className="lrr2Content">
-    {view === "ai" ? (
-      aiTabEnabled ? (
-        <LawReportAiSummaryPanel
-          lawReportId={reportId}
-          digestTitle={title}
-          courtLabel={report?.court || ""}
-          onOpenRelated={(rid) => navigate(`/dashboard/law-reports/${rid}`)}
-          enabled={true}
-        />
-      ) : (
-        <AiLockedPanel access={access} onGo={goCta} />
-      )
-    ) : !textHasContent ? (
+        {view === "ai" ? (
+          aiAllowed ? (
+            <LawReportAiSummaryPanel
+              lawReportId={reportId}
+              digestTitle={title}
+              courtLabel={report?.court || ""}
+              onOpenRelated={(rid) => navigate(`/dashboard/law-reports/${rid}`)}
+              enabled={isAdmin || hasFullAccess}
+            />
+          ) : (
+            <AiLockedPanel access={access} onGo={goCta} />
+          )
+        ) : !textHasContent ? (
           <div className="lrr2Empty">This report has no content yet.</div>
         ) : (
           <article className="lrr2Article">
@@ -2099,9 +2031,13 @@ const aiTabEnabled = useMemo(() => {
               </div>
             </div>
 
-            {isPremiumLockedForUser ? <PremiumLockHero access={access} onGo={goCta} /> : null}
+           {isPremium && !hasFullAccess ? ( <PremiumLockHero access={access} onGo={goCta} />
+            ) : null}
 
-            {/* ✅ Inline notice (inside transcript area) */}
+            {/* =========================================================
+               ✅ NEW: Inline notice INSIDE transcript area (Requirement #1)
+               Shows only when: report.isPremium && !hasFullAccess && preview.gated && preview.reachedLimit
+            ========================================================= */}
             {contentOpen && showTranscriptGate ? (
               <SubscribeGateInlineNotice access={access} onGo={goCta} />
             ) : null}
@@ -2122,13 +2058,15 @@ const aiTabEnabled = useMemo(() => {
                 <CaseContentFormatted text={preview.text} />
               )}
 
-              {/* ✅ Mid-article lock break AFTER preview */}
+              {/* =========================================================
+                 ✅ NEW: Mid-article lock break AFTER preview (Requirement #2)
+              ========================================================= */}
               {contentOpen && showTranscriptGate ? (
                 <SubscribeGateMidBreak access={access} onGo={goCta} />
               ) : null}
             </div>
 
-            {/* ✅ Sticky overlay */}
+            {/* Existing sticky CTA overlay (keep) */}
             {contentOpen && showTranscriptGate ? (
               <SubscribeGateOverlay access={access} onGo={goCta} />
             ) : null}
