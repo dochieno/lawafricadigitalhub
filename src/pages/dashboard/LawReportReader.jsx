@@ -1254,17 +1254,26 @@ export default function LawReportReader() {
 const rawContent = useMemo(() => String(report?.contentText || ""), [report?.contentText]);
 const textHasContent = !!rawContent.trim();
 
+// ✅ MUST be defined before preview uses it
+const hasFullAccess = !!(
+  access?.hasFullAccess ??
+  access?.data?.hasFullAccess ??
+  access?.allowed ??
+  access?.canAccess ??
+  access?.hasAccess
+);
+
 // ✅ Gate only premium transcripts when user lacks full access
 const shouldGateTranscript = useMemo(() => {
   if (!report) return false;
   if (!report?.isPremium) return false;
-  if (!(isInst || isPublic)) return false; // admins handled separately by hasFullAccess anyway
+  if (!(isInst || isPublic)) return false;
   return true;
 }, [report, isInst, isPublic]);
 
 const previewPolicy = useMemo(() => getAccessPreviewPolicy(access), [access]);
 
-// If HTML content + gated preview, we render as formatted text preview to avoid broken tags.
+// If HTML content + gated preview, render as formatted text preview to avoid broken tags.
 const gateSourceText = useMemo(() => {
   if (!rawContent) return "";
   return isProbablyHtml(rawContent) ? htmlToText(rawContent) : rawContent;
@@ -1283,7 +1292,6 @@ const preview = useMemo(() => {
     };
   }
 
-  // Prefer paragraph-based cut for better UX (keeps headings etc)
   const paras = splitIntoParagraphs(gateSourceText);
   const maxParas = previewPolicy.maxParas;
   const maxChars = previewPolicy.maxChars;
@@ -1299,13 +1307,11 @@ const preview = useMemo(() => {
     previewText = normalizeText(gateSourceText);
   }
 
-  // Hard char clamp after paragraph cut (safety)
   if (previewText.length > maxChars) {
     previewText = previewText.slice(0, maxChars).trimEnd();
     reached = true;
   }
 
-  // Always render preview as formatted text (not raw HTML)
   return {
     gated: true,
     reachedLimit: reached,
@@ -1315,14 +1321,6 @@ const preview = useMemo(() => {
   };
 }, [shouldGateTranscript, hasFullAccess, textHasContent, rawContent, gateSourceText, previewPolicy]);
 
-
-  const hasFullAccess = !!(
-    access?.hasFullAccess ??
-    access?.data?.hasFullAccess ??
-    access?.allowed ??
-    access?.canAccess ??
-    access?.hasAccess
-  );
 
   const canRead =
     !!report &&
