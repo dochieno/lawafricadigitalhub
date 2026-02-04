@@ -17,14 +17,6 @@ function isPublicUser() {
   return String(userType).toLowerCase() === "public" && (!inst || inst <= 0);
 }
 
-function isProbablyHtml(s) {
-  const x = String(s || "").trim();
-  if (!x) return false;
-  return /<\/?(p|br|div|span|h1|h2|h3|h4|ul|ol|li|table|thead|tbody|tr|td|th|blockquote)\b/i.test(
-    x
-  );
-}
-
 function isGlobalAdminUser() {
   const c = getAuthClaims();
 
@@ -58,6 +50,137 @@ function isGlobalAdminUser() {
 // ----------------------
 // Helpers
 // ----------------------
+function unwrapApi(res) {
+  // Handles: { data: {...} } OR { data: { data: {...} } } OR raw payload
+  const d = res?.data;
+  return d?.data ?? d;
+}
+
+// ----------------------
+// Preview gating helpers (Law Reports transcript)
+// ----------------------
+function pickFirstNumber(...vals) {
+  for (const v of vals) {
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+
+function getAccessPreviewPolicy(access) {
+  // Accepts different backend naming styles safely
+  const maxChars = pickFirstNumber(
+    access?.previewMaxChars,
+    access?.PreviewMaxChars,
+    access?.data?.previewMaxChars,
+    access?.data?.PreviewMaxChars
+  );
+
+  const maxParas = pickFirstNumber(
+    access?.previewMaxParagraphs,
+    access?.PreviewMaxParagraphs,
+    access?.data?.previewMaxParagraphs,
+    access?.data?.PreviewMaxParagraphs
+  );
+
+  // sensible defaults if backend doesn’t send any preview policy
+  return {
+    maxChars: maxChars ?? 5000,
+    maxParas: maxParas ?? 22,
+  };
+}
+
+function getAccessCtas(access) {
+  const primaryUrl =
+    access?.ctaUrl ||
+    access?.CtaUrl ||
+    access?.data?.ctaUrl ||
+    access?.data?.CtaUrl ||
+    "/pricing";
+
+  const primaryLabel =
+    access?.ctaLabel ||
+    access?.CtaLabel ||
+    access?.data?.ctaLabel ||
+    access?.data?.CtaLabel ||
+    "Subscribe to unlock";
+
+  const secondaryUrl =
+    access?.secondaryCtaUrl ||
+    access?.SecondaryCtaUrl ||
+    access?.data?.secondaryCtaUrl ||
+    access?.data?.SecondaryCtaUrl ||
+    "";
+
+  const secondaryLabel =
+    access?.secondaryCtaLabel ||
+    access?.SecondaryCtaLabel ||
+    access?.data?.secondaryCtaLabel ||
+    access?.data?.SecondaryCtaLabel ||
+    "View plans";
+
+  const msg =
+    access?.message ||
+    access?.Message ||
+    access?.data?.message ||
+    access?.data?.Message ||
+    "You’ve reached the preview limit for this premium report.";
+
+  return { primaryUrl, primaryLabel, secondaryUrl, secondaryLabel, msg };
+}
+
+function htmlToText(html) {
+  const s = String(html || "");
+  if (!s.trim()) return "";
+  // Prefer DOMParser in browser
+  try {
+    const doc = new DOMParser().parseFromString(s, "text/html");
+    return (doc?.body?.textContent || "").replace(/\s+/g, " ").trim();
+  } catch {
+    // fallback regex strip
+    return s.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  }
+}
+
+function SubscribeGateOverlay({ access, onGo }) {
+  const ctas = getAccessCtas(access);
+
+  return (
+    <div className="lrr2GateSticky" role="note" aria-label="Subscription required">
+      <div className="lrr2GateFade" aria-hidden="true" />
+      <div className="lrr2GateCard">
+        <div className="lrr2GateLeft">
+          <div className="lrr2GateTitle">Subscribe to unlock full access</div>
+          <div className="lrr2GateMsg">{ctas.msg}</div>
+        </div>
+
+        <div className="lrr2GateActions">
+          {ctas.secondaryUrl ? (
+            <button
+              type="button"
+              className="lrr2Btn"
+              onClick={() => onGo(ctas.secondaryUrl)}
+              title={ctas.secondaryLabel}
+            >
+              {ctas.secondaryLabel}
+            </button>
+          ) : null}
+
+          <button
+            type="button"
+            className="lrr2Btn primary"
+            onClick={() => onGo(ctas.primaryUrl)}
+            title={ctas.primaryLabel}
+          >
+            {ctas.primaryLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function formatDate(d) {
   if (!d) return "";
   const dt = new Date(d);
@@ -85,12 +208,19 @@ function getApiErrorMessage(err, fallback = "Request failed.") {
   return fallback;
 }
 
+function isProbablyHtml(s) {
+  const x = String(s || "").trim();
+  if (!x) return false;
+  return /<\/?(p|br|div|span|h1|h2|h3|h4|ul|ol|li|table|thead|tbody|tr|td|th|blockquote)\b/i.test(
+    x
+  );
+}
+
 // Related cases (DB)
 async function fetchRelatedLawReports(id, take = 8) {
-  const res = await api.get(`/law-reports/${Number(id)}/related`, {
-    params: { take },
-  });
-  return res.data ?? [];
+  const res = await api.get(`/law-reports/${Number(id)}/related`, { params: { take } });
+  const payload = unwrapApi(res);
+  return payload ?? [];
 }
 
 // ----------------------
@@ -161,9 +291,7 @@ function isLikelyHeadingParagraph(p) {
 
   if (
     s.length <= 40 &&
-    /^(Judgment|Introduction|Background|Facts|Issues?|Held|Analysis|Determination|Orders?|Conclusion)\b/.test(
-      s
-    )
+    /^(Judgment|Introduction|Background|Facts|Issues?|Held|Analysis|Determination|Orders?|Conclusion)\b/.test(s)
   )
     return true;
 
@@ -380,7 +508,8 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel, onOpenR
       type,
       forceRegenerate: force,
     });
-    return res.data?.data ?? res.data;
+    const payload = unwrapApi(res);
+    return payload;
   }
 
   function flash(msg) {
@@ -415,7 +544,7 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel, onOpenR
         { params: { takeKenya: 2, takeForeign: 2 } }
       );
 
-      const payload = res.data?.items ?? res.data?.data?.items ?? res.data?.data ?? res.data;
+      const payload = unwrapApi(res);
       const items = Array.isArray(payload)
         ? payload
         : Array.isArray(payload?.items)
@@ -483,7 +612,7 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel, onOpenR
         });
 
         if (cancelled) return;
-        setResult(res.data?.data ?? res.data);
+        setResult(unwrapApi(res));
         setSourceLabel("Cached");
         setError("");
       } catch (err) {
@@ -728,13 +857,14 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel, onOpenR
                         history,
                       });
 
+                      const payload = unwrapApi(res);
                       const reply =
+                        payload?.reply ||
+                        payload?.message ||
+                        payload?.content ||
                         res.data?.reply ||
-                        res.data?.data?.reply ||
                         res.data?.message ||
-                        res.data?.data?.message ||
                         res.data?.content ||
-                        res.data?.data?.content ||
                         "";
 
                       addMsg("assistant", String(reply || "No response returned."));
@@ -882,8 +1012,12 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel, onOpenR
 // ----------------------
 export default function LawReportReader() {
   const { id } = useParams();
-  const reportId = Number(id);
   const navigate = useNavigate();
+
+  const reportId = useMemo(() => {
+    const n = Number(id);
+    return Number.isFinite(n) ? n : NaN;
+  }, [id]);
 
   const isInst = isInstitutionUser();
   const isPublic = isPublicUser();
@@ -917,10 +1051,11 @@ export default function LawReportReader() {
   const [searchErr, setSearchErr] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [openResults, setOpenResults] = useState(false);
-  const searchAbortRef = useRef({ cancelled: false });
 
   const searchBoxRef = useRef(null);
   const searchInputRef = useRef(null);
+  const searchCtlRef = useRef(null); // AbortController
+  const searchReqIdRef = useRef(0);
 
   // Reading progress
   const [progress, setProgress] = useState(0);
@@ -962,6 +1097,31 @@ export default function LawReportReader() {
     progressBarRef.current.style.transform = `scaleX(${progress})`;
   }, [progress]);
 
+  // Close dropdown on outside click / Esc
+  useEffect(() => {
+    if (!openResults) return;
+
+    function onKeyDown(e) {
+      if (e.key === "Escape") {
+        setOpenResults(false);
+        searchInputRef.current?.blur?.();
+      }
+    }
+
+    function onPointerDown(e) {
+      const el = searchBoxRef.current;
+      if (!el) return;
+      if (!el.contains(e.target)) setOpenResults(false);
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [openResults]);
+
   // Related DB cases only in Transcript tab
   useEffect(() => {
     let cancelled = false;
@@ -991,34 +1151,7 @@ export default function LawReportReader() {
     };
   }, [reportId, view]);
 
-  useEffect(() => {
-    if (!openResults) return;
-
-    function onKeyDown(e) {
-      if (e.key === "Escape") {
-        setOpenResults(false);
-        searchInputRef.current?.blur?.();
-      }
-    }
-
-    function onPointerDown(e) {
-      const el = searchBoxRef.current;
-      if (!el) return;
-      if (!el.contains(e.target)) {
-        setOpenResults(false);
-      }
-    }
-
-    document.addEventListener("keydown", onKeyDown);
-    document.addEventListener("pointerdown", onPointerDown);
-
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.removeEventListener("pointerdown", onPointerDown);
-    };
-  }, [openResults]);
-
-  // Load report
+  // Load report (unwrap fixed)
   useEffect(() => {
     let cancelled = false;
 
@@ -1028,15 +1161,24 @@ export default function LawReportReader() {
         setError("");
 
         const res = await api.get(`/law-reports/${reportId}`);
+        const payload = unwrapApi(res);
         if (cancelled) return;
-        setReport(res.data ?? null);
+
+        setReport(payload ?? null);
       } catch (e) {
         console.error(e);
-        if (!cancelled) setError("We couldn’t load this report right now. Please try again.");
+        if (!cancelled) setError(getApiErrorMessage(e, "We couldn’t load this report right now. Please try again."));
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
+
+    // reset on id change
+    setReport(null);
+    setHasContent(true);
+    setAccess(null);
+    setAvailabilityLoading(false);
+    setAccessLoading(false);
 
     if (Number.isFinite(reportId) && reportId > 0) load();
     else {
@@ -1049,7 +1191,7 @@ export default function LawReportReader() {
     };
   }, [reportId]);
 
-  // Availability + access checks — DO NOT CHANGE LOGIC
+  // Availability + access checks — DO NOT CHANGE LOGIC (but unwrap fixed)
   useEffect(() => {
     let cancelled = false;
 
@@ -1067,6 +1209,7 @@ export default function LawReportReader() {
       }
 
       const textHasContent = !!String(report?.contentText || "").trim();
+
       if (textHasContent) {
         if (!cancelled) {
           setHasContent(true);
@@ -1076,8 +1219,9 @@ export default function LawReportReader() {
         try {
           setAvailabilityLoading(true);
           const r = await api.get(`/legal-documents/${report.legalDocumentId}/availability`);
-          const ok = !!r?.data?.hasContent;
-          if (!cancelled) setHasContent(ok);
+          const payload = unwrapApi(r);
+          const ok = !!(payload?.hasContent ?? payload?.data?.hasContent ?? payload?.available ?? payload?.has_file);
+          if (!cancelled) setHasContent(!!ok);
         } catch {
           if (!cancelled) setHasContent(true);
         } finally {
@@ -1089,7 +1233,8 @@ export default function LawReportReader() {
         try {
           setAccessLoading(true);
           const r = await api.get(`/legal-documents/${report.legalDocumentId}/access`);
-          if (!cancelled) setAccess(r?.data ?? null);
+          const payload = unwrapApi(r);
+          if (!cancelled) setAccess(payload ?? null);
         } catch {
           if (!cancelled) setAccess(null);
         } finally {
@@ -1106,61 +1251,150 @@ export default function LawReportReader() {
     };
   }, [report, isInst, isPublic, isAdmin]);
 
-  const rawContent = useMemo(() => String(report?.contentText || ""), [report?.contentText]);
-  const textHasContent = !!rawContent.trim();
-  const hasFullAccess = !!access?.hasFullAccess;
+const rawContent = useMemo(() => String(report?.contentText || ""), [report?.contentText]);
+const textHasContent = !!rawContent.trim();
+
+// ✅ Gate only premium transcripts when user lacks full access
+const shouldGateTranscript = useMemo(() => {
+  if (!report) return false;
+  if (!report?.isPremium) return false;
+  if (!(isInst || isPublic)) return false; // admins handled separately by hasFullAccess anyway
+  return true;
+}, [report, isInst, isPublic]);
+
+const previewPolicy = useMemo(() => getAccessPreviewPolicy(access), [access]);
+
+// If HTML content + gated preview, we render as formatted text preview to avoid broken tags.
+const gateSourceText = useMemo(() => {
+  if (!rawContent) return "";
+  return isProbablyHtml(rawContent) ? htmlToText(rawContent) : rawContent;
+}, [rawContent]);
+
+const preview = useMemo(() => {
+  const gating = shouldGateTranscript && !hasFullAccess && textHasContent;
+
+  if (!gating) {
+    return {
+      gated: false,
+      reachedLimit: false,
+      renderAsHtml: isProbablyHtml(rawContent),
+      html: rawContent,
+      text: rawContent,
+    };
+  }
+
+  // Prefer paragraph-based cut for better UX (keeps headings etc)
+  const paras = splitIntoParagraphs(gateSourceText);
+  const maxParas = previewPolicy.maxParas;
+  const maxChars = previewPolicy.maxChars;
+
+  let reached = false;
+  let previewText = "";
+
+  if (paras.length > 0) {
+    const slice = paras.slice(0, Math.max(1, maxParas));
+    previewText = slice.join("\n\n");
+    if (paras.length > maxParas) reached = true;
+  } else {
+    previewText = normalizeText(gateSourceText);
+  }
+
+  // Hard char clamp after paragraph cut (safety)
+  if (previewText.length > maxChars) {
+    previewText = previewText.slice(0, maxChars).trimEnd();
+    reached = true;
+  }
+
+  // Always render preview as formatted text (not raw HTML)
+  return {
+    gated: true,
+    reachedLimit: reached,
+    renderAsHtml: false,
+    html: "",
+    text: previewText,
+  };
+}, [shouldGateTranscript, hasFullAccess, textHasContent, rawContent, gateSourceText, previewPolicy]);
+
+
+  const hasFullAccess = !!(
+    access?.hasFullAccess ??
+    access?.data?.hasFullAccess ??
+    access?.allowed ??
+    access?.canAccess ??
+    access?.hasAccess
+  );
 
   const canRead =
     !!report &&
     (isAdmin ||
       ((hasContent || textHasContent) && (!report.isPremium || hasFullAccess || (!isInst && !isPublic))));
 
-  // Search (debounced)
+  // Search (debounced + AbortController + unwrap fixed)
   useEffect(() => {
-    const abortState = searchAbortRef.current;
-    abortState.cancelled = false;
-
     const term = String(q || "").trim();
+
+    // cancel any in-flight search
+    try {
+      searchCtlRef.current?.abort?.();
+    } catch
+     {
+      //isIgnorable
+     }
+    searchCtlRef.current = null;
+
     if (term.length < 2) {
+      setSearching(false);
       setSearchErr("");
       setSearchResults([]);
       setOpenResults(false);
-      return () => {
-        abortState.cancelled = true;
-      };
+      return;
     }
 
+    const reqId = ++searchReqIdRef.current;
     const t = setTimeout(async () => {
+      const ctl = new AbortController();
+      searchCtlRef.current = ctl;
+
       try {
         setSearching(true);
         setSearchErr("");
 
         const res = await api.get(`/law-reports/search`, {
           params: { q: term, page: 1, pageSize: 8 },
+          signal: ctl.signal,
         });
 
-        if (abortState.cancelled) return;
+        if (reqId !== searchReqIdRef.current) return;
 
-        const payload = res.data?.data ?? res.data;
-        const items = Array.isArray(payload?.items) ? payload.items : [];
+        const payload = unwrapApi(res);
+        const items = Array.isArray(payload?.items)
+          ? payload.items
+          : Array.isArray(payload)
+            ? payload
+            : [];
 
         setSearchResults(items);
         setOpenResults(true);
       } catch (e) {
-        if (!abortState.cancelled) {
-          setSearchErr(getApiErrorMessage(e, "Search failed."));
-          setSearchResults([]);
-          setOpenResults(true);
-        }
+        // ignore aborts
+        const aborted =
+          e?.name === "CanceledError" ||
+          e?.name === "AbortError" ||
+          e?.code === "ERR_CANCELED" ||
+          e?.message?.toLowerCase?.().includes("canceled");
+
+        if (aborted) return;
+        if (reqId !== searchReqIdRef.current) return;
+
+        setSearchErr(getApiErrorMessage(e, "Search failed."));
+        setSearchResults([]);
+        setOpenResults(true);
       } finally {
-        if (!abortState.cancelled) setSearching(false);
+        if (reqId === searchReqIdRef.current) setSearching(false);
       }
     }, 280);
 
-    return () => {
-      abortState.cancelled = true;
-      clearTimeout(t);
-    };
+    return () => clearTimeout(t);
   }, [q]);
 
   function pickReport(r) {
@@ -1169,6 +1403,7 @@ export default function LawReportReader() {
     setOpenResults(false);
     setQ("");
     setSearchResults([]);
+    setSearchErr("");
     navigate(`/dashboard/law-reports/${rid}`);
   }
 
@@ -1241,12 +1476,7 @@ export default function LawReportReader() {
             <div className="lrr2SearchLead" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none">
                 <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="1.6" />
-                <path
-                  d="M16.5 16.5L21 21"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                />
+                <path d="M16.5 16.5L21 21" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
               </svg>
               <span>Case search</span>
             </div>
@@ -1259,6 +1489,12 @@ export default function LawReportReader() {
               onChange={(e) => setQ(e.target.value)}
               onFocus={() => {
                 if (searchResults.length || searchErr) setOpenResults(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && openResults && searchResults?.length) {
+                  e.preventDefault();
+                  pickReport(searchResults[0]);
+                }
               }}
             />
 
@@ -1619,14 +1855,30 @@ export default function LawReportReader() {
                 `lrr2Theme-${readingTheme}`,
                 fsClass,
                 fontClass,
+                preview.gated && preview.reachedLimit ? "isPreviewGated" : "",
               ].join(" ")}
             >
-              {isProbablyHtml(rawContent) ? (
-                <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: rawContent }} />
-              ) : (
-                <CaseContentFormatted text={rawContent} />
-              )}
+
+            {preview.renderAsHtml ? (
+              <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: preview.html }} />
+            ) : (
+              <CaseContentFormatted text={preview.text} />
+            )}
+
             </div>
+
+            {contentOpen && preview.gated && preview.reachedLimit ? (
+              <SubscribeGateOverlay
+                access={access}
+                onGo={(url) => {
+                  // internal routes supported; external too
+                  if (!url) return;
+                  if (String(url).startsWith("http")) window.open(url, "_blank", "noreferrer");
+                  else navigate(url);
+                }}
+              />
+            ) : null}
+
 
             {contentOpen && (
               <div className="lrr2Panel lrr2Panel--tight lrr2DbRelatedPanel">
@@ -1687,7 +1939,9 @@ export default function LawReportReader() {
                             <div className="lrr2SearchItemTitle">{titleText}</div>
                             {meta ? <div className="lrr2SearchItemMeta">{meta}</div> : null}
                           </div>
-                          <div className="lrr2SearchItemRight">{right ? <span className="lrr2Tag">{right}</span> : null}</div>
+                          <div className="lrr2SearchItemRight">
+                            {right ? <span className="lrr2Tag">{right}</span> : null}
+                          </div>
                         </button>
                       );
                     })}

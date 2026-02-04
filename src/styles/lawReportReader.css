@@ -1557,3 +1557,115 @@
   .lrr2MetaCard { padding: 14px; }
   .lrr2MetaTag, .lrr2MetaAction { width: auto; max-width: 100%; }
 }
+/* ---------------------------
+   Premium preview gate (LawReportReader)
+---------------------------- */
+
+.lrr2Collapse.isPreviewGated {
+  position: relative;
+}
+
+/* fade at the end of preview content */
+.lrr2Collapse.isPreviewGated::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 110px;
+  pointer-events: none;
+  /* default for paper theme (white base) */
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 1));
+}
+
+/* make fade match your themes */
+.lrr2Wrap[data-theme="sepia"] .lrr2Collapse.isPreviewGated::after {
+  background: linear-gradient(to bottom, rgba(249, 243, 230, 0), rgba(249, 243, 230, 1));
+}
+
+.lrr2Wrap[data-theme="dark"] .lrr2Collapse.isPreviewGated::after {
+  background: linear-gradient(to bottom, rgba(12, 14, 18, 0), rgba(12, 14, 18, 1));
+}
+
+/* sticky subscribe card */
+.lrr2GateSticky {
+  position: sticky;
+  bottom: 12px;
+  z-index: 60;
+  margin-top: -12px;
+}
+
+.lrr2GateFade {
+  height: 70px;
+  border-radius: 14px;
+  pointer-events: none;
+}
+
+.lrr2Wrap[data-theme="paper"] .lrr2GateFade {
+  background: linear-gradient(to top, rgba(255, 255, 255, 1), rgba(255, 255, 255, 0));
+}
+.lrr2Wrap[data-theme="sepia"] .lrr2GateFade {
+  background: linear-gradient(to top, rgba(249, 243, 230, 1), rgba(249, 243, 230, 0));
+}
+.lrr2Wrap[data-theme="dark"] .lrr2GateFade {
+  background: linear-gradient(to top, rgba(12, 14, 18, 1), rgba(12, 14, 18, 0));
+}
+
+.lrr2GateCard {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  padding: 12px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(6px);
+}
+
+.lrr2Wrap[data-theme="paper"] .lrr2GateCard {
+  background: rgba(255, 255, 255, 0.96);
+}
+.lrr2Wrap[data-theme="sepia"] .lrr2GateCard {
+  background: rgba(249, 243, 230, 0.96);
+}
+.lrr2Wrap[data-theme="dark"] .lrr2GateCard {
+  background: rgba(12, 14, 18, 0.92);
+  border-color: rgba(148, 163, 184, 0.22);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+.lrr2GateLeft {
+  min-width: 0;
+}
+
+.lrr2GateTitle {
+  font-weight: 900;
+  font-size: 14px;
+}
+
+.lrr2GateMsg {
+  margin-top: 3px;
+  font-size: 13px;
+  opacity: 0.78;
+}
+
+.lrr2GateActions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Make it stack on small screens */
+@media (max-width: 520px) {
+  .lrr2GateCard {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .lrr2GateActions {
+    width: 100%;
+  }
+  .lrr2GateActions .lrr2Btn {
+    width: 100%;
+  }
+}
