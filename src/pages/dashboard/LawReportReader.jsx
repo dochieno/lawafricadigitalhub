@@ -67,6 +67,20 @@ function pickFirstNumber(...vals) {
   return null;
 }
 
+//Additional Helpers:
+
+function getHasFullAccess(access) {
+  return access?.hasFullAccess === true || access?.data?.hasFullAccess === true;
+}
+
+function getIsAiAllowed(report, access, isAdmin) {
+  if (isAdmin) return true;
+  if (!report) return false;
+  if (!report.isPremium) return true; // non-premium -> AI allowed
+  return getHasFullAccess(access);    // premium -> only subscribers
+}
+
+
 function getAccessPreviewPolicy(access) {
   // Accepts different backend naming styles safely
   const maxChars = pickFirstNumber(
@@ -460,7 +474,7 @@ function AiSummaryRichText({ text }) {
 // ----------------------
 // AI Summary Panel
 // ----------------------
-function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel, onOpenRelated }) {
+function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel, onOpenRelated, enabled = true }) {
   const [type, setType] = useState("basic"); // basic | extended
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -494,8 +508,8 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel, onOpenR
   }
 
   const canRun = useMemo(
-    () => Number.isFinite(Number(lawReportId)) && Number(lawReportId) > 0,
-    [lawReportId]
+    () => enabled && Number.isFinite(Number(lawReportId)) && Number(lawReportId) > 0,
+    [enabled, lawReportId]
   );
 
   function isCacheMiss(err) {
@@ -649,366 +663,465 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel, onOpenR
 
   const isExtended = String(result?.type ?? type).toLowerCase() === "extended";
 
-  return (
-    <section className="lrrAi">
-      <div className="lrrAiTop">
-        <div className="lrrAiTitleRow">
-          <div className="lrrAiTitle">LegalAI Summary</div>
+return (
+  <section className="lrrAi">
+    {!enabled ? (
+      <div className="lrr2Empty">LegalAI is available to subscribers only.</div>
+    ) : (
+      <>
+        <div className="lrrAiTop">
+          <div className="lrrAiTitleRow">
+            <div className="lrrAiTitle">LegalAI Summary</div>
 
-          {sourceLabel ? (
-            <span className="lrrAiBadge" title="Where this result came from">
-              {sourceLabel}
-            </span>
-          ) : (
-            <span className="lrrAiBadge">AI generated</span>
-          )}
+            {sourceLabel ? (
+              <span className="lrrAiBadge" title="Where this result came from">
+                {sourceLabel}
+              </span>
+            ) : (
+              <span className="lrrAiBadge">AI generated</span>
+            )}
 
-          <div className="lrrAiIconRow">
-            <button
-              type="button"
-              className="lrrAiUpgradeBtn ghost"
-              disabled={loading || !result}
-              onClick={onCopySummary}
-              title="Copy summary"
-              aria-label="Copy summary"
-            >
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <rect x="9" y="9" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.6" />
-                <rect x="5" y="5" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.6" />
-              </svg>
-            </button>
-
-            <button
-              type="button"
-              className="lrrAiUpgradeBtn"
-              disabled={loading || !canRun}
-              onClick={onRegenerate}
-              title="Summarize / regenerate"
-              aria-label="Summarize / regenerate"
-            >
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M12 2l1.2 4.2L17.4 8l-4.2 1.2L12 13.4l-1.2-4.2L6.6 8l4.2-1.8L12 2z"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                />
-                <path
-                  d="M5 20c2.5-2.2 5.2-3.3 8-3.3s5.5 1.1 8 3.3"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </button>
-
-            <button
-              type="button"
-              className={`lrrAiUpgradeBtn ${chatOpen ? "ghost" : ""}`}
-              onClick={() => setChatOpen((v) => !v)}
-              title="Chat with LegalAI"
-              aria-label="Chat with LegalAI"
-            >
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M4 5.5C4 4.1 5.1 3 6.5 3h11C19.9 3 21 4.1 21 5.5v7C21 13.9 19.9 15 18.5 15H11l-4.5 4V15H6.5C5.1 15 4 13.9 4 12.5v-7z"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M7.5 7.5h10M7.5 10.5h7"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <div className="lrrAiHeadnote">
-          <div className="lrrAiHeadnoteTitle">{digestTitle || "—"}</div>
-          <div className="lrrAiHeadnoteMeta">{courtLabel || "—"}</div>
-          <div className="lrrAiHeadnoteRule" />
-        </div>
-
-        {toast ? <div className="lrrAiToast">{toast}</div> : null}
-      </div>
-
-      {error ? <div className="lrrAiError">{error}</div> : null}
-
-      {result ? (
-        <div className="lrrAiResult">
-          {!isExtended ? (
-            <div className="lrrAiUpgrade">
-              <div className="lrrAiUpgradeText">
-                Need more depth? Generate an <b>Extended</b> analysis (more detailed; will be token-gated later).
-              </div>
+            <div className="lrrAiIconRow">
+              <button
+                type="button"
+                className="lrrAiUpgradeBtn ghost"
+                disabled={loading || !result}
+                onClick={onCopySummary}
+                title="Copy summary"
+                aria-label="Copy summary"
+              >
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <rect x="9" y="9" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.6" />
+                  <rect x="5" y="5" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.6" />
+                </svg>
+              </button>
 
               <button
                 type="button"
                 className="lrrAiUpgradeBtn"
-                disabled={loading}
-                onClick={() => setType("extended")}
-                title="Generate extended summary"
+                disabled={loading || !canRun}
+                onClick={onRegenerate}
+                title="Summarize / regenerate"
+                aria-label="Summarize / regenerate"
               >
-                Generate Extended
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M12 2l1.2 4.2L17.4 8l-4.2 1.2L12 13.4l-1.2-4.2L6.6 8l4.2-1.8L12 2z"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                  />
+                  <path
+                    d="M5 20c2.5-2.2 5.2-3.3 8-3.3s5.5 1.1 8 3.3"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                  />
+                </svg>
               </button>
-            </div>
-          ) : (
-            <div className="lrrAiUpgrade isExtended">
-              <div className="lrrAiUpgradeText">
-                You’re viewing the <b>Extended</b> analysis.
-              </div>
 
               <button
                 type="button"
-                className="lrrAiUpgradeBtn ghost"
-                disabled={loading}
-                onClick={() => setType("basic")}
-                title="Back to basic summary"
+                className={`lrrAiUpgradeBtn ${chatOpen ? "ghost" : ""}`}
+                onClick={() => setChatOpen((v) => !v)}
+                title="Chat with LegalAI"
+                aria-label="Chat with LegalAI"
               >
-                Back to Basic
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M4 5.5C4 4.1 5.1 3 6.5 3h11C19.9 3 21 4.1 21 5.5v7C21 13.9 19.9 15 18.5 15H11l-4.5 4V15H6.5C5.1 15 4 13.9 4 12.5v-7z"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M7.5 7.5h10M7.5 10.5h7"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                  />
+                </svg>
               </button>
             </div>
-          )}
-
-          <div className="lrrAiBody">
-            <AiSummaryRichText text={result.summary || ""} />
           </div>
 
-          {chatOpen ? (
-            <div className="lrr2Panel lrr2Panel--tight lrr2ChatPanel">
+          <div className="lrrAiHeadnote">
+            <div className="lrrAiHeadnoteTitle">{digestTitle || "—"}</div>
+            <div className="lrrAiHeadnoteMeta">{courtLabel || "—"}</div>
+            <div className="lrrAiHeadnoteRule" />
+          </div>
+
+          {toast ? <div className="lrrAiToast">{toast}</div> : null}
+        </div>
+
+        {error ? <div className="lrrAiError">{error}</div> : null}
+
+        {result ? (
+          <div className="lrrAiResult">
+            {!isExtended ? (
+              <div className="lrrAiUpgrade">
+                <div className="lrrAiUpgradeText">
+                  Need more depth? Generate an <b>Extended</b> analysis (more detailed; will be token-gated later).
+                </div>
+
+                <button
+                  type="button"
+                  className="lrrAiUpgradeBtn"
+                  disabled={loading}
+                  onClick={() => setType("extended")}
+                  title="Generate extended summary"
+                >
+                  Generate Extended
+                </button>
+              </div>
+            ) : (
+              <div className="lrrAiUpgrade isExtended">
+                <div className="lrrAiUpgradeText">
+                  You’re viewing the <b>Extended</b> analysis.
+                </div>
+
+                <button
+                  type="button"
+                  className="lrrAiUpgradeBtn ghost"
+                  disabled={loading}
+                  onClick={() => setType("basic")}
+                  title="Back to basic summary"
+                >
+                  Back to Basic
+                </button>
+              </div>
+            )}
+
+            <div className="lrrAiBody">
+              <AiSummaryRichText text={result.summary || ""} />
+            </div>
+
+            {chatOpen ? (
+              <div className="lrr2Panel lrr2Panel--tight lrr2ChatPanel">
+                <div className="lrr2PanelHead">
+                  <div className="lrr2PanelHeadLeft">
+                    <div className="lrr2PanelTitle">Chat with LegalAI</div>
+                    <div className="lrr2PanelSub">
+                      Ask about issues, holdings, reasoning, and related/persuasive cases.
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="lrr2Btn"
+                    onClick={() => {
+                      setChatMsgs((prev) =>
+                        prev.length > 1
+                          ? [
+                              prev[0],
+                              {
+                                role: "assistant",
+                                content: "Cleared. Ask a new question about this case.",
+                              },
+                            ]
+                          : prev
+                      );
+                      setChatError("");
+                      setChatInput("");
+                    }}
+                    title="Clear chat"
+                  >
+                    Clear
+                  </button>
+                </div>
+
+                <div className="lrr2ChatBox" role="log" aria-label="Chat messages">
+                  {chatMsgs.map((m, idx) => (
+                    <div key={idx} className={`lrr2ChatRow ${m.role === "user" ? "isUser" : "isAi"}`}>
+                      <div className={`lrr2ChatBubble ${m.role === "user" ? "isUser" : "isAi"}`}>{m.content}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {chatError ? <div className="lrr2PanelError">{chatError}</div> : null}
+
+                <div className="lrr2ChatComposer">
+                  <input
+                    className="lrr2SearchInput lrr2ChatInput"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    placeholder="Ask LegalAI… e.g. What were the key issues and the holding?"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        document.getElementById("lrrChatSendBtn")?.click();
+                      }
+                    }}
+                  />
+
+                  <button
+                    id="lrrChatSendBtn"
+                    type="button"
+                    className="lrr2Btn primary"
+                    disabled={chatLoading || !String(chatInput || "").trim()}
+                    onClick={async () => {
+                      if (!canRun) return;
+                      const msg = String(chatInput || "").trim();
+                      if (!msg) return;
+
+                      setChatInput("");
+                      setChatError("");
+                      addMsg("user", msg);
+
+                      try {
+                        setChatLoading(true);
+                        const history = chatMsgs.slice(-8).map((m) => ({ role: m.role, content: m.content }));
+
+                        const res = await api.post(`/ai/law-reports/${Number(lawReportId)}/chat`, {
+                          message: msg,
+                          history,
+                        });
+
+                        const payload = unwrapApi(res);
+                        const reply =
+                          payload?.reply ||
+                          payload?.message ||
+                          payload?.content ||
+                          res.data?.reply ||
+                          res.data?.message ||
+                          res.data?.content ||
+                          "";
+
+                        addMsg("assistant", String(reply || "No response returned."));
+                      } catch (e) {
+                        setChatError(getApiErrorMessage(e, "Chat failed."));
+                        addMsg("assistant", "Sorry — I couldn’t complete that request. Please try again.");
+                      } finally {
+                        setChatLoading(false);
+                      }
+                    }}
+                    title="Send"
+                  >
+                    {chatLoading ? "Sending…" : "Send"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {/* Phase 4 — AI Related Cases */}
+            <div className="lrr2Panel lrr2Panel--tight lrr2AiRelatedPanel">
               <div className="lrr2PanelHead">
                 <div className="lrr2PanelHeadLeft">
-                  <div className="lrr2PanelTitle">Chat with LegalAI</div>
-                  <div className="lrr2PanelSub">Ask about issues, holdings, reasoning, and related/persuasive cases.</div>
+                  <div className="lrr2PanelTitle">AI Related Cases</div>
+                  <div className="lrr2PanelSub">
+                    Enhancement only · returns <b>2 Kenya</b> and <b>2 Outside Kenya</b>. Always verify citations.
+                  </div>
                 </div>
 
                 <button
                   type="button"
                   className="lrr2Btn"
-                  onClick={() => {
-                    setChatMsgs((prev) =>
-                      prev.length > 1
-                        ? [
-                            prev[0],
-                            {
-                              role: "assistant",
-                              content: "Cleared. Ask a new question about this case.",
-                            },
-                          ]
-                        : prev
-                    );
-                    setChatError("");
-                    setChatInput("");
-                  }}
-                  title="Clear chat"
+                  disabled={relatedCasesLoading}
+                  onClick={fetchAiRelatedCases}
+                  title="Find AI related cases"
                 >
-                  Clear
+                  {relatedCasesLoading ? "Finding…" : "Find related"}
                 </button>
               </div>
 
-              <div className="lrr2ChatBox" role="log" aria-label="Chat messages">
-                {chatMsgs.map((m, idx) => (
-                  <div key={idx} className={`lrr2ChatRow ${m.role === "user" ? "isUser" : "isAi"}`}>
-                    <div className={`lrr2ChatBubble ${m.role === "user" ? "isUser" : "isAi"}`}>{m.content}</div>
-                  </div>
-                ))}
-              </div>
+              {relatedCasesError ? <div className="lrr2PanelError">{relatedCasesError}</div> : null}
 
-              {chatError ? <div className="lrr2PanelError">{chatError}</div> : null}
-
-              <div className="lrr2ChatComposer">
-                <input
-                  className="lrr2SearchInput lrr2ChatInput"
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  placeholder="Ask LegalAI… e.g. What were the key issues and the holding?"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      document.getElementById("lrrChatSendBtn")?.click();
-                    }
-                  }}
-                />
-
-                <button
-                  id="lrrChatSendBtn"
-                  type="button"
-                  className="lrr2Btn primary"
-                  disabled={chatLoading || !String(chatInput || "").trim()}
-                  onClick={async () => {
-                    if (!canRun) return;
-                    const msg = String(chatInput || "").trim();
-                    if (!msg) return;
-
-                    setChatInput("");
-                    setChatError("");
-                    addMsg("user", msg);
-
-                    try {
-                      setChatLoading(true);
-                      const history = chatMsgs.slice(-8).map((m) => ({ role: m.role, content: m.content }));
-
-                      const res = await api.post(`/ai/law-reports/${Number(lawReportId)}/chat`, {
-                        message: msg,
-                        history,
-                      });
-
-                      const payload = unwrapApi(res);
-                      const reply =
-                        payload?.reply ||
-                        payload?.message ||
-                        payload?.content ||
-                        res.data?.reply ||
-                        res.data?.message ||
-                        res.data?.content ||
-                        "";
-
-                      addMsg("assistant", String(reply || "No response returned."));
-                    } catch (e) {
-                      setChatError(getApiErrorMessage(e, "Chat failed."));
-                      addMsg("assistant", "Sorry — I couldn’t complete that request. Please try again.");
-                    } finally {
-                      setChatLoading(false);
-                    }
-                  }}
-                  title="Send"
-                >
-                  {chatLoading ? "Sending…" : "Send"}
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          {/* Phase 4 — AI Related Cases */}
-          <div className="lrr2Panel lrr2Panel--tight lrr2AiRelatedPanel">
-            <div className="lrr2PanelHead">
-              <div className="lrr2PanelHeadLeft">
-                <div className="lrr2PanelTitle">AI Related Cases</div>
-                <div className="lrr2PanelSub">
-                  Enhancement only · returns <b>2 Kenya</b> and <b>2 Outside Kenya</b>. Always verify citations.
+              {!relatedCasesLoading && !relatedCasesError && relatedCases.length === 0 ? (
+                <div className="lrr2PanelEmpty">
+                  No AI related cases loaded yet. Click <b>Find related</b>.
                 </div>
-              </div>
+              ) : null}
 
-              <button
-                type="button"
-                className="lrr2Btn"
-                disabled={relatedCasesLoading}
-                onClick={fetchAiRelatedCases}
-                title="Find AI related cases"
-              >
-                {relatedCasesLoading ? "Finding…" : "Find related"}
-              </button>
-            </div>
+              {relatedCases.length > 0 ? (
+                <div className="lrr2RelatedGrid">
+                  {(() => {
+                    const kenya = relatedCases.filter(
+                      (x) => String(x?.jurisdiction || "").toLowerCase() === "kenya"
+                    );
+                    const foreign = relatedCases.filter(
+                      (x) => String(x?.jurisdiction || "").toLowerCase() !== "kenya"
+                    );
 
-            {relatedCasesError ? <div className="lrr2PanelError">{relatedCasesError}</div> : null}
+                    const renderItem = (c, idx) => {
+                      const title = c?.title || `Related case ${idx + 1}`;
+                      const cite = c?.citation || "";
+                      const court = c?.court || "";
+                      const year = c?.year ? String(c.year) : "";
+                      const meta = [court, year].filter(Boolean).join(" • ");
+                      const rid = Number(c?.lawReportId || 0);
+                      const url = c?.url || "";
+                      const note = c?.note || "";
+                      const canOpenInternal = Number.isFinite(rid) && rid > 0;
 
-            {!relatedCasesLoading && !relatedCasesError && relatedCases.length === 0 ? (
-              <div className="lrr2PanelEmpty">
-                No AI related cases loaded yet. Click <b>Find related</b>.
-              </div>
-            ) : null}
+                      return (
+                        <div key={`${title}-${idx}`} className="lrr2RelatedCard">
+                          <div className="lrr2RelatedTop">
+                            <div className="lrr2RelatedTitleWrap">
+                              <div className="lrr2RelatedTitle">{title}</div>
+                              {meta ? <div className="lrr2RelatedMeta">{meta}</div> : null}
+                            </div>
 
-            {relatedCases.length > 0 ? (
-              <div className="lrr2RelatedGrid">
-                {(() => {
-                  const kenya = relatedCases.filter((x) => String(x?.jurisdiction || "").toLowerCase() === "kenya");
-                  const foreign = relatedCases.filter((x) => String(x?.jurisdiction || "").toLowerCase() !== "kenya");
-
-                  const renderItem = (c, idx) => {
-                    const title = c?.title || `Related case ${idx + 1}`;
-                    const cite = c?.citation || "";
-                    const court = c?.court || "";
-                    const year = c?.year ? String(c.year) : "";
-                    const meta = [court, year].filter(Boolean).join(" • ");
-                    const rid = Number(c?.lawReportId || 0);
-                    const url = c?.url || "";
-                    const note = c?.note || "";
-                    const canOpenInternal = Number.isFinite(rid) && rid > 0;
-
-                    return (
-                      <div key={`${title}-${idx}`} className="lrr2RelatedCard">
-                        <div className="lrr2RelatedTop">
-                          <div className="lrr2RelatedTitleWrap">
-                            <div className="lrr2RelatedTitle">{title}</div>
-                            {meta ? <div className="lrr2RelatedMeta">{meta}</div> : null}
+                            <div className="lrr2RelatedTags">
+                              {cite ? <span className="lrr2Tag">{cite}</span> : null}
+                              {String(c?.jurisdiction || "").toLowerCase() !== "kenya" ? (
+                                <span className="lrr2Tag soft">Persuasive</span>
+                              ) : null}
+                            </div>
                           </div>
 
-                          <div className="lrr2RelatedTags">
-                            {cite ? <span className="lrr2Tag">{cite}</span> : null}
-                            {String(c?.jurisdiction || "").toLowerCase() !== "kenya" ? (
-                              <span className="lrr2Tag soft">Persuasive</span>
+                          {note ? <div className="lrr2RelatedNote">{note}</div> : null}
+
+                          <div className="lrr2RelatedActions">
+                            {canOpenInternal ? (
+                              <button
+                                type="button"
+                                className="lrr2Btn"
+                                onClick={() => onOpenRelated?.(rid)}
+                                title="Open in LawAfrica"
+                              >
+                                Open in LawAfrica
+                              </button>
+                            ) : null}
+
+                            {!canOpenInternal && url ? (
+                              <a className="lrr2Btn" href={url} target="_blank" rel="noreferrer">
+                                Open reference
+                              </a>
                             ) : null}
                           </div>
                         </div>
+                      );
+                    };
 
-                        {note ? <div className="lrr2RelatedNote">{note}</div> : null}
-
-                        <div className="lrr2RelatedActions">
-                          {canOpenInternal ? (
-                            <button
-                              type="button"
-                              className="lrr2Btn"
-                              onClick={() => onOpenRelated?.(rid)}
-                              title="Open in LawAfrica"
-                            >
-                              Open in LawAfrica
-                            </button>
-                          ) : null}
-
-                          {!canOpenInternal && url ? (
-                            <a className="lrr2Btn" href={url} target="_blank" rel="noreferrer">
-                              Open reference
-                            </a>
-                          ) : null}
+                    return (
+                      <>
+                        <div className="lrr2RelatedSection">
+                          <div className="lrr2RelatedSectionTitle">Kenya</div>
+                          {kenya.length ? (
+                            <div className="lrr2RelatedStack">{kenya.map(renderItem)}</div>
+                          ) : (
+                            <div className="lrr2RelatedNone">No Kenya suggestions returned.</div>
+                          )}
                         </div>
-                      </div>
+
+                        <div className="lrr2RelatedSection">
+                          <div className="lrr2RelatedSectionTitle">Outside Kenya</div>
+                          {foreign.length ? (
+                            <div className="lrr2RelatedStack">{foreign.map(renderItem)}</div>
+                          ) : (
+                            <div className="lrr2RelatedNone">No foreign suggestions returned.</div>
+                          )}
+                        </div>
+                      </>
                     );
-                  };
-
-                  return (
-                    <>
-                      <div className="lrr2RelatedSection">
-                        <div className="lrr2RelatedSectionTitle">Kenya</div>
-                        {kenya.length ? (
-                          <div className="lrr2RelatedStack">{kenya.map(renderItem)}</div>
-                        ) : (
-                          <div className="lrr2RelatedNone">No Kenya suggestions returned.</div>
-                        )}
-                      </div>
-
-                      <div className="lrr2RelatedSection">
-                        <div className="lrr2RelatedSectionTitle">Outside Kenya</div>
-                        {foreign.length ? (
-                          <div className="lrr2RelatedStack">{foreign.map(renderItem)}</div>
-                        ) : (
-                          <div className="lrr2RelatedNone">No foreign suggestions returned.</div>
-                        )}
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-            ) : null}
+                  })()}
+                </div>
+              ) : null}
+            </div>
           </div>
-        </div>
-      ) : loading ? null : (
-        <div className="lrrAiTip">No summary available yet.</div>
-      )}
+        ) : loading ? null : (
+          <div className="lrrAiTip">No summary available yet.</div>
+        )}
 
-      <div className="lrrAiFooterNote">
-        *** This summary is automatically generated by LegalAI and may be cached for performance. Always verify critical
-        details against the full case text — <b>{isExtended ? "Extended" : "Basic"}</b>.
-      </div>
-    </section>
-  );
+        <div className="lrrAiFooterNote">
+          *** This summary is automatically generated by LegalAI and may be cached for performance. Always verify
+          critical details against the full case text — <b>{isExtended ? "Extended" : "Basic"}</b>.
+        </div>
+      </>
+    )}
+  </section>
+);
+
 }
 
 // ----------------------
 // Reader
 // ----------------------
+
+function AccessReasonLabel(access) {
+  const raw =
+    access?.reason ||
+    access?.Reason ||
+    access?.data?.reason ||
+    access?.data?.Reason ||
+    "";
+
+  const t = String(raw || "").toLowerCase();
+
+  if (t.includes("institution") && t.includes("seat")) return "Your institution has reached its seat limit.";
+  if (t.includes("institution") && t.includes("inactive")) return "Your institution subscription is inactive.";
+  if (t.includes("expired")) return "Your subscription is expired.";
+  if (t.includes("trial")) return "Your trial does not include Law Reports access.";
+  return "";
+}
+
+function PremiumLockHero({ access, onGo }) {
+  const ctas = getAccessCtas(access);
+  const reason = AccessReasonLabel(access);
+
+  return (
+    <div className="lrr2LockHero" role="note" aria-label="Premium content locked">
+      <div className="lrr2LockHeroIcon" aria-hidden="true">🔒</div>
+
+      <div className="lrr2LockHeroBody">
+        <div className="lrr2LockHeroTitle">Full transcript restricted</div>
+        <div className="lrr2LockHeroMsg">
+          You’re viewing a limited preview of this premium law report.
+          {reason ? <div className="lrr2LockHeroReason">{reason}</div> : null}
+        </div>
+
+        <ul className="lrr2LockHeroBenefits">
+          <li>Unlimited full case transcript access</li>
+          <li>LegalAI summary, key issues, and holdings</li>
+          <li>Related cases and citation tools</li>
+        </ul>
+
+        <div className="lrr2LockHeroActions">
+          {ctas.secondaryUrl ? (
+            <button type="button" className="lrr2Btn" onClick={() => onGo(ctas.secondaryUrl)}>
+              {ctas.secondaryLabel}
+            </button>
+          ) : null}
+
+          <button type="button" className="lrr2Btn primary" onClick={() => onGo(ctas.primaryUrl)}>
+            {ctas.primaryLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AiLockedPanel({ access, onGo }) {
+  const ctas = getAccessCtas(access);
+
+  return (
+    <div className="lrr2Panel lrr2Panel--tight">
+      <div className="lrr2PanelHead">
+        <div className="lrr2PanelHeadLeft">
+          <div className="lrr2PanelTitle">LegalAI Summary</div>
+          <div className="lrr2PanelSub">Available to subscribers only.</div>
+        </div>
+      </div>
+
+      <div className="lrr2LockInline">
+        <div className="lrr2LockInlineIcon">🤖</div>
+        <div className="lrr2LockInlineText">
+          <div className="lrr2LockInlineTitle">Upgrade to use LegalAI</div>
+          <div className="lrr2LockInlineMsg">
+            Summaries, key issues, holdings, and AI related cases are restricted to active subscribers.
+          </div>
+        </div>
+
+        <div className="lrr2LockInlineActions">
+          <button type="button" className="lrr2Btn primary" onClick={() => onGo(ctas.primaryUrl)}>
+            {ctas.primaryLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function LawReportReader() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -1120,6 +1233,23 @@ export default function LawReportReader() {
       document.removeEventListener("pointerdown", onPointerDown);
     };
   }, [openResults]);
+
+  // ✅ Cmd/Ctrl + K focuses the search input (premium shortcut)
+    useEffect(() => {
+      function onKey(e) {
+        const isMac = navigator.platform.toLowerCase().includes("mac");
+        const hot = (isMac ? e.metaKey : e.ctrlKey) && String(e.key || "").toLowerCase() === "k";
+        if (hot) {
+          e.preventDefault();
+          setOpenResults(true);
+          searchInputRef.current?.focus?.();
+        }
+      }
+
+  window.addEventListener("keydown", onKey);
+  return () => window.removeEventListener("keydown", onKey);
+}, []);
+
 
   // Related DB cases only in Transcript tab
   useEffect(() => {
@@ -1258,10 +1388,8 @@ export default function LawReportReader() {
   const textHasContent = !!rawContent.trim();
 
   // ✅ include admin safety too
-const hasFullAccess =
-  access?.hasFullAccess === true ||
-  access?.data?.hasFullAccess === true;
-
+const hasFullAccess = useMemo(() => getHasFullAccess(access), [access]);
+const aiAllowed = useMemo(() => getIsAiAllowed(report, access, isAdmin), [report, access, isAdmin]);
 
   // ✅ Gate only premium transcripts when user lacks full access
 const shouldGateTranscript = useMemo(() => {
@@ -1695,34 +1823,54 @@ const shouldGateTranscript = useMemo(() => {
           title={view === "content" ? (contentOpen ? "Hide transcript" : "Show transcript") : "Transcript"}
         >
           Transcript
+          {report?.isPremium && !hasFullAccess ? <span className="lrr2TabBadge lock">Locked</span> : null}
         </button>
 
-        <button
-          type="button"
-          role="tab"
-          aria-selected={view === "ai"}
-          className={`lrr2Tab ${view === "ai" ? "isActive" : ""}`}
-          onClick={() => {
-            setView("ai");
-            setContentOpen(false);
-          }}
-        >
-          LegalAI Summary
-          <span className="lrr2TabBadge">AI</span>
-        </button>
+        {aiAllowed ? (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === "ai"}
+            className={`lrr2Tab ${view === "ai" ? "isActive" : ""}`}
+            onClick={() => {
+              setView("ai");
+              setContentOpen(false);
+            }}
+          >
+            LegalAI Summary <span className="lrr2TabBadge">AI</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={false}
+            className="lrr2Tab isDisabled"
+            onClick={() => {}}
+            disabled
+            title="LegalAI is available to subscribers only"
+          >
+            LegalAI Summary <span className="lrr2TabBadge lock">Locked</span>
+          </button>
+        )}
       </div>
 
-      <section className="lrr2Content">
-        {view === "ai" ? (
+
+    <section className="lrr2Content">
+      {view === "ai" ? (
+        aiAllowed ? (
           <LawReportAiSummaryPanel
             lawReportId={reportId}
             digestTitle={title}
             courtLabel={report?.court || ""}
             onOpenRelated={(rid) => navigate(`/dashboard/law-reports/${rid}`)}
+            enabled={isAdmin || hasFullAccess}
           />
-        ) : !textHasContent ? (
-          <div className="lrr2Empty">This report has no content yet.</div>
         ) : (
+          <AiLockedPanel access={access} onGo={(url) => (String(url).startsWith("http") ? window.open(url, "_blank") : navigate(url))} />
+        )
+      ) : !textHasContent ? (
+        <div className="lrr2Empty">This report has no content yet.</div>
+      ) : (
           <article className="lrr2Article">
             <div className="lrr2TranscriptTools">
               <div className="lrr2ReaderBar">
@@ -1838,6 +1986,17 @@ const shouldGateTranscript = useMemo(() => {
                 </div>
               </div>
             </div>
+
+            {report?.isPremium && !hasFullAccess ? (
+              <PremiumLockHero
+                access={access}
+                onGo={(url) => {
+                  if (!url) return;
+                  if (String(url).startsWith("http")) window.open(url, "_blank", "noreferrer");
+                  else navigate(url);
+                }}
+              />
+            ) : null}
 
             <div
               className={[

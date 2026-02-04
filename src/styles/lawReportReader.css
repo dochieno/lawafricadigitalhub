@@ -1669,3 +1669,98 @@
     width: 100%;
   }
 }
+/* Premium: locked badges */
+.lrr2TabBadge.lock{
+  margin-left: 10px;
+  background: rgba(112,40,64,.12);
+  color: #702840;
+  border: 1px solid rgba(112,40,64,.22);
+}
+.lrr2Tab.isDisabled{
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+/* Premium lock hero */
+.lrr2LockHero{
+  display: flex;
+  gap: 14px;
+  padding: 16px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(15,23,42,0.10);
+  background: linear-gradient(90deg, rgba(112,40,64,.08), rgba(2,132,199,.06));
+  box-shadow: 0 10px 26px rgba(2,6,23,.06);
+  margin: 14px 0 14px;
+}
+.lrr2LockHeroIcon{
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background: rgba(255,255,255,.78);
+  border: 1px solid rgba(15,23,42,0.08);
+  font-size: 20px;
+}
+.lrr2LockHeroTitle{
+  font-weight: 800;
+  letter-spacing: .2px;
+  color: rgba(15,23,42,.92);
+  margin-bottom: 4px;
+}
+.lrr2LockHeroMsg{
+  color: rgba(15,23,42,.72);
+  font-size: 13.5px;
+  line-height: 1.35;
+}
+.lrr2LockHeroReason{
+  margin-top: 6px;
+  color: rgba(15,23,42,.78);
+  font-weight: 600;
+}
+.lrr2LockHeroBenefits{
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: rgba(15,23,42,.78);
+  font-size: 13px;
+}
+.lrr2LockHeroActions{
+  margin-top: 12px;
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* AI locked inline */
+.lrr2LockInline{
+  display:flex;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(15,23,42,0.10);
+  background: rgba(255,255,255,0.75);
+}
+.lrr2LockInlineIcon{
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background: rgba(112,40,64,.10);
+  border: 1px solid rgba(112,40,64,.18);
+}
+.lrr2LockInlineTitle{
+  font-weight: 800;
+  color: rgba(15,23,42,.92);
+}
+.lrr2LockInlineMsg{
+  margin-top: 2px;
+  color: rgba(15,23,42,.70);
+  font-size: 13px;
+}
+.lrr2LockInlineActions{
+  margin-left: auto;
+}
