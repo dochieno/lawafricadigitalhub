@@ -1257,24 +1257,18 @@ export default function LawReportReader() {
   const rawContent = useMemo(() => String(report?.contentText || ""), [report?.contentText]);
   const textHasContent = !!rawContent.trim();
 
-  // ✅ MUST be defined before preview uses it
   // ✅ include admin safety too
-  const hasFullAccess = !!(
-    isAdmin ||
-    access?.hasFullAccess ||
-    access?.data?.hasFullAccess ||
-    access?.allowed ||
-    access?.canAccess ||
-    access?.hasAccess
-  );
+const hasFullAccess =
+  access?.hasFullAccess === true ||
+  access?.data?.hasFullAccess === true;
+
 
   // ✅ Gate only premium transcripts when user lacks full access
-  const shouldGateTranscript = useMemo(() => {
-    if (!report) return false;
-    if (!report?.isPremium) return false;
-    if (!(isInst || isPublic)) return false;
-    return true;
-  }, [report, isInst, isPublic]);
+const shouldGateTranscript = useMemo(() => {
+  if (!report) return false;
+  if (!report.isPremium) return false;
+  return true; // ALL premium transcripts are gated unless full access
+}, [report]);
 
   const previewPolicy = useMemo(() => getAccessPreviewPolicy(access), [access]);
 
