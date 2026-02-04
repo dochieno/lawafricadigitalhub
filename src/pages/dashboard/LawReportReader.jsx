@@ -55,6 +55,29 @@ function unwrapApi(res) {
   return d?.data ?? d;
 }
 
+function getReportIsPremium(report) {
+  return !!(
+    report?.isPremium ??
+    report?.IsPremium ??
+    report?.premium ??
+    report?.Premium ??
+    false
+  );
+}
+
+function getReportLegalDocumentId(report) {
+  const v =
+    report?.legalDocumentId ??
+    report?.LegalDocumentId ??
+    report?.legal_document_id ??
+    report?.Legal_Document_Id ??
+    null;
+
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+
 // ----------------------
 // Preview gating helpers (Law Reports transcript)
 // ----------------------
@@ -73,9 +96,18 @@ function getHasFullAccess(access) {
 function getIsAiAllowed(report, access, isAdmin) {
   if (isAdmin) return true;
   if (!report) return false;
-  if (!report.isPremium) return true;
-  return getHasFullAccess(access);
+
+  const premium =
+    report?.isPremium ??
+    report?.IsPremium ??
+    report?.premium ??
+    report?.Premium ??
+    false;
+
+  if (!premium) return true; // non-premium → AI allowed
+  return getHasFullAccess(access); // premium → subscribers only
 }
+
 
 function getAccessPreviewPolicy(access) {
   const maxChars = pickFirstNumber(
@@ -1180,6 +1212,7 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel, onOpenR
   );
 }
 
+
 export default function LawReportReader() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -1232,7 +1265,7 @@ export default function LawReportReader() {
   const progressBarRef = useRef(null);
 
   // Compact header
-  const [headerCompact, setHeaderCompact] = useState(false);
+  const [headerCompact, setHeaderCompact] = useState(false);  
 
   const fsClass = useMemo(() => {
     const n = Math.round(fontScale * 100);
@@ -1376,7 +1409,7 @@ export default function LawReportReader() {
     let cancelled = false;
 
     async function check() {
-      if (!report?.legalDocumentId) return;
+if (!legalDocumentId) return;
 
       if (isAdmin) {
         if (!cancelled) {
@@ -1398,7 +1431,8 @@ export default function LawReportReader() {
       } else {
         try {
           setAvailabilityLoading(true);
-          const r = await api.get(`/legal-documents/${report.legalDocumentId}/availability`);
+        const r = await api.get(`/legal-documents/${legalDocumentId}/availability`);
+
           const payload = unwrapApi(r);
           const ok = !!(payload?.hasContent ?? payload?.data?.hasContent ?? payload?.available ?? payload?.has_file);
           if (!cancelled) setHasContent(!!ok);
@@ -1409,10 +1443,11 @@ export default function LawReportReader() {
         }
       }
 
-      if (report?.isPremium && (isInst || isPublic)) {
+if (isPremium && (isInst || isPublic)) {
+
         try {
           setAccessLoading(true);
-          const r = await api.get(`/legal-documents/${report.legalDocumentId}/access`);
+          const r = await api.get(`/legal-documents/${legalDocumentId}/access`);
           const payload = unwrapApi(r);
           if (!cancelled) setAccess(payload ?? null);
         } catch {
@@ -1429,13 +1464,16 @@ export default function LawReportReader() {
     return () => {
       cancelled = true;
     };
-  }, [report, isInst, isPublic, isAdmin]);
+ }, [report, legalDocumentId, isPremium, isInst, isPublic, isAdmin]);
 
   /* ======================================================
      IMPORTANT: These MUST live INSIDE the component
   ====================================================== */
   const rawContent = useMemo(() => String(report?.contentText || ""), [report?.contentText]);
   const textHasContent = !!rawContent.trim();
+  const legalDocumentId = useMemo(() => getReportLegalDocumentId(report), [report]);
+  const isPremium = useMemo(() => getReportIsPremium(report), [report]);
+
 
   const hasFullAccess = useMemo(() => getHasFullAccess(access), [access]);
   const aiAllowed = useMemo(() => getIsAiAllowed(report, access, isAdmin), [report, access, isAdmin]);
@@ -1876,7 +1914,8 @@ export default function LawReportReader() {
           title={view === "content" ? (contentOpen ? "Hide transcript" : "Show transcript") : "Transcript"}
         >
           Transcript
-          {report?.isPremium && !hasFullAccess ? <span className="lrr2TabBadge lock">Locked</span> : null}
+        {isPremium && !hasFullAccess ? <span className="lrr2TabBadge lock">Locked</span> : null}
+
         </button>
 
         {aiAllowed ? (
@@ -1992,8 +2031,7 @@ export default function LawReportReader() {
               </div>
             </div>
 
-            {report?.isPremium && !hasFullAccess ? (
-              <PremiumLockHero access={access} onGo={goCta} />
+           {isPremium && !hasFullAccess ? ( <PremiumLockHero access={access} onGo={goCta} />
             ) : null}
 
             {/* =========================================================
