@@ -180,7 +180,6 @@ function SubscribeGateOverlay({ access, onGo }) {
   );
 }
 
-
 function formatDate(d) {
   if (!d) return "";
   const dt = new Date(d);
@@ -1166,6 +1165,7 @@ export default function LawReportReader() {
 
         setReport(payload ?? null);
       } catch (e) {
+
         console.error(e);
         if (!cancelled) setError(getApiErrorMessage(e, "We couldn’t load this report right now. Please try again."));
       } finally {
@@ -1208,9 +1208,9 @@ export default function LawReportReader() {
         return;
       }
 
-      const textHasContent = !!String(report?.contentText || "").trim();
+      const textHasContentLocal = !!String(report?.contentText || "").trim();
 
-      if (textHasContent) {
+      if (textHasContentLocal) {
         if (!cancelled) {
           setHasContent(true);
           setAvailabilityLoading(false);
@@ -1251,76 +1251,80 @@ export default function LawReportReader() {
     };
   }, [report, isInst, isPublic, isAdmin]);
 
-const rawContent = useMemo(() => String(report?.contentText || ""), [report?.contentText]);
-const textHasContent = !!rawContent.trim();
+  /* ======================================================
+     ✅ IMPORTANT: These MUST live INSIDE the component
+  ====================================================== */
+  const rawContent = useMemo(() => String(report?.contentText || ""), [report?.contentText]);
+  const textHasContent = !!rawContent.trim();
 
-// ✅ MUST be defined before preview uses it
-const hasFullAccess = !!(
-  access?.hasFullAccess ??
-  access?.data?.hasFullAccess ??
-  access?.allowed ??
-  access?.canAccess ??
-  access?.hasAccess
-);
+  // ✅ MUST be defined before preview uses it
+  // ✅ include admin safety too
+  const hasFullAccess = !!(
+    isAdmin ||
+    access?.hasFullAccess ||
+    access?.data?.hasFullAccess ||
+    access?.allowed ||
+    access?.canAccess ||
+    access?.hasAccess
+  );
 
-// ✅ Gate only premium transcripts when user lacks full access
-const shouldGateTranscript = useMemo(() => {
-  if (!report) return false;
-  if (!report?.isPremium) return false;
-  if (!(isInst || isPublic)) return false;
-  return true;
-}, [report, isInst, isPublic]);
+  // ✅ Gate only premium transcripts when user lacks full access
+  const shouldGateTranscript = useMemo(() => {
+    if (!report) return false;
+    if (!report?.isPremium) return false;
+    if (!(isInst || isPublic)) return false;
+    return true;
+  }, [report, isInst, isPublic]);
 
-const previewPolicy = useMemo(() => getAccessPreviewPolicy(access), [access]);
+  const previewPolicy = useMemo(() => getAccessPreviewPolicy(access), [access]);
 
-// If HTML content + gated preview, render as formatted text preview to avoid broken tags.
-const gateSourceText = useMemo(() => {
-  if (!rawContent) return "";
-  return isProbablyHtml(rawContent) ? htmlToText(rawContent) : rawContent;
-}, [rawContent]);
+  // If HTML content + gated preview, render as formatted text preview to avoid broken tags.
+  const gateSourceText = useMemo(() => {
+    if (!rawContent) return "";
+    return isProbablyHtml(rawContent) ? htmlToText(rawContent) : rawContent;
+  }, [rawContent]);
 
-const preview = useMemo(() => {
-  const gating = shouldGateTranscript && !hasFullAccess && textHasContent;
+  const preview = useMemo(() => {
+    const gating = shouldGateTranscript && !hasFullAccess && textHasContent;
 
-  if (!gating) {
+    if (!gating) {
+      return {
+        gated: false,
+        reachedLimit: false,
+        renderAsHtml: isProbablyHtml(rawContent),
+        html: rawContent,
+        text: rawContent,
+      };
+    }
+
+    const paras = splitIntoParagraphs(gateSourceText);
+    const maxParas = previewPolicy.maxParas;
+    const maxChars = previewPolicy.maxChars;
+
+    let reached = false;
+    let previewText = "";
+
+    if (paras.length > 0) {
+      const slice = paras.slice(0, Math.max(1, maxParas));
+      previewText = slice.join("\n\n");
+      if (paras.length > maxParas) reached = true;
+    } else {
+      previewText = normalizeText(gateSourceText);
+    }
+
+    if (previewText.length > maxChars) {
+      previewText = previewText.slice(0, maxChars).trimEnd();
+      reached = true;
+    }
+
     return {
-      gated: false,
-      reachedLimit: false,
-      renderAsHtml: isProbablyHtml(rawContent),
-      html: rawContent,
-      text: rawContent,
+      gated: true,
+      reachedLimit: reached,
+      renderAsHtml: false,
+      html: "",
+      text: previewText,
     };
-  }
-
-  const paras = splitIntoParagraphs(gateSourceText);
-  const maxParas = previewPolicy.maxParas;
-  const maxChars = previewPolicy.maxChars;
-
-  let reached = false;
-  let previewText = "";
-
-  if (paras.length > 0) {
-    const slice = paras.slice(0, Math.max(1, maxParas));
-    previewText = slice.join("\n\n");
-    if (paras.length > maxParas) reached = true;
-  } else {
-    previewText = normalizeText(gateSourceText);
-  }
-
-  if (previewText.length > maxChars) {
-    previewText = previewText.slice(0, maxChars).trimEnd();
-    reached = true;
-  }
-
-  return {
-    gated: true,
-    reachedLimit: reached,
-    renderAsHtml: false,
-    html: "",
-    text: previewText,
-  };
-}, [shouldGateTranscript, hasFullAccess, textHasContent, rawContent, gateSourceText, previewPolicy]);
-
+  }, [shouldGateTranscript, hasFullAccess, textHasContent, rawContent, gateSourceText, previewPolicy]);
 
   const canRead =
     !!report &&
@@ -1334,10 +1338,9 @@ const preview = useMemo(() => {
     // cancel any in-flight search
     try {
       searchCtlRef.current?.abort?.();
-    } catch
-     {
-      //isIgnorable
-     }
+    } catch {
+      // ignore
+    }
     searchCtlRef.current = null;
 
     if (term.length < 2) {
@@ -1365,11 +1368,7 @@ const preview = useMemo(() => {
         if (reqId !== searchReqIdRef.current) return;
 
         const payload = unwrapApi(res);
-        const items = Array.isArray(payload?.items)
-          ? payload.items
-          : Array.isArray(payload)
-            ? payload
-            : [];
+        const items = Array.isArray(payload?.items) ? payload.items : Array.isArray(payload) ? payload : [];
 
         setSearchResults(items);
         setOpenResults(true);
@@ -1856,27 +1855,23 @@ const preview = useMemo(() => {
                 preview.gated && preview.reachedLimit ? "isPreviewGated" : "",
               ].join(" ")}
             >
-
-            {preview.renderAsHtml ? (
-              <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: preview.html }} />
-            ) : (
-              <CaseContentFormatted text={preview.text} />
-            )}
-
+              {preview.renderAsHtml ? (
+                <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: preview.html }} />
+              ) : (
+                <CaseContentFormatted text={preview.text} />
+              )}
             </div>
 
             {contentOpen && preview.gated && preview.reachedLimit ? (
               <SubscribeGateOverlay
                 access={access}
                 onGo={(url) => {
-                  // internal routes supported; external too
                   if (!url) return;
                   if (String(url).startsWith("http")) window.open(url, "_blank", "noreferrer");
                   else navigate(url);
                 }}
               />
             ) : null}
-
 
             {contentOpen && (
               <div className="lrr2Panel lrr2Panel--tight lrr2DbRelatedPanel">
