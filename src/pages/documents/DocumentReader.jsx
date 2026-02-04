@@ -8,9 +8,7 @@ import PdfViewer from "../../reader/PdfViewer";
 import SectionSummaryPanel from "../../components/reader/SectionSummaryPanel";
 import "../../styles/reader.css";
 
-// ✅ If you updated parseAiSummary.js as I gave you earlier, keep this import.
-// If you haven't updated that file yet, comment this import and the usage in onCopySummary.
-import { formatAiSummaryForCopy } from "../../reader/ai/parseAiSummary";
+import lawAfricaLogo from "../../assets/brand/lawafrica-logo.png";
 
 /** ---------------------------
  * Small helpers (pure)
@@ -29,6 +27,22 @@ function safeJsonParse(str, fallback) {
     return JSON.parse(str);
   } catch {
     return fallback;
+  }
+}
+
+function safeGetLS(key) {
+  try {
+    return window?.localStorage?.getItem(key) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function safeSetLS(key, value) {
+  try {
+    window?.localStorage?.setItem(key, value);
+  } catch {
+    // ignore
   }
 }
 
@@ -109,43 +123,6 @@ function collectAllNodeIds(nodes, depth = 0, out = new Set()) {
   return out;
 }
 
-// Helper
-function stripInlineMetaFromSummary(text) {
-  const raw = String(text || "");
-  if (!raw.trim()) return "";
-
-  // Removes common header/meta lines if they appear at the top of the summary text
-  const lines = raw.split(/\r?\n/);
-  const out = [];
-
-  let skipping = true;
-  for (const line of lines) {
-    const l = line.trim();
-
-    if (skipping) {
-      const isMetaLine =
-        /^used pages\s*:/i.test(l) ||
-        /^input chars\s*:/i.test(l) ||
-        /^cache\s*:/i.test(l) ||
-        /^warnings\s*$/i.test(l) ||
-        /^page range/i.test(l) ||
-        /^input text was truncated/i.test(l);
-
-      // skip blank lines while skipping meta
-      if (!l) continue;
-
-      if (isMetaLine) continue;
-
-      // first non-meta content starts here
-      skipping = false;
-    }
-
-    out.push(line);
-  }
-
-  return out.join("\n").trim();
-}
-
 /**
  * Filter tree by title, keeping ancestor chain for matches.
  * Returns a NEW tree (safe).
@@ -191,17 +168,20 @@ function OutlineTree({ nodes, depth = 0, expanded, activePage, pdfPageOffset, on
         const children = nodeChildren(n);
         const hasChildren = children.length > 0;
         const isOpen = expanded.has(id);
-
         const right = nodeRightLabel(n);
 
+        // Raw pages from ToC (printed/page labels)
         const startRaw = nodeStartPage(n);
         const endRaw = nodeEndPage(n);
 
+        // ✅ PDF page = printed page + offset
         const startPdf = startRaw != null ? startRaw + pdfPageOffset : null;
         const endPdf = endRaw != null ? endRaw + pdfPageOffset : null;
 
+        // Click target: prefer start page
         const jumpPage = startPdf;
 
+        // ✅ Range-active: active if activePage falls inside [startPdf..endPdf]
         const isActive = (() => {
           const p = Number(activePage);
           if (!Number.isFinite(p) || p <= 0) return false;
@@ -291,13 +271,13 @@ export default function DocumentReader() {
 
   const aliveRef = useRef(true);
 
-  function showToast(message, type = "success") {
+  const showToast = useCallback((message, type = "success") => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 2500);
-  }
+    window.setTimeout(() => setToast(null), 2500);
+  }, []);
 
   // ---------------------------------------------
-  // Outline state + PdfViewer API bridge
+  // ✅ Outline state + PdfViewer API bridge
   // ---------------------------------------------
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [outline, setOutline] = useState([]);
@@ -309,14 +289,11 @@ export default function DocumentReader() {
   const [activePage, setActivePage] = useState(null);
 
   const viewerApiRef = useRef(null);
+  const viewerUnsubRef = useRef(null); // ✅ unsubscribe for onPageChange if supported
   const mountedRef = useRef(false);
   const outlineAbortRef = useRef(null);
 
-  // ✅ page sync fix: support event-driven updates if PdfViewer exposes them
-  const pageSyncUnsubRef = useRef(null);
-  const pageSyncTimerRef = useRef(null);
-  const lastPageEmitRef = useRef(0);
-
+  // drawer width (desktop) persisted per browser
   const OUTLINE_WIDTH_KEY = "la_reader_outline_width";
   const OUTLINE_EXPANDED_KEY = useMemo(
     () => (Number.isFinite(docId) && docId > 0 ? `la_reader_outline_expanded_${docId}` : ""),
@@ -324,15 +301,15 @@ export default function DocumentReader() {
   );
 
   const [outlineWidth, setOutlineWidth] = useState(() => {
-    const raw = localStorage.getItem(OUTLINE_WIDTH_KEY);
+    const raw = safeGetLS(OUTLINE_WIDTH_KEY);
     const n = Number(raw);
     if (Number.isFinite(n) && n >= 260 && n <= 560) return n;
     return 340;
   });
 
   // =========================================================
-  // per-document PDF offset calibration (stored in localStorage)
-  // printed page -> PDF page uses: pdf = printed + offset
+  // ✅ V2: per-document PDF offset calibration (stored in localStorage)
+  // - printed page -> PDF page conversion uses: pdf = printed + offset
   // =========================================================
   const OFFSET_KEY = useMemo(
     () => (Number.isFinite(docId) && docId > 0 ? `la_reader_pdf_offset_${docId}` : ""),
@@ -346,26 +323,29 @@ export default function DocumentReader() {
   const [pdfPageOffset, setPdfPageOffset] = useState(0);
   const [offsetVerified, setOffsetVerified] = useState(false);
 
+  // Load offset per doc
   useEffect(() => {
     if (!OFFSET_KEY) return;
-    const raw = localStorage.getItem(OFFSET_KEY);
+    const raw = safeGetLS(OFFSET_KEY);
     const n = Number(raw);
     setPdfPageOffset(Number.isFinite(n) ? n : 0);
 
-    const vraw = localStorage.getItem(OFFSET_VERIFIED_KEY);
+    const vraw = safeGetLS(OFFSET_VERIFIED_KEY);
     setOffsetVerified(vraw === "1");
   }, [OFFSET_KEY, OFFSET_VERIFIED_KEY]);
 
+  // Persist offset
   useEffect(() => {
     if (!OFFSET_KEY) return;
-    localStorage.setItem(OFFSET_KEY, String(pdfPageOffset));
+    safeSetLS(OFFSET_KEY, String(pdfPageOffset));
   }, [OFFSET_KEY, pdfPageOffset]);
 
   useEffect(() => {
     if (!OFFSET_VERIFIED_KEY) return;
-    localStorage.setItem(OFFSET_VERIFIED_KEY, offsetVerified ? "1" : "0");
+    safeSetLS(OFFSET_VERIFIED_KEY, offsetVerified ? "1" : "0");
   }, [OFFSET_VERIFIED_KEY, offsetVerified]);
 
+  // Apply drawer width CSS var
   useEffect(() => {
     document.documentElement.style.setProperty("--reader-outline-width", `${outlineWidth}px`);
     return () => {
@@ -374,11 +354,12 @@ export default function DocumentReader() {
   }, [outlineWidth]);
 
   // =========================================================
-  // Summary panel state
+  // ✅ V2: Summary panel state
   // =========================================================
   const [summaryPanelOpen, setSummaryPanelOpen] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
 
+  // ✅ Selected node + AI summary state
   const [selectedTocNode, setSelectedTocNode] = useState(null);
   const [sectionSummaryType, setSectionSummaryType] = useState("basic"); // "basic" | "extended"
   const [sectionSummaryLoading, setSectionSummaryLoading] = useState(false);
@@ -387,14 +368,18 @@ export default function DocumentReader() {
   const [sectionSummaryMeta, setSectionSummaryMeta] = useState(null);
   const lastSummaryKeyRef = useRef("");
 
+  // =========================================================
+  // ✅ Remember last summary per document (localStorage)
+  // =========================================================
   const SUMMARY_LAST_KEY = useMemo(
     () => (Number.isFinite(docId) && docId > 0 ? `la_reader_last_summary_${docId}` : ""),
     [docId]
   );
 
+  // Load last summary when doc opens
   useEffect(() => {
     if (!SUMMARY_LAST_KEY) return;
-    const raw = localStorage.getItem(SUMMARY_LAST_KEY);
+    const raw = safeGetLS(SUMMARY_LAST_KEY);
     const data = safeJsonParse(raw || "null", null);
     if (!data) return;
 
@@ -406,6 +391,7 @@ export default function DocumentReader() {
     }
   }, [SUMMARY_LAST_KEY]);
 
+  // Persist last summary (whenever summary changes)
   useEffect(() => {
     if (!SUMMARY_LAST_KEY) return;
     if (!sectionSummaryText || !sectionSummaryText.trim()) return;
@@ -426,15 +412,18 @@ export default function DocumentReader() {
       savedAt: new Date().toISOString(),
     };
 
-    localStorage.setItem(SUMMARY_LAST_KEY, JSON.stringify(payload));
+    safeSetLS(SUMMARY_LAST_KEY, JSON.stringify(payload));
   }, [SUMMARY_LAST_KEY, sectionSummaryType, sectionSummaryText, sectionSummaryMeta, selectedTocNode]);
 
-  // Advanced manual summary
+  // =========================================================
+  // ✅ V2: Advanced manual page summary (Printed or PDF mode)
+  // =========================================================
   const [advancedEnabled, setAdvancedEnabled] = useState(false);
   const [pageMode, setPageMode] = useState("printed"); // "printed" | "pdf"
   const [manualStart, setManualStart] = useState("");
   const [manualEnd, setManualEnd] = useState("");
 
+  // Span clamps (client-side; backend also clamps)
   const BASIC_MAX_SPAN = 6;
   const EXTENDED_MAX_SPAN = 12;
 
@@ -444,16 +433,37 @@ export default function DocumentReader() {
       mountedRef.current = false;
       safeAbort(outlineAbortRef.current);
       try {
-        pageSyncUnsubRef.current?.();
+        if (typeof viewerUnsubRef.current === "function") viewerUnsubRef.current();
       } catch {
         // ignore
       }
-      pageSyncUnsubRef.current = null;
-      if (pageSyncTimerRef.current) {
-        window.clearInterval(pageSyncTimerRef.current);
-        pageSyncTimerRef.current = null;
-      }
+      viewerUnsubRef.current = null;
     };
+  }, []);
+
+  // ✅ Register PdfViewer API + subscribe to page change if supported
+  const handleRegisterApi = useCallback((apiObj) => {
+    viewerApiRef.current = apiObj;
+
+    // cleanup old
+    try {
+      if (typeof viewerUnsubRef.current === "function") viewerUnsubRef.current();
+    } catch {
+      // ignore
+    }
+    viewerUnsubRef.current = null;
+
+    // if viewer supports event-driven page change, use it
+    if (apiObj?.onPageChange) {
+      try {
+        viewerUnsubRef.current = apiObj.onPageChange((p) => {
+          const n = Number(p);
+          if (Number.isFinite(n) && n > 0) setActivePage(n);
+        });
+      } catch {
+        // ignore
+      }
+    }
   }, []);
 
   const openOutline = useCallback(() => setOutlineOpen(true), []);
@@ -463,91 +473,8 @@ export default function DocumentReader() {
   const closeSummaryPanel = useCallback(() => setSummaryPanelOpen(false), []);
   const toggleSummaryExpanded = useCallback(() => setSummaryExpanded((p) => !p), []);
 
-  // ✅ page sync “source of truth”: emitActivePage()
-  const emitActivePage = useCallback((p) => {
-    const n = Number(p);
-    if (!Number.isFinite(n) || n <= 0) return;
-
-    // tiny throttle to avoid re-render storms while scrolling
-    const now = Date.now();
-    if (now - lastPageEmitRef.current < 60) return;
-    lastPageEmitRef.current = now;
-
-    setActivePage((prev) => (prev === n ? prev : n));
-  }, []);
-
-  // ✅ PdfViewer API bridge (also installs stronger page-change sync if supported)
-  const handleRegisterApi = useCallback(
-    (apiObj) => {
-      viewerApiRef.current = apiObj;
-
-      // cleanup previous listeners/timers
-      try {
-        pageSyncUnsubRef.current?.();
-      } catch {
-        // ignore
-      }
-      pageSyncUnsubRef.current = null;
-
-      if (pageSyncTimerRef.current) {
-        window.clearInterval(pageSyncTimerRef.current);
-        pageSyncTimerRef.current = null;
-      }
-
-      // 1) Prefer event-driven updates if PdfViewer exposes it.
-      // Supported shapes (we try all, safely):
-      // - apiObj.onPageChange((page)=>{}) -> returns unsubscribe
-      // - apiObj.subscribe("pagechange", (page)=>{}) -> returns unsubscribe
-      // - apiObj.subscribe({ type:"pagechange", handler }) -> returns unsubscribe
-      let unsub = null;
-
-      try {
-        if (typeof apiObj?.onPageChange === "function") {
-          const ret = apiObj.onPageChange((page) => emitActivePage(page));
-          if (typeof ret === "function") unsub = ret;
-        }
-      } catch {
-        // ignore
-      }
-
-      if (!unsub) {
-        try {
-          if (typeof apiObj?.subscribe === "function") {
-            const ret1 = apiObj.subscribe("pagechange", (page) => emitActivePage(page));
-            if (typeof ret1 === "function") unsub = ret1;
-
-            if (!unsub) {
-              const ret2 = apiObj.subscribe({ type: "pagechange", handler: (page) => emitActivePage(page) });
-              if (typeof ret2 === "function") unsub = ret2;
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      if (unsub) {
-        pageSyncUnsubRef.current = unsub;
-      }
-
-      // 2) Always keep a polling fallback (covers scroll cases where events are not emitted)
-      pageSyncTimerRef.current = window.setInterval(() => {
-        const page = viewerApiRef.current?.getCurrentPage?.();
-        emitActivePage(page);
-      }, 200);
-
-      // initial snapshot
-      try {
-        const page = apiObj?.getCurrentPage?.();
-        emitActivePage(page);
-      } catch {
-        // ignore
-      }
-    },
-    [emitActivePage]
-  );
-
-  // Calibrate offset from ToC click
+  // ✅ Calibrate offset from a ToC click:
+  // offset = (pdfPage we jump to) - (printed start page from ToC)
   const calibrateOffsetFromTocNode = useCallback(
     (node, pdfPage) => {
       const printedStart = nodeStartPage(node);
@@ -566,10 +493,10 @@ export default function DocumentReader() {
       setOffsetVerified(true);
       showToast(`Offset calibrated: ${nextOffset >= 0 ? `+${nextOffset}` : nextOffset}`, "success");
     },
-    [setPdfPageOffset, setOffsetVerified]
+    [showToast]
   );
 
-  // Preview clamp + jump
+  // ✅ Preview clamp + jump (also sets selected node now)
   const onOutlineClick = useCallback(
     (node, pageNumber) => {
       setSelectedTocNode(node);
@@ -577,6 +504,7 @@ export default function DocumentReader() {
       const p = Number(pageNumber);
       if (!Number.isFinite(p) || p <= 0) return;
 
+      // Preview clamp
       if (!access?.hasFullAccess && Number.isFinite(access?.previewMaxPages)) {
         if (p > access.previewMaxPages) {
           showToast(
@@ -592,12 +520,9 @@ export default function DocumentReader() {
       if (ok) {
         calibrateOffsetFromTocNode(node, p);
         setOutlineOpen(false);
-
-        // force UI page to update immediately after jump
-        emitActivePage(p);
       }
     },
-    [access, calibrateOffsetFromTocNode, emitActivePage]
+    [access, calibrateOffsetFromTocNode, showToast]
   );
 
   const toggleOutlineNode = useCallback((idStr) => {
@@ -609,41 +534,25 @@ export default function DocumentReader() {
     });
   }, []);
 
-  const allNodeIds = useMemo(() => collectAllNodeIds(outline), [outline]);
-
-  const allExpanded = useMemo(() => {
-    if (!allNodeIds.size) return false;
-    for (const idStr of allNodeIds) {
-      if (!outlineExpanded.has(idStr)) return false;
-    }
-    return true;
-  }, [allNodeIds, outlineExpanded]);
-
   const toggleExpandCollapseAll = useCallback(() => {
-    if (!outline?.length) return;
-
+    const allIds = collectAllNodeIds(outline);
     setOutlineExpanded((prev) => {
-      let isAll = true;
-      for (const idStr of allNodeIds) {
-        if (!prev.has(idStr)) {
-          isAll = false;
-          break;
-        }
-      }
-      return isAll ? new Set() : new Set(allNodeIds);
+      const isAllExpanded = prev.size > 0 && prev.size >= allIds.size;
+      return isAllExpanded ? new Set() : allIds;
     });
-  }, [outline, allNodeIds]);
+  }, [outline]);
 
   // Persist expanded state per document
   useEffect(() => {
     if (!OUTLINE_EXPANDED_KEY) return;
     const arr = Array.from(outlineExpanded.values());
-    localStorage.setItem(OUTLINE_EXPANDED_KEY, JSON.stringify(arr));
+    safeSetLS(OUTLINE_EXPANDED_KEY, JSON.stringify(arr));
   }, [OUTLINE_EXPANDED_KEY, outlineExpanded]);
 
+  // Restore expanded state when doc changes (after outline loads)
   const restoreExpandedForDoc = useCallback(() => {
     if (!OUTLINE_EXPANDED_KEY) return;
-    const raw = localStorage.getItem(OUTLINE_EXPANDED_KEY);
+    const raw = safeGetLS(OUTLINE_EXPANDED_KEY);
     const arr = safeJsonParse(raw || "[]", []);
     if (Array.isArray(arr) && arr.length) {
       setOutlineExpanded(new Set(arr.map(String)));
@@ -652,9 +561,25 @@ export default function DocumentReader() {
     }
   }, [OUTLINE_EXPANDED_KEY]);
 
+  // Persist width
   useEffect(() => {
-    localStorage.setItem(OUTLINE_WIDTH_KEY, String(outlineWidth));
+    safeSetLS(OUTLINE_WIDTH_KEY, String(outlineWidth));
   }, [outlineWidth]);
+
+  // ✅ Active page tracking fallback (ONLY if viewer has no onPageChange)
+  useEffect(() => {
+    if (viewerApiRef.current?.onPageChange) return;
+
+    const t = window.setInterval(() => {
+      const p = viewerApiRef.current?.getCurrentPage?.();
+      const n = Number(p);
+      if (Number.isFinite(n) && n > 0) {
+        setActivePage((prev) => (prev === n ? prev : n));
+      }
+    }, 500);
+
+    return () => window.clearInterval(t);
+  }, []);
 
   // Resizable drawer drag
   const draggingRef = useRef(false);
@@ -684,7 +609,7 @@ export default function DocumentReader() {
     document.body.classList.remove("readerOutlineResizing");
   }, []);
 
-  // Fetch Outline
+  // ✅ Always fetch Outline when docId changes
   const fetchOutline = useCallback(async () => {
     if (!Number.isFinite(docId) || docId <= 0) return;
 
@@ -729,19 +654,21 @@ export default function DocumentReader() {
 
   useEffect(() => {
     if (!Number.isFinite(docId) || docId <= 0) return;
-
     setOutlineQuery("");
     setActivePage(null);
 
+    // reset summary state when doc changes
     setSectionSummaryError("");
     setSectionSummaryLoading(false);
     lastSummaryKeyRef.current = "";
 
+    // reset advanced UI
     setAdvancedEnabled(false);
     setPageMode("printed");
     setManualStart("");
     setManualEnd("");
 
+    // close panel on doc switch
     setSummaryPanelOpen(false);
     setSummaryExpanded(false);
 
@@ -784,9 +711,9 @@ export default function DocumentReader() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Access + Meta load
+  // Access + meta loading
   useEffect(() => {
-    aliveRef.current = true;
+    aliveRef.current = true; // ✅ important: reset on each run
     let cancelled = false;
 
     function sleep(ms) {
@@ -920,7 +847,7 @@ export default function DocumentReader() {
       setAccess(null);
       setLoadingAccess(false);
       setLoadingMeta(false);
-      return;
+      return () => {};
     }
 
     loadAccessOnlyWithRetryIfPaid().then(() => {
@@ -931,10 +858,10 @@ export default function DocumentReader() {
       cancelled = true;
       aliveRef.current = false;
     };
-  }, [docId, justPaid, paidProvider]);
+  }, [docId, justPaid, paidProvider, showToast]);
 
   // =========================================================
-  // AI Summary actions (ToC -> payload)
+  // ✅ AI Summary actions (ToC -> payload)
   // =========================================================
   const buildSummaryPayloadFromNode = useCallback(
     (node, type, forceRegenerate) => {
@@ -986,7 +913,7 @@ export default function DocumentReader() {
         return;
       }
 
-      setSectionSummaryText(stripInlineMetaFromSummary(summary));
+      setSectionSummaryText(String(summary));
 
       const fromCache = data?.fromCache ?? data?.FromCache ?? false;
       const usedStart = data?.startPage ?? data?.StartPage ?? null;
@@ -1010,7 +937,7 @@ export default function DocumentReader() {
 
       showToast(fromCache ? "Loaded from cache" : "Summary generated", "success");
     },
-    [setSectionSummaryMeta, setSectionSummaryText]
+    [showToast]
   );
 
   const runSectionSummary = useCallback(
@@ -1031,9 +958,7 @@ export default function DocumentReader() {
         return;
       }
 
-      const key = `${payload.legalDocumentId}|${payload.tocEntryId ?? ""}|${payload.type}|${
-        payload.startPage ?? ""
-      }-${payload.endPage ?? ""}|force=${payload.forceRegenerate ? "1" : "0"}`;
+      const key = `${payload.legalDocumentId}|${payload.tocEntryId ?? ""}|${payload.type}|${payload.startPage ?? ""}-${payload.endPage ?? ""}|force=${payload.forceRegenerate ? "1" : "0"}`;
       if (sectionSummaryLoading && lastSummaryKeyRef.current === key) return;
       lastSummaryKeyRef.current = key;
 
@@ -1042,7 +967,6 @@ export default function DocumentReader() {
       try {
         const data = await summarizeLegalDocSection(payload);
         applySummaryResponse(payload, data);
-
         if (openPanel) setSummaryPanelOpen(true);
       } catch (err) {
         console.error("Section summary failed:", err);
@@ -1055,21 +979,21 @@ export default function DocumentReader() {
         setSectionSummaryLoading(false);
       }
     },
-    [applySummaryResponse, buildSummaryPayloadFromNode, selectedTocNode, sectionSummaryLoading]
+    [
+      applySummaryResponse,
+      buildSummaryPayloadFromNode,
+      selectedTocNode,
+      sectionSummaryLoading,
+      setSummaryPanelOpen,
+    ]
   );
 
   const onCopySummary = useCallback(async () => {
     if (!sectionSummaryText) return;
-
-    const textToCopy =
-      typeof formatAiSummaryForCopy === "function"
-        ? formatAiSummaryForCopy(sectionSummaryText)
-        : sectionSummaryText;
-
-    const ok = await safeCopyToClipboard(textToCopy);
+    const ok = await safeCopyToClipboard(sectionSummaryText);
     if (ok) showToast("Copied ✅", "success");
     else showToast("Copy failed (browser blocked clipboard)", "error");
-  }, [sectionSummaryText]);
+  }, [sectionSummaryText, showToast]);
 
   const onRegenerateSummary = useCallback(() => {
     runSectionSummary(sectionSummaryType, { force: true, openPanel: true });
@@ -1080,14 +1004,13 @@ export default function DocumentReader() {
       const t = nextType === "extended" ? "extended" : "basic";
       if (t === sectionSummaryType) return;
       setSectionSummaryType(t);
-
       if (selectedTocNode) runSectionSummary(t, { force: false, openPanel: true });
     },
     [runSectionSummary, sectionSummaryType, selectedTocNode]
   );
 
   // =========================================================
-  // Manual range summary helpers
+  // ✅ V2: Manual range → compute effective PDF pages + run summary
   // =========================================================
   function parsePositiveInt(raw) {
     const n = Number(String(raw || "").trim());
@@ -1155,17 +1078,12 @@ export default function DocumentReader() {
     }
 
     if (!Number.isFinite(startPdf) || startPdf <= 0 || !Number.isFinite(endPdf) || endPdf <= 0) {
-      return {
-        ok: false,
-        label: labelPrefix,
-        clampNote: "Computed PDF pages are invalid.",
-        startPdf: null,
-        endPdf: null,
-      };
+      return { ok: false, label: labelPrefix, clampNote: "Computed PDF pages are invalid.", startPdf: null, endPdf: null };
     }
 
     const endPreviewClamped = clampToPreview(endPdf);
-    const previewNote = endPreviewClamped !== endPdf ? `Clamped to preview max page ${access?.previewMaxPages}.` : "";
+    const previewNote =
+      endPreviewClamped !== endPdf ? `Clamped to preview max page ${access?.previewMaxPages}.` : "";
 
     return { ok: true, label: labelPrefix, clampNote: previewNote, startPdf, endPdf: endPreviewClamped };
   }, [manualStart, manualEnd, pageMode, offsetVerified, pdfPageOffset, access]);
@@ -1232,7 +1150,7 @@ export default function DocumentReader() {
     effectiveManual.endPdf != null &&
     (pageMode !== "printed" || offsetVerified);
 
-  // Gate UI only on access
+  // ✅ Gate UI only on access
   if (loadingAccess) {
     return (
       <div className="reader-shell readerCenter">
@@ -1257,7 +1175,8 @@ export default function DocumentReader() {
 
   // HARD BLOCK overlay
   if (blocked) {
-    const canPay = canPurchaseIndividually === true && offer?.allowPublicPurchase === true && offer?.alreadyOwned !== true;
+    const canPay =
+      canPurchaseIndividually === true && offer?.allowPublicPurchase === true && offer?.alreadyOwned !== true;
 
     const primaryLabel = (() => {
       if (!canPurchaseIndividually) return "Purchases disabled";
@@ -1279,7 +1198,8 @@ export default function DocumentReader() {
 
             {!canPurchaseIndividually && (
               <div className="readerBlockWarn">
-                {purchaseDisabledReason || "Purchases are disabled for institution accounts. Please contact your administrator."}
+                {purchaseDisabledReason ||
+                  "Purchases are disabled for institution accounts. Please contact your administrator."}
               </div>
             )}
 
@@ -1310,7 +1230,9 @@ export default function DocumentReader() {
                 : "Purchasing is disabled for your institution account. Please contact your administrator."}
             </p>
 
-            {canPay && <p className="preview-lock-footnote readerTip">Tip: Go to the details page to complete the purchase.</p>}
+            {canPay && (
+              <p className="preview-lock-footnote readerTip">Tip: Go to the details page to complete the purchase.</p>
+            )}
           </div>
         </div>
       </div>
@@ -1340,15 +1262,14 @@ export default function DocumentReader() {
 
   const maxPages = access.hasFullAccess ? null : access.previewMaxPages;
 
-  const pageLabel = Number.isFinite(activePage) && activePage > 0 ? `Page ${activePage}` : "—";
-
   return (
     <div className="reader-layout" onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp}>
       {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
 
-      {/* ✅ Summary Panel */}
+      {/* ✅ V2 Summary Panel */}
       <SectionSummaryPanel
         open={summaryPanelOpen}
+        logoSrc={lawAfricaLogo}
         title={selectedTocNode ? nodeTitle(selectedTocNode, "") : "Selected section"}
         type={sectionSummaryType}
         loading={sectionSummaryLoading}
@@ -1363,41 +1284,27 @@ export default function DocumentReader() {
         onSwitchType={onSwitchSummaryType}
       />
 
-      {/* Topbar (premium-ish layout; CSS later) */}
+      {/* Mobile topbar */}
       <div className="readerpage-topbar">
-        <div className="readerTopbarLeft">
-          <button className="readerpage-tocbtn" type="button" onClick={openOutline} title="Table of Contents">
-            ☰ ToC
-          </button>
+        <button className="readerpage-tocbtn" type="button" onClick={openOutline} title="Table of Contents">
+          ☰ ToC
+        </button>
 
-          <div className="readerTopbarMeta" title={`Document ${docId}`}>
-            <div className="readerpage-title">Reader</div>
-            <div className="readerTopbarSub">
-              <span className="readerTopbarPage">{pageLabel}</span>
-              {!access?.hasFullAccess && Number.isFinite(access?.previewMaxPages) ? (
-                <span className="readerTopbarSep">·</span>
-              ) : null}
-              {!access?.hasFullAccess && Number.isFinite(access?.previewMaxPages) ? (
-                <span className="readerTopbarPreview">Preview up to {access.previewMaxPages}</span>
-              ) : null}
-            </div>
-          </div>
+        <div className="readerpage-title" title={`Document ${docId}`}>
+          Reader
         </div>
 
-        <div className="readerTopbarRight">
-          <button
-            className="readerpage-aiBtn"
-            type="button"
-            onClick={openSummaryPanel}
-            disabled={!sectionSummaryText}
-            title={sectionSummaryText ? "Open Summary" : "Generate a summary first (ToC → Basic/Extended)"}
-          >
-            Summary
-          </button>
-        </div>
+        <button
+          className="readerpage-aiBtn"
+          type="button"
+          onClick={openSummaryPanel}
+          disabled={!sectionSummaryText}
+          title={sectionSummaryText ? "Open AI summary" : "Generate a summary first (ToC → Basic/Extended)"}
+        >
+          AI
+        </button>
       </div>
 
-      {/* Backdrop (mobile) */}
       {outlineOpen && <div className="readerpage-tocBackdrop" onClick={closeOutline} />}
 
       {/* Drawer / sidebar */}
@@ -1405,26 +1312,24 @@ export default function DocumentReader() {
         <div className="readerpage-tocHeader">
           <div className="readerpage-tocTitle">Table of Contents</div>
 
-          {/* ✅ Compact header actions: icon toggle + Summary (no wrap) */}
           <div className="readerOutlineHeaderActions">
             <button
-              className="readerOutlineIconBtn"
+              className="readerOutlineMiniBtn"
               type="button"
               onClick={toggleExpandCollapseAll}
-              title={allExpanded ? "Collapse all" : "Expand all"}
-              aria-label={allExpanded ? "Collapse all" : "Expand all"}
+              title={outlineExpanded.size ? "Collapse all" : "Expand all"}
             >
-              {allExpanded ? "▾" : "▸"}
+              {outlineExpanded.size ? "Collapse" : "Expand"}
             </button>
 
             <button
-              className="readerOutlineMiniBtn laAccent readerOutlineSummaryBtn"
+              className="readerOutlineMiniBtn laAccent"
               type="button"
               onClick={openSummaryPanel}
               disabled={!sectionSummaryText}
-              title={sectionSummaryText ? "Open summary" : "Generate a summary first"}
+              title={sectionSummaryText ? "Open AI summary panel" : "Generate a summary first"}
             >
-              Summary
+              Open summary
             </button>
           </div>
 
@@ -1527,7 +1432,7 @@ export default function DocumentReader() {
             </div>
           )}
 
-          {/* ✅ AI summary (controls only — no used-pages / no raw text preview) */}
+          {/* AI Summary box (inline) */}
           <div className="laInlineTocSummary">
             <div className="laInlineTocSummaryTop">
               <div className="laInlineTocSummaryTitle">AI · Section summary</div>
@@ -1536,7 +1441,7 @@ export default function DocumentReader() {
                 <button
                   type="button"
                   className="readerOutlineMiniBtn"
-                  disabled={!sectionSummaryText || sectionSummaryLoading}
+                  disabled={!selectedTocNode || !sectionSummaryText}
                   onClick={onCopySummary}
                   title="Copy summary"
                 >
@@ -1548,7 +1453,7 @@ export default function DocumentReader() {
                   className="readerOutlineMiniBtn laAccent"
                   disabled={!sectionSummaryText}
                   onClick={openSummaryPanel}
-                  title={sectionSummaryText ? "Open summary panel" : "Generate a summary first"}
+                  title="Open summary panel"
                 >
                   Open
                 </button>
@@ -1600,14 +1505,37 @@ export default function DocumentReader() {
 
             {sectionSummaryError ? <div className="laInlineError">{sectionSummaryError}</div> : null}
 
-            {sectionSummaryText ? (
-              <div className="laInlineMuted" style={{ marginTop: 8 }}>
-                Summary ready. Click <strong>Open</strong> to view.
+            {sectionSummaryMeta ? (
+              <div className="laInlineMetaCard">
+                <div className="laInlineMetaRow">
+                  <div>
+                    <strong>Used pages:</strong> {sectionSummaryMeta.usedPages}
+                  </div>
+                  <div>
+                    <strong>Input chars:</strong> {sectionSummaryMeta.inputCharCount}
+                  </div>
+                  <div>
+                    <strong>Cache:</strong> {sectionSummaryMeta.fromCache ? "yes" : "no"}
+                  </div>
+                </div>
+
+                {sectionSummaryMeta.warnings?.length ? (
+                  <div className="laInlineWarnings">
+                    <div className="laInlineWarningsTitle">Warnings</div>
+                    <ul className="laInlineWarningsList">
+                      {sectionSummaryMeta.warnings.map((w, i) => (
+                        <li key={`${i}-${w}`}>{w}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </div>
             ) : null}
+
+            {sectionSummaryText ? <div className="laInlineSummaryPreview">{sectionSummaryText}</div> : null}
           </div>
 
-          {/* Advanced manual */}
+          {/* Advanced summary (manual pages) */}
           <div className="laInlineAdvanced">
             <div className="laInlineAdvancedHeader">
               <div className="laInlineAdvancedTitle">Advanced summary</div>
@@ -1622,7 +1550,12 @@ export default function DocumentReader() {
               <div className="laInlineAdvancedBody">
                 <div className="laInlineRadios">
                   <label className="laInlineRadio">
-                    <input type="radio" name="pageMode" checked={pageMode === "printed"} onChange={() => setPageMode("printed")} />
+                    <input
+                      type="radio"
+                      name="pageMode"
+                      checked={pageMode === "printed"}
+                      onChange={() => setPageMode("printed")}
+                    />
                     Printed pages (recommended)
                   </label>
 
@@ -1693,7 +1626,6 @@ export default function DocumentReader() {
                     className="outline-btn"
                     disabled={!canRunManual || sectionSummaryLoading}
                     onClick={() => runManualSectionSummary("basic")}
-                    title="Generate basic summary"
                   >
                     {sectionSummaryLoading && sectionSummaryType === "basic" ? "Basic…" : "Basic"}
                   </button>
@@ -1703,7 +1635,6 @@ export default function DocumentReader() {
                     className="outline-btn"
                     disabled={!canRunManual || sectionSummaryLoading}
                     onClick={() => runManualSectionSummary("extended")}
-                    title="Generate extended summary"
                   >
                     {sectionSummaryLoading && sectionSummaryType === "extended" ? "Extended…" : "Extended"}
                   </button>
