@@ -1,10 +1,9 @@
 // src/pages/dashboard/LawReportReader.jsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../../api/client";
 import { getAuthClaims } from "../../auth/auth";
 import "../../styles/lawReportReader.css";
-import { useCallback } from "react"; // ensure this is in your imports at top
 
 /* =========================
    Auth helpers
@@ -96,14 +95,6 @@ function getHasFullAccess(access) {
   return access?.hasFullAccess === true || access?.data?.hasFullAccess === true;
 }
 
-function getIsAiAllowed(report, access, isAdmin) {
-  if (isAdmin) return true;
-  if (!report) return false;
-
-  const premium = getReportIsPremium(report);
-  if (!premium) return true; // non-premium → AI allowed
-  return getHasFullAccess(access); // premium → subscribers only
-}
 
 function getAccessPreviewPolicy(access) {
   const maxChars = pickFirstNumber(
@@ -1358,22 +1349,27 @@ export default function LawReportReader() {
   ]);
 
   // ✅ EXACT condition: show message when preview ended
-  const showTranscriptGate = useMemo(() => {
-    return !!(isPremium && !hasFullAccess && preview.gated && preview.reachedLimit);
-  }, [isPremium, hasFullAccess, preview.gated, preview.reachedLimit]);
+const showTranscriptGate = useMemo(() => {
+  return !!(isPremiumLockedForUser && preview.gated && preview.reachedLimit);
+}, [isPremiumLockedForUser, preview.gated, preview.reachedLimit]);
 
-  // ✅ AI allowed logic
-  const aiAllowed = useMemo(
-    () => getIsAiAllowed(report, access, isAdmin),
-    [report, access, isAdmin]
-  );
+// Premium access context
+const isPremiumLockedForUser = useMemo(() => {
+  // Only enforce lock for normal logged-in categories you’re checking (public/institution),
+  // admin bypasses.
+  if (isAdmin) return false;
+  if (!isPremium) return false;
+  return (isInst || isPublic) && !hasFullAccess;
+}, [isAdmin, isPremium, isInst, isPublic, hasFullAccess]);
 
-  // ✅ IMPORTANT: enable AI panel for non-premium OR full access OR admin
-  const aiPanelEnabled = useMemo(() => {
-    if (isAdmin) return true;
-    if (!isPremium) return true;
-    return hasFullAccess;
-  }, [isAdmin, isPremium, hasFullAccess]);
+// AI tab should be enabled ONLY when user has access
+const aiTabEnabled = useMemo(() => {
+  if (isAdmin) return true;
+  if (!isPremium) return true;
+  // Avoid flicker while access is loading: keep it locked until access confirms.
+  if (accessLoading) return false;
+  return hasFullAccess;
+}, [isAdmin, isPremium, accessLoading, hasFullAccess]);
 
   const fsClass = useMemo(() => {
     const n = Math.round(fontScale * 100);
@@ -1990,7 +1986,7 @@ export default function LawReportReader() {
           {isPremium && !hasFullAccess ? <span className="lrr2TabBadge lock">Locked</span> : null}
         </button>
 
-        {aiAllowed ? (
+        {aiTabEnabled ? (
           <button
             type="button"
             role="tab"
@@ -2009,29 +2005,29 @@ export default function LawReportReader() {
             role="tab"
             aria-selected={false}
             className="lrr2Tab isDisabled"
-            onClick={() => {}}
             disabled
             title="LegalAI is available to subscribers only"
           >
             LegalAI Summary <span className="lrr2TabBadge lock">Locked</span>
           </button>
         )}
+
       </div>
 
       <section className="lrr2Content">
-        {view === "ai" ? (
-          aiAllowed ? (
-            <LawReportAiSummaryPanel
-              lawReportId={reportId}
-              digestTitle={title}
-              courtLabel={report?.court || ""}
-              onOpenRelated={(rid) => navigate(`/dashboard/law-reports/${rid}`)}
-              enabled={aiPanelEnabled}
-            />
-          ) : (
-            <AiLockedPanel access={access} onGo={goCta} />
-          )
-        ) : !textHasContent ? (
+    {view === "ai" ? (
+      aiTabEnabled ? (
+        <LawReportAiSummaryPanel
+          lawReportId={reportId}
+          digestTitle={title}
+          courtLabel={report?.court || ""}
+          onOpenRelated={(rid) => navigate(`/dashboard/law-reports/${rid}`)}
+          enabled={true}
+        />
+      ) : (
+        <AiLockedPanel access={access} onGo={goCta} />
+      )
+    ) : !textHasContent ? (
           <div className="lrr2Empty">This report has no content yet.</div>
         ) : (
           <article className="lrr2Article">
@@ -2103,7 +2099,7 @@ export default function LawReportReader() {
               </div>
             </div>
 
-            {isPremium && !hasFullAccess ? <PremiumLockHero access={access} onGo={goCta} /> : null}
+            {isPremiumLockedForUser ? <PremiumLockHero access={access} onGo={goCta} /> : null}
 
             {/* ✅ Inline notice (inside transcript area) */}
             {contentOpen && showTranscriptGate ? (
