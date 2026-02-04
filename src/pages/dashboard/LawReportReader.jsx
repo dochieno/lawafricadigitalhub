@@ -1180,7 +1180,6 @@ function LawReportAiSummaryPanel({ lawReportId, digestTitle, courtLabel, onOpenR
   );
 }
 
-
 export default function LawReportReader() {
   const { id } = useParams();
   const navigate = useNavigate();
