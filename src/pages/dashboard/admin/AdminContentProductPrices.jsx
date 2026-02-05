@@ -96,7 +96,7 @@ export default function AdminContentProductPrices() {
       setLoading(true);
       try {
         // ✅ matches controller: GET /api/admin/content-products
-        const res = await api.get("/api/admin/content-products");
+        const res = await api.get("/admin/content-products")
         const list = Array.isArray(res?.data) ? res.data : [];
         const normalized = list.map((p) => ({
           id: p.id ?? p.Id,
@@ -133,7 +133,7 @@ export default function AdminContentProductPrices() {
       setLoading(true);
       try {
         // ✅ matches controller: GET /api/admin/content-products/{id}/prices
-        const res = await api.get(`/api/admin/content-products/${Number(selectedProductId)}/prices`);
+        const res = await api.get(`/admin/content-products/${Number(selectedProductId)}/prices`)
         const list = Array.isArray(res?.data) ? res.data : [];
         const normalized = list.map((x) => ({
           id: x.id ?? x.Id,
@@ -267,7 +267,7 @@ export default function AdminContentProductPrices() {
 
       if (mode === "create") {
         // ✅ matches controller: POST /api/admin/content-products/{id}/prices
-        const res = await api.post(`/api/admin/content-products/${productId}/prices`, payload);
+        const res = api.post(`/admin/content-products/${productId}/prices`, payload)
         const created = res?.data;
 
         const row = {
@@ -287,7 +287,7 @@ export default function AdminContentProductPrices() {
       } else {
         // ✅ matches controller: PUT /api/admin/content-products/{id}/prices/{priceId}
         const priceId = Number(form.id);
-        const res = await api.put(`/api/admin/content-products/${productId}/prices/${priceId}`, payload);
+        const res = await api.put(`/admin/content-products/${productId}/prices/${priceId}`, payload);
         const updated = res?.data;
 
         const nextRow = {
@@ -327,7 +327,7 @@ export default function AdminContentProductPrices() {
     try {
       // ✅ matches controller: PATCH /api/admin/content-products/{id}/prices/{priceId}/active
       await api.patch(
-        `/api/admin/content-products/${Number(selectedProductId)}/prices/${row.id}/active`,
+        `/admin/content-products/${Number(selectedProductId)}/prices/${row.id}/active`,
         { isActive: next }
       );
 
