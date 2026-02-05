@@ -319,3 +319,50 @@
   justify-content: flex-end;
   gap: 10px;
 }
+/* =======================================================
+   PATCH: AdminContentProductPrices polish (append)
+   ======================================================= */
+
+/* Make toolbar fields adapt better on narrow screens */
+.laField {
+  flex: 1 1 180px;
+}
+
+.laField.search {
+  flex: 1 1 260px;
+}
+
+/* Slightly nicer table hover */
+.laAdminPricesTable tbody tr:hover td {
+  background: rgba(112, 40, 64, 0.04);
+}
+
+/* Improve action buttons spacing + tap area */
+.laAdminPricesTable td.actions .laBtn {
+  margin-left: 8px;
+}
+
+/* Drawer panel subtle shadow */
+.laDrawerPanel {
+  box-shadow: -18px 0 50px rgba(0, 0, 0, 0.12);
+}
+
+/* Prevent long currency/labels from breaking layout */
+.laAdminPricesTable td,
+.laAdminPricesTable th {
+  white-space: nowrap;
+}
+
+.laAdminPricesTable td.empty {
+  white-space: normal;
+}
+
+/* Mobile: reduce padding a bit */
+@media (max-width: 720px) {
+  .laAdminPrices {
+    padding: 14px;
+  }
+  .laAdminPricesHeader {
+    align-items: flex-start;
+  }
+}

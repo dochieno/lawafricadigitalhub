@@ -16,7 +16,6 @@ const BILLING = [
 ];
 
 function toIsoLocalInput(iso) {
-  // Converts ISO -> "YYYY-MM-DDTHH:mm" for datetime-local input
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
@@ -30,7 +29,6 @@ function toIsoLocalInput(iso) {
 }
 
 function fromLocalInputToIso(value) {
-  // "YYYY-MM-DDTHH:mm" -> ISO string
   if (!value) return null;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
@@ -38,7 +36,7 @@ function fromLocalInputToIso(value) {
 }
 
 function moneyFmt(amount, currency) {
-  if (amount == null) return "";
+  if (amount == null || amount === "") return "";
   try {
     return new Intl.NumberFormat(undefined, {
       style: "currency",
@@ -84,6 +82,10 @@ export default function AdminContentProductPrices() {
 
   const [form, setForm] = useState(emptyForm);
 
+  function setField(k, v) {
+    setForm((prev) => ({ ...prev, [k]: v }));
+  }
+
   // -----------------------------
   // Load products
   // -----------------------------
@@ -93,17 +95,19 @@ export default function AdminContentProductPrices() {
       setErr("");
       setLoading(true);
       try {
-        // You likely already have an admin endpoint listing products.
-        // If not, replace with whatever you use (e.g. /api/admin/content-products).
+        // ✅ matches controller: GET /api/admin/content-products
         const res = await api.get("/api/admin/content-products");
-        const list = Array.isArray(res?.data) ? res.data : (res?.data?.items ?? []);
+        const list = Array.isArray(res?.data) ? res.data : [];
         const normalized = list.map((p) => ({
           id: p.id ?? p.Id,
-          name: p.name ?? p.Name ?? p.title ?? p.Title ?? `Product #${p.id ?? p.Id}`,
+          name: p.name ?? p.Name ?? `Product #${p.id ?? p.Id}`,
         }));
+
         if (mounted) {
           setProducts(normalized);
-          if (!selectedProductId && normalized.length) setSelectedProductId(String(normalized[0].id));
+          if (!selectedProductId && normalized.length) {
+            setSelectedProductId(String(normalized[0].id));
+          }
         }
       } catch (e) {
         if (mounted) setErr(e?.response?.data?.message || e?.message || "Failed to load products.");
@@ -128,13 +132,9 @@ export default function AdminContentProductPrices() {
       setErr("");
       setLoading(true);
       try {
-        // Expected endpoint:
-        // GET /api/admin/content-product-prices?contentProductId=123
-        const res = await api.get("/api/admin/content-product-prices", {
-          params: { contentProductId: Number(selectedProductId) },
-        });
-
-        const list = Array.isArray(res?.data) ? res.data : (res?.data?.items ?? []);
+        // ✅ matches controller: GET /api/admin/content-products/{id}/prices
+        const res = await api.get(`/api/admin/content-products/${Number(selectedProductId)}/prices`);
+        const list = Array.isArray(res?.data) ? res.data : [];
         const normalized = list.map((x) => ({
           id: x.id ?? x.Id,
           contentProductId: x.contentProductId ?? x.ContentProductId,
@@ -160,6 +160,11 @@ export default function AdminContentProductPrices() {
       mounted = false;
     };
   }, [selectedProductId]);
+
+  const selectedName = useMemo(() => {
+    const p = products.find((x) => String(x.id) === String(selectedProductId));
+    return p?.name || "";
+  }, [products, selectedProductId]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -219,10 +224,6 @@ export default function AdminContentProductPrices() {
     setErr("");
   }
 
-  function setField(k, v) {
-    setForm((prev) => ({ ...prev, [k]: v }));
-  }
-
   function validateForm() {
     if (!form.contentProductId) return "Select a ContentProduct.";
     if (!form.currency || String(form.currency).trim().length < 3) return "Currency is required (e.g. KES).";
@@ -252,8 +253,9 @@ export default function AdminContentProductPrices() {
 
     setSaving(true);
     try {
+      const productId = Number(form.contentProductId);
+
       const payload = {
-        contentProductId: Number(form.contentProductId),
         audience: Number(form.audience),
         billingPeriod: Number(form.billingPeriod),
         currency: String(form.currency).trim().toUpperCase(),
@@ -264,60 +266,44 @@ export default function AdminContentProductPrices() {
       };
 
       if (mode === "create") {
-        // POST /api/admin/content-product-prices
-        const res = await api.post("/api/admin/content-product-prices", payload);
-        const created = res?.data?.id ? res.data : (res?.data?.item ?? res?.data);
-        if (created) {
-          const row = {
-            id: created.id ?? created.Id,
-            contentProductId: created.contentProductId ?? created.ContentProductId ?? payload.contentProductId,
-            audience: created.audience ?? created.Audience ?? payload.audience,
-            billingPeriod: created.billingPeriod ?? created.BillingPeriod ?? payload.billingPeriod,
-            currency: created.currency ?? created.Currency ?? payload.currency,
-            amount: created.amount ?? created.Amount ?? payload.amount,
-            isActive: created.isActive ?? created.IsActive ?? payload.isActive,
-            effectiveFromUtc: created.effectiveFromUtc ?? created.EffectiveFromUtc ?? payload.effectiveFromUtc,
-            effectiveToUtc: created.effectiveToUtc ?? created.EffectiveToUtc ?? payload.effectiveToUtc,
-            createdAtUtc: created.createdAtUtc ?? created.CreatedAtUtc ?? new Date().toISOString(),
-          };
-          setPrices((prev) => [row, ...prev]);
-        } else {
-          // fallback: reload
-          const reload = await api.get("/api/admin/content-product-prices", {
-            params: { contentProductId: Number(selectedProductId) },
-          });
-          setPrices(Array.isArray(reload?.data) ? reload.data : (reload?.data?.items ?? []));
-        }
+        // ✅ matches controller: POST /api/admin/content-products/{id}/prices
+        const res = await api.post(`/api/admin/content-products/${productId}/prices`, payload);
+        const created = res?.data;
+
+        const row = {
+          id: created.id ?? created.Id,
+          contentProductId: created.contentProductId ?? created.ContentProductId ?? productId,
+          audience: created.audience ?? created.Audience ?? payload.audience,
+          billingPeriod: created.billingPeriod ?? created.BillingPeriod ?? payload.billingPeriod,
+          currency: created.currency ?? created.Currency ?? payload.currency,
+          amount: created.amount ?? created.Amount ?? payload.amount,
+          isActive: created.isActive ?? created.IsActive ?? payload.isActive,
+          effectiveFromUtc: created.effectiveFromUtc ?? created.EffectiveFromUtc ?? payload.effectiveFromUtc,
+          effectiveToUtc: created.effectiveToUtc ?? created.EffectiveToUtc ?? payload.effectiveToUtc,
+          createdAtUtc: created.createdAtUtc ?? created.CreatedAtUtc ?? new Date().toISOString(),
+        };
+
+        setPrices((prev) => [row, ...prev]);
       } else {
-        // PUT /api/admin/content-product-prices/{id}
-        const id = form.id;
-        const res = await api.put(`/api/admin/content-product-prices/${id}`, payload);
-        const updated = res?.data?.id ? res.data : (res?.data?.item ?? res?.data);
+        // ✅ matches controller: PUT /api/admin/content-products/{id}/prices/{priceId}
+        const priceId = Number(form.id);
+        const res = await api.put(`/api/admin/content-products/${productId}/prices/${priceId}`, payload);
+        const updated = res?.data;
 
-        const nextRow = updated
-          ? {
-              id: updated.id ?? updated.Id ?? id,
-              contentProductId: updated.contentProductId ?? updated.ContentProductId ?? payload.contentProductId,
-              audience: updated.audience ?? updated.Audience ?? payload.audience,
-              billingPeriod: updated.billingPeriod ?? updated.BillingPeriod ?? payload.billingPeriod,
-              currency: updated.currency ?? updated.Currency ?? payload.currency,
-              amount: updated.amount ?? updated.Amount ?? payload.amount,
-              isActive: updated.isActive ?? updated.IsActive ?? payload.isActive,
-              effectiveFromUtc: updated.effectiveFromUtc ?? updated.EffectiveFromUtc ?? payload.effectiveFromUtc,
-              effectiveToUtc: updated.effectiveToUtc ?? updated.EffectiveToUtc ?? payload.effectiveToUtc,
-              createdAtUtc: updated.createdAtUtc ?? updated.CreatedAtUtc,
-            }
-          : null;
+        const nextRow = {
+          id: updated.id ?? updated.Id ?? priceId,
+          contentProductId: updated.contentProductId ?? updated.ContentProductId ?? productId,
+          audience: updated.audience ?? updated.Audience ?? payload.audience,
+          billingPeriod: updated.billingPeriod ?? updated.BillingPeriod ?? payload.billingPeriod,
+          currency: updated.currency ?? updated.Currency ?? payload.currency,
+          amount: updated.amount ?? updated.Amount ?? payload.amount,
+          isActive: updated.isActive ?? updated.IsActive ?? payload.isActive,
+          effectiveFromUtc: updated.effectiveFromUtc ?? updated.EffectiveFromUtc ?? payload.effectiveFromUtc,
+          effectiveToUtc: updated.effectiveToUtc ?? updated.EffectiveToUtc ?? payload.effectiveToUtc,
+          createdAtUtc: updated.createdAtUtc ?? updated.CreatedAtUtc,
+        };
 
-        if (nextRow) {
-          setPrices((prev) => prev.map((p) => (p.id === id ? nextRow : p)));
-        } else {
-          // fallback: reload
-          const reload = await api.get("/api/admin/content-product-prices", {
-            params: { contentProductId: Number(selectedProductId) },
-          });
-          setPrices(Array.isArray(reload?.data) ? reload.data : (reload?.data?.items ?? []));
-        }
+        setPrices((prev) => prev.map((p) => (p.id === priceId ? nextRow : p)));
       }
 
       closeDrawer();
@@ -337,33 +323,25 @@ export default function AdminContentProductPrices() {
   async function toggleActive(row) {
     setErr("");
     const next = !row.isActive;
+
     try {
-      // PATCH /api/admin/content-product-prices/{id}/active
-      await api.patch(`/api/admin/content-product-prices/${row.id}/active`, { isActive: next });
+      // ✅ matches controller: PATCH /api/admin/content-products/{id}/prices/{priceId}/active
+      await api.patch(
+        `/api/admin/content-products/${Number(selectedProductId)}/prices/${row.id}/active`,
+        { isActive: next }
+      );
+
       setPrices((prev) => prev.map((p) => (p.id === row.id ? { ...p, isActive: next } : p)));
     } catch (e) {
       setErr(e?.response?.data?.message || e?.message || "Failed to update status.");
     }
   }
 
-  async function removeRow(row) {
-    setErr("");
-    const ok = window.confirm("Delete this pricing plan? This cannot be undone.");
-    if (!ok) return;
-
-    try {
-      // DELETE /api/admin/content-product-prices/{id}
-      await api.delete(`/api/admin/content-product-prices/${row.id}`);
-      setPrices((prev) => prev.filter((p) => p.id !== row.id));
-    } catch (e) {
-      setErr(e?.response?.data?.message || e?.message || "Delete failed.");
-    }
+  function removeRow(row) {
+    // ✅ You don't have a DELETE endpoint in the controller yet.
+    // For now we keep “delete” as “make inactive”.
+    toggleActive({ ...row, isActive: true });
   }
-
-  const selectedName = useMemo(() => {
-    const p = products.find((x) => String(x.id) === String(selectedProductId));
-    return p?.name || "";
-  }, [products, selectedProductId]);
 
   return (
     <section className="laAdminPrices">
@@ -449,9 +427,7 @@ export default function AdminContentProductPrices() {
 
       <div className="laAdminPricesCard">
         <div className="laAdminPricesCardHead">
-          <div className="laAdminPricesCardTitle">
-            {selectedName ? <>{selectedName}</> : <>Prices</>}
-          </div>
+          <div className="laAdminPricesCardTitle">{selectedName ? selectedName : "Prices"}</div>
           <div className="laAdminPricesCardMeta">{loading ? "Loading..." : `${filtered.length} plan(s)`}</div>
         </div>
 
@@ -480,9 +456,7 @@ export default function AdminContentProductPrices() {
                 filtered.map((p) => (
                   <tr key={p.id}>
                     <td>
-                      <span className={`pill ${p.isActive ? "ok" : "off"}`}>
-                        {p.isActive ? "Active" : "Inactive"}
-                      </span>
+                      <span className={`pill ${p.isActive ? "ok" : "off"}`}>{p.isActive ? "Active" : "Inactive"}</span>
                     </td>
                     <td>{AUDIENCE.find((x) => x.value === p.audience)?.label ?? p.audience}</td>
                     <td>{BILLING.find((x) => x.value === p.billingPeriod)?.label ?? p.billingPeriod}</td>
@@ -497,7 +471,7 @@ export default function AdminContentProductPrices() {
                       <button className="laBtn ghost" onClick={() => toggleActive(p)}>
                         {p.isActive ? "Deactivate" : "Activate"}
                       </button>
-                      <button className="laBtn danger ghost" onClick={() => removeRow(p)}>
+                      <button className="laBtn danger ghost" onClick={() => removeRow(p)} title="No delete endpoint yet">
                         Delete
                       </button>
                     </td>
@@ -546,10 +520,7 @@ export default function AdminContentProductPrices() {
 
               <label className="laField">
                 <span>Billing Period</span>
-                <select
-                  value={form.billingPeriod}
-                  onChange={(e) => setField("billingPeriod", Number(e.target.value))}
-                >
+                <select value={form.billingPeriod} onChange={(e) => setField("billingPeriod", Number(e.target.value))}>
                   {BILLING.map((b) => (
                     <option key={b.value} value={b.value}>
                       {b.label}
@@ -593,7 +564,11 @@ export default function AdminContentProductPrices() {
             </div>
 
             <label className="laCheck">
-              <input type="checkbox" checked={!!form.isActive} onChange={(e) => setField("isActive", e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={!!form.isActive}
+                onChange={(e) => setField("isActive", e.target.checked)}
+              />
               <span>Active (selectable by users)</span>
             </label>
 
