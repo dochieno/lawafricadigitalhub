@@ -1,7 +1,9 @@
+// src/pages/dashboard/LawReportsSubscribe.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../../api/client";
 import "../../styles/lawReportsSubscribe.css";
+import { getToken } from "../../auth/auth";
 
 /* =========================
    Formatting helpers
@@ -18,6 +20,20 @@ function formatMoney(amount, currency = "KES") {
     }).format(v);
   } catch {
     return `${currency} ${Math.round(v)}`;
+  }
+}
+
+/** ---------- Paystack context snapshot (for return page token restore) ---------- */
+function ctxKey(ref) {
+  return `la_paystack_ctx_${ref}`;
+}
+
+function writeCtx(ref, ctx) {
+  try {
+    if (!ref) return;
+    localStorage.setItem(ctxKey(ref), JSON.stringify(ctx));
+  } catch {
+    // ignore
   }
 }
 
@@ -189,7 +205,10 @@ export default function LawReportsSubscribe() {
     loadAll();
   }, []);
 
-  const nowUtcMs = useMemo(() => new Date(nowUtc || Date.now()).getTime(), [nowUtc]);
+  const nowUtcMs = useMemo(
+    () => new Date(nowUtc || Date.now()).getTime(),
+    [nowUtc]
+  );
 
   // best subscription per product (latest end)
   const bestSubByProductId = useMemo(() => {
@@ -200,7 +219,9 @@ export default function LawReportsSubscribe() {
 
       const prev = map.get(pid);
       const end = new Date(s.endDate || s.EndDate || 0).getTime();
-      const prevEnd = prev ? new Date(prev.endDate || prev.EndDate || 0).getTime() : -1;
+      const prevEnd = prev
+        ? new Date(prev.endDate || prev.EndDate || 0).getTime()
+        : -1;
       if (!prev || end > prevEnd) map.set(pid, s);
     }
     return map;
@@ -216,8 +237,15 @@ export default function LawReportsSubscribe() {
     const rem = daysRemaining(s, nowUtcMs);
 
     if (active) {
-      if (isTrial) return { kind: "trial", text: `Trial • ends ${end}${rem ? ` (${rem} days)` : ""}` };
-      return { kind: "active", text: `Active • ends ${end}${rem ? ` (${rem} days)` : ""}` };
+      if (isTrial)
+        return {
+          kind: "trial",
+          text: `Trial • ends ${end}${rem ? ` (${rem} days)` : ""}`,
+        };
+      return {
+        kind: "active",
+        text: `Active • ends ${end}${rem ? ` (${rem} days)` : ""}`,
+      };
     }
     return { kind: "expired", text: `Expired • ended ${end}` };
   }
@@ -265,9 +293,13 @@ export default function LawReportsSubscribe() {
       const data = res?.data || {};
       const paymentIntentId = data.paymentIntentId || data.PaymentIntentId;
 
-      setNotice(`STK sent. Check your phone to complete payment for "${product?.name || product?.Name}".`);
+      setNotice(
+        `STK sent. Check your phone to complete payment for "${
+          product?.name || product?.Name
+        }".`
+      );
 
-      // optional polling (works only if you already have /payments/intent/{id})
+      // optional polling
       if (paymentIntentId) {
         const start = Date.now();
         const timeoutMs = 90_000;
@@ -294,7 +326,9 @@ export default function LawReportsSubscribe() {
           await new Promise((r) => setTimeout(r, intervalMs));
         }
 
-        setNotice("We’re still waiting for confirmation. If you completed payment, refresh this page in a moment.");
+        setNotice(
+          "We’re still waiting for confirmation. If you completed payment, refresh this page in a moment."
+        );
       }
     } catch (e) {
       console.error(e);
@@ -330,13 +364,28 @@ export default function LawReportsSubscribe() {
 
       const data = res?.data || {};
       const url = data.authorizationUrl || data.AuthorizationUrl;
+      const reference = data.reference || data.Reference || null;
+
+      // ✅ CRITICAL: snapshot auth + next route under the Paystack reference
+      // so PaystackReturn can restore token even if storage/cookies are lost.
+      if (reference) {
+        writeCtx(reference, {
+          tokenSnapshot: getToken?.() || null,
+          next: "/dashboard/law-reports",
+          productName: product?.name || product?.Name || null,
+          contentProductPriceId: planId,
+          ts: Date.now(),
+        });
+      }
 
       if (!url) {
         setError("Paystack did not return an authorization URL.");
         return;
       }
 
-      setNotice(`Redirecting to Paystack for "${product?.name || product?.Name}"…`);
+      setNotice(
+        `Redirecting to Paystack for "${product?.name || product?.Name}"…`
+      );
       window.location.href = url;
     } catch (e) {
       console.error(e);
@@ -369,7 +418,9 @@ export default function LawReportsSubscribe() {
     const list = [...(plans || [])].filter(Boolean);
 
     // Keep only active-ish plans if the API ever returns mixed rows
-    const activeOnly = list.filter((p) => (p.isActive ?? p.IsActive ?? true) === true);
+    const activeOnly = list.filter(
+      (p) => (p.isActive ?? p.IsActive ?? true) === true
+    );
 
     // Sort: Monthly then Annual then others; within group low->high
     activeOnly.sort((a, b) => {
@@ -402,11 +453,23 @@ export default function LawReportsSubscribe() {
           </div>
 
           <div className="lrs-heroActions">
-            <button className="lrs-iconBtn" onClick={loadAll} disabled={loading} title="Refresh">
+            <button
+              className="lrs-iconBtn"
+              onClick={loadAll}
+              disabled={loading}
+              title="Refresh"
+              type="button"
+            >
               <IconRefresh className="lrs-ico" />
               <span>Refresh</span>
             </button>
-            <button className="lrs-btnPrimary" onClick={() => nav("/dashboard/law-reports")} title="Back">
+
+            <button
+              className="lrs-btnPrimary"
+              onClick={() => nav("/dashboard/law-reports")}
+              title="Back"
+              type="button"
+            >
               <IconBack className="lrs-ico" />
               <span>Back</span>
             </button>
@@ -423,7 +486,9 @@ export default function LawReportsSubscribe() {
             </span>
             MPESA phone number
           </div>
-          <div className="lrs-rowHint">Used only when you click “Subscribe/Renew (MPESA)”.</div>
+          <div className="lrs-rowHint">
+            Used only when you click “Subscribe/Renew (MPESA)”.
+          </div>
         </div>
 
         <input
@@ -439,7 +504,9 @@ export default function LawReportsSubscribe() {
       {error ? (
         <div className="lrs-alert lrs-alertErr">
           <div className="lrs-alertTitle">Something went wrong</div>
-          <div className="lrs-alertBody">{typeof error === "string" ? error : JSON.stringify(error)}</div>
+          <div className="lrs-alertBody">
+            {typeof error === "string" ? error : JSON.stringify(error)}
+          </div>
         </div>
       ) : null}
 
@@ -472,7 +539,6 @@ export default function LawReportsSubscribe() {
 
             return (
               <div className="lrs-premiumCard" key={pid}>
-                {/* Top row */}
                 <div className="lrs-cardTop">
                   <div className="lrs-cardTitle">{name}</div>
 
@@ -492,7 +558,6 @@ export default function LawReportsSubscribe() {
 
                 {desc ? <div className="lrs-cardDesc">{desc}</div> : null}
 
-                {/* Premium features */}
                 <ul className="lrs-features">
                   <li>
                     <IconCheck className="lrs-featIco" />
@@ -519,15 +584,19 @@ export default function LawReportsSubscribe() {
 
                 {plans.length === 0 ? (
                   <div className="lrs-emptyPlan">
-                    <div className="lrs-emptyPlanTitle">No active plans available for this product.</div>
+                    <div className="lrs-emptyPlanTitle">
+                      No active plans available for this product.
+                    </div>
                     <div className="lrs-emptyPlanMeta">
-                      Admin: confirm there is an active <b>ContentProductPrice</b> for Audience <b>{audience}</b>.
+                      Admin: confirm there is an active <b>ContentProductPrice</b>{" "}
+                      for Audience <b>{audience}</b>.
                     </div>
 
                     <button
                       className="lrs-pillBtn"
                       onClick={() => nav(`/dashboard/trials?productId=${pid}`)}
                       title="Request trial (if eligible)"
+                      type="button"
                     >
                       <IconSpark className="lrs-ico" />
                       Trial
@@ -563,6 +632,7 @@ export default function LawReportsSubscribe() {
                               disabled={busyKey === keyMpesa}
                               onClick={() => startMpesa(pl, p)}
                               title="Pay with MPESA (STK Push)"
+                              type="button"
                             >
                               <IconPhone className="lrs-ico" />
                               {busyKey === keyMpesa ? "Sending…" : `${primaryLabel} (MPESA)`}
@@ -573,16 +643,17 @@ export default function LawReportsSubscribe() {
                               disabled={busyKey === keyPaystack}
                               onClick={() => startPaystack(pl, p)}
                               title="Pay with Paystack"
+                              type="button"
                             >
                               <IconCard className="lrs-ico" />
                               {busyKey === keyPaystack ? "Opening…" : `${primaryLabel} (Paystack)`}
                             </button>
 
-                            {/* Trial always visible (you asked “Also include Trial”) */}
                             <button
                               className="lrs-pillBtn"
                               onClick={() => nav(`/dashboard/trials?productId=${pid}`)}
                               title="Request trial (if eligible)"
+                              type="button"
                             >
                               <IconSpark className="lrs-ico" />
                               Trial
