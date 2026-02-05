@@ -57,6 +57,7 @@ import AdminInvoiceDetail from "./pages/dashboard/admin/AdminInvoiceDetail";
 import AdminInvoiceSettings from "./pages/dashboard/admin/AdminInvoiceSettings";
 import AdminPayments from "./pages/dashboard/admin/AdminPayments";
 import AdminUserSubscriptions from "./pages/dashboard/admin/AdminUserSubscriptions";
+import AdminContentProductPrices from "./pages/dashboard/admin/AdminContentProductPrices";
 
 // ✅ NEW: VAT Rates Admin
 import AdminVATRates from "./pages/dashboard/admin/AdminVatRates";
@@ -142,6 +143,7 @@ export default function App() {
             <Route element={<AdminRoute />}>
               <Route path="admin/institutions" element={<AdminInstitutions />} />
               <Route path="admin/content-products" element={<AdminContentProducts />} />
+              <Route path="admin/content-product-prices" element={<AdminContentProductPrices />} />
               <Route path="admin/documents" element={<AdminDocuments />} />
               <Route path="admin/toc-test" element={<AdminTocTest />} />
               <Route path="admin/llr-services" element={<AdminLLRServices />} />

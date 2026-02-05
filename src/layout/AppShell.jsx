@@ -217,6 +217,10 @@ export default function AppShell() {
                       Products
                     </NavLink>
 
+                      <NavLink to="/dashboard/admin/content-product-prices" className="nav-link nav-child">
+                        Product Prices
+                      </NavLink>
+
                     <NavLink to="/dashboard/admin/documents" className="nav-link nav-child">
                       Books
                     </NavLink>

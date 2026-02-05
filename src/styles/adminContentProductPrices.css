@@ -1,0 +1,321 @@
+/* =======================================================
+   FILE: src/styles/adminContentProductPrices.css
+   Admin - Content Product Prices
+   ======================================================= */
+
+.laAdminPrices {
+  padding: 18px;
+}
+
+.laAdminPricesHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.laAdminPricesTitle {
+  font-size: 18px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.laAdminPricesSub {
+  margin-top: 4px;
+  color: rgba(15, 23, 42, 0.7);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.laAdminPricesHeaderRight {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.laAdminPricesAlert {
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.22);
+  color: #991b1b;
+  padding: 10px 12px;
+  border-radius: 12px;
+  margin: 10px 0 12px;
+  font-size: 13px;
+}
+
+.laAdminPricesToolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+
+.laAdminPricesToolbarLeft,
+.laAdminPricesToolbarRight {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.laField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 180px;
+}
+
+.laField span {
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.7);
+}
+
+.laField input,
+.laField select {
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0 12px;
+  outline: none;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.laField input:focus,
+.laField select:focus {
+  border-color: rgba(112, 40, 64, 0.45);
+  box-shadow: 0 0 0 4px rgba(112, 40, 64, 0.12);
+}
+
+.laField.search {
+  min-width: 260px;
+}
+
+.laAdminPricesCard {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.laAdminPricesCardHead {
+  padding: 12px 14px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.laAdminPricesCardTitle {
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.laAdminPricesCardMeta {
+  color: rgba(15, 23, 42, 0.6);
+  font-size: 12px;
+}
+
+.laAdminPricesTableWrap {
+  overflow: auto;
+}
+
+.laAdminPricesTable {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 980px;
+}
+
+.laAdminPricesTable th,
+.laAdminPricesTable td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  font-size: 13px;
+  color: #0f172a;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.laAdminPricesTable th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: rgba(248, 250, 252, 0.95);
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.7);
+}
+
+.laAdminPricesTable td.empty {
+  padding: 18px 12px;
+  color: rgba(15, 23, 42, 0.6);
+}
+
+.laAdminPricesTable .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.75);
+}
+
+.laAdminPricesTable .amount {
+  font-weight: 800;
+}
+
+.laAdminPricesTable th.actions,
+.laAdminPricesTable td.actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.pill.ok {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.12);
+  color: rgba(6, 95, 70, 1);
+}
+
+.pill.off {
+  border-color: rgba(148, 163, 184, 0.45);
+  background: rgba(148, 163, 184, 0.18);
+  color: rgba(51, 65, 85, 1);
+}
+
+/* Buttons (kept compatible with your admin styles; fallback if missing) */
+.laBtn {
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.9);
+  color: #0f172a;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.laBtn.primary {
+  border-color: rgba(112, 40, 64, 0.3);
+  background: rgba(112, 40, 64, 0.12);
+}
+
+.laBtn.ghost {
+  background: transparent;
+}
+
+.laBtn.danger {
+  border-color: rgba(220, 38, 38, 0.35);
+  color: #b91c1c;
+}
+
+.laBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Drawer */
+.laDrawer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 180ms ease;
+  z-index: 50;
+}
+
+.laDrawer.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.laDrawerBackdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.45);
+}
+
+.laDrawerPanel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: min(520px, 95vw);
+  background: rgba(255, 255, 255, 0.98);
+  border-left: 1px solid rgba(15, 23, 42, 0.12);
+  display: flex;
+  flex-direction: column;
+}
+
+.laDrawerHead {
+  padding: 14px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.laDrawerTitle {
+  font-size: 16px;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.laDrawerSub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.68);
+}
+
+.laDrawerBody {
+  padding: 14px;
+  overflow: auto;
+  flex: 1;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 720px) {
+  .grid2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.laCheck {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+  color: rgba(15, 23, 42, 0.82);
+  font-size: 13px;
+}
+
+.laHint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.65);
+  line-height: 1.4;
+}
+
+.laDrawerFoot {
+  padding: 12px 14px;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
