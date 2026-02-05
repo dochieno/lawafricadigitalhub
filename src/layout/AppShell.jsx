@@ -100,6 +100,10 @@ export default function AppShell() {
             <NavLink to="/dashboard/law-reports" className="nav-link">
               Law Reports
             </NavLink>
+            <NavLink to="/dashboard/trials" className="nav-link">
+              Trials
+            </NavLink>
+
 
             {/* ✅ DEV: Content Blocks tester (temporary quick navigation) */}
             {import.meta.env.DEV && (

@@ -37,6 +37,7 @@ import DevContentBlocksTest from "./pages/dashboard/DevContentBlocksTest";
 import Explore from "./pages/dashboard/Explore";
 import Library from "./pages/dashboard/Library";
 import AdminTrials from "./pages/dashboard/admin/AdminTrials";
+import RequestTrial from "./pages/dashboard/RequestTrial";
 import "./styles/lawAfricaBrand.css";
 
 // ✅ Home -> Global Admin dashboard (charts) only for Global Admin
@@ -122,7 +123,7 @@ export default function App() {
             {/* ✅ Law Reports */}
             <Route path="law-reports" element={<LawReports />} />
             <Route path="law-reports/:id" element={<LawReportReader />} />
-
+            <Route path="trials" element={<RequestTrial />} />
             <Route path="security" element={<SecurityDashboard />} />
 
             {/* ===================== */}

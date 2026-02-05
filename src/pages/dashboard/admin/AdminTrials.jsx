@@ -1,55 +1,51 @@
-import { useMemo, useState } from "react";
-import api from "../../../api/client"; // axios instance
+import { useEffect, useMemo, useState } from "react";
+import api from "../../../api/client";
+
+const STATUS = {
+  Pending: 1,
+  Approved: 2,
+  Rejected: 3,
+  Cancelled: 4,
+};
+
+function extractErrorMessage(e) {
+  const data = e?.response?.data;
+  if (data?.message) return data.message;
+
+  if (data?.errors && typeof data.errors === "object") {
+    const firstKey = Object.keys(data.errors)[0];
+    const firstVal = Array.isArray(data.errors[firstKey]) ? data.errors[firstKey][0] : null;
+    if (firstVal) return `${firstKey}: ${firstVal}`;
+  }
+
+  if (typeof data === "string") return data;
+  return e?.message || "Request failed";
+}
+
+function fmt(dt) {
+  if (!dt) return "";
+  const d = new Date(dt);
+  if (Number.isNaN(d.getTime())) return String(dt);
+  return d.toLocaleString();
+}
 
 export default function AdminTrials() {
-  const [userId, setUserId] = useState("");
-  const [contentProductId, setContentProductId] = useState("");
-  const [unit, setUnit] = useState("Days"); // "Days" | "Months"
-  const [value, setValue] = useState(7);
-  const [extendIfActive, setExtendIfActive] = useState(true);
-
+  const [status, setStatus] = useState("Pending");
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState(null);
+  const [items, setItems] = useState([]);
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [notesById, setNotesById] = useState({}); // { [requestId]: string }
 
-  const userIdNum = useMemo(() => Number(userId), [userId]);
-  const productIdNum = useMemo(() => Number(contentProductId), [contentProductId]);
-  const valueNum = useMemo(() => Number(value), [value]);
+  const statusValue = useMemo(() => STATUS[status] ?? STATUS.Pending, [status]);
 
-  const canSubmit = Number.isFinite(userIdNum) && userIdNum > 0 &&
-                    Number.isFinite(productIdNum) && productIdNum > 0;
-
-  function normalizeUnit(u) {
-    // API enum int: Days=1 Months=2
-    return u === "Months" ? 2 : 1;
-  }
-
-  function extractErrorMessage(e) {
-    const data = e?.response?.data;
-
-    // Common API pattern: { message: "..." }
-    if (data?.message) return data.message;
-
-    // ASP.NET validation errors: { errors: { Field: ["msg"] } }
-    if (data?.errors && typeof data.errors === "object") {
-      const firstKey = Object.keys(data.errors)[0];
-      const firstVal = Array.isArray(data.errors[firstKey]) ? data.errors[firstKey][0] : null;
-      if (firstVal) return `${firstKey}: ${firstVal}`;
-    }
-
-    // String responses
-    if (typeof data === "string") return data;
-
-    return e?.message || "Request failed";
-  }
-
-  async function call(endpoint, payload) {
+  async function refresh() {
     setBusy(true);
     setError("");
-    setResult(null);
+    setActionError("");
     try {
-      const res = await api.post(endpoint, payload);
-      setResult(res.data);
+      const res = await api.get("/trials/admin/requests", { params: { status: statusValue } });
+      setItems(Array.isArray(res.data) ? res.data : []);
     } catch (e) {
       setError(extractErrorMessage(e));
     } finally {
@@ -57,143 +53,177 @@ export default function AdminTrials() {
     }
   }
 
-  async function grant() {
-    if (!canSubmit) return;
-    await call("/admin/trials/grant", {
-      userId: userIdNum,
-      contentProductId: productIdNum,
-      unit: normalizeUnit(unit),
-      value: valueNum,
-      extendIfActive: !!extendIfActive,
-    });
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusValue]);
+
+  async function approve(requestId) {
+    setBusy(true);
+    setActionError("");
+    try {
+      const adminNotes = (notesById[requestId] || "").trim() || null;
+      await api.post(`/trials/admin/requests/${requestId}/approve`, { adminNotes });
+      await refresh();
+    } catch (e) {
+      setActionError(extractErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
   }
 
-  async function extend() {
-    if (!canSubmit) return;
-    await call("/admin/trials/extend", {
-      userId: userIdNum,
-      contentProductId: productIdNum,
-      unit: normalizeUnit(unit),
-      value: valueNum,
-    });
-  }
-
-  async function revoke() {
-    if (!canSubmit) return;
-    await call("/admin/trials/revoke", {
-      userId: userIdNum,
-      contentProductId: productIdNum,
-    });
+  async function reject(requestId) {
+    setBusy(true);
+    setActionError("");
+    try {
+      const adminNotes = (notesById[requestId] || "").trim() || null;
+      await api.post(`/trials/admin/requests/${requestId}/reject`, { adminNotes });
+      await refresh();
+    } catch (e) {
+      setActionError(extractErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
-    <div style={{ maxWidth: 780, margin: "0 auto", padding: 16 }}>
-      <h2 style={{ marginBottom: 8 }}>Trial Management</h2>
-      <p style={{ marginTop: 0, opacity: 0.8 }}>
-        Grant / extend / revoke a user trial for a product (e.g. Reports).
-      </p>
-
-      <div style={{ display: "grid", gap: 12 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <label style={{ display: "grid", gap: 6 }}>
-            <span>UserId</span>
-            <input
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
-              placeholder="e.g. 123"
-              inputMode="numeric"
-            />
-          </label>
-
-          <label style={{ display: "grid", gap: 6 }}>
-            <span>ContentProductId (Reports product id)</span>
-            <input
-              value={contentProductId}
-              onChange={(e) => setContentProductId(e.target.value)}
-              placeholder="e.g. 9"
-              inputMode="numeric"
-            />
-          </label>
+    <div style={{ maxWidth: 980, margin: "0 auto", padding: 16 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+        <div>
+          <h2 style={{ margin: 0 }}>Trial Requests</h2>
+          <p style={{ marginTop: 6, opacity: 0.8 }}>
+            Approve/reject trial requests. Approval creates a <b>7-day</b> trial subscription.
+          </p>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <label style={{ display: "grid", gap: 6 }}>
-            <span>Unit</span>
-            <select value={unit} onChange={(e) => setUnit(e.target.value)}>
-              <option value="Days">Days</option>
-              <option value="Months">Months</option>
+            <span style={{ fontSize: 12, opacity: 0.8 }}>Status</span>
+            <select value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="Pending">Pending</option>
+              <option value="Approved">Approved</option>
+              <option value="Rejected">Rejected</option>
+              <option value="Cancelled">Cancelled</option>
             </select>
           </label>
 
-          <label style={{ display: "grid", gap: 6 }}>
-            <span>Value</span>
-            <input
-              type="number"
-              min={1}
-              max={365}
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-            />
-          </label>
-
-          <label style={{ display: "grid", gap: 6 }}>
-            <span>Grant behavior</span>
-            <select
-              value={extendIfActive ? "extend" : "reset"}
-              onChange={(e) => setExtendIfActive(e.target.value === "extend")}
-            >
-              <option value="extend">Extend if active</option>
-              <option value="reset">Reset from now</option>
-            </select>
-          </label>
-        </div>
-
-        {!canSubmit && (
-          <div style={{ padding: 10, border: "1px solid #ddd", background: "#fafafa" }}>
-            Enter a valid <b>UserId</b> and <b>ContentProductId</b> to enable actions.
-          </div>
-        )}
-
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button disabled={busy || !canSubmit} onClick={grant}>
-            {busy ? "Working..." : "Grant Trial"}
-          </button>
-
-          <button disabled={busy || !canSubmit} onClick={extend}>
-            {busy ? "Working..." : "Extend Trial"}
-          </button>
-
-          <button disabled={busy || !canSubmit} onClick={revoke}>
-            {busy ? "Working..." : "Revoke Trial"}
+          <button disabled={busy} onClick={refresh}>
+            {busy ? "Loading..." : "Refresh"}
           </button>
         </div>
-
-        {error && (
-          <div style={{ padding: 12, border: "1px solid #ffb3b3", background: "#fff5f5" }}>
-            <b>Error:</b> {error}
-          </div>
-        )}
-
-        {result && (
-          <div style={{ padding: 12, border: "1px solid #cfe9cf", background: "#f6fff6" }}>
-            <b>Response</b>
-            <pre style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
-              {JSON.stringify(result, null, 2)}
-            </pre>
-          </div>
-        )}
       </div>
 
-      <hr style={{ margin: "18px 0" }} />
+      {error && (
+        <div style={{ marginTop: 12, padding: 12, border: "1px solid #ffb3b3", background: "#fff5f5" }}>
+          <b>Error:</b> {error}
+        </div>
+      )}
 
-      <div style={{ opacity: 0.8 }}>
-        <b>Notes:</b>
-        <ul>
-          <li>Unit values sent to API: Days=1, Months=2.</li>
-          <li>
-            Next improvement: fetch products and let you pick “Reports” instead of typing the id.
-          </li>
-        </ul>
+      {actionError && (
+        <div style={{ marginTop: 12, padding: 12, border: "1px solid #ffb3b3", background: "#fff5f5" }}>
+          <b>Action error:</b> {actionError}
+        </div>
+      )}
+
+      <div style={{ marginTop: 14, border: "1px solid rgba(0,0,0,0.12)", borderRadius: 10, overflow: "hidden" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "120px 1fr 1fr 220px 240px",
+            padding: 10,
+            background: "#fafafa",
+            fontWeight: 600,
+          }}
+        >
+          <div>ID</div>
+          <div>User</div>
+          <div>Product</div>
+          <div>Requested</div>
+          <div>Actions</div>
+        </div>
+
+        {items.length === 0 ? (
+          <div style={{ padding: 14, opacity: 0.75 }}>No requests found.</div>
+        ) : (
+          items.map((r) => {
+            const isPending = String(r.status).toLowerCase() === "pending";
+            return (
+              <div
+                key={r.id}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "120px 1fr 1fr 220px 240px",
+                  padding: 10,
+                  borderTop: "1px solid rgba(0,0,0,0.08)",
+                  alignItems: "start",
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 600 }}>#{r.id}</div>
+                  <div style={{ fontSize: 12, opacity: 0.75 }}>{String(r.status)}</div>
+                </div>
+
+                <div style={{ fontSize: 13 }}>
+                  <div style={{ fontWeight: 600 }}>{r?.user?.username || "—"}</div>
+                  <div style={{ opacity: 0.85 }}>{r?.user?.email || "—"}</div>
+                  <div style={{ opacity: 0.85 }}>{r?.user?.phoneNumber || "—"}</div>
+
+                  {r?.reason ? (
+                    <div
+                      style={{
+                        marginTop: 8,
+                        padding: 8,
+                        background: "#fcfcfc",
+                        border: "1px solid rgba(0,0,0,0.08)",
+                        borderRadius: 8,
+                        whiteSpace: "pre-wrap",
+                      }}
+                    >
+                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>User reason</div>
+                      {r.reason}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div style={{ fontSize: 13 }}>
+                  <div style={{ fontWeight: 600 }}>{r?.product?.name || "—"}</div>
+                  <div style={{ fontSize: 12, opacity: 0.8 }}>
+                    ProductId: {r?.product?.contentProductId ?? r?.contentProductId ?? "—"}
+                  </div>
+                </div>
+
+                <div style={{ fontSize: 13 }}>
+                  <div>{fmt(r.requestedAt)}</div>
+                  {r.reviewedAt ? <div style={{ fontSize: 12, opacity: 0.75 }}>Reviewed: {fmt(r.reviewedAt)}</div> : null}
+                </div>
+
+                <div style={{ display: "grid", gap: 8 }}>
+                  <textarea
+                    rows={2}
+                    placeholder="Admin notes (optional)"
+                    value={notesById[r.id] || ""}
+                    onChange={(e) => setNotesById((p) => ({ ...p, [r.id]: e.target.value }))}
+                  />
+
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button disabled={busy || !isPending} onClick={() => approve(r.id)}>
+                      Approve (7 days)
+                    </button>
+                    <button disabled={busy || !isPending} onClick={() => reject(r.id)}>
+                      Reject
+                    </button>
+                  </div>
+
+                  {r?.adminNotes ? (
+                    <div style={{ fontSize: 12, opacity: 0.8 }}>
+                      <b>Existing admin notes:</b> {r.adminNotes}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );
