@@ -1,7 +1,7 @@
 // =======================================================
 // FILE: src/pages/dashboard/admin/AdminContentProductPrices.jsx
 // =======================================================
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../../../api/client";
 import "../../../styles/adminContentProductPrices.css";
 
@@ -48,11 +48,86 @@ function moneyFmt(amount, currency) {
   }
 }
 
-// ✅ Axios wrapper safety:
-// some projects return axiosResponse, others return axiosResponse.data via interceptor.
-// This normalizes both styles.
+// Some projects return axios response; others return data (interceptors).
 function unwrapApi(res) {
   return res?.data ?? res;
+}
+
+// ✅ Turns ASP.NET ProblemDetails / ValidationProblemDetails into a friendly string
+function formatApiError(e) {
+  const data = e?.response?.data;
+
+  if (!data) return e?.message || "Request failed.";
+
+  // Plain string from API
+  if (typeof data === "string") return data;
+
+  // Typical { message: "..."} or { detail: "..." }
+  if (data?.message) return String(data.message);
+  if (data?.detail) return String(data.detail);
+  if (data?.title && data?.status) {
+    // ProblemDetails shape
+    const bits = [];
+    bits.push(data.title);
+    if (data.detail) bits.push(data.detail);
+    if (data.status) bits.push(`(HTTP ${data.status})`);
+
+    // ValidationProblemDetails: errors: { Field: ["msg1","msg2"] }
+    if (data.errors && typeof data.errors === "object") {
+      const first = [];
+      for (const [k, v] of Object.entries(data.errors)) {
+        if (Array.isArray(v) && v.length) first.push(`${k}: ${v[0]}`);
+      }
+      if (first.length) bits.push(first.slice(0, 6).join(" • "));
+    }
+    return bits.filter(Boolean).join(" ");
+  }
+
+  // Fallback: stringify object safely
+  try {
+    return JSON.stringify(data);
+  } catch {
+    return "Request failed.";
+  }
+}
+
+// ✅ Adds 1 month/year to a datetime-local string.
+// Keeps the same time; handles month rollovers (e.g. Jan 31 -> Feb last day).
+function addPeriodToLocalInput(fromLocal, billingPeriod) {
+  if (!fromLocal) return "";
+
+  const d = new Date(fromLocal);
+  if (Number.isNaN(d.getTime())) return "";
+
+  const y = d.getFullYear();
+  const m = d.getMonth();
+  const day = d.getDate();
+  const hh = d.getHours();
+  const mi = d.getMinutes();
+
+  const target = new Date(d);
+
+  // billingPeriod: 1=Monthly, 2=Annual
+  if (Number(billingPeriod) === 2) {
+    target.setFullYear(y + 1);
+  } else {
+    target.setMonth(m + 1);
+  }
+
+  // Fix “month overflow” (JS auto-rolls: Jan 31 + 1 month => Mar 2 sometimes)
+  // Strategy: set to 1st of target month then clamp day to max in that month.
+  const ty = target.getFullYear();
+  const tm = target.getMonth();
+
+  const maxDay = new Date(ty, tm + 1, 0).getDate(); // last day of target month
+  const clampedDay = Math.min(day, maxDay);
+
+  const fixed = new Date(ty, tm, clampedDay, hh, mi, 0, 0);
+
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${fixed.getFullYear()}-${pad(fixed.getMonth() + 1)}-${pad(fixed.getDate())}T${pad(
+    fixed.getHours()
+  )}:${pad(fixed.getMinutes())}`;
 }
 
 export default function AdminContentProductPrices() {
@@ -71,6 +146,9 @@ export default function AdminContentProductPrices() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [mode, setMode] = useState("create"); // create | edit
   const [saving, setSaving] = useState(false);
+
+  // ✅ Track whether user manually edited end date in this drawer session
+  const endTouchedRef = useRef(false);
 
   const emptyForm = useMemo(
     () => ({
@@ -104,7 +182,6 @@ export default function AdminContentProductPrices() {
       setLoading(true);
 
       try {
-        // ✅ matches controller: GET /api/admin/content-products
         const res = await api.get("/admin/content-products");
         const data = unwrapApi(res);
 
@@ -121,7 +198,7 @@ export default function AdminContentProductPrices() {
           }
         }
       } catch (e) {
-        if (mounted) setErr(e?.response?.data?.message || e?.message || "Failed to load products.");
+        if (mounted) setErr(formatApiError(e) || "Failed to load products.");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -145,7 +222,6 @@ export default function AdminContentProductPrices() {
       setLoading(true);
 
       try {
-        // ✅ matches controller: GET /api/admin/content-products/{id}/prices
         const res = await api.get(`/admin/content-products/${Number(selectedProductId)}/prices`);
         const data = unwrapApi(res);
 
@@ -165,7 +241,7 @@ export default function AdminContentProductPrices() {
 
         if (mounted) setPrices(normalized);
       } catch (e) {
-        if (mounted) setErr(e?.response?.data?.message || e?.message || "Failed to load prices.");
+        if (mounted) setErr(formatApiError(e) || "Failed to load prices.");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -210,6 +286,7 @@ export default function AdminContentProductPrices() {
   }, [prices, query, audienceFilter, billingFilter, statusFilter]);
 
   function openCreate() {
+    endTouchedRef.current = false; // allow auto calc
     setMode("create");
     setForm({
       ...emptyForm,
@@ -219,6 +296,9 @@ export default function AdminContentProductPrices() {
   }
 
   function openEdit(row) {
+    // If record already has an end date, consider it "touched" (don't auto overwrite)
+    endTouchedRef.current = !!row.effectiveToUtc;
+
     setMode("edit");
     setForm({
       id: row.id,
@@ -241,8 +321,7 @@ export default function AdminContentProductPrices() {
 
   function validateForm() {
     if (!form.contentProductId) return "Select a ContentProduct.";
-    if (!form.currency || String(form.currency).trim().length < 3)
-      return "Currency is required (e.g. KES).";
+    if (!form.currency || String(form.currency).trim().length < 3) return "Currency is required (e.g. KES).";
 
     const amt = Number(form.amount);
     if (!Number.isFinite(amt) || amt <= 0) return "Amount must be a positive number.";
@@ -258,6 +337,22 @@ export default function AdminContentProductPrices() {
 
     return null;
   }
+
+  // ✅ Auto-calc end date when FROM or BILLING changes (unless user edited end date)
+  useEffect(() => {
+    if (!drawerOpen) return;
+    if (!form.effectiveFromUtc) return;
+    if (endTouchedRef.current) return; // user controls end date
+
+    const nextTo = addPeriodToLocalInput(form.effectiveFromUtc, form.billingPeriod);
+    if (!nextTo) return;
+
+    // avoid useless state churn
+    if (String(form.effectiveToUtc || "") !== String(nextTo || "")) {
+      setForm((prev) => ({ ...prev, effectiveToUtc: nextTo }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawerOpen, form.effectiveFromUtc, form.billingPeriod]);
 
   async function save() {
     setErr("");
@@ -283,7 +378,6 @@ export default function AdminContentProductPrices() {
       };
 
       if (mode === "create") {
-        // ✅ matches controller: POST /api/admin/content-products/{id}/prices
         const res = await api.post(`/admin/content-products/${productId}/prices`, payload);
         const created = unwrapApi(res);
 
@@ -303,10 +397,8 @@ export default function AdminContentProductPrices() {
         };
 
         if (!row.id) throw new Error("Server response missing id for created price plan.");
-
         setPrices((prev) => [row, ...prev]);
       } else {
-        // ✅ matches controller: PUT /api/admin/content-products/{id}/prices/{priceId}
         const priceId = Number(form.id);
 
         const res = await api.put(`/admin/content-products/${productId}/prices/${priceId}`, payload);
@@ -332,13 +424,7 @@ export default function AdminContentProductPrices() {
 
       closeDrawer();
     } catch (e) {
-      const msg =
-        e?.response?.data?.detail ||
-        e?.response?.data?.message ||
-        e?.response?.data ||
-        e?.message ||
-        "Save failed.";
-      setErr(String(msg));
+      setErr(formatApiError(e));
     } finally {
       setSaving(false);
     }
@@ -349,21 +435,15 @@ export default function AdminContentProductPrices() {
     const next = !row.isActive;
 
     try {
-      // ✅ matches controller: PATCH /api/admin/content-products/{id}/prices/{priceId}/active
-      await api.patch(
-        `/admin/content-products/${Number(selectedProductId)}/prices/${row.id}/active`,
-        { isActive: next }
-      );
-
+      await api.patch(`/admin/content-products/${Number(selectedProductId)}/prices/${row.id}/active`, { isActive: next });
       setPrices((prev) => prev.map((p) => (p.id === row.id ? { ...p, isActive: next } : p)));
     } catch (e) {
-      setErr(e?.response?.data?.message || e?.message || "Failed to update status.");
+      setErr(formatApiError(e) || "Failed to update status.");
     }
   }
 
   function removeRow(row) {
-    // ✅ You don't have a DELETE endpoint in the controller yet.
-    // For now we keep “delete” as “make inactive”.
+    // No DELETE endpoint: interpret "delete" as "make inactive"
     toggleActive({ ...row, isActive: true });
   }
 
@@ -444,11 +524,7 @@ export default function AdminContentProductPrices() {
         <div className="laAdminPricesToolbarRight">
           <label className="laField search">
             <span>Search</span>
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="KES, Monthly, 1000..."
-            />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="KES, Monthly, 1000..." />
           </label>
         </div>
       </div>
@@ -484,9 +560,7 @@ export default function AdminContentProductPrices() {
                 filtered.map((p) => (
                   <tr key={p.id}>
                     <td>
-                      <span className={`pill ${p.isActive ? "ok" : "off"}`}>
-                        {p.isActive ? "Active" : "Inactive"}
-                      </span>
+                      <span className={`pill ${p.isActive ? "ok" : "off"}`}>{p.isActive ? "Active" : "Inactive"}</span>
                     </td>
                     <td>{AUDIENCE.find((x) => x.value === p.audience)?.label ?? p.audience}</td>
                     <td>{BILLING.find((x) => x.value === p.billingPeriod)?.label ?? p.billingPeriod}</td>
@@ -501,11 +575,7 @@ export default function AdminContentProductPrices() {
                       <button className="laBtn ghost" onClick={() => toggleActive(p)}>
                         {p.isActive ? "Deactivate" : "Activate"}
                       </button>
-                      <button
-                        className="laBtn danger ghost"
-                        onClick={() => removeRow(p)}
-                        title="No delete endpoint yet"
-                      >
+                      <button className="laBtn danger ghost" onClick={() => removeRow(p)} title="No delete endpoint yet">
                         Delete
                       </button>
                     </td>
@@ -556,7 +626,10 @@ export default function AdminContentProductPrices() {
                 <span>Billing Period</span>
                 <select
                   value={form.billingPeriod}
-                  onChange={(e) => setField("billingPeriod", Number(e.target.value))}
+                  onChange={(e) => {
+                    setField("billingPeriod", Number(e.target.value));
+                    // if user hasn't manually touched end date, we will auto-recompute via effect
+                  }}
                 >
                   {BILLING.map((b) => (
                     <option key={b.value} value={b.value}>
@@ -586,7 +659,10 @@ export default function AdminContentProductPrices() {
                 <input
                   type="datetime-local"
                   value={form.effectiveFromUtc}
-                  onChange={(e) => setField("effectiveFromUtc", e.target.value)}
+                  onChange={(e) => {
+                    // changing "from" should auto-calc end (unless end touched)
+                    setField("effectiveFromUtc", e.target.value);
+                  }}
                 />
               </label>
 
@@ -595,17 +671,16 @@ export default function AdminContentProductPrices() {
                 <input
                   type="datetime-local"
                   value={form.effectiveToUtc}
-                  onChange={(e) => setField("effectiveToUtc", e.target.value)}
+                  onChange={(e) => {
+                    endTouchedRef.current = true; // ✅ user overrides
+                    setField("effectiveToUtc", e.target.value);
+                  }}
                 />
               </label>
             </div>
 
             <label className="laCheck">
-              <input
-                type="checkbox"
-                checked={!!form.isActive}
-                onChange={(e) => setField("isActive", e.target.checked)}
-              />
+              <input type="checkbox" checked={!!form.isActive} onChange={(e) => setField("isActive", e.target.checked)} />
               <span>Active (selectable by users)</span>
             </label>
 
