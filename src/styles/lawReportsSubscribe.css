@@ -1,0 +1,271 @@
+/* Law Reports Subscribe — LawAfrica branded (no inline CSS) */
+
+:root {
+  --la-red: #8b1c1c;
+  --la-ink: #0f172a;
+  --la-muted: rgba(15, 23, 42, 0.62);
+  --la-border: rgba(15, 23, 42, 0.12);
+
+  --la-bg: #f3f4f6;
+  --la-card: rgba(255, 255, 255, 0.92);
+  --la-card-2: rgba(248, 250, 252, 0.85);
+  --la-shadow: 0 18px 45px rgba(0, 0, 0, 0.08);
+  --la-radius: 16px;
+}
+
+.lrsPage {
+  padding: 18px;
+  max-width: 980px;
+}
+
+.lrsHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.lrsHeaderLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lrsKicker {
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--la-red);
+  font-size: 12px;
+}
+
+.lrsTitle {
+  margin: 0;
+  font-weight: 950;
+  color: var(--la-ink);
+  font-size: 28px;
+  line-height: 1.15;
+}
+
+.lrsSub {
+  color: var(--la-muted);
+  font-size: 13px;
+}
+
+.lrsHeaderActions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.lrsInfo {
+  color: var(--la-muted);
+  margin: 8px 0 14px;
+}
+
+.lrsPhoneCard {
+  border: 1px solid var(--la-border);
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: var(--la-radius);
+  padding: 12px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.05);
+}
+
+.lrsPhoneTitle {
+  font-weight: 900;
+  color: var(--la-ink);
+  margin-bottom: 6px;
+}
+
+.lrsPhoneRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.lrsInput {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  background: white;
+  outline: none;
+  min-width: 260px;
+}
+
+.lrsInput:focus {
+  border-color: rgba(139, 28, 28, 0.55);
+  box-shadow: 0 0 0 4px rgba(139, 28, 28, 0.12);
+}
+
+.lrsPhoneHint {
+  font-size: 13px;
+  color: var(--la-muted);
+}
+
+.lrsAlert {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--la-border);
+}
+
+.lrsAlertErr {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.20);
+  color: rgba(127, 29, 29, 0.95);
+}
+
+.lrsAlertInfo {
+  background: rgba(2, 132, 199, 0.08);
+  border-color: rgba(2, 132, 199, 0.20);
+  color: rgba(7, 89, 133, 0.95);
+}
+
+.lrsLoading,
+.lrsEmpty {
+  margin-top: 14px;
+  color: var(--la-muted);
+}
+
+.lrsGrid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 14px;
+}
+
+.lrsCard {
+  border: 1px solid var(--la-border);
+  background: var(--la-card);
+  border-radius: var(--la-radius);
+  padding: 14px;
+  box-shadow: var(--la-shadow);
+}
+
+.lrsCardTop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.lrsCardTitle {
+  font-weight: 950;
+  color: var(--la-ink);
+  font-size: 16px;
+}
+
+.lrsBadge {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: rgba(148, 163, 184, 0.14);
+  color: rgba(15, 23, 42, 0.78);
+}
+
+.lrsBadge.ok {
+  background: rgba(34, 197, 94, 0.10);
+  border-color: rgba(34, 197, 94, 0.22);
+}
+
+.lrsBadge.muted {
+  background: rgba(148, 163, 184, 0.14);
+}
+
+.lrsCardDesc {
+  margin-top: 8px;
+  color: rgba(15, 23, 42, 0.75);
+  line-height: 1.35;
+}
+
+.lrsSectionTitle {
+  margin-top: 12px;
+  font-weight: 900;
+  color: var(--la-ink);
+}
+
+.lrsEmptyMini {
+  margin-top: 8px;
+  color: var(--la-muted);
+}
+
+.lrsPlanStack {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lrsPlan {
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: var(--la-card-2);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.lrsPlanRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.lrsPlanPeriod {
+  font-weight: 900;
+  color: var(--la-ink);
+}
+
+.lrsPlanPrice {
+  font-weight: 950;
+  color: var(--la-ink);
+}
+
+.lrsPlanActions {
+  margin-top: 10px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.lrsBtn {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  background: white;
+  cursor: pointer;
+  font-weight: 900;
+  color: var(--la-ink);
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.lrsBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(0,0,0,0.08);
+}
+
+.lrsBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.lrsBtnGhost {
+  background: white;
+}
+
+.lrsBtnDashed {
+  background: transparent;
+  border-style: dashed;
+  opacity: 0.92;
+}
+
+.lrsTip {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--la-muted);
+}

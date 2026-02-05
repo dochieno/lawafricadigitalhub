@@ -1,8 +1,8 @@
-// src/pages/payments/PaystackReturn.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../../api/client";
 import { getToken, clearToken, saveToken } from "../../auth/auth";
+import "../../styles/paystackReturn.css";
 
 function useQuery() {
   const { search } = useLocation();
@@ -32,10 +32,7 @@ function extractAxiosError(e) {
   return e?.message || "Request failed.";
 }
 
-// localStorage keys for signup flow
 const LS_REG_INTENT = "la_reg_intent_id";
-
-// ✅ paystack return context key
 function ctxKey(ref) {
   return `la_paystack_ctx_${ref}`;
 }
@@ -45,9 +42,11 @@ export default function PaystackReturn() {
   const query = useQuery();
   const { state } = useLocation();
 
-  // ✅ Paystack returns `reference` AND sometimes `trxref`
   const reference = (query.get("reference") || query.get("trxref") || "").trim();
   const fallbackDocId = state?.docId ? Number(state.docId) : null;
+
+  // ✅ NEW: support redirects after subscription purchases too
+  const next = (query.get("next") || "/dashboard/law-reports").trim();
 
   const [phase, setPhase] = useState("LOADING"); // LOADING | SUCCESS | FAILED
   const [message, setMessage] = useState("Processing Paystack return…");
@@ -76,7 +75,6 @@ export default function PaystackReturn() {
     }
   }
 
-  // ✅ Restore token snapshot if it was lost on return
   function restoreTokenIfMissing(ref) {
     try {
       const token = getToken?.() || null;
@@ -94,7 +92,6 @@ export default function PaystackReturn() {
     }
   }
 
-  // best-effort only (safe even if endpoint doesn't exist)
   async function logReturnVisit(ref) {
     try {
       if (!ref) return;
@@ -119,13 +116,8 @@ export default function PaystackReturn() {
     return res.data?.data ?? res.data;
   }
 
-  // ✅ Force server verification + finalize/fulfillment (avoids “works only after refresh”)
   async function confirmPaystack(ref) {
-    const res = await api.post(
-      "/payments/paystack/confirm",
-      { reference: ref },
-      { __skipThrottle: true }
-    );
+    const res = await api.post("/payments/paystack/confirm", { reference: ref }, { __skipThrottle: true });
     return res.data?.data ?? res.data;
   }
 
@@ -137,7 +129,6 @@ export default function PaystackReturn() {
     nav(`/register?${qs.toString()}`, { replace: true });
   }
 
-  // ✅ HARD redirect so AuthProvider re-reads token immediately (no blank screen requiring manual refresh)
   function hardGoToReader(docId, intentId, ref) {
     const qs = new URLSearchParams();
     qs.set("paid", "1");
@@ -146,6 +137,12 @@ export default function PaystackReturn() {
     if (intentId) qs.set("paymentIntentId", String(intentId));
 
     window.location.replace(`/dashboard/documents/${docId}/read?${qs.toString()}`);
+  }
+
+  function hardGoNext(path) {
+    // For subscriptions we prefer hard redirect so app refreshes and entitlement checks are clean
+    const safe = path.startsWith("/") ? path : "/dashboard/law-reports";
+    window.location.replace(safe);
   }
 
   async function run() {
@@ -171,7 +168,7 @@ export default function PaystackReturn() {
       return;
     }
 
-    // ✅ Authenticated purchase flow: token required for the user experience
+    // Authenticated purchase flow
     const token = restoreTokenIfMissing(reference);
     if (!token) {
       setPhase("FAILED");
@@ -185,7 +182,6 @@ export default function PaystackReturn() {
       setMessage("Resolving your payment…");
       await logReturnVisit(reference);
 
-      // 1) Resolve intent & meta (docId)
       const resolved = await fetchIntentByReference(reference);
       const intentId = resolved?.paymentIntentId || resolved?.id || null;
       const meta = resolved?.meta || null;
@@ -195,29 +191,25 @@ export default function PaystackReturn() {
       setPaymentIntentId(intentId);
 
       const ctx = readCtx(reference);
-
-      // 2) Pick docId from best sources (intent/meta > ctx > location.state)
       const docId = meta?.legalDocumentId ?? ctx?.docId ?? fallbackDocId ?? null;
 
-      // 3) ✅ Confirm server-side now (forces entitlement/fulfillment immediately)
       setMessage("Confirming payment on server…");
       await confirmPaystack(reference);
 
       setPhase("SUCCESS");
-      setMessage("Payment received ✅ Opening your document…");
+      setMessage("Payment received ✅ Redirecting…");
       await sleep(250);
 
-      // ✅ Safe to clear now
       clearCtx(reference);
 
+      // If doc purchase -> reader
       if (docId) {
-        // ✅ Hard redirect to reader to avoid “blank until refresh”
         hardGoToReader(docId, intentId, reference);
         return;
       }
 
-      // No docId means not a doc purchase; go to library (hard redirect not necessary)
-      nav("/dashboard/library", { replace: true });
+      // Otherwise -> next (subscription flows)
+      hardGoNext(next);
     } catch (e) {
       const status = e?.response?.status;
       if (status === 401) {
@@ -239,37 +231,22 @@ export default function PaystackReturn() {
   }, []);
 
   return (
-    <div style={{ padding: 24, maxWidth: 720, margin: "0 auto" }}>
-      <h2 style={{ fontWeight: 900, marginBottom: 12 }}>Paystack Return</h2>
+    <div className="psrPage">
+      <div className="psrHeader">
+        <div className="psrKicker">LawAfrica</div>
+        <h2 className="psrTitle">Paystack Return</h2>
+      </div>
 
       {phase !== "FAILED" ? (
-        <div
-          style={{
-            border: "1px solid #e5e7eb",
-            background: "white",
-            borderRadius: 14,
-            padding: 16,
-            boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div
-              style={{
-                width: 22,
-                height: 22,
-                borderRadius: "50%",
-                border: "3px solid #e5e7eb",
-                borderTopColor: "#8b1c1c",
-                animation: "spin 0.9s linear infinite",
-              }}
-            />
-            <div>
-              <div style={{ fontWeight: 900 }}>{message}</div>
-              <div style={{ marginTop: 4, fontSize: 13, color: "#6b7280" }}>
-                Don’t close this page. We’re redirecting you back.
-              </div>
+        <div className="psrCard">
+          <div className="psrRow">
+            <div className="psrSpinner" aria-hidden="true" />
+            <div className="psrBody">
+              <div className="psrMsg">{message}</div>
+              <div className="psrHint">Don’t close this page. We’re redirecting you back.</div>
+
               {paymentIntentId && (
-                <div style={{ marginTop: 6, fontSize: 12, color: "#6b7280" }}>
+                <div className="psrMeta">
                   PaymentIntentId: <b>#{paymentIntentId}</b> • Reference: <b>{reference}</b>
                 </div>
               )}
@@ -277,76 +254,31 @@ export default function PaystackReturn() {
           </div>
 
           {phase === "SUCCESS" && (
-            <div
-              style={{
-                marginTop: 12,
-                padding: 10,
-                borderRadius: 12,
-                background: "#ecfdf5",
-                border: "1px solid #a7f3d0",
-                color: "#065f46",
-              }}
-            >
+            <div className="psrOk">
               Payment received ✅ Redirecting…
             </div>
           )}
         </div>
       ) : (
-        <div
-          style={{
-            border: "1px solid #fecaca",
-            background: "#fff1f2",
-            borderRadius: 14,
-            padding: 16,
-          }}
-        >
-          <div style={{ fontWeight: 900, color: "#9f1239" }}>{message}</div>
-          <div style={{ marginTop: 6, whiteSpace: "pre-wrap", color: "#7f1d1d" }}>{error}</div>
+        <div className="psrErrorCard">
+          <div className="psrErrTitle">{message}</div>
+          <div className="psrErrText">{error}</div>
 
-          <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button
-              onClick={() => window.location.reload()}
-              style={{
-                background: "#8b1c1c",
-                color: "white",
-                border: "none",
-                borderRadius: 10,
-                padding: "10px 14px",
-                fontWeight: 800,
-                cursor: "pointer",
-              }}
-            >
+          <div className="psrActions">
+            <button className="psrBtn psrBtnPrimary" onClick={() => window.location.reload()}>
               Refresh
             </button>
 
-            <button
-              onClick={() => nav("/login", { replace: true })}
-              style={{
-                background: "white",
-                color: "#8b1c1c",
-                border: "1px solid #8b1c1c",
-                borderRadius: 10,
-                padding: "10px 14px",
-                fontWeight: 800,
-                cursor: "pointer",
-              }}
-            >
+            <button className="psrBtn psrBtnGhost" onClick={() => nav("/login", { replace: true })}>
               Go to Login
             </button>
           </div>
 
-          <div style={{ marginTop: 10, fontSize: 12, color: "#6b7280" }}>
+          <div className="psrHint2">
             Tip: after logging in, come back to this same return URL and click Refresh.
           </div>
         </div>
       )}
-
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 }

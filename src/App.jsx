@@ -27,12 +27,14 @@ import AdminInstitutionBundleSubscriptions from "./pages/dashboard/admin/AdminIn
 import AdminProductDocuments from "./pages/dashboard/admin/AdminProductDocuments";
 import AdminDocuments from "./pages/dashboard/admin/AdminDocuments";
 import AdminInstitutionUsers from "./pages/dashboard/admin/AdminInstitutionUsers";
+import LawReportsSubscribe from "./pages/dashboard/LawReportsSubscribe";
 import AdminUsers from "./pages/dashboard/admin/AdminUsers";
 import AdminLLRServices from "./pages/dashboard/admin/AdminLLRServices";
 import InstitutionMembersAdmin from "./pages/dashboard/institution/InstitutionMembersAdmin";
 import AdminSubscriptionRequests from "./pages/dashboard/approvals/AdminSubscriptionRequests";
 import AppShell from "./layout/AppShell";
 import DevContentBlocksTest from "./pages/dashboard/DevContentBlocksTest";
+
 
 import Explore from "./pages/dashboard/Explore";
 import Library from "./pages/dashboard/Library";
@@ -126,6 +128,7 @@ export default function App() {
             <Route path="law-reports" element={<LawReports />} />
             <Route path="law-reports/:id" element={<LawReportReader />} />
             <Route path="trials" element={<RequestTrial />} />
+            <Route path="law-reports/subscribe" element={<LawReportsSubscribe />} />
             <Route path="security" element={<SecurityDashboard />} />
 
             {/* ===================== */}
