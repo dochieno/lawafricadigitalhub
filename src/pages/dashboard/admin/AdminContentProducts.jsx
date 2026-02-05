@@ -257,10 +257,6 @@ export default function AdminContentProducts() {
     });
   }
 
-  useEffect(() => {
-    loadAll();
-  }, []);
-
   // when rows change, fetch counts for visible products in background
   useEffect(() => {
     const ids = rows.map((r) => r.id ?? r.Id).filter((id) => id != null);

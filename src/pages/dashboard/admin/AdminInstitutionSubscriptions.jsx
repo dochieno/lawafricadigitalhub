@@ -306,7 +306,7 @@ export default function AdminInstitutionSubscriptions() {
 
   // ✅ unified UX: toast + rich error box (keep your strings too)
   const [error, setError] = useState("");
-  const [info, setInfo] = useState("");
+  const [setInfo] = useState("");
   const [toast, setToast] = useState(null); // {type,text}
 
   // Create
@@ -380,7 +380,6 @@ export default function AdminInstitutionSubscriptions() {
   }
 
   useEffect(() => {
-    loadAll();
     loadInstitutions();
     loadProducts();
   }, []);
