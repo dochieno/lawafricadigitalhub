@@ -56,6 +56,7 @@ import AdminInvoices from "./pages/dashboard/admin/AdminInvoices";
 import AdminInvoiceDetail from "./pages/dashboard/admin/AdminInvoiceDetail";
 import AdminInvoiceSettings from "./pages/dashboard/admin/AdminInvoiceSettings";
 import AdminPayments from "./pages/dashboard/admin/AdminPayments";
+import AdminUserSubscriptions from "./pages/dashboard/admin/AdminUserSubscriptions";
 
 // ✅ NEW: VAT Rates Admin
 import AdminVATRates from "./pages/dashboard/admin/AdminVatRates";
@@ -150,6 +151,7 @@ export default function App() {
 
               <Route path="admin/institution-subscriptions" element={<AdminInstitutionSubscriptions />} />
               <Route path="admin/institution-bundle-subscriptions" element={<AdminInstitutionBundleSubscriptions />} />
+              <Route path="admin/user-subscriptions" element={<AdminUserSubscriptions />} />
               <Route path="admin/trials" element={<AdminTrials />} />
               <Route path="admin/institution-admins" element={<AdminInstitutionAdmins />} />
               <Route path="admin/content-products/:productId/documents" element={<AdminProductDocuments />} />
