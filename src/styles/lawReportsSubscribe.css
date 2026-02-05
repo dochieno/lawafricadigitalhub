@@ -1,293 +1,376 @@
-/* src/styles/lawReportsSubscribe.css */
-
-.lrsPage {
-  padding: 18px;
-  max-width: 1100px;
-  margin: 0 auto;
+:root {
+  --lrs-bg: #f6f7fb;
+  --lrs-card: rgba(255, 255, 255, 0.92);
+  --lrs-border: rgba(15, 23, 42, 0.12);
+  --lrs-ink: #0f172a;
+  --lrs-muted: rgba(15, 23, 42, 0.65);
+  --lrs-brand: #8b1c1c;
+  --lrs-brand2: #a11f1f;
+  --lrs-shadow: 0 18px 45px rgba(0, 0, 0, 0.08);
+  --lrs-radius: 16px;
 }
 
-.lrsHero {
+.lrsPage {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 18px 16px 40px;
+}
+
+.lrsHeroCard {
+  background: linear-gradient(
+    180deg,
+    rgba(139, 28, 28, 0.08),
+    rgba(255, 255, 255, 0.8)
+  );
+  border: 1px solid var(--lrs-border);
+  border-radius: var(--lrs-radius);
+  box-shadow: var(--lrs-shadow);
+  padding: 18px;
+}
+
+.lrsHeroTop {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
-  padding: 18px 18px;
-  border-radius: 16px;
-  border: 1px solid rgba(17, 24, 39, 0.12);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.78));
-  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.10);
-  margin-bottom: 14px;
-}
-
-.lrsHeroLeft {
-  min-width: 260px;
 }
 
 .lrsKicker {
   font-size: 12px;
-  letter-spacing: 0.18em;
-  font-weight: 800;
-  color: #a11212;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  margin-bottom: 6px;
+  color: rgba(139, 28, 28, 0.9);
+  font-weight: 700;
 }
 
-.lrsHeroTitle {
-  font-size: 30px;
-  font-weight: 900;
-  color: #111827;
+.lrsTitle {
+  margin: 8px 0 6px;
+  font-size: 32px;
   line-height: 1.1;
+  color: var(--lrs-ink);
 }
 
-.lrsHeroSub {
-  margin-top: 6px;
-  color: #4b5563;
-  font-size: 14px;
+.lrsSub {
+  margin: 0;
+  color: var(--lrs-muted);
+  max-width: 720px;
 }
 
 .lrsDot {
-  margin: 0 8px;
-  color: #9ca3af;
+  margin: 0 6px;
+  color: rgba(15, 23, 42, 0.35);
 }
 
 .lrsHeroActions {
   display: flex;
   gap: 10px;
+  align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
 
-.lrsBtn {
-  background: #111827;
-  color: #fff;
-  border: 1px solid #111827;
-  border-radius: 12px;
-  padding: 10px 14px;
-  font-weight: 800;
-  cursor: pointer;
+.lrsCard {
+  margin-top: 14px;
+  background: var(--lrs-card);
+  border: 1px solid var(--lrs-border);
+  border-radius: var(--lrs-radius);
+  box-shadow: var(--lrs-shadow);
+  padding: 16px;
 }
 
-.lrsBtn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+.lrsPhoneCard .lrsCardHead {
+  display: grid;
+  gap: 6px;
 }
 
-.lrsBtnGhost {
-  background: #fff;
-  color: #111827;
-  border: 1px solid rgba(17, 24, 39, 0.16);
-}
-
-.lrsBtnDashed {
-  background: transparent;
-  color: #111827;
-  border: 1px dashed rgba(17, 24, 39, 0.26);
-}
-
-.lrsPhoneCard {
-  border: 1px solid rgba(17, 24, 39, 0.12);
-  background: #fff;
-  border-radius: 14px;
-  padding: 14px;
-  margin-bottom: 12px;
-}
-
-.lrsPhoneTitle {
+.lrsCardTitleSm {
+  font-size: 13px;
   font-weight: 900;
-  margin-bottom: 8px;
-  color: #111827;
+  color: rgba(15, 23, 42, 0.85);
+}
+
+.lrsCardMeta {
+  color: var(--lrs-muted);
+  font-size: 12px;
 }
 
 .lrsPhoneRow {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  margin-top: 10px;
 }
 
 .lrsInput {
   width: 100%;
-  max-width: 520px;
-  padding: 12px 12px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
   border-radius: 12px;
-  border: 1px solid rgba(17, 24, 39, 0.14);
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.9);
   outline: none;
-  font-weight: 700;
+  color: var(--lrs-ink);
 }
 
 .lrsInput:focus {
-  border-color: rgba(161, 18, 18, 0.55);
-  box-shadow: 0 0 0 4px rgba(161, 18, 18, 0.10);
-}
-
-.lrsPhoneHint {
-  font-size: 12px;
-  color: #6b7280;
+  border-color: rgba(139, 28, 28, 0.35);
+  box-shadow: 0 0 0 4px rgba(139, 28, 28, 0.12);
 }
 
 .lrsAlert {
+  margin-top: 12px;
   border-radius: 14px;
-  padding: 12px 14px;
-  margin: 10px 0;
-  font-weight: 700;
+  padding: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.85);
 }
 
 .lrsAlertErr {
-  background: #fff1f2;
-  border: 1px solid #fecaca;
-  color: #7f1d1d;
+  border-color: rgba(220, 38, 38, 0.28);
+  background: rgba(254, 242, 242, 0.92);
 }
 
 .lrsAlertInfo {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  color: #1e3a8a;
+  border-color: rgba(139, 28, 28, 0.18);
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.lrsAlertTitle {
+  font-weight: 900;
+  color: var(--lrs-ink);
+}
+
+.lrsAlertBody {
+  margin-top: 6px;
+  color: rgba(15, 23, 42, 0.75);
+  line-height: 1.35;
 }
 
 .lrsLoading,
 .lrsEmpty {
-  padding: 18px;
-  color: #6b7280;
-  font-weight: 700;
+  margin-top: 16px;
+  color: var(--lrs-muted);
 }
 
 .lrsGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 12px;
+  grid-template-columns: 1fr;
+  gap: 12px;
 }
 
-@media (max-width: 900px) {
+@media (min-width: 900px) {
   .lrsGrid {
-    grid-template-columns: 1fr;
-  }
-  .lrsHero {
-    flex-direction: column;
-  }
-  .lrsHeroActions {
-    justify-content: flex-start;
+    grid-template-columns: 1fr 1fr;
   }
 }
 
-.lrsCard {
-  border: 1px solid rgba(17, 24, 39, 0.12);
-  background: #fff;
-  border-radius: 16px;
-  padding: 14px;
-  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.12);
+.lrsProductCard {
+  position: relative;
+  overflow: hidden;
 }
 
-.lrsCardTop {
+.lrsProdTop {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
 }
 
-.lrsCardTitle {
+.lrsProdTitle {
+  font-weight: 950;
+  color: var(--lrs-ink);
   font-size: 16px;
-  font-weight: 900;
-  color: #111827;
+}
+
+.lrsProdDesc {
+  margin-top: 8px;
+  color: var(--lrs-muted);
+  line-height: 1.35;
 }
 
 .lrsBadge {
-  font-size: 12px;
-  font-weight: 900;
-  padding: 6px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(17, 24, 39, 0.12);
-  background: #f9fafb;
-  color: #111827;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 800;
   white-space: nowrap;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.75);
+  color: rgba(15, 23, 42, 0.78);
 }
 
 .lrsBadge.ok {
-  background: #ecfdf5;
-  border-color: #a7f3d0;
-  color: #065f46;
+  border-color: rgba(16, 185, 129, 0.22);
+  background: rgba(236, 253, 245, 0.9);
+  color: rgba(6, 95, 70, 0.95);
+}
+
+.lrsBadge.warn {
+  border-color: rgba(245, 158, 11, 0.25);
+  background: rgba(255, 247, 237, 0.92);
+  color: rgba(146, 64, 14, 0.98);
 }
 
 .lrsBadge.muted {
-  background: #f3f4f6;
-  border-color: rgba(17, 24, 39, 0.12);
-  color: #4b5563;
+  opacity: 0.9;
 }
 
-.lrsCardDesc {
-  margin-top: 10px;
-  color: #4b5563;
-  line-height: 1.45;
-  font-weight: 600;
+.lrsHint {
+  margin-top: 12px;
+  border-radius: 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.8);
+  color: rgba(15, 23, 42, 0.78);
+}
+
+.lrsHint.ok {
+  border-color: rgba(16, 185, 129, 0.22);
+  background: rgba(236, 253, 245, 0.9);
+}
+
+.lrsHint.warn {
+  border-color: rgba(245, 158, 11, 0.22);
+  background: rgba(255, 247, 237, 0.92);
+}
+
+.lrsFeatures {
+  margin-top: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.lrsFeat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(15, 23, 42, 0.75);
+  font-size: 13px;
+}
+
+.lrsDotIcon {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(
+    135deg,
+    rgba(139, 28, 28, 0.95),
+    rgba(15, 148, 136, 0.95)
+  );
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+  flex: 0 0 auto;
 }
 
 .lrsSectionTitle {
-  margin-top: 12px;
-  font-weight: 900;
-  color: #111827;
+  margin-top: 14px;
+  font-weight: 950;
+  color: rgba(15, 23, 42, 0.9);
 }
 
 .lrsPlanStack {
   margin-top: 10px;
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 10px;
 }
 
 .lrsPlan {
-  border: 1px solid rgba(17, 24, 39, 0.10);
+  border: 1px solid rgba(15, 23, 42, 0.1);
   border-radius: 14px;
   padding: 12px;
-  background: rgba(249, 250, 251, 0.6);
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .lrsPlanRow {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
 }
 
 .lrsPlanPeriod {
-  font-weight: 900;
-  color: #111827;
+  font-weight: 950;
+  color: rgba(15, 23, 42, 0.88);
 }
 
 .lrsPlanPrice {
-  font-weight: 900;
-  color: #111827;
+  font-weight: 950;
+  color: rgba(15, 23, 42, 0.92);
 }
 
 .lrsPlanActions {
   margin-top: 10px;
   display: flex;
-  flex-wrap: wrap;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
-.lrsEmptyMini {
-  margin-top: 10px;
-  padding: 12px;
-  border-radius: 14px;
-  background: #fff7ed;
-  border: 1px solid #fed7aa;
-  color: #9a3412;
+.lrsIco {
+  width: 16px;
+  height: 16px;
+}
+
+.lrsIconBtn {
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.85);
+  color: rgba(15, 23, 42, 0.88);
+  border-radius: 12px;
+  padding: 8px 12px;
+  height: 38px;
+  cursor: pointer;
   font-weight: 800;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.lrsEmptyMiniHint {
-  margin-top: 6px;
-  font-size: 12px;
-  color: #7c2d12;
-  font-weight: 700;
+.lrsIconBtn:hover:not(:disabled) {
+  filter: brightness(1.02);
 }
 
-.lrsEmptyMiniActions {
-  margin-top: 10px;
+.lrsIconBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.lrsPrimaryBtn {
+  border-color: rgba(139, 28, 28, 0.35);
+  background: linear-gradient(
+    135deg,
+    rgba(139, 28, 28, 0.95) 0%,
+    rgba(161, 31, 31, 0.95) 50%,
+    rgba(15, 148, 136, 0.95) 100%
+  );
+  color: #fff;
+}
+
+.lrsGhostBtn {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.lrsDashedBtn {
+  border-style: dashed;
+  border-color: rgba(139, 28, 28, 0.26);
 }
 
 .lrsTip {
   margin-top: 10px;
+  color: rgba(15, 23, 42, 0.62);
   font-size: 12px;
-  color: #6b7280;
-  font-weight: 700;
+}
+
+.lrsEmptyPlan {
+  margin-top: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  background: rgba(255, 247, 237, 0.92);
+  padding: 12px;
+}
+
+.lrsEmptyPlanTitle {
+  font-weight: 950;
+  color: rgba(146, 64, 14, 0.98);
+}
+
+.lrsEmptyPlanMeta {
+  margin-top: 6px;
+  color: rgba(146, 64, 14, 0.86);
+  font-size: 12px;
+  line-height: 1.35;
 }
