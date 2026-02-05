@@ -149,4 +149,27 @@
   white-space: pre-wrap;
   font-size: 12px;
   color: rgba(17,24,39,0.8);
+}/* add to ../../styles/requestTrial.css */
+.rt-btnGhost {
+  background: transparent;
+  color: #8b1c1c;
+  border: 1px solid rgba(139, 28, 28, 0.25);
 }
+
+.rt-btnGhost:hover {
+  background: rgba(139, 28, 28, 0.06);
+}
+
+.rt-mt6 {
+  margin-top: 6px;
+}
+
+.rt-details {
+  margin-top: 10px;
+}
+
+.rt-summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
