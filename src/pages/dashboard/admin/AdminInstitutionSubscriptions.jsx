@@ -1,4 +1,3 @@
-// src/pages/dashboard/admin/AdminInstitutionSubscriptions.jsx
 import { useEffect, useMemo, useState } from "react";
 import api from "../../../api/client";
 import "../../../styles/adminCrud.css"; // keep modals/toggles
@@ -190,14 +189,6 @@ function Badge({ tone = "neutral", children }) {
   return <span className={`au-badge au-badge-${tone}`}>{children}</span>;
 }
 
-function Chip({ active, children, ...props }) {
-  return (
-    <button type="button" className={`au-chip ${active ? "active" : ""}`} {...props}>
-      {children}
-    </button>
-  );
-}
-
 function IconBtn({ tone = "neutral", disabled, title, onClick, children }) {
   return (
     <button
@@ -237,19 +228,6 @@ function Icon({ name }) {
             strokeWidth="2"
             strokeLinecap="round"
           />
-        </svg>
-      );
-    case "refresh":
-      return (
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path d="M21 12a9 9 0 1 1-2.64-6.36" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          <path d="M21 3v6h-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      );
-    case "plus":
-      return (
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       );
     case "history":
@@ -304,9 +282,9 @@ export default function AdminInstitutionSubscriptions() {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  // ✅ unified UX: toast + rich error box (keep your strings too)
+  // ✅ FIXED: proper info state + setter
   const [error, setError] = useState("");
-  const [setInfo] = useState("");
+  const [info, setInfo] = useState("");
   const [toast, setToast] = useState(null); // {type,text}
 
   // Create
@@ -379,9 +357,12 @@ export default function AdminInstitutionSubscriptions() {
     }
   }
 
+  // ✅ FIXED: actually load subscriptions on mount
   useEffect(() => {
     loadInstitutions();
     loadProducts();
+    loadAll();
+
   }, []);
 
   const filtered = useMemo(() => {
@@ -724,6 +705,7 @@ export default function AdminInstitutionSubscriptions() {
           </div>
 
           {error ? <div className="au-error">{error}</div> : null}
+          {info ? <div className="au-info">{info}</div> : null}
 
           <div className="au-topbar">
             <div className="au-search">
@@ -792,7 +774,6 @@ export default function AdminInstitutionSubscriptions() {
               <div className="au-kpiValue">{summary.suspended}</div>
             </div>
           </div>
-          
         </div>
       </header>
 
@@ -872,8 +853,13 @@ export default function AdminInstitutionSubscriptions() {
 
                     <td className="au-tdRight">
                       <div className="au-actionsRow">
-                        <IconBtn tone="neutral" disabled={busy} title="View audit history" onClick={() => openAuditModalFor(r)}>
-                          {busy && auditTarget && (auditTarget.id ?? auditTarget.Id) === id && auditLoading ? (
+                        <IconBtn
+                          tone="neutral"
+                          disabled={busy}
+                          title="View audit history"
+                          onClick={() => openAuditModalFor(r)}
+                        >
+                          {auditLoading && auditTarget && (auditTarget.id ?? auditTarget.Id) === id ? (
                             <Icon name="spinner" />
                           ) : (
                             <Icon name="history" />
@@ -886,7 +872,7 @@ export default function AdminInstitutionSubscriptions() {
                           title="View request / approval logs"
                           onClick={() => openReqLogModalFor(r)}
                         >
-                          {busy && reqLogTarget && (reqLogTarget.id ?? reqLogTarget.Id) === id && reqLogLoading ? (
+                          {reqLogLoading && reqLogTarget && (reqLogTarget.id ?? reqLogTarget.Id) === id ? (
                             <Icon name="spinner" />
                           ) : (
                             <Icon name="file" />
@@ -944,15 +930,15 @@ export default function AdminInstitutionSubscriptions() {
 
         <div className="au-panelBottom">
           <div className="au-muted">Suspended subscriptions must be unsuspended before renewing.</div>
-          <div className="au-muted">{meIsGlobal ? "Global Admin can apply suspend/unsuspend immediately." : "Non-Global Admin submits requests for approval."}</div>
+          <div className="au-muted">
+            {meIsGlobal ? "Global Admin can apply suspend/unsuspend immediately." : "Non-Global Admin submits requests for approval."}
+          </div>
         </div>
       </section>
 
       <AdminPageFooter right={<span className="admin-footer-muted">LawAfrica • Admin Console</span>} />
 
-      {/* ========================= */}
       {/* CREATE MODAL */}
-      {/* ========================= */}
       {openCreate && (
         <div className="admin-modal-overlay" onClick={closeCreateModal}>
           <div className="admin-modal admin-modal-tight" onClick={(e) => e.stopPropagation()}>
@@ -1046,9 +1032,7 @@ export default function AdminInstitutionSubscriptions() {
         </div>
       )}
 
-      {/* ========================= */}
       {/* RENEW MODAL */}
-      {/* ========================= */}
       {openRenew && renewTarget && (
         <div className="admin-modal-overlay" onClick={closeRenewModal}>
           <div className="admin-modal admin-modal-tight" onClick={(e) => e.stopPropagation()}>
@@ -1122,9 +1106,7 @@ export default function AdminInstitutionSubscriptions() {
         </div>
       )}
 
-      {/* ========================= */}
       {/* AUDIT MODAL */}
-      {/* ========================= */}
       {openAudit && auditTarget && (
         <div className="admin-modal-overlay" onClick={closeAuditModal}>
           <div className="admin-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 1100 }}>
@@ -1220,9 +1202,7 @@ export default function AdminInstitutionSubscriptions() {
         </div>
       )}
 
-      {/* ========================= */}
       {/* REQUEST / APPROVAL LOG MODAL */}
-      {/* ========================= */}
       {openReqLog && reqLogTarget && (
         <div className="admin-modal-overlay" onClick={closeReqLogModal}>
           <div className="admin-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 1100 }}>
@@ -1371,9 +1351,7 @@ export default function AdminInstitutionSubscriptions() {
         </div>
       )}
 
-      {/* ========================= */}
       {/* REQUEST ACTION MODAL */}
-      {/* ========================= */}
       {openReqAction && reqActionRow && reqActionMode && (
         <div className="admin-modal-overlay" onClick={closeRequestActionModal}>
           <div className="admin-modal admin-modal-tight" onClick={(e) => e.stopPropagation()}>
