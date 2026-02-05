@@ -1,3 +1,4 @@
+// src/pages/dashboard/LawReportsSubscribe.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../../api/client";
@@ -22,6 +23,18 @@ function billingLabel(period) {
   if (s.includes("month") || s === "1") return "Monthly";
   if (s.includes("annual") || s.includes("year") || s === "2") return "Annual";
   return period || "Plan";
+}
+
+function formatDatePretty(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  // 31 Jan 2026
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(d);
 }
 
 function isActiveNow(sub, nowUtcMs) {
@@ -97,10 +110,7 @@ export default function LawReportsSubscribe() {
     loadAll();
   }, []);
 
-  const nowUtcMs = useMemo(
-    () => new Date(nowUtc || Date.now()).getTime(),
-    [nowUtc]
-  );
+  const nowUtcMs = useMemo(() => new Date(nowUtc || Date.now()).getTime(), [nowUtc]);
 
   const activeByProductId = useMemo(() => {
     const map = new Map();
@@ -121,8 +131,8 @@ export default function LawReportsSubscribe() {
     if (!s) return null;
 
     const active = isActiveNow(s, nowUtcMs);
-    const end = new Date(s.endDate || s.EndDate).toLocaleDateString();
-    return active ? `Active • ends ${end}` : `Expired • ended ${end}`;
+    const endPretty = formatDatePretty(s.endDate || s.EndDate);
+    return active ? `Active • ends ${endPretty}` : `Expired • ended ${endPretty}`;
   }
 
   async function startMpesa(plan, product) {
@@ -149,7 +159,9 @@ export default function LawReportsSubscribe() {
       const data = res?.data || {};
       const paymentIntentId = data.paymentIntentId || data.PaymentIntentId;
 
-      setNotice(`STK sent. Check your phone to complete payment for "${product?.name || product?.Name}".`);
+      setNotice(
+        `STK sent. Check your phone to complete payment for "${product?.name || product?.Name}".`
+      );
 
       if (paymentIntentId) {
         const start = Date.now();
@@ -157,7 +169,6 @@ export default function LawReportsSubscribe() {
         const intervalMs = 2500;
 
         while (Date.now() - start < timeoutMs) {
-
           const intent = await api.get(`/payments/intent/${paymentIntentId}`);
           const it = intent?.data || {};
           const status = String(it.status || it.Status || "").toLowerCase();
@@ -178,7 +189,9 @@ export default function LawReportsSubscribe() {
           await new Promise((r) => setTimeout(r, intervalMs));
         }
 
-        setNotice("We’re still waiting for confirmation. If you completed payment, refresh this page in a moment.");
+        setNotice(
+          "We’re still waiting for confirmation. If you completed payment, refresh this page in a moment."
+        );
       }
     } catch (e) {
       console.error(e);
@@ -251,16 +264,19 @@ export default function LawReportsSubscribe() {
 
   return (
     <div className="lrsPage">
-      <div className="lrsHeader">
-        <div className="lrsHeaderLeft">
-          <div className="lrsKicker">LawAfrica</div>
-          <h1 className="lrsTitle">Subscribe to Law Reports</h1>
-          <div className="lrsSub">
+      {/* ✅ Header card (like Trials) */}
+      <div className="lrsHero">
+        <div className="lrsHeroLeft">
+          <div className="lrsKicker">LAWAFRICA • SUBSCRIPTIONS</div>
+          <div className="lrsHeroTitle">Subscribe to Law Reports</div>
+          <div className="lrsHeroSub">
+            Choose a plan below. You can subscribe now or renew anytime.
+            <span className="lrsDot">•</span>
             Audience: <b>{audience}</b>
           </div>
         </div>
 
-        <div className="lrsHeaderActions">
+        <div className="lrsHeroActions">
           <button className="lrsBtn lrsBtnGhost" onClick={loadAll} disabled={loading}>
             Refresh
           </button>
@@ -268,10 +284,6 @@ export default function LawReportsSubscribe() {
             Back to Law Reports
           </button>
         </div>
-      </div>
-
-      <div className="lrsInfo">
-        Choose a plan below. You can subscribe now or renew anytime.
       </div>
 
       <div className="lrsPhoneCard">
@@ -285,11 +297,15 @@ export default function LawReportsSubscribe() {
             inputMode="numeric"
             autoComplete="tel"
           />
-          <div className="lrsPhoneHint">Used only when you click “Pay with MPESA”.</div>
+          <div className="lrsPhoneHint">Used only when you click “Subscribe/Renew (MPESA)”.</div>
         </div>
       </div>
 
-      {error ? <div className="lrsAlert lrsAlertErr">{typeof error === "string" ? error : JSON.stringify(error)}</div> : null}
+      {error ? (
+        <div className="lrsAlert lrsAlertErr">
+          {typeof error === "string" ? error : JSON.stringify(error)}
+        </div>
+      ) : null}
       {notice ? <div className="lrsAlert lrsAlertInfo">{notice}</div> : null}
 
       {loading ? (
@@ -316,7 +332,7 @@ export default function LawReportsSubscribe() {
                   <div className="lrsCardTitle">{name}</div>
 
                   {badge ? (
-                    <span className={`lrsBadge ${active ? "ok" : "muted"}`} title="Your status for this product">
+                    <span className={`lrsBadge ${active ? "ok" : "muted"}`} title="Your status">
                       {badge}
                     </span>
                   ) : (
@@ -329,7 +345,20 @@ export default function LawReportsSubscribe() {
                 <div className="lrsSectionTitle">Plans</div>
 
                 {plans.length === 0 ? (
-                  <div className="lrsEmptyMini">No active plans available.</div>
+                  <div className="lrsEmptyMini">
+                    No active plans available for this product.
+                    <div className="lrsEmptyMiniHint">
+                      Admin: confirm there is an <b>active ContentProductPrice</b> for Audience <b>{audience}</b>.
+                    </div>
+                    <div className="lrsEmptyMiniActions">
+                      <button
+                        className="lrsBtn lrsBtnDashed"
+                        onClick={() => nav(`/dashboard/trials?productId=${pid}`)}
+                      >
+                        Start trial
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <div className="lrsPlanStack">
                     {plans.map((pl) => {
@@ -341,7 +370,6 @@ export default function LawReportsSubscribe() {
                       const keyMpesa = `${planId}-mpesa`;
                       const keyPaystack = `${planId}-paystack`;
 
-                      // ✅ “Renew” if already active, else “Subscribe”
                       const primaryLabel = active ? "Renew" : "Subscribe";
 
                       return (
@@ -358,7 +386,9 @@ export default function LawReportsSubscribe() {
                               onClick={() => startMpesa(pl, p)}
                               title="Pay with MPESA (STK Push)"
                             >
-                              {busyKey === keyMpesa ? "Sending STK…" : `${primaryLabel} (MPESA)`}
+                              {busyKey === keyMpesa
+                                ? "Sending STK…"
+                                : `${primaryLabel} (MPESA)`}
                             </button>
 
                             <button
@@ -367,7 +397,9 @@ export default function LawReportsSubscribe() {
                               onClick={() => startPaystack(pl, p)}
                               title="Pay with Paystack"
                             >
-                              {busyKey === keyPaystack ? "Opening Paystack…" : `${primaryLabel} (Paystack)`}
+                              {busyKey === keyPaystack
+                                ? "Opening Paystack…"
+                                : `${primaryLabel} (Paystack)`}
                             </button>
 
                             <button

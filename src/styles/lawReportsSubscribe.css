@@ -1,196 +1,229 @@
-/* Law Reports Subscribe — LawAfrica branded (no inline CSS) */
-
-:root {
-  --la-red: #8b1c1c;
-  --la-ink: #0f172a;
-  --la-muted: rgba(15, 23, 42, 0.62);
-  --la-border: rgba(15, 23, 42, 0.12);
-
-  --la-bg: #f3f4f6;
-  --la-card: rgba(255, 255, 255, 0.92);
-  --la-card-2: rgba(248, 250, 252, 0.85);
-  --la-shadow: 0 18px 45px rgba(0, 0, 0, 0.08);
-  --la-radius: 16px;
-}
+/* src/styles/lawReportsSubscribe.css */
 
 .lrsPage {
   padding: 18px;
-  max-width: 980px;
+  max-width: 1100px;
+  margin: 0 auto;
 }
 
-.lrsHeader {
+.lrsHero {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
+  padding: 18px 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.78));
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.10);
+  margin-bottom: 14px;
 }
 
-.lrsHeaderLeft {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.lrsHeroLeft {
+  min-width: 260px;
 }
 
 .lrsKicker {
-  font-weight: 900;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--la-red);
   font-size: 12px;
+  letter-spacing: 0.18em;
+  font-weight: 800;
+  color: #a11212;
+  text-transform: uppercase;
+  margin-bottom: 6px;
 }
 
-.lrsTitle {
-  margin: 0;
-  font-weight: 950;
-  color: var(--la-ink);
-  font-size: 28px;
-  line-height: 1.15;
+.lrsHeroTitle {
+  font-size: 30px;
+  font-weight: 900;
+  color: #111827;
+  line-height: 1.1;
 }
 
-.lrsSub {
-  color: var(--la-muted);
-  font-size: 13px;
+.lrsHeroSub {
+  margin-top: 6px;
+  color: #4b5563;
+  font-size: 14px;
 }
 
-.lrsHeaderActions {
+.lrsDot {
+  margin: 0 8px;
+  color: #9ca3af;
+}
+
+.lrsHeroActions {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-.lrsInfo {
-  color: var(--la-muted);
-  margin: 8px 0 14px;
+.lrsBtn {
+  background: #111827;
+  color: #fff;
+  border: 1px solid #111827;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.lrsBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.lrsBtnGhost {
+  background: #fff;
+  color: #111827;
+  border: 1px solid rgba(17, 24, 39, 0.16);
+}
+
+.lrsBtnDashed {
+  background: transparent;
+  color: #111827;
+  border: 1px dashed rgba(17, 24, 39, 0.26);
 }
 
 .lrsPhoneCard {
-  border: 1px solid var(--la-border);
-  background: rgba(255, 255, 255, 0.85);
-  border-radius: var(--la-radius);
-  padding: 12px;
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 12px;
 }
 
 .lrsPhoneTitle {
   font-weight: 900;
-  color: var(--la-ink);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+  color: #111827;
 }
 
 .lrsPhoneRow {
   display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .lrsInput {
-  padding: 10px 12px;
+  width: 100%;
+  max-width: 520px;
+  padding: 12px 12px;
   border-radius: 12px;
-  border: 1px solid rgba(15, 23, 42, 0.18);
-  background: white;
+  border: 1px solid rgba(17, 24, 39, 0.14);
   outline: none;
-  min-width: 260px;
+  font-weight: 700;
 }
 
 .lrsInput:focus {
-  border-color: rgba(139, 28, 28, 0.55);
-  box-shadow: 0 0 0 4px rgba(139, 28, 28, 0.12);
+  border-color: rgba(161, 18, 18, 0.55);
+  box-shadow: 0 0 0 4px rgba(161, 18, 18, 0.10);
 }
 
 .lrsPhoneHint {
-  font-size: 13px;
-  color: var(--la-muted);
+  font-size: 12px;
+  color: #6b7280;
 }
 
 .lrsAlert {
-  margin-top: 12px;
-  padding: 12px;
-  border-radius: 12px;
-  border: 1px solid var(--la-border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin: 10px 0;
+  font-weight: 700;
 }
 
 .lrsAlertErr {
-  background: rgba(220, 38, 38, 0.08);
-  border-color: rgba(220, 38, 38, 0.20);
-  color: rgba(127, 29, 29, 0.95);
+  background: #fff1f2;
+  border: 1px solid #fecaca;
+  color: #7f1d1d;
 }
 
 .lrsAlertInfo {
-  background: rgba(2, 132, 199, 0.08);
-  border-color: rgba(2, 132, 199, 0.20);
-  color: rgba(7, 89, 133, 0.95);
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e3a8a;
 }
 
 .lrsLoading,
 .lrsEmpty {
-  margin-top: 14px;
-  color: var(--la-muted);
+  padding: 18px;
+  color: #6b7280;
+  font-weight: 700;
 }
 
 .lrsGrid {
-  margin-top: 14px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+  margin-top: 12px;
+}
+
+@media (max-width: 900px) {
+  .lrsGrid {
+    grid-template-columns: 1fr;
+  }
+  .lrsHero {
+    flex-direction: column;
+  }
+  .lrsHeroActions {
+    justify-content: flex-start;
+  }
 }
 
 .lrsCard {
-  border: 1px solid var(--la-border);
-  background: var(--la-card);
-  border-radius: var(--la-radius);
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  background: #fff;
+  border-radius: 16px;
   padding: 14px;
-  box-shadow: var(--la-shadow);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.12);
 }
 
 .lrsCardTop {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
-  flex-wrap: wrap;
 }
 
 .lrsCardTitle {
-  font-weight: 950;
-  color: var(--la-ink);
   font-size: 16px;
+  font-weight: 900;
+  color: #111827;
 }
 
 .lrsBadge {
   font-size: 12px;
-  padding: 4px 10px;
+  font-weight: 900;
+  padding: 6px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, 0.14);
-  background: rgba(148, 163, 184, 0.14);
-  color: rgba(15, 23, 42, 0.78);
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  background: #f9fafb;
+  color: #111827;
+  white-space: nowrap;
 }
 
 .lrsBadge.ok {
-  background: rgba(34, 197, 94, 0.10);
-  border-color: rgba(34, 197, 94, 0.22);
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
 }
 
 .lrsBadge.muted {
-  background: rgba(148, 163, 184, 0.14);
+  background: #f3f4f6;
+  border-color: rgba(17, 24, 39, 0.12);
+  color: #4b5563;
 }
 
 .lrsCardDesc {
-  margin-top: 8px;
-  color: rgba(15, 23, 42, 0.75);
-  line-height: 1.35;
+  margin-top: 10px;
+  color: #4b5563;
+  line-height: 1.45;
+  font-weight: 600;
 }
 
 .lrsSectionTitle {
   margin-top: 12px;
   font-weight: 900;
-  color: var(--la-ink);
-}
-
-.lrsEmptyMini {
-  margin-top: 8px;
-  color: var(--la-muted);
+  color: #111827;
 }
 
 .lrsPlanStack {
@@ -201,71 +234,60 @@
 }
 
 .lrsPlan {
-  border: 1px solid rgba(15, 23, 42, 0.10);
-  background: var(--la-card-2);
+  border: 1px solid rgba(17, 24, 39, 0.10);
   border-radius: 14px;
   padding: 12px;
+  background: rgba(249, 250, 251, 0.6);
 }
 
 .lrsPlanRow {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
 }
 
 .lrsPlanPeriod {
   font-weight: 900;
-  color: var(--la-ink);
+  color: #111827;
 }
 
 .lrsPlanPrice {
-  font-weight: 950;
-  color: var(--la-ink);
+  font-weight: 900;
+  color: #111827;
 }
 
 .lrsPlanActions {
   margin-top: 10px;
   display: flex;
-  gap: 10px;
   flex-wrap: wrap;
+  gap: 10px;
 }
 
-.lrsBtn {
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(15, 23, 42, 0.18);
-  background: white;
-  cursor: pointer;
-  font-weight: 900;
-  color: var(--la-ink);
-  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+.lrsEmptyMini {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  font-weight: 800;
 }
 
-.lrsBtn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 12px 24px rgba(0,0,0,0.08);
+.lrsEmptyMiniHint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #7c2d12;
+  font-weight: 700;
 }
 
-.lrsBtn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
-
-.lrsBtnGhost {
-  background: white;
-}
-
-.lrsBtnDashed {
-  background: transparent;
-  border-style: dashed;
-  opacity: 0.92;
+.lrsEmptyMiniActions {
+  margin-top: 10px;
 }
 
 .lrsTip {
   margin-top: 10px;
-  font-size: 13px;
-  color: var(--la-muted);
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 700;
 }
