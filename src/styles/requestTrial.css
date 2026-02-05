@@ -137,17 +137,37 @@
 .rt-actions {
   display: flex;
   justify-content: flex-end;
+  margin-top: 8px;
 }
 
 .rt-btnPrimary {
   border: 1px solid rgba(139, 28, 28, 0.35);
-  background: linear-gradient(180deg, rgba(139, 28, 28, 0.95) 0%, rgba(161, 31, 31, 0.95) 100%);
-  color: white;
-  font-weight: 900;
-  padding: 9px 12px;
-  border-radius: 12px;
+  background: linear-gradient(
+    135deg,
+    rgba(139, 28, 28, 0.95) 0%,
+    rgba(161, 31, 31, 0.95) 50%,
+    rgba(15, 148, 136, 0.95) 100%
+  );
+
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+
+  padding: 8px 14px;       /* 👈 smaller */
+  min-width: 150px;        /* 👈 no full-width feel */
+  height: 38px;            /* 👈 compact */
+
+  border-radius: 10px;
   cursor: pointer;
-  min-width: 160px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.rt-btnPrimary:hover:not(:disabled) {
+  filter: brightness(1.05);
 }
 
 .rt-btnPrimary:disabled {
