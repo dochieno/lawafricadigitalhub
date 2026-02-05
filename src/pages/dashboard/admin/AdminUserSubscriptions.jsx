@@ -526,7 +526,13 @@ export default function AdminUserSubscriptions() {
               {rows.map((r) => {
                 const id = r.id ?? r.Id;
                 const u = r.user ?? {};
-                const username = u.username ?? u.Username ?? "—";
+                const user = r.user || {};
+                const firstName = user.FirstName || "";
+                const lastName = user.LastName || "";
+                const fullName = `${firstName} ${lastName}`.trim();
+                const displayName =
+                fullName || user.Username || "—";
+
                 const email = u.email ?? u.Email ?? "—";
                 const phone = u.phoneNumber ?? u.PhoneNumber ?? "—";
 
@@ -548,7 +554,7 @@ export default function AdminUserSubscriptions() {
                       <div className="au-userCell">
                         <span className={`au-dot ${isActiveNow ? "on" : ""}`} />
                         <div className="au-userMeta">
-                          <div className="au-userName">{username}</div>
+                          <div className="au-userName">{displayName}</div>
                           <div className="au-userSub">
                             <span className="au-muted">{email}</span>
                             <span className="au-sep">•</span>

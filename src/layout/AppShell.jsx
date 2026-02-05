@@ -244,7 +244,6 @@ export default function AppShell() {
                       Public Subscriptions
                     </NavLink>
 
-
                     <NavLink to="/dashboard/admin/trials" className="nav-link nav-child">
                       Trials
                     </NavLink>
