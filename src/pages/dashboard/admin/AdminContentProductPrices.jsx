@@ -48,7 +48,21 @@ function moneyFmt(amount, currency) {
   }
 }
 
-// Some projects return axios response; others return data (interceptors).
+function formatDatePretty(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return new Intl.DateTimeFormat(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }).format(d);
+}
+
+
 function unwrapApi(res) {
   return res?.data ?? res;
 }
@@ -58,7 +72,6 @@ function formatApiError(e) {
   const data = e?.response?.data;
 
   if (!data) return e?.message || "Request failed.";
-
   if (typeof data === "string") return data;
   if (data?.message) return String(data.message);
   if (data?.detail) return String(data.detail);
@@ -86,6 +99,27 @@ function formatApiError(e) {
   }
 }
 
+// ✅ Normalize enum coming from API (sometimes numeric, sometimes string)
+function normalizeAudience(v) {
+  if (v == null) return 1;
+  if (typeof v === "number") return v;
+  const s = String(v).trim().toLowerCase();
+  if (s === "public" || s === "1") return 1;
+  if (s === "institution" || s === "2") return 2;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 1;
+}
+
+function normalizeBilling(v) {
+  if (v == null) return 1;
+  if (typeof v === "number") return v;
+  const s = String(v).trim().toLowerCase();
+  if (s === "monthly" || s === "month" || s === "1") return 1;
+  if (s === "annual" || s === "yearly" || s === "year" || s === "2") return 2;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 1;
+}
+
 // ✅ Adds 1 month/year to a datetime-local string (clamps month-end correctly)
 function addPeriodToLocalInput(fromLocal, billingPeriod) {
   if (!fromLocal) return "";
@@ -99,7 +133,6 @@ function addPeriodToLocalInput(fromLocal, billingPeriod) {
 
   const target = new Date(d);
 
-  // billingPeriod: 1=Monthly, 2=Annual
   if (Number(billingPeriod) === 2) target.setFullYear(target.getFullYear() + 1);
   else target.setMonth(target.getMonth() + 1);
 
@@ -164,10 +197,7 @@ function IconPencil() {
 function IconTrash() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        fill="currentColor"
-        d="M6 7h12l-1 14H7L6 7Zm3-3h6l1 2H8l1-2Z"
-      />
+      <path fill="currentColor" d="M6 7h12l-1 14H7L6 7Zm3-3h6l1 2H8l1-2Z" />
     </svg>
   );
 }
@@ -211,7 +241,6 @@ export default function AdminContentProductPrices() {
   const [mode, setMode] = useState("create"); // create | edit
   const [saving, setSaving] = useState(false);
 
-  // ✅ Track whether user manually edited end date in this drawer session
   const endTouchedRef = useRef(false);
 
   const emptyForm = useMemo(
@@ -290,18 +319,24 @@ export default function AdminContentProductPrices() {
         const data = unwrapApi(res);
 
         const list = Array.isArray(data) ? data : [];
-        const normalized = list.map((x) => ({
-          id: x.id ?? x.Id,
-          contentProductId: x.contentProductId ?? x.ContentProductId,
-          audience: x.audience ?? x.Audience,
-          billingPeriod: x.billingPeriod ?? x.BillingPeriod,
-          currency: x.currency ?? x.Currency,
-          amount: x.amount ?? x.Amount,
-          isActive: x.isActive ?? x.IsActive,
-          effectiveFromUtc: x.effectiveFromUtc ?? x.EffectiveFromUtc,
-          effectiveToUtc: x.effectiveToUtc ?? x.EffectiveToUtc,
-          createdAtUtc: x.createdAtUtc ?? x.CreatedAtUtc,
-        }));
+        const normalized = list.map((x) => {
+          const audienceRaw = x.audience ?? x.Audience;
+          const billingRaw = x.billingPeriod ?? x.BillingPeriod;
+
+          return {
+            id: x.id ?? x.Id,
+            contentProductId: x.contentProductId ?? x.ContentProductId,
+            // ✅ normalize enums so filters work
+            audience: normalizeAudience(audienceRaw),
+            billingPeriod: normalizeBilling(billingRaw),
+            currency: x.currency ?? x.Currency,
+            amount: x.amount ?? x.Amount,
+            isActive: x.isActive ?? x.IsActive,
+            effectiveFromUtc: x.effectiveFromUtc ?? x.EffectiveFromUtc,
+            effectiveToUtc: x.effectiveToUtc ?? x.EffectiveToUtc,
+            createdAtUtc: x.createdAtUtc ?? x.CreatedAtUtc,
+          };
+        });
 
         if (mounted) setPrices(normalized);
       } catch (e) {
@@ -366,8 +401,8 @@ export default function AdminContentProductPrices() {
     setForm({
       id: row.id,
       contentProductId: row.contentProductId,
-      audience: row.audience,
-      billingPeriod: row.billingPeriod,
+      audience: normalizeAudience(row.audience),
+      billingPeriod: normalizeBilling(row.billingPeriod),
       currency: row.currency || "KES",
       amount: row.amount ?? "",
       isActive: !!row.isActive,
@@ -447,8 +482,9 @@ export default function AdminContentProductPrices() {
         const row = {
           id: created.id ?? created.Id,
           contentProductId: created.contentProductId ?? created.ContentProductId ?? productId,
-          audience: created.audience ?? created.Audience ?? payload.audience,
-          billingPeriod: created.billingPeriod ?? created.BillingPeriod ?? payload.billingPeriod,
+          // ✅ normalize here too
+          audience: normalizeAudience(created.audience ?? created.Audience ?? payload.audience),
+          billingPeriod: normalizeBilling(created.billingPeriod ?? created.BillingPeriod ?? payload.billingPeriod),
           currency: created.currency ?? created.Currency ?? payload.currency,
           amount: created.amount ?? created.Amount ?? payload.amount,
           isActive: created.isActive ?? created.IsActive ?? payload.isActive,
@@ -469,8 +505,9 @@ export default function AdminContentProductPrices() {
         const nextRow = {
           id: updated.id ?? updated.Id ?? priceId,
           contentProductId: updated.contentProductId ?? updated.ContentProductId ?? productId,
-          audience: updated.audience ?? updated.Audience ?? payload.audience,
-          billingPeriod: updated.billingPeriod ?? updated.BillingPeriod ?? payload.billingPeriod,
+          // ✅ normalize here too
+          audience: normalizeAudience(updated.audience ?? updated.Audience ?? payload.audience),
+          billingPeriod: normalizeBilling(updated.billingPeriod ?? updated.BillingPeriod ?? payload.billingPeriod),
           currency: updated.currency ?? updated.Currency ?? payload.currency,
           amount: updated.amount ?? updated.Amount ?? payload.amount,
           isActive: updated.isActive ?? updated.IsActive ?? payload.isActive,
@@ -495,7 +532,9 @@ export default function AdminContentProductPrices() {
     const next = !row.isActive;
 
     try {
-      await api.patch(`/admin/content-products/${Number(selectedProductId)}/prices/${row.id}/active`, { isActive: next });
+      await api.patch(`/admin/content-products/${Number(selectedProductId)}/prices/${row.id}/active`, {
+        isActive: next,
+      });
       setPrices((prev) => prev.map((p) => (p.id === row.id ? { ...p, isActive: next } : p)));
     } catch (e) {
       setErr(formatApiError(e) || "Failed to update status.");
@@ -630,11 +669,9 @@ export default function AdminContentProductPrices() {
                       <td>{BILLING.find((x) => x.value === p.billingPeriod)?.label ?? p.billingPeriod}</td>
                       <td className="mono">{p.currency}</td>
                       <td className="amount">{moneyFmt(p.amount, p.currency)}</td>
-                      <td className="mono">{p.effectiveFromUtc ? new Date(p.effectiveFromUtc).toLocaleString() : "—"}</td>
-                      <td className="mono">{p.effectiveToUtc ? new Date(p.effectiveToUtc).toLocaleString() : "—"}</td>
-
+                        <td className="mono">{formatDatePretty(p.effectiveFromUtc)}</td>
+                        <td className="mono">{formatDatePretty(p.effectiveToUtc)}</td>
                       <td className="actions">
-                        {/* ✅ SVG icon actions with tooltips */}
                         <div style={{ display: "inline-flex", gap: 8, justifyContent: "flex-end" }}>
                           <IconButton
                             title="Edit this pricing plan"
@@ -646,7 +683,11 @@ export default function AdminContentProductPrices() {
                           </IconButton>
 
                           <IconButton
-                            title={p.isActive ? "Deactivate this plan (keeps it for audit)" : "Activate this plan (makes it selectable)"}
+                            title={
+                              p.isActive
+                                ? "Deactivate this plan (keeps it for audit)"
+                                : "Activate this plan (makes it selectable)"
+                            }
                             ariaLabel={p.isActive ? "Deactivate pricing plan" : "Activate pricing plan"}
                             onClick={() => toggleActive(p)}
                             disabled={!canToggle}
@@ -712,12 +753,7 @@ export default function AdminContentProductPrices() {
 
               <label className="laField">
                 <span>Billing Period</span>
-                <select
-                  value={form.billingPeriod}
-                  onChange={(e) => {
-                    setField("billingPeriod", Number(e.target.value));
-                  }}
-                >
+                <select value={form.billingPeriod} onChange={(e) => setField("billingPeriod", Number(e.target.value))}>
                   {BILLING.map((b) => (
                     <option key={b.value} value={b.value}>
                       {b.label}
@@ -743,13 +779,7 @@ export default function AdminContentProductPrices() {
 
               <label className="laField">
                 <span>Effective From (optional)</span>
-                <input
-                  type="datetime-local"
-                  value={form.effectiveFromUtc}
-                  onChange={(e) => {
-                    setField("effectiveFromUtc", e.target.value);
-                  }}
-                />
+                <input type="datetime-local" value={form.effectiveFromUtc} onChange={(e) => setField("effectiveFromUtc", e.target.value)} />
               </label>
 
               <label className="laField">
@@ -771,8 +801,8 @@ export default function AdminContentProductPrices() {
             </label>
 
             <div className="laHint">
-              Tip: If you select an <b>Effective From</b> date, the system auto-fills <b>Effective To</b> based on Billing:
-              <b> Monthly → +1 month</b>, <b>Annual → +1 year</b>. If you manually edit Effective To, it won’t auto-change again.
+              Tip: If you set <b>Effective From</b>, the UI auto-fills <b>Effective To</b> based on Billing:
+              <b> Monthly → +1 month</b>, <b>Annual → +1 year</b>. If you manually edit Effective To, auto-fill stops.
             </div>
           </div>
 
