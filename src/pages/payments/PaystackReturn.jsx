@@ -1,3 +1,4 @@
+// src/pages/payments/PaystackReturn.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../../api/client";
@@ -45,7 +46,7 @@ export default function PaystackReturn() {
   const reference = (query.get("reference") || query.get("trxref") || "").trim();
   const fallbackDocId = state?.docId ? Number(state.docId) : null;
 
-  // ✅ NEW: support redirects after subscription purchases too
+  // supports redirects after subscription purchases too
   const next = (query.get("next") || "/dashboard/law-reports").trim();
 
   const [phase, setPhase] = useState("LOADING"); // LOADING | SUCCESS | FAILED
@@ -135,12 +136,10 @@ export default function PaystackReturn() {
     qs.set("provider", "paystack");
     if (ref) qs.set("reference", ref);
     if (intentId) qs.set("paymentIntentId", String(intentId));
-
     window.location.replace(`/dashboard/documents/${docId}/read?${qs.toString()}`);
   }
 
   function hardGoNext(path) {
-    // For subscriptions we prefer hard redirect so app refreshes and entitlement checks are clean
     const safe = path.startsWith("/") ? path : "/dashboard/law-reports";
     window.location.replace(safe);
   }
@@ -161,21 +160,16 @@ export default function PaystackReturn() {
       clearToken();
       setPhase("SUCCESS");
       setMessage("Payment received ✅ Returning to registration…");
-
       clearCtx(reference);
       await sleep(350);
       redirectToRegisterPaid(reference);
       return;
     }
 
-    // Authenticated purchase flow
-    const token = restoreTokenIfMissing(reference);
-    if (!token) {
-      setPhase("FAILED");
-      setMessage("You’re not logged in.");
-      setError("Please log in first, then come back to this return URL and click Refresh.");
-      return;
-    }
+    // ✅ IMPORTANT CHANGE:
+    // Do NOT block if token is missing. For subscription flows, confirm is AllowAnonymous.
+    // We still try to restore token for better UX, but we proceed either way.
+    restoreTokenIfMissing(reference);
 
     try {
       setPhase("LOADING");
@@ -187,7 +181,6 @@ export default function PaystackReturn() {
       const meta = resolved?.meta || null;
 
       if (!intentId) throw new Error("Could not resolve payment intent from reference.");
-
       setPaymentIntentId(intentId);
 
       const ctx = readCtx(reference);
@@ -202,16 +195,24 @@ export default function PaystackReturn() {
 
       clearCtx(reference);
 
-      // If doc purchase -> reader
       if (docId) {
         hardGoToReader(docId, intentId, reference);
         return;
       }
 
-      // Otherwise -> next (subscription flows)
       hardGoNext(next);
     } catch (e) {
       const status = e?.response?.status;
+
+      // If the server truly requires auth (or ownership check hit), THEN show login UI.
+      if (status === 401 || status === 403) {
+        setPhase("FAILED");
+        setMessage("You’re not logged in.");
+        setError("Please log in first, then come back to this return URL and click Refresh.");
+        return;
+      }
+
+      // Other errors
       if (status === 401) {
         clearToken();
         clearCtx(reference);
@@ -253,11 +254,7 @@ export default function PaystackReturn() {
             </div>
           </div>
 
-          {phase === "SUCCESS" && (
-            <div className="psrOk">
-              Payment received ✅ Redirecting…
-            </div>
-          )}
+          {phase === "SUCCESS" && <div className="psrOk">Payment received ✅ Redirecting…</div>}
         </div>
       ) : (
         <div className="psrErrorCard">
@@ -265,18 +262,16 @@ export default function PaystackReturn() {
           <div className="psrErrText">{error}</div>
 
           <div className="psrActions">
-            <button className="psrBtn psrBtnPrimary" onClick={() => window.location.reload()}>
+            <button className="psrBtn psrBtnPrimary" onClick={() => window.location.reload()} type="button">
               Refresh
             </button>
 
-            <button className="psrBtn psrBtnGhost" onClick={() => nav("/login", { replace: true })}>
+            <button className="psrBtn psrBtnGhost" onClick={() => nav("/login", { replace: true })} type="button">
               Go to Login
             </button>
           </div>
 
-          <div className="psrHint2">
-            Tip: after logging in, come back to this same return URL and click Refresh.
-          </div>
+          <div className="psrHint2">Tip: after logging in, come back to this same return URL and click Refresh.</div>
         </div>
       )}
     </div>
