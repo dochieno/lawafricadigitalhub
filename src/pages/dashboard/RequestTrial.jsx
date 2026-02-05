@@ -1,14 +1,18 @@
-// ✅ src/pages/dashboard/RequestTrial.jsx
+// src/pages/dashboard/trials/RequestTrial.jsx
 import { useEffect, useMemo, useState } from "react";
 import api from "../../api/client";
+import "../../styles/requestTrial.css";
 
 function extractErrorMessage(e) {
   const data = e?.response?.data;
+
   if (data?.message) return data.message;
 
   if (data?.errors && typeof data.errors === "object") {
     const firstKey = Object.keys(data.errors)[0];
-    const firstVal = Array.isArray(data.errors[firstKey]) ? data.errors[firstKey][0] : null;
+    const firstVal = Array.isArray(data.errors[firstKey])
+      ? data.errors[firstKey][0]
+      : null;
     if (firstVal) return `${firstKey}: ${firstVal}`;
   }
 
@@ -16,113 +20,137 @@ function extractErrorMessage(e) {
   return e?.message || "Request failed";
 }
 
+/**
+ * Avoid “/api double” or “missing /api”.
+ * - If axios baseURL ends with "/api", then paths should be "/trials/..."
+ * - Otherwise prefix "/api" (useful if baseURL is just the host origin)
+ */
+function makeApiPath(pathAfterApi) {
+  const base = String(api?.defaults?.baseURL || "");
+
+  try {
+    const u = new URL(base, window.location.origin);
+    const normalized = u.pathname.replace(/\/+$/, ""); // trim trailing slash(es)
+    const endsWithApi = normalized.endsWith("/api");
+    return endsWithApi ? pathAfterApi : `/api${pathAfterApi}`;
+  } catch {
+    // base may be a relative path; fallback safely
+    const cleaned = base.replace(/\/+$/, "");
+    const endsWithApi = cleaned.endsWith("/api");
+    return endsWithApi ? pathAfterApi : `/api${pathAfterApi}`;
+  }
+}
+
 export default function RequestTrial() {
   const [products, setProducts] = useState([]);
-  const [productsLoading, setProductsLoading] = useState(true);
-  const [productsError, setProductsError] = useState("");
+  const [loadingProducts, setLoadingProducts] = useState(true);
 
   const [contentProductId, setContentProductId] = useState("");
   const [reason, setReason] = useState("");
+
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
 
-  // Load allowed products (AvailableToPublic=true AND PublicAccessModel=Subscription)
-  useEffect(() => {
-    let alive = true;
+  const productIdNum = useMemo(() => Number(contentProductId), [contentProductId]);
+  const canSubmit = Number.isFinite(productIdNum) && productIdNum > 0;
 
-    async function load() {
-      setProductsLoading(true);
-      setProductsError("");
-      try {
-        const res = await api.get("/public/content-products/subscription-products");
-        const data = res.data?.data ?? res.data;
-        const list = Array.isArray(data) ? data : [];
+  const selectedProduct = useMemo(() => {
+    const id = Number(contentProductId);
+    if (!id) return null;
+    return products.find((p) => Number(p.id ?? p.Id) === id) || null;
+  }, [products, contentProductId]);
 
-        if (!alive) return;
+  async function loadProducts() {
+    setLoadingProducts(true);
+    setError("");
 
-        setProducts(list);
+    try {
+      const res = await api.get(
+        makeApiPath("/public/content-products/subscription-products")
+      );
+      const data = res.data?.data ?? res.data;
+      const list = Array.isArray(data) ? data : [];
 
-        // auto select first product to reduce friction
-        if (!contentProductId && list.length) {
-          const firstId = list[0]?.id ?? list[0]?.Id;
-          if (firstId != null) setContentProductId(String(firstId));
-        }
-      } catch (e) {
-        if (!alive) return;
-        setProducts([]);
-        setProductsError(extractErrorMessage(e) || "Failed to load products.");
-      } finally {
-        if (alive) setProductsLoading(false);
+      setProducts(list);
+
+      // auto-select first product if none selected
+      if (!contentProductId && list.length) {
+        const firstId = list[0].id ?? list[0].Id;
+        if (firstId != null) setContentProductId(String(firstId));
       }
+    } catch (e) {
+      setProducts([]);
+      setError(extractErrorMessage(e) || "Failed to load subscription products.");
+    } finally {
+      setLoadingProducts(false);
     }
+  }
 
-    load();
-    return () => {
-      alive = false;
-    };
+  useEffect(() => {
+    // Make sure there are NO `debugger;` statements in this file or in main.jsx
+    loadProducts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const productIdNum = useMemo(() => Number(contentProductId), [contentProductId]);
-  const canSubmit = Number.isFinite(productIdNum) && productIdNum > 0 && !productsLoading;
-
-  const selectedProduct = useMemo(() => {
-    const id = productIdNum;
-    if (!id) return null;
-    return products.find((p) => (p.id ?? p.Id) === id) || null;
-  }, [products, productIdNum]);
-
-  async function submit() {
-    if (!canSubmit) return;
+  async function submit(e) {
+    e?.preventDefault?.();
+    if (!canSubmit || busy) return;
 
     setBusy(true);
     setError("");
     setResult(null);
 
     try {
-      const res = await api.post("/trials/request", {
+      const cleanReason = reason.trim();
+      const payload = {
+        // send both casing variants to be bulletproof across JSON options
         contentProductId: productIdNum,
-        reason: reason.trim() || null,
-      });
+        ContentProductId: productIdNum,
+        reason: cleanReason || null,
+        Reason: cleanReason || null,
+      };
+
+      const res = await api.post(makeApiPath("/trials/request"), payload);
 
       setResult(res.data?.data ?? res.data);
       setReason("");
-    } catch (e) {
-      setError(extractErrorMessage(e));
+    } catch (e2) {
+      setError(extractErrorMessage(e2));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div style={{ maxWidth: 780, margin: "0 auto", padding: 16 }}>
-      <h2 style={{ marginBottom: 8 }}>Request a Trial</h2>
-      <p style={{ marginTop: 0, opacity: 0.8 }}>
-        Request trial access for a subscription product. A Global Admin must approve it.
-      </p>
+    <div className="rt-wrap">
+      <div className="rt-hero">
+        <div>
+          <h2 className="rt-title">Request a Trial</h2>
+          <p className="rt-sub">
+            Request trial access for a subscription product. A Global Admin must approve it.
+          </p>
+        </div>
 
-      <div style={{ display: "grid", gap: 12 }}>
-        <label style={{ display: "grid", gap: 6 }}>
-          <span>Subscription Product</span>
+        <div className="rt-mini">
+          {loadingProducts ? "Loading products…" : `${products.length} subscription product(s)`}
+        </div>
+      </div>
 
-          {productsLoading ? (
-            <div style={{ padding: 12, border: "1px solid #e5e7eb", borderRadius: 10, opacity: 0.8 }}>
-              Loading products…
-            </div>
-          ) : productsError ? (
-            <div style={{ padding: 12, border: "1px solid #ffb3b3", background: "#fff5f5" }}>
-              <b>Failed to load products:</b> {productsError}
-              <div style={{ marginTop: 8, opacity: 0.85 }}>
-                Ensure products are marked: <b>AvailableToPublic</b> and <b>PublicAccessModel = Subscription</b>.
-              </div>
-            </div>
-          ) : products.length === 0 ? (
-            <div style={{ padding: 12, border: "1px solid #e5e7eb", background: "#fff", borderRadius: 10 }}>
-              No public subscription products are available for trials yet.
-            </div>
-          ) : (
-            <select value={contentProductId} onChange={(e) => setContentProductId(e.target.value)}>
+      <div className="rt-card">
+        <form className="rt-grid" onSubmit={submit}>
+          <label className="rt-label">
+            <span>Subscription product</span>
+            <select
+              className="rt-select"
+              value={contentProductId}
+              onChange={(e) => setContentProductId(e.target.value)}
+              disabled={busy || loadingProducts || products.length === 0}
+            >
+              {products.length === 0 ? (
+                <option value="">No public subscription products found</option>
+              ) : null}
+
               {products.map((p) => {
                 const id = p.id ?? p.Id;
                 const name = p.name ?? p.Name ?? `Product #${id}`;
@@ -133,51 +161,67 @@ export default function RequestTrial() {
                 );
               })}
             </select>
-          )}
-        </label>
+          </label>
 
-        {selectedProduct ? (
-          <div style={{ padding: 12, border: "1px solid #e5e7eb", background: "#fff", borderRadius: 10 }}>
-            <div style={{ fontWeight: 800 }}>{selectedProduct.name ?? selectedProduct.Name}</div>
-            <div style={{ marginTop: 6, opacity: 0.8 }}>
-              {(selectedProduct.description ?? selectedProduct.Description) || "—"}
+          {selectedProduct ? (
+            <div className="rt-productCard">
+              <div className="rt-productName">
+                {selectedProduct.name ?? selectedProduct.Name}
+              </div>
+              <div className="rt-productDesc">
+                {(selectedProduct.description ?? selectedProduct.Description) ||
+                  "No description provided."}
+              </div>
             </div>
+          ) : null}
+
+          <label className="rt-label">
+            <span>Reason (optional)</span>
+            <textarea
+              className="rt-textarea"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Tell us why you need a trial…"
+              disabled={busy}
+            />
+          </label>
+
+          <div className="rt-row">
+            <button className="rt-btn" disabled={busy || !canSubmit} type="submit">
+              {busy ? "Submitting…" : "Submit request"}
+            </button>
+
+            <button
+              type="button"
+              className="rt-btn rt-btnGhost"
+              disabled={busy}
+              onClick={loadProducts}
+              title="Reload products"
+            >
+              Refresh products
+            </button>
           </div>
-        ) : null}
 
-        <label style={{ display: "grid", gap: 6 }}>
-          <span>Reason (optional)</span>
-          <textarea
-            rows={4}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Tell us why you need a trial..."
-          />
-        </label>
-
-        <button disabled={busy || !canSubmit || products.length === 0} onClick={submit}>
-          {busy ? "Submitting..." : "Submit request"}
-        </button>
-
-        {error && (
-          <div style={{ padding: 12, border: "1px solid #ffb3b3", background: "#fff5f5" }}>
-            <b>Error:</b> {error}
-          </div>
-        )}
-
-        {result && (
-          <div style={{ padding: 12, border: "1px solid #cfe9cf", background: "#f6fff6" }}>
-            <b>Request sent</b>
-            <div style={{ marginTop: 8, opacity: 0.9 }}>
-              Status: <b>{result?.status}</b>
+          {error ? (
+            <div className="rt-alert err">
+              <b>Error:</b> {error}
             </div>
+          ) : null}
 
-            <details style={{ marginTop: 10 }}>
-              <summary style={{ cursor: "pointer" }}>Show raw response</summary>
-              <pre style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{JSON.stringify(result, null, 2)}</pre>
-            </details>
-          </div>
-        )}
+          {result ? (
+            <div className="rt-alert ok">
+              <b>Request sent</b>
+              <div className="rt-mt6">
+                Status: <b>{result?.status ?? "Pending"}</b>
+              </div>
+
+              <details className="rt-details">
+                <summary className="rt-summary">Show raw response</summary>
+                <pre className="rt-pre">{JSON.stringify(result, null, 2)}</pre>
+              </details>
+            </div>
+          ) : null}
+        </form>
       </div>
     </div>
   );

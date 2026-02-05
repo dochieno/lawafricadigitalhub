@@ -1,0 +1,268 @@
+/* src/styles/trials.css */
+
+.la-trials {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 18px 16px 28px;
+}
+
+.la-trialsTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.la-trialsTitle {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+
+.la-trialsSub {
+  margin: 6px 0 0;
+  color: rgba(17, 24, 39, 0.65);
+  font-size: 14px;
+}
+
+.la-trialsControls {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.la-field {
+  display: grid;
+  gap: 6px;
+  min-width: 170px;
+}
+
+.la-field > span {
+  font-size: 12px;
+  color: rgba(17, 24, 39, 0.65);
+}
+
+.la-field select {
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid rgba(17, 24, 39, 0.14);
+  padding: 0 12px;
+  background: #fff;
+  outline: none;
+}
+
+.la-card {
+  margin-top: 16px;
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.la-tableHead,
+.la-row {
+  display: grid;
+  grid-template-columns: 140px 1.2fr 1fr 220px 280px;
+  gap: 12px;
+  padding: 12px;
+}
+
+.la-tableHead {
+  background: rgba(17, 24, 39, 0.03);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.la-row {
+  border-top: 1px solid rgba(17, 24, 39, 0.08);
+  font-size: 13px;
+  align-items: start;
+}
+
+.la-empty {
+  padding: 16px;
+  color: rgba(17, 24, 39, 0.65);
+}
+
+.la-idTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.la-idNum {
+  font-weight: 800;
+}
+
+.la-muted,
+.la-mutedSmall {
+  color: rgba(17, 24, 39, 0.65);
+}
+
+.la-mutedSmall {
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+.la-strong {
+  font-weight: 800;
+}
+
+.la-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  border: 1px solid transparent;
+}
+
+.la-badge.pending {
+  background: #fff7ed;
+  color: #9a3412;
+  border-color: rgba(154, 52, 18, 0.18);
+}
+
+.la-badge.approved {
+  background: #ecfdf5;
+  color: #065f46;
+  border-color: rgba(6, 95, 70, 0.18);
+}
+
+.la-badge.rejected {
+  background: #fef2f2;
+  color: #991b1b;
+  border-color: rgba(153, 27, 27, 0.18);
+}
+
+.la-badge.cancelled {
+  background: #f3f4f6;
+  color: #374151;
+  border-color: rgba(55, 65, 81, 0.18);
+}
+
+.la-noteBox {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(17, 24, 39, 0.03);
+  border: 1px solid rgba(17, 24, 39, 0.08);
+}
+
+.la-noteTitle {
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 6px;
+  color: rgba(17, 24, 39, 0.75);
+}
+
+.la-noteText {
+  white-space: pre-wrap;
+  color: rgba(17, 24, 39, 0.8);
+}
+
+.la-notes {
+  width: 100%;
+  resize: vertical;
+  border-radius: 10px;
+  border: 1px solid rgba(17, 24, 39, 0.18);
+  padding: 8px 10px;
+  font-size: 13px;
+  outline: none;
+}
+
+.la-notes:focus {
+  border-color: rgba(161, 18, 18, 0.35);
+  box-shadow: 0 0 0 3px rgba(161, 18, 18, 0.10);
+}
+
+.la-actionsCell {
+  display: grid;
+  gap: 10px;
+}
+
+.la-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.la-btn {
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.la-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.la-btn.approve {
+  background: #16a34a;
+  color: #fff;
+}
+
+.la-btn.reject {
+  background: #dc2626;
+  color: #fff;
+}
+
+.la-btnNeutral {
+  background: #fff;
+  border-color: rgba(17, 24, 39, 0.14);
+  color: #111827;
+}
+
+.la-alert {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  background: #fff;
+}
+
+.la-alertTitle {
+  font-weight: 900;
+  margin-bottom: 6px;
+}
+
+.la-alert.error {
+  border-color: rgba(220, 38, 38, 0.25);
+  background: rgba(220, 38, 38, 0.05);
+}
+
+.la-alert.warn {
+  border-color: rgba(245, 158, 11, 0.25);
+  background: rgba(245, 158, 11, 0.06);
+}
+
+/* Toast */
+.la-toast {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 9999;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 13px;
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  background: #fff;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.10);
+}
+
+.la-toast.success {
+  border-color: rgba(22, 163, 74, 0.25);
+}
+
+.la-toast.error {
+  border-color: rgba(220, 38, 38, 0.25);
+}
