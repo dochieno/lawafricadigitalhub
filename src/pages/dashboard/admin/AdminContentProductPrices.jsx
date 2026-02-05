@@ -59,20 +59,16 @@ function formatApiError(e) {
 
   if (!data) return e?.message || "Request failed.";
 
-  // Plain string from API
   if (typeof data === "string") return data;
-
-  // Typical { message: "..."} or { detail: "..." }
   if (data?.message) return String(data.message);
   if (data?.detail) return String(data.detail);
+
   if (data?.title && data?.status) {
-    // ProblemDetails shape
     const bits = [];
     bits.push(data.title);
     if (data.detail) bits.push(data.detail);
     if (data.status) bits.push(`(HTTP ${data.status})`);
 
-    // ValidationProblemDetails: errors: { Field: ["msg1","msg2"] }
     if (data.errors && typeof data.errors === "object") {
       const first = [];
       for (const [k, v] of Object.entries(data.errors)) {
@@ -83,7 +79,6 @@ function formatApiError(e) {
     return bits.filter(Boolean).join(" ");
   }
 
-  // Fallback: stringify object safely
   try {
     return JSON.stringify(data);
   } catch {
@@ -91,16 +86,13 @@ function formatApiError(e) {
   }
 }
 
-// ✅ Adds 1 month/year to a datetime-local string.
-// Keeps the same time; handles month rollovers (e.g. Jan 31 -> Feb last day).
+// ✅ Adds 1 month/year to a datetime-local string (clamps month-end correctly)
 function addPeriodToLocalInput(fromLocal, billingPeriod) {
   if (!fromLocal) return "";
 
   const d = new Date(fromLocal);
   if (Number.isNaN(d.getTime())) return "";
 
-  const y = d.getFullYear();
-  const m = d.getMonth();
   const day = d.getDate();
   const hh = d.getHours();
   const mi = d.getMinutes();
@@ -108,18 +100,12 @@ function addPeriodToLocalInput(fromLocal, billingPeriod) {
   const target = new Date(d);
 
   // billingPeriod: 1=Monthly, 2=Annual
-  if (Number(billingPeriod) === 2) {
-    target.setFullYear(y + 1);
-  } else {
-    target.setMonth(m + 1);
-  }
+  if (Number(billingPeriod) === 2) target.setFullYear(target.getFullYear() + 1);
+  else target.setMonth(target.getMonth() + 1);
 
-  // Fix “month overflow” (JS auto-rolls: Jan 31 + 1 month => Mar 2 sometimes)
-  // Strategy: set to 1st of target month then clamp day to max in that month.
   const ty = target.getFullYear();
   const tm = target.getMonth();
-
-  const maxDay = new Date(ty, tm + 1, 0).getDate(); // last day of target month
+  const maxDay = new Date(ty, tm + 1, 0).getDate();
   const clampedDay = Math.min(day, maxDay);
 
   const fixed = new Date(ty, tm, clampedDay, hh, mi, 0, 0);
@@ -128,6 +114,84 @@ function addPeriodToLocalInput(fromLocal, billingPeriod) {
   return `${fixed.getFullYear()}-${pad(fixed.getMonth() + 1)}-${pad(fixed.getDate())}T${pad(
     fixed.getHours()
   )}:${pad(fixed.getMinutes())}`;
+}
+
+/** -----------------------------
+ * Small UI helpers
+ * ----------------------------- */
+function IconButton({ title, ariaLabel, onClick, disabled, children, danger }) {
+  const style = {
+    height: 34,
+    width: 34,
+    padding: 0,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+    border: "1px solid rgba(15, 23, 42, 0.14)",
+    background: "transparent",
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.5 : 1,
+    color: danger ? "#b91c1c" : "rgba(15, 23, 42, 0.85)",
+  };
+
+  return (
+    <button
+      type="button"
+      className="laBtn ghost"
+      style={style}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={ariaLabel}
+    >
+      {children}
+    </button>
+  );
+}
+
+function IconPencil() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M3 17.25V21h3.75l11.06-11.06-3.75-3.75L3 17.25Zm17.71-10.04a1.003 1.003 0 0 0 0-1.42l-2.5-2.5a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 2-1.66Z"
+      />
+    </svg>
+  );
+}
+
+function IconTrash() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M6 7h12l-1 14H7L6 7Zm3-3h6l1 2H8l1-2Z"
+      />
+    </svg>
+  );
+}
+
+function IconToggleOn() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M17 7H7a5 5 0 0 0 0 10h10a5 5 0 0 0 0-10Zm0 8a3 3 0 1 1 0-6a3 3 0 0 1 0 6Z"
+      />
+    </svg>
+  );
+}
+
+function IconToggleOff() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M17 7H7a5 5 0 0 0 0 10h10a5 5 0 0 0 0-10ZM7 15a3 3 0 1 1 0-6a3 3 0 0 1 0 6Z"
+      />
+    </svg>
+  );
 }
 
 export default function AdminContentProductPrices() {
@@ -286,7 +350,7 @@ export default function AdminContentProductPrices() {
   }, [prices, query, audienceFilter, billingFilter, statusFilter]);
 
   function openCreate() {
-    endTouchedRef.current = false; // allow auto calc
+    endTouchedRef.current = false;
     setMode("create");
     setForm({
       ...emptyForm,
@@ -296,7 +360,6 @@ export default function AdminContentProductPrices() {
   }
 
   function openEdit(row) {
-    // If record already has an end date, consider it "touched" (don't auto overwrite)
     endTouchedRef.current = !!row.effectiveToUtc;
 
     setMode("edit");
@@ -338,16 +401,15 @@ export default function AdminContentProductPrices() {
     return null;
   }
 
-  // ✅ Auto-calc end date when FROM or BILLING changes (unless user edited end date)
+  // ✅ Auto-calc end date when FROM or BILLING changes (unless user touched end date)
   useEffect(() => {
     if (!drawerOpen) return;
     if (!form.effectiveFromUtc) return;
-    if (endTouchedRef.current) return; // user controls end date
+    if (endTouchedRef.current) return;
 
     const nextTo = addPeriodToLocalInput(form.effectiveFromUtc, form.billingPeriod);
     if (!nextTo) return;
 
-    // avoid useless state churn
     if (String(form.effectiveToUtc || "") !== String(nextTo || "")) {
       setForm((prev) => ({ ...prev, effectiveToUtc: nextTo }));
     }
@@ -380,7 +442,6 @@ export default function AdminContentProductPrices() {
       if (mode === "create") {
         const res = await api.post(`/admin/content-products/${productId}/prices`, payload);
         const created = unwrapApi(res);
-
         if (!created) throw new Error("Empty response from server.");
 
         const row = {
@@ -403,7 +464,6 @@ export default function AdminContentProductPrices() {
 
         const res = await api.put(`/admin/content-products/${productId}/prices/${priceId}`, payload);
         const updated = unwrapApi(res);
-
         if (!updated) throw new Error("Empty response from server.");
 
         const nextRow = {
@@ -549,6 +609,7 @@ export default function AdminContentProductPrices() {
                 <th className="actions">Actions</th>
               </tr>
             </thead>
+
             <tbody>
               {!filtered.length ? (
                 <tr>
@@ -557,30 +618,56 @@ export default function AdminContentProductPrices() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((p) => (
-                  <tr key={p.id}>
-                    <td>
-                      <span className={`pill ${p.isActive ? "ok" : "off"}`}>{p.isActive ? "Active" : "Inactive"}</span>
-                    </td>
-                    <td>{AUDIENCE.find((x) => x.value === p.audience)?.label ?? p.audience}</td>
-                    <td>{BILLING.find((x) => x.value === p.billingPeriod)?.label ?? p.billingPeriod}</td>
-                    <td className="mono">{p.currency}</td>
-                    <td className="amount">{moneyFmt(p.amount, p.currency)}</td>
-                    <td className="mono">{p.effectiveFromUtc ? new Date(p.effectiveFromUtc).toLocaleString() : "—"}</td>
-                    <td className="mono">{p.effectiveToUtc ? new Date(p.effectiveToUtc).toLocaleString() : "—"}</td>
-                    <td className="actions">
-                      <button className="laBtn ghost" onClick={() => openEdit(p)}>
-                        Edit
-                      </button>
-                      <button className="laBtn ghost" onClick={() => toggleActive(p)}>
-                        {p.isActive ? "Deactivate" : "Activate"}
-                      </button>
-                      <button className="laBtn danger ghost" onClick={() => removeRow(p)} title="No delete endpoint yet">
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                filtered.map((p) => {
+                  const canToggle = !loading && !saving;
+
+                  return (
+                    <tr key={p.id}>
+                      <td>
+                        <span className={`pill ${p.isActive ? "ok" : "off"}`}>{p.isActive ? "Active" : "Inactive"}</span>
+                      </td>
+                      <td>{AUDIENCE.find((x) => x.value === p.audience)?.label ?? p.audience}</td>
+                      <td>{BILLING.find((x) => x.value === p.billingPeriod)?.label ?? p.billingPeriod}</td>
+                      <td className="mono">{p.currency}</td>
+                      <td className="amount">{moneyFmt(p.amount, p.currency)}</td>
+                      <td className="mono">{p.effectiveFromUtc ? new Date(p.effectiveFromUtc).toLocaleString() : "—"}</td>
+                      <td className="mono">{p.effectiveToUtc ? new Date(p.effectiveToUtc).toLocaleString() : "—"}</td>
+
+                      <td className="actions">
+                        {/* ✅ SVG icon actions with tooltips */}
+                        <div style={{ display: "inline-flex", gap: 8, justifyContent: "flex-end" }}>
+                          <IconButton
+                            title="Edit this pricing plan"
+                            ariaLabel="Edit pricing plan"
+                            onClick={() => openEdit(p)}
+                            disabled={loading || saving}
+                          >
+                            <IconPencil />
+                          </IconButton>
+
+                          <IconButton
+                            title={p.isActive ? "Deactivate this plan (keeps it for audit)" : "Activate this plan (makes it selectable)"}
+                            ariaLabel={p.isActive ? "Deactivate pricing plan" : "Activate pricing plan"}
+                            onClick={() => toggleActive(p)}
+                            disabled={!canToggle}
+                          >
+                            {p.isActive ? <IconToggleOn /> : <IconToggleOff />}
+                          </IconButton>
+
+                          <IconButton
+                            title="Delete (no delete endpoint yet) — will mark plan inactive"
+                            ariaLabel="Delete pricing plan (marks inactive)"
+                            onClick={() => removeRow(p)}
+                            disabled={!canToggle}
+                            danger
+                          >
+                            <IconTrash />
+                          </IconButton>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -598,6 +685,7 @@ export default function AdminContentProductPrices() {
                 Product: <b>{selectedName || "—"}</b>
               </div>
             </div>
+
             <button className="laBtn ghost" onClick={closeDrawer}>
               Close
             </button>
@@ -628,7 +716,6 @@ export default function AdminContentProductPrices() {
                   value={form.billingPeriod}
                   onChange={(e) => {
                     setField("billingPeriod", Number(e.target.value));
-                    // if user hasn't manually touched end date, we will auto-recompute via effect
                   }}
                 >
                   {BILLING.map((b) => (
@@ -660,7 +747,6 @@ export default function AdminContentProductPrices() {
                   type="datetime-local"
                   value={form.effectiveFromUtc}
                   onChange={(e) => {
-                    // changing "from" should auto-calc end (unless end touched)
                     setField("effectiveFromUtc", e.target.value);
                   }}
                 />
@@ -672,7 +758,7 @@ export default function AdminContentProductPrices() {
                   type="datetime-local"
                   value={form.effectiveToUtc}
                   onChange={(e) => {
-                    endTouchedRef.current = true; // ✅ user overrides
+                    endTouchedRef.current = true;
                     setField("effectiveToUtc", e.target.value);
                   }}
                 />
@@ -685,7 +771,8 @@ export default function AdminContentProductPrices() {
             </label>
 
             <div className="laHint">
-              Tip: Keep older plans <b>inactive</b> instead of deleting, for audit consistency.
+              Tip: If you select an <b>Effective From</b> date, the system auto-fills <b>Effective To</b> based on Billing:
+              <b> Monthly → +1 month</b>, <b>Annual → +1 year</b>. If you manually edit Effective To, it won’t auto-change again.
             </div>
           </div>
 
