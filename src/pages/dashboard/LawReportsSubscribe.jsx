@@ -3,6 +3,10 @@ import { useLocation, useNavigate } from "react-router-dom";
 import api from "../../api/client";
 import "../../styles/lawReportsSubscribe.css";
 
+/* =========================
+   Formatting helpers
+   ========================= */
+
 function formatMoney(amount, currency = "KES") {
   const v = Number(amount || 0);
   if (!Number.isFinite(v)) return `${currency} 0`;
@@ -17,22 +21,29 @@ function formatMoney(amount, currency = "KES") {
   }
 }
 
-function fmtDateShort(d) {
-  if (!d) return "";
-  const dt = new Date(d);
-  if (Number.isNaN(dt.getTime())) return "";
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(dt); // e.g. 12 Feb 2026
-}
-
 function billingLabel(period) {
   const s = String(period || "").toLowerCase();
   if (s.includes("month") || s === "1") return "Monthly";
   if (s.includes("annual") || s.includes("year") || s === "2") return "Annual";
   return period || "Plan";
+}
+
+function normalizeBilling(period) {
+  const s = String(period || "").toLowerCase();
+  if (s.includes("month") || s === "1") return "monthly";
+  if (s.includes("annual") || s.includes("year") || s === "2") return "annual";
+  return "other";
+}
+
+function formatDateShort(d) {
+  if (!d) return "";
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return "";
+  // 31 Jan 2026
+  const day = String(dt.getDate()).padStart(2, "0");
+  const mon = dt.toLocaleString("en-GB", { month: "short" });
+  const yr = dt.getFullYear();
+  return `${day} ${mon} ${yr}`;
 }
 
 function isActiveNow(sub, nowUtcMs) {
@@ -44,60 +55,78 @@ function isActiveNow(sub, nowUtcMs) {
   return start <= nowUtcMs && end >= nowUtcMs;
 }
 
-function daysRemaining(endDate, nowUtcMs) {
-  const end = new Date(endDate).getTime();
+function daysRemaining(sub, nowUtcMs) {
+  if (!sub) return 0;
+  const end = new Date(sub.endDate || sub.EndDate).getTime();
   if (!Number.isFinite(end)) return 0;
-  const diff = end - nowUtcMs;
-  return diff > 0 ? Math.ceil(diff / (1000 * 60 * 60 * 24)) : 0;
+  if (end <= nowUtcMs) return 0;
+  return Math.max(0, Math.ceil((end - nowUtcMs) / (1000 * 60 * 60 * 24)));
 }
 
-// ----- small inline svg icons (no dependency) -----
-function IRefresh() {
+/* =========================
+   Tiny SVG icons (no deps)
+   ========================= */
+function IconRefresh(props) {
   return (
-    <svg viewBox="0 0 24 24" className="lrsIco" aria-hidden="true">
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
       <path
         fill="currentColor"
-        d="M12 6V3L8 7l4 4V8c2.76 0 5 2.24 5 5a5 5 0 0 1-9.58 2H5.26A7 7 0 0 0 19 13c0-3.87-3.13-7-7-7Z"
+        d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.45 5H17.3A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L14 10h6V4l-2.35 2.35z"
       />
     </svg>
   );
 }
-function IBack() {
+
+function IconBack(props) {
   return (
-    <svg viewBox="0 0 24 24" className="lrsIco" aria-hidden="true">
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
       <path
         fill="currentColor"
-        d="M20 11H7.83l4.58-4.59L11 5l-7 7 7 7 1.41-1.41L7.83 13H20v-2Z"
+        d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"
       />
     </svg>
   );
 }
-function IMpesa() {
+
+function IconPhone(props) {
   return (
-    <svg viewBox="0 0 24 24" className="lrsIco" aria-hidden="true">
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
       <path
         fill="currentColor"
-        d="M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm5 18a1.25 1.25 0 1 0 0-2.5A1.25 1.25 0 0 0 12 20Zm-5-4h10V6H7v10Z"
+        d="M17 1H7C5.9 1 5 1.9 5 3v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-2-2-2zm0 18H7V5h10v14z"
       />
     </svg>
   );
 }
-function IPaystack() {
+
+function IconCard(props) {
   return (
-    <svg viewBox="0 0 24 24" className="lrsIco" aria-hidden="true">
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
       <path
         fill="currentColor"
-        d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11A2.5 2.5 0 0 1 17.5 20h-11A2.5 2.5 0 0 1 4 17.5v-11Zm2.2 1.3h11.6v2H6.2v-2Zm0 4h7.2v2H6.2v-2Z"
+        d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4H4V6h16v2z"
       />
     </svg>
   );
 }
-function ITrial() {
+
+function IconSpark(props) {
   return (
-    <svg viewBox="0 0 24 24" className="lrsIco" aria-hidden="true">
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
       <path
         fill="currentColor"
-        d="M12 2 8.5 8.5 2 12l6.5 3.5L12 22l3.5-6.5L22 12l-6.5-3.5L12 2Zm0 6.2 1.5 2.8 2.8 1.5-2.8 1.5L12 16.8 10.5 14 7.7 12.5l2.8-1.5L12 8.2Z"
+        d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z"
+      />
+    </svg>
+  );
+}
+
+function IconCheck(props) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" {...props}>
+      <path
+        fill="currentColor"
+        d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"
       />
     </svg>
   );
@@ -160,13 +189,10 @@ export default function LawReportsSubscribe() {
     loadAll();
   }, []);
 
-  const nowUtcMs = useMemo(
-    () => new Date(nowUtc || Date.now()).getTime(),
-    [nowUtc]
-  );
+  const nowUtcMs = useMemo(() => new Date(nowUtc || Date.now()).getTime(), [nowUtc]);
 
-  // latest subscription per product
-  const latestByProductId = useMemo(() => {
+  // best subscription per product (latest end)
+  const bestSubByProductId = useMemo(() => {
     const map = new Map();
     for (const s of mySubs || []) {
       const pid = s.contentProductId ?? s.ContentProductId;
@@ -180,25 +206,39 @@ export default function LawReportsSubscribe() {
     return map;
   }, [mySubs]);
 
-  function buildBadge(sub) {
-    if (!sub) return { text: "Not subscribed", tone: "muted" };
+  function statusBadgeText(pid) {
+    const s = bestSubByProductId.get(pid);
+    if (!s) return { kind: "none", text: "Not subscribed" };
 
-    const active = isActiveNow(sub, nowUtcMs);
-    const endTxt = fmtDateShort(sub.endDate || sub.EndDate);
-    const isTrial = !!(sub.isTrial ?? sub.IsTrial);
+    const active = isActiveNow(s, nowUtcMs);
+    const isTrial = !!(s.isTrial ?? s.IsTrial);
+    const end = formatDateShort(s.endDate || s.EndDate);
+    const rem = daysRemaining(s, nowUtcMs);
 
     if (active) {
-      const dr = daysRemaining(sub.endDate || sub.EndDate, nowUtcMs);
-      if (isTrial && dr <= 7) {
-        return {
-          text: `Trial • ends ${endTxt} (${dr} day${dr === 1 ? "" : "s"})`,
-          tone: "warn",
-        };
-      }
-      return { text: `${isTrial ? "Trial" : "Active"} • ends ${endTxt}`, tone: "ok" };
+      if (isTrial) return { kind: "trial", text: `Trial • ends ${end}${rem ? ` (${rem} days)` : ""}` };
+      return { kind: "active", text: `Active • ends ${end}${rem ? ` (${rem} days)` : ""}` };
     }
+    return { kind: "expired", text: `Expired • ended ${end}` };
+  }
 
-    return { text: `Expired • ended ${endTxt}`, tone: "muted" };
+  function expiringNudge(pid) {
+    const s = bestSubByProductId.get(pid);
+    if (!s) return null;
+
+    const active = isActiveNow(s, nowUtcMs);
+    if (!active) return null;
+
+    const rem = daysRemaining(s, nowUtcMs);
+    if (rem > 14) return null; // only nudge when within 2 weeks
+    const isTrial = !!(s.isTrial ?? s.IsTrial);
+
+    return {
+      title: isTrial ? "Your trial is ending soon" : "Your subscription is ending soon",
+      body: isTrial
+        ? `Your trial expires in ${rem} day(s). Subscribe now to avoid losing access.`
+        : `Your access expires in ${rem} day(s). Renew now to avoid interruption.`,
+    };
   }
 
   async function startMpesa(plan, product) {
@@ -225,11 +265,9 @@ export default function LawReportsSubscribe() {
       const data = res?.data || {};
       const paymentIntentId = data.paymentIntentId || data.PaymentIntentId;
 
-      setNotice(
-        `STK sent. Check your phone to complete payment for "${product?.name || product?.Name}".`
-      );
+      setNotice(`STK sent. Check your phone to complete payment for "${product?.name || product?.Name}".`);
 
-      // Optional: polling if you already have /payments/intent/{id}
+      // optional polling (works only if you already have /payments/intent/{id})
       if (paymentIntentId) {
         const start = Date.now();
         const timeoutMs = 90_000;
@@ -247,16 +285,16 @@ export default function LawReportsSubscribe() {
             nav("/dashboard/law-reports");
             return;
           }
+
           if (status === "failed") {
             setError("Payment failed or was cancelled. Please try again.");
             return;
           }
+
           await new Promise((r) => setTimeout(r, intervalMs));
         }
 
-        setNotice(
-          "We’re still waiting for confirmation. If you completed payment, refresh this page in a moment."
-        );
+        setNotice("We’re still waiting for confirmation. If you completed payment, refresh this page in a moment.");
       }
     } catch (e) {
       console.error(e);
@@ -327,158 +365,176 @@ export default function LawReportsSubscribe() {
     return list;
   }, [products, productIdFocus]);
 
-  const audienceTxt = String(audience || "Public");
+  function normalizePlans(plans) {
+    const list = [...(plans || [])].filter(Boolean);
+
+    // Keep only active-ish plans if the API ever returns mixed rows
+    const activeOnly = list.filter((p) => (p.isActive ?? p.IsActive ?? true) === true);
+
+    // Sort: Monthly then Annual then others; within group low->high
+    activeOnly.sort((a, b) => {
+      const ga = normalizeBilling(a.billingPeriod ?? a.BillingPeriod);
+      const gb = normalizeBilling(b.billingPeriod ?? b.BillingPeriod);
+      const order = (g) => (g === "monthly" ? 0 : g === "annual" ? 1 : 2);
+      const oa = order(ga);
+      const ob = order(gb);
+      if (oa !== ob) return oa - ob;
+      const aa = Number(a.amount ?? a.Amount ?? 0);
+      const bb = Number(b.amount ?? b.Amount ?? 0);
+      return aa - bb;
+    });
+
+    return activeOnly;
+  }
 
   return (
-    <div className="lrsPage">
-      {/* HERO CARD (match Trials styling) */}
-      <div className="lrsHeroCard">
-        <div className="lrsHeroTop">
+    <div className="lrs-page">
+      {/* HERO / HEADER CARD */}
+      <div className="lrs-heroCard">
+        <div className="lrs-heroTop">
           <div>
-            <div className="lrsKicker">LAWAFRICA • SUBSCRIPTIONS</div>
-            <h1 className="lrsTitle">Subscribe to Law Reports</h1>
-            <p className="lrsSub">
+            <div className="lrs-kicker">LawAfrica • Subscriptions</div>
+            <h1 className="lrs-title">Subscribe to Law Reports</h1>
+            <p className="lrs-sub">
               Choose a plan below. You can subscribe now or renew anytime.{" "}
-              <span className="lrsDot">•</span> Audience: <b>{audienceTxt}</b>
+              <span className="lrs-dot">•</span> Audience: <b>{audience}</b>
             </p>
           </div>
 
-          <div className="lrsHeroActions">
-            <button className="lrsIconBtn" onClick={loadAll} disabled={loading} title="Refresh">
-              <IRefresh />
+          <div className="lrs-heroActions">
+            <button className="lrs-iconBtn" onClick={loadAll} disabled={loading} title="Refresh">
+              <IconRefresh className="lrs-ico" />
               <span>Refresh</span>
             </button>
-
-            <button
-              className="lrsIconBtn lrsPrimaryBtn"
-              onClick={() => nav("/dashboard/law-reports")}
-              title="Back to Law Reports"
-            >
-              <IBack />
+            <button className="lrs-btnPrimary" onClick={() => nav("/dashboard/law-reports")} title="Back">
+              <IconBack className="lrs-ico" />
               <span>Back</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* MPESA card */}
-      <div className="lrsCard lrsPhoneCard">
-        <div className="lrsCardHead">
-          <div className="lrsCardTitleSm">MPESA phone number</div>
-          <div className="lrsCardMeta">Used only when you click “Subscribe/Renew (MPESA)”.</div>
+      {/* PHONE CARD */}
+      <div className="lrs-card">
+        <div className="lrs-rowTop">
+          <div className="lrs-rowTitle">
+            <span className="lrs-rowIcon">
+              <IconPhone className="lrs-ico" />
+            </span>
+            MPESA phone number
+          </div>
+          <div className="lrs-rowHint">Used only when you click “Subscribe/Renew (MPESA)”.</div>
         </div>
 
-        <div className="lrsPhoneRow">
-          <input
-            className="lrsInput"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="e.g. 254712345678"
-            inputMode="numeric"
-            autoComplete="tel"
-          />
-        </div>
+        <input
+          className="lrs-input"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="e.g. 254712345678"
+          inputMode="numeric"
+          autoComplete="tel"
+        />
       </div>
 
       {error ? (
-        <div className="lrsAlert lrsAlertErr">
-          <div className="lrsAlertTitle">Action required</div>
-          <div className="lrsAlertBody">{typeof error === "string" ? error : JSON.stringify(error)}</div>
+        <div className="lrs-alert lrs-alertErr">
+          <div className="lrs-alertTitle">Something went wrong</div>
+          <div className="lrs-alertBody">{typeof error === "string" ? error : JSON.stringify(error)}</div>
         </div>
       ) : null}
 
       {notice ? (
-        <div className="lrsAlert lrsAlertInfo">
-          <div className="lrsAlertTitle">Update</div>
-          <div className="lrsAlertBody">{notice}</div>
+        <div className="lrs-alert lrs-alertOk">
+          <div className="lrs-alertTitle">Update</div>
+          <div className="lrs-alertBody">{notice}</div>
         </div>
       ) : null}
 
       {loading ? (
-        <div className="lrsLoading">Loading plans…</div>
+        <div className="lrs-loading">Loading plans…</div>
       ) : sortedProducts.length === 0 ? (
-        <div className="lrsEmpty">No subscription products available right now.</div>
+        <div className="lrs-empty">No subscription products available right now.</div>
       ) : (
-        <div className="lrsGrid">
+        <div className="lrs-grid">
           {sortedProducts.map((p) => {
             const pid = p.contentProductId ?? p.ContentProductId;
             const name = p.name ?? p.Name;
             const desc = p.description ?? p.Description;
 
-            const plans = p.plans ?? p.Plans ?? [];
-            const sub = latestByProductId.get(pid) || null;
-            const badge = buildBadge(sub);
-            const activeNow = sub ? isActiveNow(sub, nowUtcMs) : false;
-            const isTrial = !!(sub?.isTrial ?? sub?.IsTrial);
-            const dr = sub ? daysRemaining(sub.endDate || sub.EndDate, nowUtcMs) : 0;
+            const rawPlans = p.plans ?? p.Plans ?? [];
+            const plans = normalizePlans(rawPlans);
 
-            const ctaLabel = activeNow ? "Renew" : "Subscribe";
+            const badge = statusBadgeText(pid);
+            const nudge = expiringNudge(pid);
+            const activeSub = bestSubByProductId.get(pid);
+            const activeNow = activeSub ? isActiveNow(activeSub, nowUtcMs) : false;
+            const primaryLabel = activeNow ? "Renew" : "Subscribe";
 
             return (
-              <div className="lrsCard lrsProductCard" key={pid}>
-                <div className="lrsProdTop">
-                  <div className="lrsProdTitle">{name}</div>
+              <div className="lrs-premiumCard" key={pid}>
+                {/* Top row */}
+                <div className="lrs-cardTop">
+                  <div className="lrs-cardTitle">{name}</div>
 
-                  <span className={`lrsBadge ${badge.tone}`} title="Your status for this product">
+                  <span
+                    className={[
+                      "lrs-badge",
+                      badge.kind === "active" ? "ok" : "",
+                      badge.kind === "trial" ? "trial" : "",
+                      badge.kind === "expired" ? "muted" : "",
+                      badge.kind === "none" ? "muted" : "",
+                    ].join(" ")}
+                    title="Your status for this product"
+                  >
                     {badge.text}
                   </span>
                 </div>
 
-                {desc ? <div className="lrsProdDesc">{desc}</div> : null}
+                {desc ? <div className="lrs-cardDesc">{desc}</div> : null}
 
-                {/* Trial expiry hint -> push user to subscribe */}
-                {activeNow && isTrial ? (
-                  <div className={`lrsHint ${dr <= 7 ? "warn" : "ok"}`}>
-                    {dr <= 7 ? (
-                      <>
-                        Your trial is ending soon (<b>{dr}</b> day{dr === 1 ? "" : "s"}). Consider
-                        subscribing to avoid losing access.
-                      </>
-                    ) : (
-                      <>You’re currently on a trial. You can subscribe anytime.</>
-                    )}
+                {/* Premium features */}
+                <ul className="lrs-features">
+                  <li>
+                    <IconCheck className="lrs-featIco" />
+                    Full Law Reports library access
+                  </li>
+                  <li>
+                    <IconCheck className="lrs-featIco" />
+                    Fast search + citations
+                  </li>
+                  <li>
+                    <IconCheck className="lrs-featIco" />
+                    Reader highlights + notes
+                  </li>
+                </ul>
+
+                {nudge ? (
+                  <div className="lrs-nudge">
+                    <div className="lrs-nudgeTitle">{nudge.title}</div>
+                    <div className="lrs-nudgeBody">{nudge.body}</div>
                   </div>
                 ) : null}
 
-                {/* Premium features (small) */}
-                <div className="lrsFeatures">
-                  <div className="lrsFeat">
-                    <span className="lrsDotIcon" />
-                    Full Law Reports library access
-                  </div>
-                  <div className="lrsFeat">
-                    <span className="lrsDotIcon" />
-                    Fast search + citations
-                  </div>
-                  <div className="lrsFeat">
-                    <span className="lrsDotIcon" />
-                    Reader highlights + notes
-                  </div>
-                </div>
-
-                <div className="lrsSectionTitle">Plans</div>
+                <div className="lrs-sectionTitle">Plans</div>
 
                 {plans.length === 0 ? (
-                  <div className="lrsEmptyPlan">
-                    <div className="lrsEmptyPlanTitle">No active plans available for this product.</div>
-                    <div className="lrsEmptyPlanMeta">
-                      This usually means your pricing “Effective To” date has passed for audience{" "}
-                      <b>{audienceTxt}</b>. Update/extend the active ContentProductPrice in Admin.
+                  <div className="lrs-emptyPlan">
+                    <div className="lrs-emptyPlanTitle">No active plans available for this product.</div>
+                    <div className="lrs-emptyPlanMeta">
+                      Admin: confirm there is an active <b>ContentProductPrice</b> for Audience <b>{audience}</b>.
                     </div>
 
-                    <div className="lrsPlanActions">
-                      <button
-                        className="lrsIconBtn lrsGhostBtn"
-                        onClick={() => nav(`/dashboard/trials?productId=${pid}`)}
-                        title="Request trial (if eligible)"
-                      >
-                        <ITrial />
-                        <span>Start trial</span>
-                      </button>
-                    </div>
+                    <button
+                      className="lrs-pillBtn"
+                      onClick={() => nav(`/dashboard/trials?productId=${pid}`)}
+                      title="Request trial (if eligible)"
+                    >
+                      <IconSpark className="lrs-ico" />
+                      Trial
+                    </button>
                   </div>
                 ) : (
-                  <div className="lrsPlanStack">
+                  <div className="lrs-planStack">
                     {plans.map((pl) => {
                       const planId = pl.contentProductPriceId ?? pl.ContentProductPriceId;
                       const period = pl.billingPeriod ?? pl.BillingPeriod;
@@ -489,51 +545,56 @@ export default function LawReportsSubscribe() {
                       const keyPaystack = `${planId}-paystack`;
 
                       return (
-                        <div className="lrsPlan" key={planId}>
-                          <div className="lrsPlanRow">
-                            <div className="lrsPlanPeriod">{billingLabel(period)}</div>
-                            <div className="lrsPlanPrice">{formatMoney(amount, currency)}</div>
+                        <div className="lrs-plan" key={planId}>
+                          <div className="lrs-planRow">
+                            <div className="lrs-planLeft">
+                              <div className="lrs-planPeriod">{billingLabel(period)}</div>
+                              <div className="lrs-planMeta">
+                                Billed {normalizeBilling(period) === "annual" ? "yearly" : "monthly"}
+                              </div>
+                            </div>
+
+                            <div className="lrs-planPrice">{formatMoney(amount, currency)}</div>
                           </div>
 
-                          <div className="lrsPlanActions">
+                          <div className="lrs-planActions">
                             <button
-                              className="lrsIconBtn lrsGhostBtn"
+                              className="lrs-actionBtn"
                               disabled={busyKey === keyMpesa}
                               onClick={() => startMpesa(pl, p)}
                               title="Pay with MPESA (STK Push)"
                             >
-                              <IMpesa />
-                              <span>{busyKey === keyMpesa ? "Sending…" : `${ctaLabel} (MPESA)`}</span>
+                              <IconPhone className="lrs-ico" />
+                              {busyKey === keyMpesa ? "Sending…" : `${primaryLabel} (MPESA)`}
                             </button>
 
                             <button
-                              className="lrsIconBtn lrsGhostBtn"
+                              className="lrs-actionBtn"
                               disabled={busyKey === keyPaystack}
                               onClick={() => startPaystack(pl, p)}
                               title="Pay with Paystack"
                             >
-                              <IPaystack />
-                              <span>{busyKey === keyPaystack ? "Opening…" : `${ctaLabel} (Paystack)`}</span>
+                              <IconCard className="lrs-ico" />
+                              {busyKey === keyPaystack ? "Opening…" : `${primaryLabel} (Paystack)`}
                             </button>
 
+                            {/* Trial always visible (you asked “Also include Trial”) */}
                             <button
-                              className="lrsIconBtn lrsDashedBtn"
+                              className="lrs-pillBtn"
                               onClick={() => nav(`/dashboard/trials?productId=${pid}`)}
                               title="Request trial (if eligible)"
                             >
-                              <ITrial />
-                              <span>Trial</span>
+                              <IconSpark className="lrs-ico" />
+                              Trial
                             </button>
                           </div>
                         </div>
                       );
                     })}
+
+                    <div className="lrs-tip">Tip: Annual plans usually save more.</div>
                   </div>
                 )}
-
-                {plans.length > 0 ? (
-                  <div className="lrsTip">Tip: Annual plans usually save more.</div>
-                ) : null}
               </div>
             );
           })}
