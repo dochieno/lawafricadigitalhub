@@ -1,3 +1,4 @@
+// src/pages/dashboard/admin/AdminUserSubscriptions.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../../../api/client";
 import "../../../styles/adminCrud.css";
@@ -96,6 +97,27 @@ function fmtDateTime(d) {
   });
 }
 
+// ✅ Display name helper: First + Last (fallback to username/email/phone)
+function buildDisplayName(user) {
+  const u = user || {};
+  const first = (u.firstName ?? u.FirstName ?? "").toString().trim();
+  const last = (u.lastName ?? u.LastName ?? "").toString().trim();
+  const full = `${first} ${last}`.trim();
+
+  if (full) return full;
+
+  const username = (u.username ?? u.Username ?? "").toString().trim();
+  if (username) return username;
+
+  const email = (u.email ?? u.Email ?? "").toString().trim();
+  if (email) return email;
+
+  const phone = (u.phoneNumber ?? u.PhoneNumber ?? "").toString().trim();
+  if (phone) return phone;
+
+  return "—";
+}
+
 /* =========================
    AU mini UI
 ========================= */
@@ -136,20 +158,45 @@ function Icon({ name }) {
     case "pause":
       return (
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path d="M6 4h4v16H6zM14 4h4v16h-4z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+          <path
+            d="M6 4h4v16H6zM14 4h4v16h-4z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
         </svg>
       );
     case "play":
       return (
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path d="M8 5v14l11-7z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+          <path
+            d="M8 5v14l11-7z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinejoin="round"
+          />
         </svg>
       );
     case "refresh":
       return (
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path d="M21 12a9 9 0 1 1-2.64-6.36" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          <path d="M21 3v6h-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path
+            d="M21 12a9 9 0 1 1-2.64-6.36"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <path
+            d="M21 3v6h-6"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
       );
     default:
@@ -249,13 +296,10 @@ export default function AdminUserSubscriptions() {
       // - status=null + includeExpiredWindows=false => backend returns active window only
       // - status=... => backend filters by status
       if (status === "1" || status === "2" || status === "3" || status === "4") {
-        // backend expects enum; it can parse string names too, but number is safest
         const n = Number(status);
-        // If your controller model-binds enum, it may accept numeric
         params.status = n;
       } else if (status === "all") {
         // no status filter, but includeExpiredWindows=true to show everything
-        // keep params.status undefined
       } else if (status === "activeWindow") {
         // backend default window filter (includeExpiredWindows=false)
       }
@@ -321,7 +365,7 @@ export default function AdminUserSubscriptions() {
       if (isTrial) trials += 1;
       else paid += 1;
 
-      const isActiveNow = !!(r.isActiveNow ?? r.isActiveNow);
+      const isActiveNow = !!(r.isActiveNow ?? r.IsActiveNow);
       if (isActiveNow) activeNow += 1;
     }
 
@@ -338,18 +382,28 @@ export default function AdminUserSubscriptions() {
     if (!actionRow || !actionMode) return;
 
     const id = actionRow.id ?? actionRow.Id;
-    const user = actionRow.user?.username || actionRow.user?.email || actionRow.user?.phoneNumber || "—";
+
+    const u = actionRow.user ?? {};
+    const displayName = buildDisplayName(u);
+
+    const email = (u.email ?? u.Email ?? "").toString().trim();
+    const phone = (u.phoneNumber ?? u.PhoneNumber ?? "").toString().trim();
+
     const product = actionRow.productName ?? actionRow.contentProductName ?? "—";
 
     const label = actionMode === "suspend" ? "Suspend" : "Unsuspend";
-    const msg = `Confirm ${label}?\n\nUser: ${user}\nProduct: ${product}${actionNotes ? `\nNotes: ${actionNotes}` : ""}`;
+    const userLine = email || phone ? `${displayName} (${email || phone})` : displayName;
+
+    const msg = `Confirm ${label}?\n\nUser: ${userLine}\nProduct: ${product}${
+      actionNotes ? `\nNotes: ${actionNotes}` : ""
+    }`;
     if (!window.confirm(msg)) return;
 
     setBusy(true);
     setError("");
 
     try {
-      // ✅ Add these endpoints in backend (recommended):
+      // Expected backend endpoints:
       // POST /api/subscriptions/admin/{id}/suspend
       // POST /api/subscriptions/admin/{id}/unsuspend
       await api.post(`/subscriptions/admin/${id}/${actionMode}`, {
@@ -400,7 +454,8 @@ export default function AdminUserSubscriptions() {
                 title="Refresh"
               >
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
-                  {loading ? <Icon name="spinner" /> : <Icon name="refresh" />} {loading ? "Refreshing…" : "Refresh"}
+                  {loading ? <Icon name="spinner" /> : <Icon name="refresh" />}{" "}
+                  {loading ? "Refreshing…" : "Refresh"}
                 </span>
               </button>
 
@@ -422,7 +477,7 @@ export default function AdminUserSubscriptions() {
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Search by username, email, phone, product…"
+                placeholder="Search by name, email, phone, product…"
                 aria-label="Search"
               />
               {q ? (
@@ -447,7 +502,11 @@ export default function AdminUserSubscriptions() {
 
               <div className="au-sort" title="Trial vs paid">
                 <span className="au-sortLabel">Type</span>
-                <select value={trialFilter} onChange={(e) => setTrialFilter(e.target.value)} disabled={loading || busy}>
+                <select
+                  value={trialFilter}
+                  onChange={(e) => setTrialFilter(e.target.value)}
+                  disabled={loading || busy}
+                >
                   <option value="all">All</option>
                   <option value="trial">Trials</option>
                   <option value="paid">Paid</option>
@@ -456,7 +515,11 @@ export default function AdminUserSubscriptions() {
 
               <div className="au-sort" title="Rows per page">
                 <span className="au-sortLabel">Page size</span>
-                <select value={String(pageSize)} onChange={(e) => setPageSize(Number(e.target.value))} disabled={loading || busy}>
+                <select
+                  value={String(pageSize)}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  disabled={loading || busy}
+                >
                   <option value="25">25</option>
                   <option value="50">50</option>
                   <option value="100">100</option>
@@ -492,9 +555,7 @@ export default function AdminUserSubscriptions() {
       <section className="au-panel">
         <div className="au-panelTop">
           <div className="au-panelTitle">{loading ? "Loading…" : "Subscription directory"}</div>
-          <div className="au-muted">
-            {loading ? "—" : `Total matching: ${total} • Page ${page} / ${pageCount}`}
-          </div>
+          <div className="au-muted">{loading ? "—" : `Total matching: ${total} • Page ${page} / ${pageCount}`}</div>
         </div>
 
         <div className="au-tableWrap">
@@ -525,13 +586,9 @@ export default function AdminUserSubscriptions() {
 
               {rows.map((r) => {
                 const id = r.id ?? r.Id;
+
                 const u = r.user ?? {};
-                const user = r.user || {};
-                const firstName = user.FirstName || "";
-                const lastName = user.LastName || "";
-                const fullName = `${firstName} ${lastName}`.trim();
-                const displayName =
-                fullName || user.Username || "—";
+                const displayName = buildDisplayName(u);
 
                 const email = u.email ?? u.Email ?? "—";
                 const phone = u.phoneNumber ?? u.PhoneNumber ?? "—";
@@ -545,7 +602,7 @@ export default function AdminUserSubscriptions() {
                 const start = r.startDate ?? r.StartDate;
                 const end = r.endDate ?? r.EndDate;
 
-                const isActiveNow = !!(r.isActiveNow ?? r.isActiveNow);
+                const isActiveNow = !!(r.isActiveNow ?? r.IsActiveNow);
                 const isSuspended = stNum === 4;
 
                 return (
@@ -554,7 +611,9 @@ export default function AdminUserSubscriptions() {
                       <div className="au-userCell">
                         <span className={`au-dot ${isActiveNow ? "on" : ""}`} />
                         <div className="au-userMeta">
+                          {/* ✅ changed: show first+last name (fallback handled in buildDisplayName) */}
                           <div className="au-userName">{displayName}</div>
+
                           <div className="au-userSub">
                             <span className="au-muted">{email}</span>
                             <span className="au-sep">•</span>
@@ -569,7 +628,10 @@ export default function AdminUserSubscriptions() {
                     <td>{productName}</td>
 
                     <td>
-                      <Badge tone={isTrial ? "warn" : "info"} title={isTrial ? "Trial subscription" : "Paid subscription"}>
+                      <Badge
+                        tone={isTrial ? "warn" : "info"}
+                        title={isTrial ? "Trial subscription" : "Paid subscription"}
+                      >
                         {isTrial ? "Trial" : "Paid"}
                       </Badge>
                     </td>
@@ -617,9 +679,7 @@ export default function AdminUserSubscriptions() {
 
         {/* Pagination */}
         <div className="au-panelBottom" style={{ justifyContent: "space-between" }}>
-          <div className="au-muted">
-            Tip: “Active window” matches your backend default (Status=Active + Start/End window).
-          </div>
+          <div className="au-muted">Tip: “Active window” matches your backend default (Status=Active + Start/End window).</div>
 
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <button
@@ -665,9 +725,13 @@ export default function AdminUserSubscriptions() {
           <div className="admin-modal admin-modal-tight" onClick={(e) => e.stopPropagation()}>
             <div className="admin-modal-head admin-modal-head-x">
               <div>
-                <h3 className="admin-modal-title">{actionMode === "suspend" ? "Suspend Subscription" : "Unsuspend Subscription"}</h3>
+                <h3 className="admin-modal-title">
+                  {actionMode === "suspend" ? "Suspend Subscription" : "Unsuspend Subscription"}
+                </h3>
                 <div className="admin-modal-subtitle">
-                  {actionRow?.user?.username || actionRow?.user?.email || "User"} — {actionRow?.productName || "Product"}
+                  {/* ✅ changed: show full name (fallback handled) */}
+                  {buildDisplayName(actionRow?.user)} —{" "}
+                  {actionRow?.productName || actionRow?.contentProductName || "Product"}
                 </div>
               </div>
 
@@ -704,7 +768,10 @@ export default function AdminUserSubscriptions() {
               </div>
 
               <div style={{ marginTop: 10, fontSize: 12, color: "rgba(0,0,0,0.55)" }}>
-                Endpoint expected: <span className="au-mono">POST /api/subscriptions/admin/{"{id}"}/{actionMode}</span>
+                Endpoint expected:{" "}
+                <span className="au-mono">
+                  POST /api/subscriptions/admin/{"{id}"}/{actionMode}
+                </span>
               </div>
             </form>
           </div>
