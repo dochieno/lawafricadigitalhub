@@ -1,4 +1,3 @@
-// src/pages/dashboard/trials/RequestTrial.jsx
 import { useEffect, useMemo, useState } from "react";
 import api from "../../api/client";
 import "../../styles/requestTrial.css";
@@ -10,9 +9,7 @@ function extractErrorMessage(e) {
 
   if (data?.errors && typeof data.errors === "object") {
     const firstKey = Object.keys(data.errors)[0];
-    const firstVal = Array.isArray(data.errors[firstKey])
-      ? data.errors[firstKey][0]
-      : null;
+    const firstVal = Array.isArray(data.errors[firstKey]) ? data.errors[firstKey][0] : null;
     if (firstVal) return `${firstKey}: ${firstVal}`;
   }
 
@@ -21,24 +18,17 @@ function extractErrorMessage(e) {
 }
 
 /**
- * Avoid “/api double” or “missing /api”.
- * - If axios baseURL ends with "/api", then paths should be "/trials/..."
- * - Otherwise prefix "/api" (useful if baseURL is just the host origin)
+ * Fixes "/api missing" and "double /api" issues.
+ * - If axios baseURL already includes "/api", keep paths like "/trials/request"
+ * - If axios baseURL does NOT include "/api", prefix "/api"
  */
-function makeApiPath(pathAfterApi) {
-  const base = String(api?.defaults?.baseURL || "");
+function apiPath(path) {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  if (p.startsWith("/api/") || p === "/api") return p;
 
-  try {
-    const u = new URL(base, window.location.origin);
-    const normalized = u.pathname.replace(/\/+$/, ""); // trim trailing slash(es)
-    const endsWithApi = normalized.endsWith("/api");
-    return endsWithApi ? pathAfterApi : `/api${pathAfterApi}`;
-  } catch {
-    // base may be a relative path; fallback safely
-    const cleaned = base.replace(/\/+$/, "");
-    const endsWithApi = cleaned.endsWith("/api");
-    return endsWithApi ? pathAfterApi : `/api${pathAfterApi}`;
-  }
+  const base = String(api?.defaults?.baseURL || "").toLowerCase();
+  const baseHasApi = base.includes("/api");
+  return baseHasApi ? p : `/api${p}`;
 }
 
 export default function RequestTrial() {
@@ -66,9 +56,7 @@ export default function RequestTrial() {
     setError("");
 
     try {
-      const res = await api.get(
-        makeApiPath("/public/content-products/subscription-products")
-      );
+      const res = await api.get(apiPath("/public/content-products/subscription-products"));
       const data = res.data?.data ?? res.data;
       const list = Array.isArray(data) ? data : [];
 
@@ -88,7 +76,6 @@ export default function RequestTrial() {
   }
 
   useEffect(() => {
-    // Make sure there are NO `debugger;` statements in this file or in main.jsx
     loadProducts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -102,16 +89,10 @@ export default function RequestTrial() {
     setResult(null);
 
     try {
-      const cleanReason = reason.trim();
-      const payload = {
-        // send both casing variants to be bulletproof across JSON options
+      const res = await api.post(apiPath("/trials/request"), {
         contentProductId: productIdNum,
-        ContentProductId: productIdNum,
-        reason: cleanReason || null,
-        Reason: cleanReason || null,
-      };
-
-      const res = await api.post(makeApiPath("/trials/request"), payload);
+        reason: reason.trim() || null,
+      });
 
       setResult(res.data?.data ?? res.data);
       setReason("");
@@ -123,100 +104,93 @@ export default function RequestTrial() {
   }
 
   return (
-    <div className="rt-wrap">
-      <div className="rt-hero">
-        <div>
-          <h2 className="rt-title">Request a Trial</h2>
-          <p className="rt-sub">
-            Request trial access for a subscription product. A Global Admin must approve it.
-          </p>
-        </div>
+    <div className="rt-page">
+      {/* Branded header card */}
+      <div className="rt-heroCard">
+        <div className="rt-heroTop">
+          <div>
+            <div className="rt-kicker">LAWFRAICA • TRIALS</div>
+            <h1 className="rt-title">Request a Trial</h1>
+            <p className="rt-sub">
+              Request trial access for a subscription product. A Global Admin must approve it.
+            </p>
+          </div>
 
-        <div className="rt-mini">
-          {loadingProducts ? "Loading products…" : `${products.length} subscription product(s)`}
+          <div className="rt-countPill" title="Public subscription products available">
+            {loadingProducts ? "Loading…" : `${products.length} subscription product(s)`}
+          </div>
         </div>
       </div>
 
+      {/* Form card */}
       <div className="rt-card">
-        <form className="rt-grid" onSubmit={submit}>
-          <label className="rt-label">
-            <span>Subscription product</span>
-            <select
-              className="rt-select"
-              value={contentProductId}
-              onChange={(e) => setContentProductId(e.target.value)}
-              disabled={busy || loadingProducts || products.length === 0}
-            >
-              {products.length === 0 ? (
-                <option value="">No public subscription products found</option>
-              ) : null}
+        <form className="rt-form" onSubmit={submit}>
+          <div className="rt-grid">
+            <label className="rt-label">
+              <span>Subscription product</span>
+              <select
+                className="rt-select"
+                value={contentProductId}
+                onChange={(e) => setContentProductId(e.target.value)}
+                disabled={busy || loadingProducts || products.length === 0}
+              >
+                {products.length === 0 ? <option value="">No public subscription products found</option> : null}
 
-              {products.map((p) => {
-                const id = p.id ?? p.Id;
-                const name = p.name ?? p.Name ?? `Product #${id}`;
-                return (
-                  <option key={id} value={String(id)}>
-                    {name}
-                  </option>
-                );
-              })}
-            </select>
-          </label>
+                {products.map((p) => {
+                  const id = p.id ?? p.Id;
+                  const name = p.name ?? p.Name ?? `Product #${id}`;
+                  return (
+                    <option key={id} value={String(id)}>
+                      {name}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
 
-          {selectedProduct ? (
-            <div className="rt-productCard">
-              <div className="rt-productName">
-                {selectedProduct.name ?? selectedProduct.Name}
+            {selectedProduct ? (
+              <div className="rt-productCard" role="note" aria-label="Selected product details">
+                <div className="rt-productName">{selectedProduct.name ?? selectedProduct.Name}</div>
+                <div className="rt-productDesc">
+                  {(selectedProduct.description ?? selectedProduct.Description) || "No description provided."}
+                </div>
               </div>
-              <div className="rt-productDesc">
-                {(selectedProduct.description ?? selectedProduct.Description) ||
-                  "No description provided."}
-              </div>
-            </div>
-          ) : null}
+            ) : null}
 
-          <label className="rt-label">
-            <span>Reason (optional)</span>
-            <textarea
-              className="rt-textarea"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Tell us why you need a trial…"
-              disabled={busy}
-            />
-          </label>
+            <label className="rt-label">
+              <span>Reason (optional)</span>
+              <textarea
+                className="rt-textarea"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Tell us why you need a trial…"
+                disabled={busy}
+              />
+            </label>
+          </div>
 
-          <div className="rt-row">
-            <button className="rt-btn" disabled={busy || !canSubmit} type="submit">
+          {/* Actions: right aligned, small submit */}
+          <div className="rt-actions">
+            <button className="rt-btnPrimary" disabled={busy || !canSubmit} type="submit">
               {busy ? "Submitting…" : "Submit request"}
-            </button>
-
-            <button
-              type="button"
-              className="rt-btn rt-btnGhost"
-              disabled={busy}
-              onClick={loadProducts}
-              title="Reload products"
-            >
-              Refresh products
             </button>
           </div>
 
           {error ? (
-            <div className="rt-alert err">
+            <div className="rt-alert rt-alertErr">
               <b>Error:</b> {error}
             </div>
           ) : null}
 
           {result ? (
-            <div className="rt-alert ok">
-              <b>Request sent</b>
-              <div className="rt-mt6">
+            <div className="rt-alert rt-alertOk">
+              <div className="rt-alertTitle">Request sent</div>
+              <div className="rt-alertMeta">
                 Status: <b>{result?.status ?? "Pending"}</b>
               </div>
 
               <details className="rt-details">
-                <summary className="rt-summary">Show raw response</summary>
+                <summary>Show raw response</summary>
                 <pre className="rt-pre">{JSON.stringify(result, null, 2)}</pre>
               </details>
             </div>

@@ -2,8 +2,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../../api/client";
-import "../../../styles/adminCrud.css"; // keep for modal styles (adminUsers.css doesn’t define modals)
-import "../../../styles/adminUsers.css"; // ✅ branded au-* UI
+import "../../../styles/adminCrud.css";
+import "../../../styles/adminUsers.css";
 import AdminPageFooter from "../../../components/AdminPageFooter";
 
 function toText(v) {
@@ -21,8 +21,16 @@ function toText(v) {
   return String(v);
 }
 
+function apiPath(path) {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  if (p.startsWith("/api/") || p === "/api") return p;
+
+  const base = String(api?.defaults?.baseURL || "").toLowerCase();
+  const baseHasApi = base.includes("/api");
+  return baseHasApi ? p : `/api${p}`;
+}
+
 /**
- * ✅ ProductAccessModel mapping (matches backend)
  * enum ProductAccessModel:
  * 0 = Unknown
  * 1 = OneTimePurchase
@@ -55,7 +63,7 @@ function accessModelLabel(v) {
 
 function bundleLabel(isIncluded, accessModel) {
   const model = parseAccessModel(accessModel, 0);
-  if (model !== 2) return "—"; // only relevant for subscription
+  if (model !== 2) return "—";
   return isIncluded ? "Included (Bundle)" : "Separate";
 }
 
@@ -69,12 +77,10 @@ const emptyForm = {
   name: "",
   description: "",
 
-  // legacy (kept for backward compat; mirrors PublicAccessModel in backend)
   accessModel: 1,
 
-  // ✅ audience-specific fields
-  institutionAccessModel: 2, // default: Subscription
-  publicAccessModel: 1, // default: OneTimePurchase
+  institutionAccessModel: 2,
+  publicAccessModel: 1,
   includedInInstitutionBundle: true,
   includedInPublicBundle: false,
 
@@ -92,7 +98,6 @@ function mapRowToForm(row) {
     name: r.name ?? r.Name ?? "",
     description: r.description ?? r.Description ?? "",
 
-    // legacy mirrors public
     accessModel: parseAccessModel(r.accessModel ?? r.AccessModel ?? pubModel, pubModel),
 
     institutionAccessModel: instModel,
@@ -113,9 +118,7 @@ function safeBool(v, fallback = false) {
   return fallback;
 }
 
-/* =========================
-   Tiny icons (no deps)
-========================= */
+/* Tiny icons */
 function ISearch() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -130,14 +133,7 @@ function ISearch() {
 }
 function IRefresh({ spin = false } = {}) {
   return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-      className={spin ? "au-spin" : undefined}
-    >
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className={spin ? "au-spin" : undefined}>
       <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       <path d="M21 3v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
@@ -178,23 +174,18 @@ export default function AdminContentProducts() {
   const [busy, setBusy] = useState(false);
 
   const [q, setQ] = useState("");
-
-  // au-toast feedback
-  const [toast, setToast] = useState(null); // {type:"success"|"error", text:string}
+  const [toast, setToast] = useState(null);
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ ...emptyForm });
   const [modalLoading, setModalLoading] = useState(false);
 
-  // document counts per productId
-  // value can be: number | null (loading) | undefined (not requested yet) | "err" (failed)
   const [docCounts, setDocCounts] = useState({});
 
-  // filters (UI only)
-  const [audienceFilter, setAudienceFilter] = useState("all"); // all | institutions | public
-  const [instModelFilter, setInstModelFilter] = useState("all"); // all | 1 | 2 | 0
-  const [pubModelFilter, setPubModelFilter] = useState("all"); // all | 1 | 2 | 0
+  const [audienceFilter, setAudienceFilter] = useState("all");
+  const [instModelFilter, setInstModelFilter] = useState("all");
+  const [pubModelFilter, setPubModelFilter] = useState("all");
 
   function showError(msg) {
     setToast({ type: "error", text: msg });
@@ -211,16 +202,15 @@ export default function AdminContentProducts() {
     setToast(null);
     setLoading(true);
     try {
-      const res = await api.get("/content-products");
+      const res = await api.get(apiPath("/content-products"));
       const data = res.data?.data ?? res.data;
       const list = Array.isArray(data) ? data : [];
       setRows(list);
 
-      // reset counts for current list (keeps UI predictable)
       const nextCounts = {};
       for (const r of list) {
         const id = r.id ?? r.Id;
-        if (id != null) nextCounts[id] = null; // null = "loading"
+        if (id != null) nextCounts[id] = null; // null = loading
       }
       setDocCounts(nextCounts);
     } catch (e) {
@@ -232,20 +222,26 @@ export default function AdminContentProducts() {
     }
   }
 
-  // background count fetcher (does not block main table)
+  // ✅ FIX: actually load on mount
+  useEffect(() => {
+    loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function loadDocCountsForProducts(productIds) {
     if (!productIds?.length) return;
 
     const settled = await Promise.allSettled(
       productIds.map(async (id) => {
-        const res = await api.get(`/content-products/${id}/documents`);
+        // If your backend endpoint differs, change it here.
+        // This assumes: GET /api/content-products/{id}/documents returns list
+        const res = await api.get(apiPath(`/content-products/${id}/documents`));
         const data = res.data?.data ?? res.data;
         const count = Array.isArray(data) ? data.length : 0;
         return { id, count };
       })
     );
 
-    // ✅ FIX: map failures to the correct product id by index
     setDocCounts((prev) => {
       const next = { ...prev };
       settled.forEach((s, idx) => {
@@ -257,7 +253,6 @@ export default function AdminContentProducts() {
     });
   }
 
-  // when rows change, fetch counts for visible products in background
   useEffect(() => {
     const ids = rows.map((r) => r.id ?? r.Id).filter((id) => id != null);
     const needs = ids.filter((id) => docCounts[id] == null);
@@ -318,11 +313,6 @@ export default function AdminContentProducts() {
 
     let toInst = 0;
     let toPub = 0;
-    let instSub = 0;
-    let pubSub = 0;
-    let instBundle = 0;
-    let pubBundle = 0;
-
     let docsKnown = 0;
     let docsTotal = 0;
 
@@ -335,18 +325,6 @@ export default function AdminContentProducts() {
       if (aInst) toInst += 1;
       if (aPub) toPub += 1;
 
-      const instModel = parseAccessModel(r.institutionAccessModel ?? r.InstitutionAccessModel, 2);
-      const pubModel = parseAccessModel(r.publicAccessModel ?? r.PublicAccessModel ?? r.accessModel ?? r.AccessModel, 1);
-
-      if (aInst && instModel === 2) instSub += 1;
-      if (aPub && pubModel === 2) pubSub += 1;
-
-      const instB = safeBool(r.includedInInstitutionBundle ?? r.IncludedInInstitutionBundle, true);
-      const pubB = safeBool(r.includedInPublicBundle ?? r.IncludedInPublicBundle, false);
-
-      if (aInst && instModel === 2 && instB) instBundle += 1;
-      if (aPub && pubModel === 2 && pubB) pubBundle += 1;
-
       const c = docCounts[id];
       if (typeof c === "number") {
         docsKnown += 1;
@@ -354,17 +332,7 @@ export default function AdminContentProducts() {
       }
     }
 
-    return {
-      total,
-      toInst,
-      toPub,
-      instSub,
-      pubSub,
-      instBundle,
-      pubBundle,
-      docsKnown,
-      docsTotal,
-    };
+    return { total, toInst, toPub, docsKnown, docsTotal };
   }, [filtered, docCounts]);
 
   function setField(k, v) {
@@ -388,7 +356,7 @@ export default function AdminContentProducts() {
     setModalLoading(true);
     try {
       const id = row.id ?? row.Id;
-      const res = await api.get(`/content-products/${id}`);
+      const res = await api.get(apiPath(`/content-products/${id}`));
       const data = res.data?.data ?? res.data;
       setForm(mapRowToForm(data));
     } catch {
@@ -412,13 +380,11 @@ export default function AdminContentProducts() {
       name: form.name.trim(),
       description: form.description?.trim() || null,
 
-      // legacy for older clients; backend treats as public model
       accessModel: pubModel,
 
       institutionAccessModel: instModel,
       publicAccessModel: pubModel,
 
-      // Only meaningful if Subscription
       includedInInstitutionBundle: instModel === 2 ? !!form.includedInInstitutionBundle : false,
       includedInPublicBundle: pubModel === 2 ? !!form.includedInPublicBundle : false,
 
@@ -436,10 +402,10 @@ export default function AdminContentProducts() {
 
       if (editing) {
         const id = editing.id ?? editing.Id;
-        await api.put(`/content-products/${id}`, payload);
+        await api.put(apiPath(`/content-products/${id}`), payload);
         showSuccess("Content product updated.");
       } else {
-        await api.post("/content-products", payload);
+        await api.post(apiPath("/content-products"), payload);
         showSuccess("Content product created.");
       }
 
@@ -454,12 +420,10 @@ export default function AdminContentProducts() {
 
   return (
     <div className="au-wrap">
-      {/* Toast */}
       {toast?.text ? (
         <div className={`toast ${toast.type === "error" ? "toast-error" : "toast-success"}`}>{toast.text}</div>
       ) : null}
 
-      {/* HERO */}
       <div className="au-hero">
         <div className="au-titleRow">
           <div>
@@ -494,7 +458,6 @@ export default function AdminContentProducts() {
           </div>
         </div>
 
-        {/* TOPBAR */}
         <div className="au-topbar">
           <div className="au-search">
             <span className="au-searchIcon" aria-hidden="true">
@@ -514,7 +477,7 @@ export default function AdminContentProducts() {
           </div>
 
           <div className="au-topbarRight">
-            <div className="au-sort" title="These filters only affect the table UI">
+            <div className="au-sort">
               <span className="au-sortLabel">Audience</span>
               <select value={audienceFilter} onChange={(e) => setAudienceFilter(e.target.value)} disabled={loading}>
                 <option value="all">All</option>
@@ -523,7 +486,7 @@ export default function AdminContentProducts() {
               </select>
             </div>
 
-            <div className="au-sort" title="Institution access model filter">
+            <div className="au-sort">
               <span className="au-sortLabel">Inst model</span>
               <select value={instModelFilter} onChange={(e) => setInstModelFilter(e.target.value)} disabled={loading}>
                 <option value="all">All</option>
@@ -533,7 +496,7 @@ export default function AdminContentProducts() {
               </select>
             </div>
 
-            <div className="au-sort" title="Public access model filter">
+            <div className="au-sort">
               <span className="au-sortLabel">Public model</span>
               <select value={pubModelFilter} onChange={(e) => setPubModelFilter(e.target.value)} disabled={loading}>
                 <option value="all">All</option>
@@ -545,7 +508,6 @@ export default function AdminContentProducts() {
           </div>
         </div>
 
-        {/* KPI CARDS */}
         <div className="au-kpis">
           <div className="au-kpiCard">
             <div className="au-kpiLabel">Shown</div>
@@ -564,61 +526,8 @@ export default function AdminContentProducts() {
             <div className="au-kpiValue">{loading ? "…" : kpis.docsKnown ? kpis.docsTotal : "—"}</div>
           </div>
         </div>
-
-        {/* CHIP FILTERS (quick presets) */}
-        <div className="au-filters">
-          <div className="au-filterGroup">
-            <span className="au-filterLabel">Quick filters</span>
-            <div className="au-chips">
-              <button
-                type="button"
-                className={`au-chip ${audienceFilter === "all" ? "active" : ""}`}
-                onClick={() => setAudienceFilter("all")}
-                disabled={loading}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                className={`au-chip ${audienceFilter === "institutions" ? "active" : ""}`}
-                onClick={() => setAudienceFilter("institutions")}
-                disabled={loading}
-              >
-                Institutions
-              </button>
-              <button
-                type="button"
-                className={`au-chip ${audienceFilter === "public" ? "active" : ""}`}
-                onClick={() => setAudienceFilter("public")}
-                disabled={loading}
-              >
-                Public
-              </button>
-            </div>
-          </div>
-
-          <div className="au-filterGroup">
-            <span className="au-filterLabel">Reset</span>
-            <div className="au-chips">
-              <button
-                type="button"
-                className="au-chip"
-                onClick={() => {
-                  setQ("");
-                  setAudienceFilter("all");
-                  setInstModelFilter("all");
-                  setPubModelFilter("all");
-                }}
-                disabled={loading}
-              >
-                Clear filters
-              </button>
-            </div>
-          </div>
-        </div>
       </div>
 
-      {/* PANEL + TABLE */}
       <div className="au-panel">
         <div className="au-panelTop">
           <div className="au-panelTitle">Product directory</div>
@@ -767,15 +676,12 @@ export default function AdminContentProducts() {
             needs its own subscription (e.g., Law Reports).
           </span>
 
-          <span className="au-pageMeta">
-            Docs counts load in the background (non-blocking).
-          </span>
+          <span className="au-pageMeta">Docs counts load in the background (non-blocking).</span>
         </div>
       </div>
 
       <AdminPageFooter />
 
-      {/* MODAL (kept adminCrud modal styles; just content stays the same) */}
       {open && (
         <div className="admin-modal-overlay" onClick={closeModal}>
           <div className="admin-modal admin-modal-tight" onClick={(e) => e.stopPropagation()}>
@@ -814,7 +720,10 @@ export default function AdminContentProducts() {
 
                 <div className="admin-field">
                   <label>Available to public?</label>
-                  <select value={String(!!form.availableToPublic)} onChange={(e) => setField("availableToPublic", e.target.value === "true")}>
+                  <select
+                    value={String(!!form.availableToPublic)}
+                    onChange={(e) => setField("availableToPublic", e.target.value === "true")}
+                  >
                     <option value="true">Yes</option>
                     <option value="false">No</option>
                   </select>
@@ -822,7 +731,9 @@ export default function AdminContentProducts() {
 
                 <div className="admin-form-section">
                   <div className="admin-form-section-title">Institution rules</div>
-                  <div className="admin-form-section-sub">Applies when the product is used under an institution account.</div>
+                  <div className="admin-form-section-sub">
+                    Applies when the product is used under an institution account.
+                  </div>
                 </div>
 
                 <div className="admin-field">

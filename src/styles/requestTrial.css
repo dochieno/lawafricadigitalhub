@@ -1,48 +1,81 @@
 :root {
-  --la-maroon: #8b1c1c;
   --rt-bg: #f6f7fb;
-  --rt-card: rgba(255, 255, 255, 0.88);
-  --rt-border: rgba(17, 24, 39, 0.12);
-  --rt-ink: #111827;
-  --rt-muted: rgba(17, 24, 39, 0.65);
-  --rt-shadow: 0 18px 45px rgba(0, 0, 0, 0.10);
+  --rt-card: rgba(255, 255, 255, 0.92);
+  --rt-border: rgba(15, 23, 42, 0.12);
+  --rt-ink: #0f172a;
+  --rt-muted: rgba(15, 23, 42, 0.65);
+  --rt-brand: #8b1c1c;
+  --rt-brand2: #a11f1f;
+  --rt-shadow: 0 18px 45px rgba(0, 0, 0, 0.08);
   --rt-radius: 16px;
 }
 
-.rt-wrap {
-  max-width: 880px;
+.rt-page {
+  max-width: 980px;
   margin: 0 auto;
-  padding: 18px;
+  padding: 18px 16px 40px;
 }
 
-.rt-hero {
+.rt-heroCard {
+  background: linear-gradient(180deg, rgba(139, 28, 28, 0.08), rgba(255, 255, 255, 0.8));
+  border: 1px solid var(--rt-border);
+  border-radius: var(--rt-radius);
+  box-shadow: var(--rt-shadow);
+  padding: 18px 18px;
+}
+
+.rt-heroTop {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
-  margin-bottom: 14px;
+}
+
+.rt-kicker {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(139, 28, 28, 0.9);
+  font-weight: 700;
 }
 
 .rt-title {
-  margin: 0;
-  font-size: 28px;
-  letter-spacing: -0.02em;
+  margin: 8px 0 6px;
+  font-size: 30px;
+  line-height: 1.15;
   color: var(--rt-ink);
 }
 
 .rt-sub {
-  margin: 6px 0 0 0;
+  margin: 0;
   color: var(--rt-muted);
-  line-height: 1.5;
+  max-width: 720px;
+}
+
+.rt-countPill {
+  align-self: center;
+  border: 1px solid rgba(139, 28, 28, 0.22);
+  background: rgba(255, 255, 255, 0.75);
+  padding: 8px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: rgba(139, 28, 28, 0.9);
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .rt-card {
+  margin-top: 14px;
   background: var(--rt-card);
   border: 1px solid var(--rt-border);
-  box-shadow: var(--rt-shadow);
   border-radius: var(--rt-radius);
+  box-shadow: var(--rt-shadow);
   padding: 16px;
-  backdrop-filter: blur(10px);
+}
+
+.rt-form {
+  display: grid;
+  gap: 12px;
 }
 
 .rt-grid {
@@ -53,123 +86,117 @@
 .rt-label {
   display: grid;
   gap: 6px;
-  color: var(--rt-ink);
-  font-weight: 700;
 }
 
-.rt-label span {
-  font-size: 13px;
-  color: var(--rt-muted);
-  font-weight: 700;
+.rt-label > span {
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(15, 23, 42, 0.8);
 }
 
-.rt-input,
 .rt-select,
 .rt-textarea {
   width: 100%;
-  border: 1px solid var(--rt-border);
+  border: 1px solid rgba(15, 23, 42, 0.14);
   border-radius: 12px;
-  padding: 12px 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.9);
   outline: none;
-  background: rgba(255, 255, 255, 0.95);
   color: var(--rt-ink);
 }
 
+.rt-select:focus,
+.rt-textarea:focus {
+  border-color: rgba(139, 28, 28, 0.35);
+  box-shadow: 0 0 0 4px rgba(139, 28, 28, 0.12);
+}
+
 .rt-textarea {
+  min-height: 92px;
   resize: vertical;
-  min-height: 110px;
-}
-
-.rt-row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-}
-
-.rt-btn {
-  height: 44px;
-  padding: 0 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(139, 28, 28, 0.35);
-  background: linear-gradient(180deg, rgba(139, 28, 28, 0.95) 0%, rgba(161, 31, 31, 0.95) 100%);
-  color: white;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.rt-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.rt-mini {
-  font-size: 13px;
-  color: var(--rt-muted);
 }
 
 .rt-productCard {
-  border: 1px solid rgba(0,0,0,0.08);
+  border: 1px solid rgba(15, 23, 42, 0.1);
   border-radius: 14px;
   padding: 12px;
-  background: rgba(255,255,255,0.65);
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .rt-productName {
   font-weight: 900;
   color: var(--rt-ink);
-  margin-bottom: 4px;
 }
 
 .rt-productDesc {
+  margin-top: 6px;
   color: var(--rt-muted);
-  line-height: 1.5;
+  line-height: 1.35;
+}
+
+.rt-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.rt-btnPrimary {
+  border: 1px solid rgba(139, 28, 28, 0.35);
+  background: linear-gradient(180deg, rgba(139, 28, 28, 0.95) 0%, rgba(161, 31, 31, 0.95) 100%);
+  color: white;
+  font-weight: 900;
+  padding: 9px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  min-width: 160px;
+}
+
+.rt-btnPrimary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .rt-alert {
   border-radius: 14px;
   padding: 12px;
-  border: 1px solid;
-  background: rgba(255,255,255,0.8);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.8);
 }
 
-.rt-alert.err {
-  border-color: rgba(220, 38, 38, 0.35);
+.rt-alertErr {
+  border-color: rgba(220, 38, 38, 0.28);
   background: rgba(254, 242, 242, 0.9);
 }
 
-.rt-alert.ok {
-  border-color: rgba(16, 185, 129, 0.35);
+.rt-alertOk {
+  border-color: rgba(16, 185, 129, 0.22);
   background: rgba(236, 253, 245, 0.9);
 }
 
-.rt-pre {
-  margin: 8px 0 0 0;
-  white-space: pre-wrap;
-  font-size: 12px;
-  color: rgba(17,24,39,0.8);
-}/* add to ../../styles/requestTrial.css */
-.rt-btnGhost {
-  background: transparent;
-  color: #8b1c1c;
-  border: 1px solid rgba(139, 28, 28, 0.25);
+.rt-alertTitle {
+  font-weight: 900;
+  color: var(--rt-ink);
 }
 
-.rt-btnGhost:hover {
-  background: rgba(139, 28, 28, 0.06);
-}
-
-.rt-mt6 {
+.rt-alertMeta {
   margin-top: 6px;
+  color: rgba(15, 23, 42, 0.75);
 }
 
 .rt-details {
   margin-top: 10px;
 }
 
-.rt-summary {
+.rt-details summary {
   cursor: pointer;
-  font-weight: 800;
+  font-weight: 900;
+  color: rgba(15, 23, 42, 0.85);
 }
 
+.rt-pre {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(0, 0, 0, 0.03);
+  overflow: auto;
+}

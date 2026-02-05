@@ -1,7 +1,6 @@
-// src/pages/dashboard/admin/AdminTrials.jsx
 import { useEffect, useMemo, useState } from "react";
 import api from "../../../api/client";
-import "../../../styles/trials.css";
+import "../../../styles/adminTrials.css";
 
 const STATUS = {
   Pending: 1,
@@ -25,24 +24,19 @@ function extractErrorMessage(e) {
 }
 
 function fmt(dt) {
-  if (!dt) return "—";
+  if (!dt) return "";
   const d = new Date(dt);
   if (Number.isNaN(d.getTime())) return String(dt);
-  return d.toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return d.toLocaleString();
 }
 
-function statusClass(s) {
-  const x = String(s || "").toLowerCase();
-  if (x.includes("approved")) return "approved";
-  if (x.includes("rejected")) return "rejected";
-  if (x.includes("cancelled")) return "cancelled";
-  return "pending";
+function apiPath(path) {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  if (p.startsWith("/api/") || p === "/api") return p;
+
+  const base = String(api?.defaults?.baseURL || "").toLowerCase();
+  const baseHasApi = base.includes("/api");
+  return baseHasApi ? p : `/api${p}`;
 }
 
 export default function AdminTrials() {
@@ -52,29 +46,17 @@ export default function AdminTrials() {
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
   const [notesById, setNotesById] = useState({}); // { [requestId]: string }
-  const [toast, setToast] = useState(null); // { type: "success"|"error", text: string }
 
   const statusValue = useMemo(() => STATUS[status] ?? STATUS.Pending, [status]);
-
-  function showToast(type, text) {
-    setToast({ type, text });
-    window.clearTimeout(showToast._t);
-    showToast._t = window.setTimeout(() => setToast(null), 2600);
-  }
 
   async function refresh() {
     setBusy(true);
     setError("");
     setActionError("");
-
     try {
-      // ✅ Backend: GET /api/trials/admin/requests?status={int}
-      // ✅ Frontend: assumes api.baseURL already includes /api
-      const res = await api.get("/trials/admin/requests", { params: { status: statusValue } });
-      const data = Array.isArray(res.data) ? res.data : [];
-      setItems(data);
+      const res = await api.get(apiPath("/trials/admin/requests"), { params: { status: statusValue } });
+      setItems(Array.isArray(res.data) ? res.data : (res.data?.data ?? []));
     } catch (e) {
-      setItems([]);
       setError(extractErrorMessage(e));
     } finally {
       setBusy(false);
@@ -89,19 +71,12 @@ export default function AdminTrials() {
   async function approve(requestId) {
     setBusy(true);
     setActionError("");
-
     try {
       const adminNotes = (notesById[requestId] || "").trim() || null;
-
-      // ✅ Backend: POST /api/trials/admin/requests/{id}/approve
-      await api.post(`/trials/admin/requests/${requestId}/approve`, { adminNotes });
-
-      showToast("success", `Approved request #${requestId} (7-day trial).`);
+      await api.post(apiPath(`/trials/admin/requests/${requestId}/approve`), { adminNotes });
       await refresh();
     } catch (e) {
-      const msg = extractErrorMessage(e);
-      setActionError(msg);
-      showToast("error", msg);
+      setActionError(extractErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -110,161 +85,123 @@ export default function AdminTrials() {
   async function reject(requestId) {
     setBusy(true);
     setActionError("");
-
     try {
       const adminNotes = (notesById[requestId] || "").trim() || null;
-
-      // ✅ Backend: POST /api/trials/admin/requests/{id}/reject
-      await api.post(`/trials/admin/requests/${requestId}/reject`, { adminNotes });
-
-      showToast("success", `Rejected request #${requestId}.`);
+      await api.post(apiPath(`/trials/admin/requests/${requestId}/reject`), { adminNotes });
       await refresh();
     } catch (e) {
-      const msg = extractErrorMessage(e);
-      setActionError(msg);
-      showToast("error", msg);
+      setActionError(extractErrorMessage(e));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="la-trials">
-      {toast?.text ? (
-        <div className={`la-toast ${toast.type === "success" ? "success" : "error"}`}>{toast.text}</div>
-      ) : null}
+    <div className="at-page">
+      <div className="at-heroCard">
+        <div className="at-heroTop">
+          <div>
+            <div className="at-kicker">LAWFRAICA • ADMIN</div>
+            <h1 className="at-title">Trial Requests</h1>
+            <p className="at-sub">Approve/reject trial requests. Approval creates a <b>7-day</b> trial subscription.</p>
+          </div>
 
-      <div className="la-trialsTop">
-        <div>
-          <h2 className="la-trialsTitle">Trial Requests</h2>
-          <p className="la-trialsSub">
-            Approve/reject trial requests. Approval creates a <b>7-day</b> trial subscription.
-          </p>
-        </div>
+          <div className="at-controls">
+            <label className="at-control">
+              <span>Status</span>
+              <select value={status} onChange={(e) => setStatus(e.target.value)} disabled={busy}>
+                <option value="Pending">Pending</option>
+                <option value="Approved">Approved</option>
+                <option value="Rejected">Rejected</option>
+                <option value="Cancelled">Cancelled</option>
+              </select>
+            </label>
 
-        <div className="la-trialsControls">
-          <label className="la-field">
-            <span>Status</span>
-            <select value={status} onChange={(e) => setStatus(e.target.value)} disabled={busy}>
-              <option value="Pending">Pending</option>
-              <option value="Approved">Approved</option>
-              <option value="Rejected">Rejected</option>
-              <option value="Cancelled">Cancelled</option>
-            </select>
-          </label>
-
-          <button className="la-btn la-btnNeutral" type="button" disabled={busy} onClick={refresh}>
-            {busy ? "Loading…" : "Refresh"}
-          </button>
+            <button className="at-btn" disabled={busy} onClick={refresh}>
+              {busy ? "Loading…" : "Refresh"}
+            </button>
+          </div>
         </div>
       </div>
 
       {error ? (
-        <div className="la-alert error">
-          <div className="la-alertTitle">Error</div>
-          <div>{error}</div>
+        <div className="at-alert at-err">
+          <b>Error:</b> {error}
         </div>
       ) : null}
 
       {actionError ? (
-        <div className="la-alert warn">
-          <div className="la-alertTitle">Action error</div>
-          <div>{actionError}</div>
+        <div className="at-alert at-err">
+          <b>Action error:</b> {actionError}
         </div>
       ) : null}
 
-      <div className="la-card">
-        <div className="la-tableHead">
-          <div>ID</div>
-          <div>User</div>
-          <div>Product</div>
-          <div>Requested</div>
-          <div>Actions</div>
+      <div className="at-tableCard">
+        <div className="at-tableHead">
+          <div className="at-th">ID</div>
+          <div className="at-th">User</div>
+          <div className="at-th">Product</div>
+          <div className="at-th">Requested</div>
+          <div className="at-th">Actions</div>
         </div>
 
         {items.length === 0 ? (
-          <div className="la-empty">{busy ? "Loading…" : "No requests found."}</div>
+          <div className="at-empty">No requests found.</div>
         ) : (
           items.map((r) => {
-            const isPending = String(r?.status || "").toLowerCase() === "pending";
-            const sClass = statusClass(r?.status);
-
-            const requestId = r?.id;
-            const user = r?.user || {};
-            const product = r?.product || {};
-
+            const isPending = String(r.status).toLowerCase() === "pending";
             return (
-              <div key={requestId} className="la-row">
-                <div className="la-idCell">
-                  <div className="la-idTop">
-                    <div className="la-idNum">#{requestId}</div>
-                    <span className={`la-badge ${sClass}`}>{String(r?.status || "—")}</span>
-                  </div>
-                  {r?.reviewedAt ? (
-                    <div className="la-mutedSmall">Reviewed: {fmt(r.reviewedAt)}</div>
-                  ) : (
-                    <div className="la-mutedSmall">Not reviewed</div>
-                  )}
+              <div key={r.id} className="at-row">
+                <div className="at-id">
+                  <div className="at-idMain">#{r.id}</div>
+                  <div className="at-idSub">{String(r.status)}</div>
                 </div>
 
-                <div className="la-userCell">
-                  <div className="la-strong">{user?.username || "—"}</div>
-                  <div className="la-muted">{user?.email || "—"}</div>
-                  <div className="la-muted">{user?.phoneNumber || "—"}</div>
+                <div className="at-user">
+                  <div className="at-userMain">{r?.user?.username || "—"}</div>
+                  <div className="at-userSub">{r?.user?.email || "—"}</div>
+                  <div className="at-userSub">{r?.user?.phoneNumber || "—"}</div>
 
                   {r?.reason ? (
-                    <div className="la-noteBox">
-                      <div className="la-noteTitle">User reason</div>
-                      <div className="la-noteText">{r.reason}</div>
+                    <div className="at-noteBox">
+                      <div className="at-noteLabel">User reason</div>
+                      <div className="at-noteText">{r.reason}</div>
                     </div>
                   ) : null}
                 </div>
 
-                <div className="la-prodCell">
-                  <div className="la-strong">{product?.name || "—"}</div>
-                  <div className="la-mutedSmall">
-                    ProductId: {product?.contentProductId ?? r?.contentProductId ?? "—"}
+                <div className="at-product">
+                  <div className="at-productMain">{r?.product?.name || "—"}</div>
+                  <div className="at-productSub">
+                    ProductId: {r?.product?.contentProductId ?? r?.contentProductId ?? "—"}
                   </div>
                 </div>
 
-                <div className="la-timeCell">
-                  <div>{fmt(r?.requestedAt)}</div>
+                <div className="at-when">
+                  <div>{fmt(r.requestedAt)}</div>
+                  {r.reviewedAt ? <div className="at-whenSub">Reviewed: {fmt(r.reviewedAt)}</div> : null}
                 </div>
 
-                <div className="la-actionsCell">
+                <div className="at-actions">
                   <textarea
-                    className="la-notes"
                     rows={2}
                     placeholder="Admin notes (optional)"
-                    value={notesById[requestId] || ""}
-                    onChange={(e) => setNotesById((p) => ({ ...p, [requestId]: e.target.value }))}
+                    value={notesById[r.id] || ""}
+                    onChange={(e) => setNotesById((p) => ({ ...p, [r.id]: e.target.value }))}
                     disabled={busy}
                   />
 
-                  <div className="la-actions">
-                    <button
-                      className="la-btn approve"
-                      type="button"
-                      disabled={busy || !isPending}
-                      onClick={() => approve(requestId)}
-                      title={!isPending ? "Only pending requests can be approved" : "Approve and grant 7-day trial"}
-                    >
+                  <div className="at-actionBtns">
+                    <button className="at-btnPrimary" disabled={busy || !isPending} onClick={() => approve(r.id)}>
                       Approve (7 days)
                     </button>
-
-                    <button
-                      className="la-btn reject"
-                      type="button"
-                      disabled={busy || !isPending}
-                      onClick={() => reject(requestId)}
-                      title={!isPending ? "Only pending requests can be rejected" : "Reject request"}
-                    >
+                    <button className="at-btnGhost" disabled={busy || !isPending} onClick={() => reject(r.id)}>
                       Reject
                     </button>
                   </div>
 
                   {r?.adminNotes ? (
-                    <div className="la-mutedSmall">
+                    <div className="at-existing">
                       <b>Existing admin notes:</b> {r.adminNotes}
                     </div>
                   ) : null}
