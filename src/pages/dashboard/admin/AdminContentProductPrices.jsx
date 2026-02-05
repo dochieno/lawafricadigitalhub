@@ -48,6 +48,13 @@ function moneyFmt(amount, currency) {
   }
 }
 
+// ✅ Axios wrapper safety:
+// some projects return axiosResponse, others return axiosResponse.data via interceptor.
+// This normalizes both styles.
+function unwrapApi(res) {
+  return res?.data ?? res;
+}
+
 export default function AdminContentProductPrices() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -91,13 +98,17 @@ export default function AdminContentProductPrices() {
   // -----------------------------
   useEffect(() => {
     let mounted = true;
+
     (async () => {
       setErr("");
       setLoading(true);
+
       try {
         // ✅ matches controller: GET /api/admin/content-products
-        const res = await api.get("/admin/content-products")
-        const list = Array.isArray(res?.data) ? res.data : [];
+        const res = await api.get("/admin/content-products");
+        const data = unwrapApi(res);
+
+        const list = Array.isArray(data) ? data : [];
         const normalized = list.map((p) => ({
           id: p.id ?? p.Id,
           name: p.name ?? p.Name ?? `Product #${p.id ?? p.Id}`,
@@ -115,6 +126,7 @@ export default function AdminContentProductPrices() {
         if (mounted) setLoading(false);
       }
     })();
+
     return () => {
       mounted = false;
     };
@@ -131,10 +143,13 @@ export default function AdminContentProductPrices() {
     (async () => {
       setErr("");
       setLoading(true);
+
       try {
         // ✅ matches controller: GET /api/admin/content-products/{id}/prices
-        const res = await api.get(`/admin/content-products/${Number(selectedProductId)}/prices`)
-        const list = Array.isArray(res?.data) ? res.data : [];
+        const res = await api.get(`/admin/content-products/${Number(selectedProductId)}/prices`);
+        const data = unwrapApi(res);
+
+        const list = Array.isArray(data) ? data : [];
         const normalized = list.map((x) => ({
           id: x.id ?? x.Id,
           contentProductId: x.contentProductId ?? x.ContentProductId,
@@ -226,7 +241,8 @@ export default function AdminContentProductPrices() {
 
   function validateForm() {
     if (!form.contentProductId) return "Select a ContentProduct.";
-    if (!form.currency || String(form.currency).trim().length < 3) return "Currency is required (e.g. KES).";
+    if (!form.currency || String(form.currency).trim().length < 3)
+      return "Currency is required (e.g. KES).";
 
     const amt = Number(form.amount);
     if (!Number.isFinite(amt) || amt <= 0) return "Amount must be a positive number.";
@@ -252,6 +268,7 @@ export default function AdminContentProductPrices() {
     }
 
     setSaving(true);
+
     try {
       const productId = Number(form.contentProductId);
 
@@ -267,8 +284,10 @@ export default function AdminContentProductPrices() {
 
       if (mode === "create") {
         // ✅ matches controller: POST /api/admin/content-products/{id}/prices
-        const res = api.post(`/admin/content-products/${productId}/prices`, payload)
-        const created = res?.data;
+        const res = await api.post(`/admin/content-products/${productId}/prices`, payload);
+        const created = unwrapApi(res);
+
+        if (!created) throw new Error("Empty response from server.");
 
         const row = {
           id: created.id ?? created.Id,
@@ -283,12 +302,17 @@ export default function AdminContentProductPrices() {
           createdAtUtc: created.createdAtUtc ?? created.CreatedAtUtc ?? new Date().toISOString(),
         };
 
+        if (!row.id) throw new Error("Server response missing id for created price plan.");
+
         setPrices((prev) => [row, ...prev]);
       } else {
         // ✅ matches controller: PUT /api/admin/content-products/{id}/prices/{priceId}
         const priceId = Number(form.id);
+
         const res = await api.put(`/admin/content-products/${productId}/prices/${priceId}`, payload);
-        const updated = res?.data;
+        const updated = unwrapApi(res);
+
+        if (!updated) throw new Error("Empty response from server.");
 
         const nextRow = {
           id: updated.id ?? updated.Id ?? priceId,
@@ -420,7 +444,11 @@ export default function AdminContentProductPrices() {
         <div className="laAdminPricesToolbarRight">
           <label className="laField search">
             <span>Search</span>
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="KES, Monthly, 1000..." />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="KES, Monthly, 1000..."
+            />
           </label>
         </div>
       </div>
@@ -456,7 +484,9 @@ export default function AdminContentProductPrices() {
                 filtered.map((p) => (
                   <tr key={p.id}>
                     <td>
-                      <span className={`pill ${p.isActive ? "ok" : "off"}`}>{p.isActive ? "Active" : "Inactive"}</span>
+                      <span className={`pill ${p.isActive ? "ok" : "off"}`}>
+                        {p.isActive ? "Active" : "Inactive"}
+                      </span>
                     </td>
                     <td>{AUDIENCE.find((x) => x.value === p.audience)?.label ?? p.audience}</td>
                     <td>{BILLING.find((x) => x.value === p.billingPeriod)?.label ?? p.billingPeriod}</td>
@@ -471,7 +501,11 @@ export default function AdminContentProductPrices() {
                       <button className="laBtn ghost" onClick={() => toggleActive(p)}>
                         {p.isActive ? "Deactivate" : "Activate"}
                       </button>
-                      <button className="laBtn danger ghost" onClick={() => removeRow(p)} title="No delete endpoint yet">
+                      <button
+                        className="laBtn danger ghost"
+                        onClick={() => removeRow(p)}
+                        title="No delete endpoint yet"
+                      >
                         Delete
                       </button>
                     </td>
@@ -520,7 +554,10 @@ export default function AdminContentProductPrices() {
 
               <label className="laField">
                 <span>Billing Period</span>
-                <select value={form.billingPeriod} onChange={(e) => setField("billingPeriod", Number(e.target.value))}>
+                <select
+                  value={form.billingPeriod}
+                  onChange={(e) => setField("billingPeriod", Number(e.target.value))}
+                >
                   {BILLING.map((b) => (
                     <option key={b.value} value={b.value}>
                       {b.label}
