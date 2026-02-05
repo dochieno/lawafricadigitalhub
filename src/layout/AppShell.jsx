@@ -97,10 +97,6 @@ export default function AppShell() {
               Library
             </NavLink>
 
-            <NavLink to="/dashboard/subscriptions" className="nav-link">
-              Subscriptions
-            </NavLink>
-
             <NavLink to="/dashboard/law-reports" className="nav-link">
               Law Reports
             </NavLink>
@@ -108,6 +104,9 @@ export default function AppShell() {
               Trials
             </NavLink>
 
+            <NavLink to="/dashboard/law-reports/subscribe" className="nav-link">
+              Subscriptions
+            </NavLink>
 
             {/* ✅ DEV: Content Blocks tester (temporary quick navigation) */}
             {import.meta.env.DEV && (
