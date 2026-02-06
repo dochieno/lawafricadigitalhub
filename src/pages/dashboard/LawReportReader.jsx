@@ -143,6 +143,169 @@ function getAccessCtas(access) {
   return { primaryUrl, primaryLabel, secondaryUrl, secondaryLabel, msg };
 }
 
+//subscriptions
+// ----------------------
+// ✅ Subscription messaging helpers (NEW)
+// ----------------------
+function getAccessStatus(access, report, isAdmin, hasFullAccess) {
+  if (isAdmin) return { tone: "ok", label: "Admin access", hint: "Full access enabled." };
+  if (!report?.isPremium) return { tone: "ok", label: "Free report", hint: "Full transcript available." };
+
+  if (hasFullAccess) return { tone: "ok", label: "Active subscription", hint: "Full transcript unlocked." };
+
+  // Not full access (premium)
+  const reason = AccessReasonLabel(access);
+  const msg =
+    access?.message ||
+    access?.Message ||
+    access?.data?.message ||
+    access?.data?.Message ||
+    "";
+
+  // Try detect trial wording
+  const t = `${reason} ${msg}`.toLowerCase();
+  if (t.includes("trial")) return { tone: "warn", label: "Trial doesn’t include Law Reports", hint: reason || msg || "" };
+
+  if (t.includes("expired")) return { tone: "warn", label: "Subscription expired", hint: reason || msg || "" };
+  if (t.includes("inactive")) return { tone: "warn", label: "Subscription inactive", hint: reason || msg || "" };
+  if (t.includes("seat")) return { tone: "warn", label: "Seat limit reached", hint: reason || msg || "" };
+
+  return { tone: "warn", label: "Locked (preview only)", hint: reason || msg || "Subscribe to unlock full transcript." };
+}
+
+function AccessStatusChip({ access, report, isAdmin, hasFullAccess }) {
+  const s = getAccessStatus(access, report, isAdmin, hasFullAccess);
+
+  return (
+    <span className={`lrr2AccessChip ${s.tone}`}>
+      <span className="dot" aria-hidden="true" />
+      <span className="txt">{s.label}</span>
+      {s.hint ? <span className="hint" title={s.hint}>i</span> : null}
+    </span>
+  );
+}
+
+// ----------------------
+// ✅ Subscription / Trial guide panel (NEW)
+// ----------------------
+function SubscriptionGuidePanel({
+  report,
+  access,
+  isAdmin,
+  isInst,
+  isPublic,
+  hasFullAccess,
+  onGo,
+  onRefreshAccess,
+}) {
+  if (!report?.isPremium || isAdmin || hasFullAccess) return null;
+
+  const ctas = getAccessCtas(access);
+  const status = getAccessStatus(access, report, isAdmin, hasFullAccess);
+  const reason = AccessReasonLabel(access);
+
+  const primary = { url: ctas.primaryUrl || "/pricing", label: ctas.primaryLabel || "Subscribe" };
+  const secondary = ctas.secondaryUrl ? { url: ctas.secondaryUrl, label: ctas.secondaryLabel || "View plans" } : null;
+
+  const showTrial = isPublic; // public users can start a trial
+  const trialUrl =
+    access?.trialUrl ||
+    access?.TrialUrl ||
+    access?.data?.trialUrl ||
+    access?.data?.TrialUrl ||
+    "/pricing?tab=trial";
+
+  const showAccessCode = isInst; // institution users can activate via access code
+  const accessCodeUrl =
+    access?.accessCodeUrl ||
+    access?.AccessCodeUrl ||
+    access?.data?.accessCodeUrl ||
+    access?.data?.AccessCodeUrl ||
+    "/dashboard/institution/activate"; // adjust to your real route
+
+  const showContactAdmin = isInst && (String(reason).toLowerCase().includes("seat") || String(reason).toLowerCase().includes("inactive"));
+  const contactUrl =
+    access?.contactUrl ||
+    access?.ContactUrl ||
+    access?.data?.contactUrl ||
+    access?.data?.ContactUrl ||
+    "/support";
+
+  return (
+    <div className="lrr2SubGuide" role="note" aria-label="How to unlock full access">
+      <div className="lrr2SubGuideTop">
+        <div className="lrr2SubGuideTitle">Subscription required</div>
+        <div className="lrr2SubGuideStatus">
+          <span className={`lrr2Pill ${status.tone}`}>{status.label}</span>
+          {reason ? <span className="lrr2SubGuideReason">{reason}</span> : null}
+        </div>
+      </div>
+
+      <div className="lrr2SubGuideBody">
+        <div className="lrr2SubGuideMsg">
+          You can preview this case, but the <b>full transcript</b> and <b>LegalAI features</b> require an active Law Reports subscription.
+        </div>
+
+        <ul className="lrr2SubGuideSteps">
+          {showTrial ? (
+            <li>
+              <b>Start a trial:</b> Try Law Reports access instantly (if eligible).
+            </li>
+          ) : null}
+
+          <li>
+            <b>Subscribe:</b> Choose a plan and pay. Access unlocks immediately after successful payment.
+          </li>
+
+          {showAccessCode ? (
+            <li>
+              <b>Institution users:</b> Activate using your institution access code, or ask your admin to add a seat.
+            </li>
+          ) : null}
+
+          <li>
+            <b>Already paid?</b> Click <b>Refresh access</b> below to re-check your subscription status.
+          </li>
+        </ul>
+
+        <div className="lrr2SubGuideActions">
+          {showTrial ? (
+            <button type="button" className="lrr2Btn" onClick={() => onGo(trialUrl)} title="Start trial">
+              Start trial
+            </button>
+          ) : null}
+
+          {showAccessCode ? (
+            <button type="button" className="lrr2Btn" onClick={() => onGo(accessCodeUrl)} title="Enter access code">
+              Enter access code
+            </button>
+          ) : null}
+
+          {secondary ? (
+            <button type="button" className="lrr2Btn" onClick={() => onGo(secondary.url)} title={secondary.label}>
+              {secondary.label}
+            </button>
+          ) : null}
+
+          <button type="button" className="lrr2Btn primary" onClick={() => onGo(primary.url)} title={primary.label}>
+            {primary.label}
+          </button>
+
+          <button type="button" className="lrr2Btn ghost" onClick={onRefreshAccess} title="Refresh access">
+            Refresh access
+          </button>
+
+          {showContactAdmin ? (
+            <button type="button" className="lrr2Btn ghost" onClick={() => onGo(contactUrl)} title="Contact support/admin">
+              Contact support
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function htmlToText(html) {
   const s = String(html || "");
   if (!s.trim()) return "";
@@ -1515,6 +1678,37 @@ const shouldGateTranscript = useMemo(() => {
     return () => clearTimeout(t);
   }, [q]);
 
+//Here
+    async function refreshAccessNow() {
+    if (!report?.legalDocumentId) return;
+
+    if (isAdmin) {
+      setAccess({ hasFullAccess: true });
+      return;
+    }
+
+    // Only meaningful for premium access checks
+    if (!report?.isPremium) return;
+
+    try {
+      setAccessLoading(true);
+      const r = await api.get(`/legal-documents/${report.legalDocumentId}/access`, { __skipThrottle: true });
+      const payload = unwrapApi(r);
+      setAccess(payload ?? null);
+    } catch (e) {
+      // keep old access but show something in console
+      console.warn("[LawReportReader] refresh access failed", e);
+    } finally {
+      setAccessLoading(false);
+    }
+  }
+
+  function goUrl(url) {
+    if (!url) return;
+    if (String(url).startsWith("http")) window.open(url, "_blank", "noreferrer");
+    else navigate(url);
+  }
+
   function pickReport(r) {
     const rid = Number(r?.id || r?.lawReportId);
     if (!rid) return;
@@ -1794,11 +1988,16 @@ const shouldGateTranscript = useMemo(() => {
                 </button>
               ) : null}
 
-              {!isAdmin && accessLoading ? (
-                <span className="lrr2MetaHint" data-tip="Checking subscription access">
-                  checking access…
-                </span>
+              {report?.isPremium ? (
+                <div className="lrr2MetaHint">
+                  {accessLoading ? (
+                    <span className="lrr2MetaHint" data-tip="Checking subscription access">checking access…</span>
+                  ) : (
+                    <AccessStatusChip access={access} report={report} isAdmin={isAdmin} hasFullAccess={hasFullAccess} />
+                  )}
+                </div>
               ) : null}
+
             </div>
           </div>
         </section>
@@ -1996,6 +2195,23 @@ const shouldGateTranscript = useMemo(() => {
                 }}
               />
             ) : null}
+
+            {report?.isPremium && !hasFullAccess ? (
+  <>
+              <PremiumLockHero access={access} onGo={goUrl} />
+
+              <SubscriptionGuidePanel
+                report={report}
+                access={access}
+                isAdmin={isAdmin}
+                isInst={isInst}
+                isPublic={isPublic}
+                hasFullAccess={hasFullAccess}
+                onGo={goUrl}
+                onRefreshAccess={refreshAccessNow}
+              />
+            </>
+          ) : null}
 
             <div
               className={[

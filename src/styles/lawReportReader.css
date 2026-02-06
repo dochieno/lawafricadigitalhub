@@ -1982,3 +1982,40 @@
     width: 100%;
   }
 }
+.lrr2AccessChip{
+  display:inline-flex;align-items:center;gap:.45rem;
+  padding:.3rem .6rem;border-radius:999px;
+  border:1px solid rgba(17,24,39,.12);
+  background:rgba(255,255,255,.7);
+  font-size:.82rem;
+}
+.lrr2AccessChip .dot{width:.55rem;height:.55rem;border-radius:999px;background:rgba(107,114,128,.8)}
+.lrr2AccessChip.ok .dot{background:rgba(16,185,129,.9)}
+.lrr2AccessChip.warn .dot{background:rgba(245,158,11,.95)}
+.lrr2AccessChip .hint{
+  margin-left:.2rem;
+  display:inline-grid;place-items:center;
+  width:1.1rem;height:1.1rem;border-radius:999px;
+  background:rgba(17,24,39,.08);font-size:.75rem;
+}
+
+.lrr2SubGuide{
+  margin:14px 0 18px;
+  border:1px solid rgba(17,24,39,.12);
+  background:rgba(255,255,255,.78);
+  border-radius:16px;
+  box-shadow:0 12px 28px rgba(0,0,0,.08);
+  overflow:hidden;
+}
+.lrr2SubGuideTop{padding:14px 14px 0}
+.lrr2SubGuideTitle{font-weight:800;font-size:1rem}
+.lrr2SubGuideStatus{display:flex;gap:.6rem;align-items:center;margin-top:6px;flex-wrap:wrap}
+.lrr2SubGuideReason{color:rgba(17,24,39,.65);font-size:.9rem}
+.lrr2Pill{padding:.22rem .55rem;border-radius:999px;font-size:.82rem;border:1px solid rgba(17,24,39,.12)}
+.lrr2Pill.ok{background:rgba(16,185,129,.10)}
+.lrr2Pill.warn{background:rgba(245,158,11,.12)}
+.lrr2SubGuideBody{padding:12px 14px 14px}
+.lrr2SubGuideMsg{color:rgba(17,24,39,.88);margin-bottom:10px}
+.lrr2SubGuideSteps{margin:0;padding-left:18px;color:rgba(17,24,39,.85)}
+.lrr2SubGuideSteps li{margin:6px 0}
+.lrr2SubGuideActions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
