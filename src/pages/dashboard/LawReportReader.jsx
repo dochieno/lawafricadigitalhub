@@ -167,9 +167,10 @@ function AccessReasonLabel(access) {
   return "";
 }
 
-function getAccessStatus(access, report, isAdmin, hasFullAccess) {
+// ✅ updated: accepts isPremium explicitly (so Option B can drive UI even if report.isPremium missing)
+function getAccessStatus(access, isPremium, isAdmin, hasFullAccess) {
   if (isAdmin) return { tone: "ok", label: "Admin access", hint: "Full access enabled." };
-  if (!report?.isPremium) return { tone: "ok", label: "Free report", hint: "Full transcript available." };
+  if (!isPremium) return { tone: "ok", label: "Free report", hint: "Full transcript available." };
 
   if (hasFullAccess) return { tone: "ok", label: "Active subscription", hint: "Full transcript unlocked." };
 
@@ -190,10 +191,10 @@ function getAccessStatus(access, report, isAdmin, hasFullAccess) {
   return { tone: "warn", label: "Locked (preview only)", hint: reason || msg || "Subscribe to unlock full transcript." };
 }
 
-function getIsAiAllowed(report, access, isAdmin) {
+// ✅ updated: accepts isPremium explicitly
+function getIsAiAllowed(isPremium, access, isAdmin) {
   if (isAdmin) return true;
-  if (!report) return false;
-  if (!report.isPremium) return true;
+  if (!isPremium) return true;
   return getHasFullAccess(access);
 }
 
@@ -289,7 +290,6 @@ function decodeHtmlEntities(text) {
   const s = String(text || "");
   if (!s) return "";
   try {
-    // textarea trick decodes &amp; etc.
     const t = document.createElement("textarea");
     t.innerHTML = s;
     return t.value;
@@ -309,8 +309,8 @@ function formatDate(d) {
    2) Small presentational components
 ========================================================= */
 
-function AccessStatusChip({ access, report, isAdmin, hasFullAccess }) {
-  const s = getAccessStatus(access, report, isAdmin, hasFullAccess);
+function AccessStatusChip({ access, isPremium, isAdmin, hasFullAccess }) {
+  const s = getAccessStatus(access, isPremium, isAdmin, hasFullAccess);
 
   return (
     <span className={`lrr2AccessChip ${s.tone}`}>
@@ -365,7 +365,7 @@ function PremiumLockHero({ access, onGo }) {
 }
 
 function SubscriptionGuidePanel({
-  report,
+  isPremium,
   access,
   isAdmin,
   isInst,
@@ -374,10 +374,10 @@ function SubscriptionGuidePanel({
   onGo,
   onRefreshAccess,
 }) {
-  if (!report?.isPremium || isAdmin || hasFullAccess) return null;
+  if (!isPremium || isAdmin || hasFullAccess) return null;
 
   const ctas = getAccessCtas(access);
-  const status = getAccessStatus(access, report, isAdmin, hasFullAccess);
+  const status = getAccessStatus(access, isPremium, isAdmin, hasFullAccess);
   const reason = AccessReasonLabel(access);
 
   const primary = { url: ctas.primaryUrl || "/pricing", label: ctas.primaryLabel || "Subscribe" };
@@ -561,30 +561,6 @@ function InlineSubscribeBreak({ access, onGo, onRefresh }) {
   );
 }
 
-function CaseContentFormatted({ text }) {
-  const paras = useMemo(() => splitIntoParagraphs(text), [text]);
-  if (!paras.length) return null;
-
-  return (
-    <div className="lrr2CaseFmt">
-      {paras.map((p, idx) =>
-        isLikelyHeadingParagraph(p) ? (
-          <h3 className="lrr2CaseH" key={idx}>
-            {p}
-          </h3>
-        ) : (
-          <p className="lrr2CaseP" key={idx}>
-            {p}
-          </p>
-        )
-      )}
-    </div>
-  );
-}
-
-/* -------------------------
-   Case content with INLINE break (Step 2)
-------------------------- */
 function CaseContentWithGateBreak({ text, showBreak, access, onGo, onRefresh }) {
   const paras = useMemo(() => splitIntoParagraphs(text), [text]);
 
@@ -615,10 +591,6 @@ function CaseContentWithGateBreak({ text, showBreak, access, onGo, onRefresh }) 
   );
 }
 
-
-/* -------------------------
-   Minimal AI locked panel
-------------------------- */
 function AiLockedPanel({ access, onGo }) {
   const ctas = getAccessCtas(access);
 
@@ -704,6 +676,31 @@ export default function LawReportReader() {
   const searchReqIdRef = useRef(0);
 
   /* -------------------------
+     ✅ Option B: robust premium detection
+  ------------------------- */
+  const isPremium = useMemo(() => {
+    if (!report) return false;
+
+    // primary: explicit premium flag
+    const v = report?.isPremium ?? report?.IsPremium;
+    if (v === true) return true;
+
+    // fallback 1: accessLevel says preview-only (gated by entitlement)
+    const lvl = String(report?.accessLevel || report?.AccessLevel || "").toLowerCase();
+    if (lvl === "previewonly") return true;
+
+    // fallback 2: required action implies paid entitlement needed
+    const req = String(report?.requiredAction || report?.RequiredAction || "").toLowerCase();
+    if (req === "subscribe" || req === "buy") return true;
+
+    // fallback 3: blocked meta present (still premium, but hard-stopped)
+    const blocked = report?.isBlocked ?? report?.IsBlocked;
+    if (blocked === true) return true;
+
+    return false;
+  }, [report]);
+
+  /* -------------------------
      Derived values (useMemo)
   ------------------------- */
 
@@ -711,7 +708,7 @@ export default function LawReportReader() {
   const textHasContent = useMemo(() => !!rawContent.trim(), [rawContent]);
 
   const hasFullAccess = useMemo(() => (isAdmin ? true : getHasFullAccess(access)), [access, isAdmin]);
-  const aiAllowed = useMemo(() => getIsAiAllowed(report, access, isAdmin), [report, access, isAdmin]);
+  const aiAllowed = useMemo(() => getIsAiAllowed(isPremium, access, isAdmin), [isPremium, access, isAdmin]);
 
   const fsClass = useMemo(() => {
     const n = Math.round(fontScale * 100);
@@ -722,26 +719,23 @@ export default function LawReportReader() {
   const fontClass = useMemo(() => (serif ? "lrr2FontSerif" : "lrr2FontSans"), [serif]);
 
   const shouldGateTranscript = useMemo(() => {
-    if (!report?.isPremium) return false;
+    if (!isPremium) return false;
     return !hasFullAccess;
-  }, [report, hasFullAccess]);
+  }, [isPremium, hasFullAccess]);
 
   const previewPolicy = useMemo(() => getAccessPreviewPolicy(access), [access]);
 
   const gateSourceText = useMemo(() => {
     if (!rawContent) return "";
-    // if HTML, strip tags to text, then decode entities so "&amp;" displays as "&"
     const base = isProbablyHtml(rawContent) ? htmlToText(rawContent) : rawContent;
     return decodeHtmlEntities(base);
   }, [rawContent]);
 
   const preview = useMemo(() => {
     // Not premium or has access → show full
-    if (!report?.isPremium || !textHasContent || !shouldGateTranscript) {
+    if (!isPremium || !textHasContent || !shouldGateTranscript) {
       const renderHtml = isProbablyHtml(rawContent);
 
-      // If rendering as HTML, keep raw HTML.
-      // If not HTML, decode entities so "&amp;" doesn't show.
       const safeText = renderHtml ? rawContent : decodeHtmlEntities(rawContent);
 
       return {
@@ -781,14 +775,13 @@ export default function LawReportReader() {
       html: "",
       text: previewText,
     };
-  }, [report, shouldGateTranscript, textHasContent, rawContent, gateSourceText, previewPolicy]);
+  }, [isPremium, shouldGateTranscript, textHasContent, rawContent, gateSourceText, previewPolicy]);
 
   const showTranscriptGate = useMemo(() => {
-    return !!(report?.isPremium && !hasFullAccess);
-  }, [report, hasFullAccess]);
+    return !!(isPremium && !hasFullAccess);
+  }, [isPremium, hasFullAccess]);
 
   const showInlineBreak = useMemo(() => {
-    // only show the mid-article break when preview limit is reached & transcript open
     return !!(contentOpen && preview.gated && preview.reachedLimit);
   }, [contentOpen, preview.gated, preview.reachedLimit]);
 
@@ -944,8 +937,8 @@ export default function LawReportReader() {
         }
       }
 
-      // access (only for premium)
-      if (report?.isPremium && (isInst || isPublic)) {
+      // ✅ access (only for premium) - uses Option B computed isPremium
+      if (isPremium && (isInst || isPublic)) {
         try {
           setAccessLoading(true);
           const r = await api.get(`/legal-documents/${report.legalDocumentId}/access`);
@@ -965,7 +958,7 @@ export default function LawReportReader() {
     return () => {
       cancelled = true;
     };
-  }, [report, isInst, isPublic, isAdmin]);
+  }, [report, isInst, isPublic, isAdmin, isPremium]);
 
   // Search (debounced + AbortController)
   useEffect(() => {
@@ -1040,7 +1033,7 @@ export default function LawReportReader() {
       return;
     }
 
-    if (!report?.isPremium) return;
+    if (!isPremium) return;
 
     try {
       setAccessLoading(true);
@@ -1331,14 +1324,14 @@ export default function LawReportReader() {
                 </button>
               ) : null}
 
-              {report?.isPremium ? (
+              {isPremium ? (
                 <div className="lrr2MetaHint">
                   {accessLoading ? (
                     <span className="lrr2MetaHint" data-tip="Checking subscription access">
                       checking access…
                     </span>
                   ) : (
-                    <AccessStatusChip access={access} report={report} isAdmin={isAdmin} hasFullAccess={hasFullAccess} />
+                    <AccessStatusChip access={access} isPremium={isPremium} isAdmin={isAdmin} hasFullAccess={hasFullAccess} />
                   )}
                 </div>
               ) : null}
@@ -1364,7 +1357,7 @@ export default function LawReportReader() {
           title={view === "content" ? (contentOpen ? "Hide transcript" : "Show transcript") : "Transcript"}
         >
           Transcript
-          {report?.isPremium && !hasFullAccess ? <span className="lrr2TabBadge lock">Locked</span> : null}
+          {isPremium && !hasFullAccess ? <span className="lrr2TabBadge lock">Locked</span> : null}
         </button>
 
         {aiAllowed ? (
@@ -1481,7 +1474,7 @@ export default function LawReportReader() {
                 <PremiumLockHero access={access} onGo={goUrl} />
 
                 <SubscriptionGuidePanel
-                  report={report}
+                  isPremium={isPremium}
                   access={access}
                   isAdmin={isAdmin}
                   isInst={isInst}
