@@ -7,7 +7,7 @@ import "../../styles/lawReportReader.css";
 
 /* =========================================================
    1) Pure helpers (NO React hooks)
-   ========================================================= */
+========================================================= */
 
 function unwrapApi(res) {
   const d = res?.data;
@@ -85,7 +85,7 @@ function isGlobalAdminUser() {
 
 /* -------------------------
    Access + gating helpers
-   ------------------------- */
+------------------------- */
 
 function getHasFullAccess(access) {
   return access?.hasFullAccess === true || access?.data?.hasFullAccess === true;
@@ -158,8 +158,10 @@ function AccessReasonLabel(access) {
 
   const t = String(raw || "").toLowerCase();
 
-  if (t.includes("institution") && t.includes("seat")) return "Your institution has reached its seat limit.";
-  if (t.includes("institution") && t.includes("inactive")) return "Your institution subscription is inactive.";
+  if (t.includes("institution") && t.includes("seat"))
+    return "Your institution has reached its seat limit.";
+  if (t.includes("institution") && t.includes("inactive"))
+    return "Your institution subscription is inactive.";
   if (t.includes("expired")) return "Your subscription is expired.";
   if (t.includes("trial")) return "Your trial does not include Law Reports access.";
   return "";
@@ -197,7 +199,7 @@ function getIsAiAllowed(report, access, isAdmin) {
 
 /* -------------------------
    Content formatting
-   ------------------------- */
+------------------------- */
 
 function normalizeText(s) {
   return String(s || "")
@@ -283,6 +285,19 @@ function htmlToText(html) {
   }
 }
 
+function decodeHtmlEntities(text) {
+  const s = String(text || "");
+  if (!s) return "";
+  try {
+    // textarea trick decodes &amp; etc.
+    const t = document.createElement("textarea");
+    t.innerHTML = s;
+    return t.value;
+  } catch {
+    return s;
+  }
+}
+
 function formatDate(d) {
   if (!d) return "";
   const dt = new Date(d);
@@ -292,7 +307,7 @@ function formatDate(d) {
 
 /* =========================================================
    2) Small presentational components
-   ========================================================= */
+========================================================= */
 
 function AccessStatusChip({ access, report, isAdmin, hasFullAccess }) {
   const s = getAccessStatus(access, report, isAdmin, hasFullAccess);
@@ -496,6 +511,56 @@ function SubscribeGateOverlay({ access, onGo }) {
   );
 }
 
+function InlineSubscribeBreak({ access, onGo, onRefresh }) {
+  const ctas = getAccessCtas(access);
+  const reason = AccessReasonLabel(access);
+
+  return (
+    <div className="lrr2GateMidBreak" role="note" aria-label="Continue reading requires subscription">
+      <div className="lrr2GateMidRule" aria-hidden="true" />
+
+      <div className="lrr2GateMidCard">
+        <div className="lrr2GateMidTop">
+          <div className="lrr2GateMidLock" aria-hidden="true">
+            🔒
+          </div>
+
+          <div className="lrr2GateMidText">
+            <div className="lrr2GateMidTitle">Subscribe to continue reading</div>
+            <div className="lrr2GateMidMsg">
+              You’ve reached the preview section for this premium law report. Unlock the full transcript and LegalAI
+              tools.
+            </div>
+            {reason ? <div className="lrr2GateMidReason">{reason}</div> : null}
+
+            <ul className="lrr2GateMidBullets">
+              <li>Continue from where you left off</li>
+              <li>Copy citations and access related cases</li>
+              <li>Use LegalAI summary & key points</li>
+            </ul>
+
+            <div className="lrr2GateMidActions">
+              <button type="button" className="lrr2Btn ghost" onClick={onRefresh}>
+                Refresh access
+              </button>
+
+              {ctas.secondaryUrl ? (
+                <button type="button" className="lrr2Btn" onClick={() => onGo(ctas.secondaryUrl)}>
+                  {ctas.secondaryLabel}
+                </button>
+              ) : null}
+
+              <button type="button" className="lrr2Btn primary" onClick={() => onGo(ctas.primaryUrl)}>
+                {ctas.primaryLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CaseContentFormatted({ text }) {
   const paras = useMemo(() => splitIntoParagraphs(text), [text]);
   if (!paras.length) return null;
@@ -518,8 +583,42 @@ function CaseContentFormatted({ text }) {
 }
 
 /* -------------------------
+   Case content with INLINE break (Step 2)
+------------------------- */
+function CaseContentWithGateBreak({ text, showBreak, access, onGo, onRefresh }) {
+  const paras = useMemo(() => splitIntoParagraphs(text), [text]);
+
+  // ✅ compute breakIndex WITHOUT hooks (no conditional hook calls)
+  const breakIndex = showBreak
+    ? Math.min(paras.length, Math.max(3, Math.floor(paras.length * 0.65)))
+    : -1;
+
+  if (!paras.length) return null;
+
+  return (
+    <div className="lrr2CaseFmt">
+      {paras.map((p, idx) => {
+        const isHeading = isLikelyHeadingParagraph(p);
+
+        return (
+          <div key={idx}>
+            {isHeading ? <h3 className="lrr2CaseH">{p}</h3> : <p className="lrr2CaseP">{p}</p>}
+
+            {/* ✅ insert the inline break after the paragraph at breakIndex */}
+            {showBreak && breakIndex === idx + 1 ? (
+              <InlineSubscribeBreak access={access} onGo={onGo} onRefresh={onRefresh} />
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+
+/* -------------------------
    Minimal AI locked panel
-   ------------------------- */
+------------------------- */
 function AiLockedPanel({ access, onGo }) {
   const ctas = getAccessCtas(access);
 
@@ -536,9 +635,7 @@ function AiLockedPanel({ access, onGo }) {
         <div className="lrr2LockInlineIcon">🤖</div>
         <div className="lrr2LockInlineText">
           <div className="lrr2LockInlineTitle">Upgrade to use LegalAI</div>
-          <div className="lrr2LockInlineMsg">
-            Summaries and AI tools are restricted to active subscribers.
-          </div>
+          <div className="lrr2LockInlineMsg">Summaries and AI tools are restricted to active subscribers.</div>
         </div>
 
         <div className="lrr2LockInlineActions">
@@ -553,7 +650,7 @@ function AiLockedPanel({ access, onGo }) {
 
 /* =========================================================
    3) Main reader component
-   ========================================================= */
+========================================================= */
 
 export default function LawReportReader() {
   const { id } = useParams();
@@ -561,7 +658,7 @@ export default function LawReportReader() {
 
   /* -------------------------
      Hooks first (stable order)
-     ------------------------- */
+  ------------------------- */
 
   const reportId = useMemo(() => {
     const n = Number(id);
@@ -608,7 +705,7 @@ export default function LawReportReader() {
 
   /* -------------------------
      Derived values (useMemo)
-     ------------------------- */
+  ------------------------- */
 
   const rawContent = useMemo(() => String(report?.contentText || ""), [report?.contentText]);
   const textHasContent = useMemo(() => !!rawContent.trim(), [rawContent]);
@@ -626,29 +723,37 @@ export default function LawReportReader() {
 
   const shouldGateTranscript = useMemo(() => {
     if (!report?.isPremium) return false;
-    return !hasFullAccess; // gate premium unless full access
+    return !hasFullAccess;
   }, [report, hasFullAccess]);
 
   const previewPolicy = useMemo(() => getAccessPreviewPolicy(access), [access]);
 
   const gateSourceText = useMemo(() => {
     if (!rawContent) return "";
-    return isProbablyHtml(rawContent) ? htmlToText(rawContent) : rawContent;
+    // if HTML, strip tags to text, then decode entities so "&amp;" displays as "&"
+    const base = isProbablyHtml(rawContent) ? htmlToText(rawContent) : rawContent;
+    return decodeHtmlEntities(base);
   }, [rawContent]);
 
   const preview = useMemo(() => {
     // Not premium or has access → show full
     if (!report?.isPremium || !textHasContent || !shouldGateTranscript) {
+      const renderHtml = isProbablyHtml(rawContent);
+
+      // If rendering as HTML, keep raw HTML.
+      // If not HTML, decode entities so "&amp;" doesn't show.
+      const safeText = renderHtml ? rawContent : decodeHtmlEntities(rawContent);
+
       return {
         gated: false,
         reachedLimit: false,
-        renderAsHtml: isProbablyHtml(rawContent),
-        html: rawContent,
-        text: rawContent,
+        renderAsHtml: renderHtml,
+        html: renderHtml ? rawContent : "",
+        text: renderHtml ? "" : safeText,
       };
     }
 
-    // Premium + no access → preview
+    // Premium + no access → preview (TEXT preview always)
     const paras = splitIntoParagraphs(gateSourceText);
     const maxParas = previewPolicy.maxParas;
     const maxChars = previewPolicy.maxChars;
@@ -678,8 +783,16 @@ export default function LawReportReader() {
     };
   }, [report, shouldGateTranscript, textHasContent, rawContent, gateSourceText, previewPolicy]);
 
+  const showTranscriptGate = useMemo(() => {
+    return !!(report?.isPremium && !hasFullAccess);
+  }, [report, hasFullAccess]);
+
+  const showInlineBreak = useMemo(() => {
+    // only show the mid-article break when preview limit is reached & transcript open
+    return !!(contentOpen && preview.gated && preview.reachedLimit);
+  }, [contentOpen, preview.gated, preview.reachedLimit]);
+
   const canRenderReader = useMemo(() => {
-    // We only hard-block if there is genuinely no content available
     if (!report) return false;
     if (availabilityLoading) return true;
     if (!hasContent && !textHasContent) return false;
@@ -688,7 +801,7 @@ export default function LawReportReader() {
 
   /* -------------------------
      Effects
-     ------------------------- */
+  ------------------------- */
 
   // Scroll/progress + compact header
   useEffect(() => {
@@ -858,11 +971,10 @@ export default function LawReportReader() {
   useEffect(() => {
     const term = String(q || "").trim();
 
-    // cancel in-flight
     try {
       searchCtlRef.current?.abort?.();
     } catch {
-      // ignore
+      //ignore
     }
     searchCtlRef.current = null;
 
@@ -917,9 +1029,8 @@ export default function LawReportReader() {
   }, [q]);
 
   /* ======================================================
-     ✅ IMPORTANT: Actions live INSIDE the component
-     (this is what you asked about originally)
-     ====================================================== */
+     Actions
+  ====================================================== */
 
   async function refreshAccessNow() {
     if (!report?.legalDocumentId) return;
@@ -961,7 +1072,7 @@ export default function LawReportReader() {
 
   /* -------------------------
      Early returns
-     ------------------------- */
+  ------------------------- */
 
   if (loading) {
     return (
@@ -1007,7 +1118,7 @@ export default function LawReportReader() {
 
   /* -------------------------
      Render
-     ------------------------- */
+  ------------------------- */
 
   const title = report.parties || report.title || "Law Report";
   const llrNo = report.reportNumber || report.llrNo || report.llrNumber || String(reportId);
@@ -1283,10 +1394,10 @@ export default function LawReportReader() {
               <div className="lrr2PanelHead">
                 <div className="lrr2PanelHeadLeft">
                   <div className="lrr2PanelTitle">LegalAI Summary</div>
-                  <div className="lrr2PanelSub">Enabled (Step 2: we’ll re-plug your full AI panel cleanly).</div>
+                  <div className="lrr2PanelSub">Enabled (Step 3: re-plug your full AI panel cleanly).</div>
                 </div>
               </div>
-              <div className="lrr2PanelEmpty">AI panel will be re-attached after Step 1 is stable.</div>
+              <div className="lrr2PanelEmpty">AI panel will be re-attached after Step 2 is stable.</div>
             </div>
           ) : (
             <AiLockedPanel access={access} onGo={goUrl} />
@@ -1364,8 +1475,8 @@ export default function LawReportReader() {
               </div>
             </div>
 
-            {/* ✅ Subscription UI (guaranteed) */}
-            {report?.isPremium && !hasFullAccess ? (
+            {/* Subscription UI (top explanation) */}
+            {showTranscriptGate ? (
               <>
                 <PremiumLockHero access={access} onGo={goUrl} />
 
@@ -1396,7 +1507,13 @@ export default function LawReportReader() {
               {preview.renderAsHtml ? (
                 <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: preview.html }} />
               ) : (
-                <CaseContentFormatted text={preview.text} />
+                <CaseContentWithGateBreak
+                  text={preview.text}
+                  showBreak={showInlineBreak}
+                  access={access}
+                  onGo={goUrl}
+                  onRefresh={refreshAccessNow}
+                />
               )}
             </div>
 
