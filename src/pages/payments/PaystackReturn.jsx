@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../../api/client";
-import { getToken, clearToken, saveToken } from "../../auth/auth";
+import { getToken, saveToken } from "../../auth/auth";
 import "../../styles/paystackReturn.css";
 
 function useQuery() {
@@ -122,6 +122,38 @@ export default function PaystackReturn() {
     return res.data?.data ?? res.data;
   }
 
+  // Paystack can be eventually-consistent right after redirect.
+  // Retry confirm a few times before giving up.
+  async function confirmWithRetry(ref) {
+    const maxAttempts = 8;
+    const delays = [0, 600, 900, 1200, 1500, 2000, 2500, 3000];
+
+    let lastErr = null;
+    for (let i = 0; i < maxAttempts; i++) {
+      if (delays[i]) await sleep(delays[i]);
+      try {
+        return await confirmPaystack(ref);
+      } catch (e) {
+        lastErr = e;
+
+        const status = e?.response?.status;
+        const msg = extractAxiosError(e).toLowerCase();
+
+        // If it’s clearly not a "just wait" issue, stop early.
+        // (We do NOT want to redirect to login for signup.)
+        const fatal =
+          status === 403 ||
+          msg.includes("forbid") ||
+          msg.includes("not found") ||
+          msg.includes("currency mismatch") ||
+          msg.includes("amount mismatch");
+
+        if (fatal) break;
+      }
+    }
+    throw lastErr || new Error("Payment confirmation failed.");
+  }
+
   function redirectToRegisterPaid(ref) {
     const qs = new URLSearchParams();
     qs.set("paid", "1");
@@ -144,6 +176,14 @@ export default function PaystackReturn() {
     window.location.replace(safe);
   }
 
+  function isSignupMeta(meta) {
+    // meta from /intent-by-reference returns:
+    // meta: { purpose, registrationIntentId, ... }
+    const purpose = String(meta?.purpose || "").toLowerCase();
+    const hasReg = !!meta?.registrationIntentId;
+    return purpose === "publicsignupfee" || hasReg;
+  }
+
   async function run() {
     setError("");
 
@@ -154,50 +194,7 @@ export default function PaystackReturn() {
       return;
     }
 
-    // ✅ SIGNUP FLOW MUST WIN — but MUST confirm/finalize before redirecting to /register
-    const storedRegIntent = localStorage.getItem(LS_REG_INTENT);
-    if (storedRegIntent) {
-      try {
-        setPhase("LOADING");
-        setMessage("Confirming payment on server…");
-
-        // NOTE:
-        // - confirm is AllowAnonymous
-        // - PublicSignupFee intent.UserId is null, so ownership checks won't block
-        const confirm = await confirmPaystack(reference);
-        const intentId = confirm?.paymentIntentId || confirm?.id || null;
-        if (intentId) setPaymentIntentId(intentId);
-
-        setPhase("SUCCESS");
-        setMessage("Payment confirmed ✅ Returning to registration…");
-
-        // IMPORTANT:
-        // - DO NOT clear LS_REG_INTENT here; register flow may still rely on it
-        // - Do not clearToken() here; it can break other flows. If needed, clear later.
-        clearCtx(reference);
-
-        await sleep(350);
-        redirectToRegisterPaid(reference);
-        return;
-      } catch (e) {
-        const status = e?.response?.status;
-
-        setPhase("FAILED");
-        setMessage("Payment confirmation issue");
-        setError(extractAxiosError(e));
-
-        // If confirm truly requires auth in some environment, guide user
-        if (status === 401 || status === 403) {
-          setError("Please log in, then come back to this return URL and click Refresh.");
-        }
-
-        return;
-      }
-    }
-
-    // ✅ IMPORTANT:
-    // Do NOT block if token is missing. For subscription flows, confirm is AllowAnonymous.
-    // We still try to restore token for better UX, but we proceed either way.
+    // Always try to restore token for non-signup UX, but do NOT depend on it.
     restoreTokenIfMissing(reference);
 
     try {
@@ -205,18 +202,43 @@ export default function PaystackReturn() {
       setMessage("Resolving your payment…");
       await logReturnVisit(reference);
 
+      // ✅ Always resolve intent first so we can correctly route signup vs other flows,
+      // even if LS_REG_INTENT is missing.
       const resolved = await fetchIntentByReference(reference);
       const intentId = resolved?.paymentIntentId || resolved?.id || null;
       const meta = resolved?.meta || null;
 
-      if (!intentId) throw new Error("Could not resolve payment intent from reference.");
-      setPaymentIntentId(intentId);
+      if (intentId) setPaymentIntentId(intentId);
 
+      const storedRegIntent = localStorage.getItem(LS_REG_INTENT);
       const ctx = readCtx(reference);
+
+      const isSignup =
+        !!storedRegIntent || isSignupMeta(meta) || !!ctx?.registrationIntentId || !!meta?.registrationIntentId;
+
+      // ✅ SIGNUP FLOW: NEVER send user to login/dashboard.
+      // Confirm first (finalizes), then go back to /register (no auth required).
+      if (isSignup) {
+        setMessage("Confirming payment on server…");
+        const confirm = await confirmWithRetry(reference);
+
+        const confirmedIntentId = confirm?.paymentIntentId || confirm?.id || intentId || null;
+        if (confirmedIntentId) setPaymentIntentId(confirmedIntentId);
+
+        setPhase("SUCCESS");
+        setMessage("Payment confirmed ✅ Returning to registration…");
+
+        clearCtx(reference);
+        await sleep(350);
+        redirectToRegisterPaid(reference);
+        return;
+      }
+
+      // Non-signup flows (subscriptions / doc purchase etc.)
       const docId = meta?.legalDocumentId ?? ctx?.docId ?? fallbackDocId ?? null;
 
       setMessage("Confirming payment on server…");
-      await confirmPaystack(reference);
+      await confirmWithRetry(reference);
 
       setPhase("SUCCESS");
       setMessage("Payment received ✅ Redirecting…");
@@ -233,18 +255,13 @@ export default function PaystackReturn() {
     } catch (e) {
       const status = e?.response?.status;
 
-      // If the server truly requires auth (or ownership check hit), THEN show login UI.
+      // For non-signup flows, 401/403 can mean user must login.
+      // For signup, we already short-circuit earlier and never come here for routing.
       if (status === 401 || status === 403) {
         setPhase("FAILED");
-        setMessage("You’re not logged in.");
-        setError("Please log in first, then come back to this return URL and click Refresh.");
+        setMessage("Payment confirmation issue");
+        setError(extractAxiosError(e));
         return;
-      }
-
-      // Other errors
-      if (status === 401) {
-        clearToken();
-        clearCtx(reference);
       }
 
       setPhase("FAILED");
@@ -295,12 +312,16 @@ export default function PaystackReturn() {
               Refresh
             </button>
 
+            {/* Keep login button for non-signup flows (e.g., subscription/doc purchase) */}
             <button className="psrBtn psrBtnGhost" onClick={() => nav("/login", { replace: true })} type="button">
               Go to Login
             </button>
           </div>
 
-          <div className="psrHint2">Tip: after logging in, come back to this same return URL and click Refresh.</div>
+          <div className="psrHint2">
+            If this is a signup payment, go back to the registration page and refresh. If it’s a subscription/doc purchase,
+            log in then refresh this return URL.
+          </div>
         </div>
       )}
     </div>
