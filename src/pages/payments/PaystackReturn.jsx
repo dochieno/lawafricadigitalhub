@@ -154,19 +154,48 @@ export default function PaystackReturn() {
       return;
     }
 
-    // ✅ SIGNUP FLOW MUST WIN — DO NOT CHANGE
+    // ✅ SIGNUP FLOW MUST WIN — but MUST confirm/finalize before redirecting to /register
     const storedRegIntent = localStorage.getItem(LS_REG_INTENT);
     if (storedRegIntent) {
-      clearToken();
-      setPhase("SUCCESS");
-      setMessage("Payment received ✅ Returning to registration…");
-      clearCtx(reference);
-      await sleep(350);
-      redirectToRegisterPaid(reference);
-      return;
+      try {
+        setPhase("LOADING");
+        setMessage("Confirming payment on server…");
+
+        // NOTE:
+        // - confirm is AllowAnonymous
+        // - PublicSignupFee intent.UserId is null, so ownership checks won't block
+        const confirm = await confirmPaystack(reference);
+        const intentId = confirm?.paymentIntentId || confirm?.id || null;
+        if (intentId) setPaymentIntentId(intentId);
+
+        setPhase("SUCCESS");
+        setMessage("Payment confirmed ✅ Returning to registration…");
+
+        // IMPORTANT:
+        // - DO NOT clear LS_REG_INTENT here; register flow may still rely on it
+        // - Do not clearToken() here; it can break other flows. If needed, clear later.
+        clearCtx(reference);
+
+        await sleep(350);
+        redirectToRegisterPaid(reference);
+        return;
+      } catch (e) {
+        const status = e?.response?.status;
+
+        setPhase("FAILED");
+        setMessage("Payment confirmation issue");
+        setError(extractAxiosError(e));
+
+        // If confirm truly requires auth in some environment, guide user
+        if (status === 401 || status === 403) {
+          setError("Please log in, then come back to this return URL and click Refresh.");
+        }
+
+        return;
+      }
     }
 
-    // ✅ IMPORTANT CHANGE:
+    // ✅ IMPORTANT:
     // Do NOT block if token is missing. For subscription flows, confirm is AllowAnonymous.
     // We still try to restore token for better UX, but we proceed either way.
     restoreTokenIfMissing(reference);
