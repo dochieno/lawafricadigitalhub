@@ -56,6 +56,20 @@ function unwrapApi(res) {
   return d?.data ?? d;
 }
 
+function getIsPremiumReport(report) {
+  const v =
+    report?.isPremium ??
+    report?.IsPremium ??
+    report?.premium ??
+    report?.Premium ??
+    report?.isPaid ??
+    report?.IsPaid ??
+    false;
+
+  // handle strings like "true"/"false"
+  if (typeof v === "string") return v.trim().toLowerCase() === "true";
+  return !!v;
+}
 // ----------------------
 // Preview gating helpers (Law Reports transcript)
 // ----------------------
@@ -1521,7 +1535,8 @@ export default function LawReportReader() {
         }
       }
 
-      if (report?.isPremium && (isInst || isPublic)) {
+    if (isPremium && (isInst || isPublic)) {
+
         try {
           setAccessLoading(true);
           const r = await api.get(`/legal-documents/${report.legalDocumentId}/access`);
@@ -1541,12 +1556,13 @@ export default function LawReportReader() {
     return () => {
       cancelled = true;
     };
-  }, [report, isInst, isPublic, isAdmin]);
+  }, [report, isInst, isPublic, isAdmin, isPremium]);
 
   /* ======================================================
      ✅ IMPORTANT: These MUST live INSIDE the component
   ====================================================== */
   const rawContent = useMemo(() => String(report?.contentText || ""), [report?.contentText]);
+  const isPremium = useMemo(() => getIsPremiumReport(report), [report]);
   const textHasContent = !!rawContent.trim();
 
   // ✅ include admin safety too
@@ -1556,9 +1572,10 @@ const aiAllowed = useMemo(() => getIsAiAllowed(report, access, isAdmin), [report
   // ✅ Gate only premium transcripts when user lacks full access
 const shouldGateTranscript = useMemo(() => {
   if (!report) return false;
-  if (!report.isPremium) return false;
+if (!isPremium) return false;
   return true; // ALL premium transcripts are gated unless full access
-}, [report]);
+}, [report, isPremium]);
+
 
   const previewPolicy = useMemo(() => getAccessPreviewPolicy(access), [access]);
 
@@ -1613,7 +1630,7 @@ const shouldGateTranscript = useMemo(() => {
   const canRead =
     !!report &&
     (isAdmin ||
-      ((hasContent || textHasContent) && (!report.isPremium || hasFullAccess || (!isInst && !isPublic))));
+      ((hasContent || textHasContent) && (!isPremium || hasFullAccess || (!isInst && !isPublic))));
 
   // Search (debounced + AbortController + unwrap fixed)
   useEffect(() => {
@@ -2021,7 +2038,7 @@ const shouldGateTranscript = useMemo(() => {
           title={view === "content" ? (contentOpen ? "Hide transcript" : "Show transcript") : "Transcript"}
         >
           Transcript
-          {report?.isPremium && !hasFullAccess ? <span className="lrr2TabBadge lock">Locked</span> : null}
+         {isPremium && !hasFullAccess ? <span className="lrr2TabBadge lock">Locked</span> : null}
         </button>
 
         {aiAllowed ? (
@@ -2185,18 +2202,7 @@ const shouldGateTranscript = useMemo(() => {
               </div>
             </div>
 
-            {report?.isPremium && !hasFullAccess ? (
-              <PremiumLockHero
-                access={access}
-                onGo={(url) => {
-                  if (!url) return;
-                  if (String(url).startsWith("http")) window.open(url, "_blank", "noreferrer");
-                  else navigate(url);
-                }}
-              />
-            ) : null}
-
-            {report?.isPremium && !hasFullAccess ? (
+           {isPremium && !hasFullAccess ? (
   <>
               <PremiumLockHero access={access} onGo={goUrl} />
 
