@@ -1540,10 +1540,23 @@ export default function LawReportReader() {
 
 
     function extractKeyTakeaways(sections) {
-      const kp = sections.find((s) => s.title.toUpperCase().includes("KEY TAKEAWAYS"));
-      if (!kp) return [];
-      return kp.items.map((t, idx) => ({ id: `kp_${idx}`, text: t }));
-    }
+      const isKpTitle = (title) => {
+        const t = String(title || "").toUpperCase();
+        return (
+          t.includes("KEY TAKEAWAYS") ||
+          t.includes("KEY POINTS") ||
+          t.includes("KEY POINT") ||
+          t.includes("KEY HIGHLIGHTS") ||
+          t.includes("HIGHLIGHTS") ||
+          t.includes("TAKEAWAYS")
+        );
+      };
+
+  const kp = sections.find((s) => isKpTitle(s.title));
+  if (!kp) return [];
+  return kp.items.map((t, idx) => ({ id: `kp_${idx}`, text: t }));
+}
+
 
     return (
       <div className={`lrrAi ${compact ? "isCompact" : ""}`}>
@@ -1716,7 +1729,18 @@ export default function LawReportReader() {
                   const sections = parsed.sections;
 
                   const takeaways = extractKeyTakeaways(sections);
-                  const mainSections = sections.filter((s) => !s.title.toUpperCase().includes("KEY TAKEAWAYS"));
+                  const mainSections = sections.filter((s) => {
+                  const t = String(s.title || "").toUpperCase();
+                  return !(
+                    t.includes("KEY TAKEAWAYS") ||
+                    t.includes("KEY POINTS") ||
+                    t.includes("KEY POINT") ||
+                    t.includes("KEY HIGHLIGHTS") ||
+                    t.includes("HIGHLIGHTS") ||
+                    t.includes("TAKEAWAYS")
+                  );
+                });
+
 
                     return (
                       <>

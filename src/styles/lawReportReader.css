@@ -1889,10 +1889,21 @@
 .lrrAiIconBtn:focus-visible{ outline:none; box-shadow: 0 0 0 4px rgba(161,24,30,.12); }
 
 /* ===== Section cards (FACTS/ISSUES/HOLDING/REASONING) ===== */
-.lrrAiSections{
-  display:grid;
-  gap:12px;
+/* 1 card per row, full width */
+.lrrAiSections {
+  display: grid;
+  grid-template-columns: 1fr;  /* ✅ one column */
+  gap: 14px;
+  margin-top: 12px;
 }
+/* 1 card per row, full width */
+.lrrAiSections {
+  display: grid;
+  grid-template-columns: 1fr;  /* ✅ one column */
+  gap: 14px;
+  margin-top: 12px;
+}
+
 
 .lrrAiSectionCard{
   border:1px solid rgba(15,23,42,.10);
@@ -2496,4 +2507,140 @@
   margin: 10px 2px 14px;
   font-size: 14px;
   line-height: 1.35;
+}
+/* =========================
+   Premium AI cards + typography
+========================= */
+
+/* Ensure body text is NEVER bold */
+.lrrAi,
+.lrrAi *:not(.lrrAiTitle):not(.lrrAiSectionHead .ttl):not(.lrrAiCaseTitle):not(.lrrAiTakeawaysSum .kpttl):not(.lrrAiH) {
+  font-weight: 400;
+}
+
+/* Headings only */
+.lrrAiTitle,
+.lrrAiCaseTitle,
+.lrrAiSectionHead .ttl,
+.lrrAiTakeawaysSum .kpttl,
+.lrrAiH {
+  font-weight: 700;
+}
+
+/* Section card: premium look */
+.lrrAiSectionCard {
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(17, 24, 39, 0.10);
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.06),
+    0 1px 0 rgba(255, 255, 255, 0.65) inset;
+  overflow: hidden;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.lrrAiSectionCard:hover {
+  transform: translateY(-1px);
+  border-color: rgba(17, 24, 39, 0.14);
+  box-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.72) inset;
+}
+
+/* Card header bar */
+.lrrAiSectionHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: linear-gradient(
+    to bottom,
+    rgba(249, 250, 251, 0.85),
+    rgba(243, 244, 246, 0.65)
+  );
+  border-bottom: 1px solid rgba(17, 24, 39, 0.08);
+}
+
+.lrrAiSectionHead .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 99px;
+  background: rgba(161, 18, 18, 0.85); /* uses your maroon */
+  box-shadow: 0 0 0 4px rgba(161, 18, 18, 0.12);
+}
+
+.lrrAiSectionHead .ttl {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(17, 24, 39, 0.88);
+}
+
+/* List typography (premium spacing) */
+.lrrAiSectionList {
+  padding: 12px 18px 14px;
+  margin: 0;
+  list-style: disc;
+}
+
+.lrrAiSectionList li {
+  margin: 8px 0;
+  line-height: 1.55;
+  color: rgba(17, 24, 39, 0.88);
+}
+
+/* Key takeaways panel stays premium */
+.lrrAiTakeaways {
+  margin-top: 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(17, 24, 39, 0.10);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.lrrAiTakeawaysSum {
+  padding: 12px 14px;
+  background: linear-gradient(
+    to bottom,
+    rgba(249, 250, 251, 0.85),
+    rgba(243, 244, 246, 0.65)
+  );
+  border-bottom: 1px solid rgba(17, 24, 39, 0.08);
+}
+
+/* KP cards */
+.lrrAiKpGrid {
+  display: grid;
+  grid-template-columns: 1fr; /* match your “one per row” vibe */
+  gap: 12px;
+  padding: 14px;
+}
+
+.lrrAiKpCard {
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(17, 24, 39, 0.10);
+  box-shadow: 0 10px 22px rgba(0,0,0,0.05);
+  padding: 12px 12px 10px;
+}
+
+.lrrAiKpText {
+  font-weight: 400; /* ✅ not bold */
+  line-height: 1.55;
+  color: rgba(17, 24, 39, 0.88);
+}
+
+.lrrAiKpBadge {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(17, 24, 39, 0.80);
+  background: rgba(161, 18, 18, 0.10);
+  border: 1px solid rgba(161, 18, 18, 0.16);
 }
