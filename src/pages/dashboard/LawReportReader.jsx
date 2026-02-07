@@ -1614,25 +1614,6 @@ function parseSectionedSummary(text) {
   return { caseTitle, sections: deduped };
 }
 
-
-    function extractKeyTakeaways(sections) {
-      const isKpTitle = (title) => {
-        const t = String(title || "").toUpperCase();
-        return (
-          t.includes("KEY TAKEAWAYS") ||
-          t.includes("KEY POINTS") ||
-          t.includes("KEY POINT") ||
-          t.includes("KEY HIGHLIGHTS") ||
-          t.includes("HIGHLIGHTS") ||
-          t.includes("TAKEAWAYS")
-        );
-      };
-
-      const kp = sections.find((s) => isKpTitle(s.title));
-      if (!kp) return [];
-      return kp.items.map((t, idx) => ({ id: `kp_${idx}`, text: t }));
-    }
-
     const aiShellClass = `lrrAi lrrAi--premium ${compact ? "isCompact" : ""}`;
 
     return (
@@ -1827,51 +1808,83 @@ function parseSectionedSummary(text) {
                     </div>
                   </div>
 
-                  {(() => {
-                    const parsed = parseSectionedSummary(summaryText);
-                    const sections = Array.isArray(parsed?.sections) ? parsed.sections : [];
+                {(() => {
+                  // --- helpers (no hooks) ---
+                  function cleanItemsFromBlock(block) {
+                    const t = String(block || "").replace(/\r\n/g, "\n").trim();
+                    if (!t) return [];
 
-                    // Optional: keep your "KEY TAKEAWAYS" extraction if you still want it
-                    const takeaways = extractKeyTakeaways(sections);
+                    const lines = t
+                      .split("\n")
+                      .map((x) => x.trim())
+                      .filter(Boolean);
 
-                    // Remove takeaways section from the main stack (so it doesn't appear twice)
-                    const mainSections = sections.filter((s) => {
-                      const t = String(s?.title || s?.key || "").toUpperCase();
-                      return !(
-                        t.includes("KEY TAKEAWAYS") ||
-                        t.includes("KEY POINTS") ||
-                        t.includes("KEY POINT") ||
-                        t.includes("KEY HIGHLIGHTS") ||
-                        t.includes("HIGHLIGHTS") ||
-                        t.includes("TAKEAWAYS")
-                      );
-                    });
+                    const hasBullets = lines.some((l) => /^([-•]|\d+\.)\s+/.test(l));
+                    if (hasBullets) {
+                      return lines
+                        .map((l) => l.replace(/^([-•]|\d+\.)\s+/, "").trim())
+                        .filter(Boolean);
+                    }
 
-                    // Map headings to tones (left rail colors in CSS)
-                    const toneFor = (s) => {
-                      const t = String(s?.title || s?.key || "").toUpperCase();
-                      if (t.includes("FACT")) return "facts";
-                      if (t.includes("ISSUE")) return "issues";
-                      if (t.includes("HOLD") || t.includes("DECISION") || t.includes("HELD")) return "holding";
-                      if (t.includes("REASON") || t.includes("ANALYS") || t.includes("DISCUSS") || t.includes("RATION")) return "reasoning";
-                      if (t.includes("ORDER") || t.includes("DISPOSITION")) return "orders";
-                      if (t.includes("RULE") || t.includes("PRINCIPLE")) return "rule";
-                      if (t.includes("AUTHOR") || t.includes("CITED") || t.includes("STATUTE")) return "authorities";
-                      return "summary";
-                    };
+                    const parts = t
+                      .split(/(?<=[.!?])\s+/)
+                      .map((x) => x.trim())
+                      .filter(Boolean);
 
+                    if (parts.length > 12) return parts.slice(0, 12);
+                    return parts.length ? parts : [t];
+                  }
+
+                  function splitBasicSummary(text) {
+                    const raw = String(text || "").replace(/\r\n/g, "\n").trim();
+                    if (!raw) return { summaryBlock: "", keyPointsBlock: "" };
+
+                    const re = /\n\s*(key\s*points|key\s*takeaways|highlights)\s*:\s*\n?/i;
+                    const m = raw.match(re);
+
+                    if (!m) {
+                      const reInline = /(key\s*points|key\s*takeaways|highlights)\s*:\s*/i;
+                      const idxInline = raw.search(reInline);
+                      if (idxInline >= 0) {
+                        const before = raw.slice(0, idxInline).trim();
+                        const after = raw.slice(idxInline).replace(reInline, "").trim();
+                        return { summaryBlock: before, keyPointsBlock: after };
+                      }
+                      return { summaryBlock: raw, keyPointsBlock: "" };
+                    }
+
+                    const idx = m.index ?? -1;
+                    if (idx < 0) return { summaryBlock: raw, keyPointsBlock: "" };
+
+                    const summaryBlock = raw.slice(0, idx).trim();
+                    const keyPointsBlock = raw.slice(idx).replace(re, "").trim();
+                    return { summaryBlock, keyPointsBlock };
+                  }
+
+                  const parsed = parseSectionedSummary(summaryText);
+                  const sections = Array.isArray(parsed?.sections) ? parsed.sections : [];
+
+                  const toneFor = (s) => {
+                    const t = String(s?.title || s?.key || "").toUpperCase();
+                    if (t.includes("FACT")) return "facts";
+                    if (t.includes("ISSUE")) return "issues";
+                    if (t.includes("HOLD") || t.includes("DECISION") || t.includes("HELD")) return "holding";
+                    if (t.includes("REASON") || t.includes("ANALYS") || t.includes("DISCUSS") || t.includes("RATION")) return "reasoning";
+                    if (t.includes("ORDER") || t.includes("DISPOSITION")) return "orders";
+                    if (t.includes("RULE") || t.includes("PRINCIPLE")) return "rule";
+                    if (t.includes("AUTHOR") || t.includes("CITED") || t.includes("STATUTE")) return "authorities";
+                    return "summary";
+                  };
+
+                  // ✅ EXTENDED: keep your normal parsed section cards
+                  if (summaryType === "extended") {
                     return (
                       <div className="lrrAiCaseLayout">
-                        {/* Title is displayed once (NOT as a card) */}
                         {parsed?.caseTitle ? <div className="lrrAiCaseTitle">{parsed.caseTitle}</div> : null}
 
-                        {/* Stacked cards like your screenshot */}
                         <div className="lrrAiStack">
-                          {mainSections.map((s, idx) => (
-                            <section
-                              key={`${s?.title || s?.key || "SEC"}_${idx}`}
-                              className={`lrrAiSCard lrrAiTone-${toneFor(s)}`}
-                            >
+                          {sections.map((s, idx) => (
+                            <section key={`${s?.title || s?.key || "SEC"}_${idx}`} className={`lrrAiSCard lrrAiTone-${toneFor(s)}`}>
                               <div className="lrrAiSHead">
                                 <span className="lrrAiSPill">{s?.title || s?.key || "SUMMARY"}</span>
                               </div>
@@ -1884,31 +1897,46 @@ function parseSectionedSummary(text) {
                             </section>
                           ))}
                         </div>
-
-                        {/* Optional takeaways block (keep if you like it) */}
-                        {takeaways?.length ? (
-                          <details className="lrrAiTakeaways" open>
-                            <summary className="lrrAiTakeawaysSum">
-                              <span className="kpttl">KEY TAKEAWAYS</span>
-                              <span className="kphint">(click to collapse)</span>
-                              <span className="chev" aria-hidden="true">
-                                ▾
-                              </span>
-                            </summary>
-
-                            <div className="lrrAiKpGrid">
-                              {takeaways.map((x, i) => (
-                                <div key={x.id || i} className="lrrAiKpCard">
-                                  <div className="lrrAiKpText">{x.text}</div>
-                                  <div className="lrrAiKpBadge">{`KP${i + 1}`}</div>
-                                </div>
-                              ))}
-                            </div>
-                          </details>
-                        ) : null}
                       </div>
                     );
-                  })()}
+                  }
+
+                  // ✅ BASIC: force exactly 2 sections (SUMMARY + KEY POINTS) styled like extended cards
+                  const { summaryBlock, keyPointsBlock } = splitBasicSummary(summaryText);
+                  const summaryItems = cleanItemsFromBlock(summaryBlock);
+                  const keyPointItems = cleanItemsFromBlock(keyPointsBlock);
+
+                  return (
+                    <div className="lrrAiCaseLayout">
+                      {parsed?.caseTitle ? <div className="lrrAiCaseTitle">{parsed.caseTitle}</div> : null}
+
+                      <div className="lrrAiStack">
+                        <section className="lrrAiSCard lrrAiTone-summary">
+                          <div className="lrrAiSHead">
+                            <span className="lrrAiSPill">SUMMARY</span>
+                          </div>
+                          <ul className="lrrAiSBullets">
+                            {(summaryItems.length ? summaryItems : ["No summary returned."]).map((it, i2) => (
+                              <li key={i2}>{it}</li>
+                            ))}
+                          </ul>
+                        </section>
+
+                        <section className="lrrAiSCard lrrAiTone-issues">
+                          <div className="lrrAiSHead">
+                            <span className="lrrAiSPill">KEY POINTS</span>
+                          </div>
+                          <ul className="lrrAiSBullets">
+                            {(keyPointItems.length ? keyPointItems : ["No key points returned."]).map((it, i2) => (
+                              <li key={i2}>{it}</li>
+                            ))}
+                          </ul>
+                        </section>
+                      </div>
+                    </div>
+                  );
+                })()}
+
 
 
                   <details className="lrrAiRawToggle">
@@ -1974,7 +2002,7 @@ function parseSectionedSummary(text) {
               <div className="lrrAiChat lrrAiChat--premium">
                 {messages
                   // keep chat clean: exclude any summary messages if they exist from old sessions
-                  .filter((m) => m?.kind !== "summary")
+                  .filter((m) => m?.kind !== "summary" && m?.kind !== "info")
                   .map((m) => {
                     const isUser = m.role === "user";
                     const isTyping = m.kind === "typing";

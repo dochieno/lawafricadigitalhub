@@ -1728,3 +1728,25 @@
 .lrr2Wrap[data-theme="dark"] .lrrAiCaseTitle {
   color: rgba(226, 232, 240, 0.92);
 }
+.lrrAiSegment {
+  display: inline-flex;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  border-radius: 999px;
+  background: rgba(255,255,255,.6);
+  backdrop-filter: blur(10px);
+}
+
+.lrrAiSegBtn {
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.lrrAiSegBtn.isOn {
+  background: rgba(17, 24, 39, 0.92);
+  color: #fff;
+}
