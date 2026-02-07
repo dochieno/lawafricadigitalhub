@@ -114,7 +114,6 @@ const SUBSCRIBE_ROUTE = "/dashboard/law-reports/subscribe";
 const TRIAL_ROUTE = "/dashboard/trials";
 
 function getAccessCtas(access) {
-  // ✅ Fix defaults: /pricing does NOT exist in your router -> it redirects to /login via "*"
   const primaryUrl =
     access?.ctaUrl ||
     access?.CtaUrl ||
@@ -129,7 +128,6 @@ function getAccessCtas(access) {
     access?.data?.CtaLabel ||
     "Subscribe to continue";
 
-  // ✅ Always provide a “View plans” destination (same subscribe page) unless backend supplies one
   const secondaryUrl =
     access?.secondaryCtaUrl ||
     access?.SecondaryCtaUrl ||
@@ -173,7 +171,7 @@ function AccessReasonLabel(access) {
   return "";
 }
 
-// ✅ updated: accepts isPremium explicitly (so Option B can drive UI even if report.isPremium missing)
+// ✅ updated: accepts isPremium explicitly
 function getAccessStatus(access, isPremium, isAdmin, hasFullAccess) {
   if (isAdmin) return { tone: "ok", label: "Admin access", hint: "Full access enabled." };
   if (!isPremium) return { tone: "ok", label: "Free report", hint: "Full transcript available." };
@@ -316,6 +314,136 @@ function formatDate(d) {
   return dt.toISOString().slice(0, 10);
 }
 
+/* -------------------------
+   AI helpers
+------------------------- */
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function safeTrim(s) {
+  return String(s || "").trim();
+}
+
+function toChatHistory(messages, max = 10) {
+  const tail = messages.slice(-max);
+  return tail
+    .filter((m) => m?.role === "user" || m?.role === "assistant")
+    .map((m) => ({ role: m.role, content: String(m.content || "") }));
+}
+
+function bulletsFromText(text) {
+  const t = normalizeText(text);
+  if (!t) return "";
+  const lines = t.split("\n").map((x) => x.trim()).filter(Boolean);
+  // If it already looks like bullets, keep them
+  const alreadyBullets = lines.some((l) => /^[-•]\s+/.test(l));
+  if (alreadyBullets) return lines.map((l) => (l.startsWith("-") || l.startsWith("•") ? l.replace(/^•\s+/, "- ") : `- ${l}`)).join("\n");
+  // Otherwise, bullet each line; if single line, split by sentences lightly
+  if (lines.length === 1) {
+    const one = lines[0];
+    const parts = one.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter(Boolean);
+    return parts.map((p) => `- ${p}`).join("\n");
+  }
+  return lines.map((l) => `- ${l}`).join("\n");
+}
+
+/**
+ * Minimal rich formatter (no markdown lib):
+ * - "## " / "### " headings
+ * - bullets "- " / "• "
+ * - numbered "1. "
+ */
+function RichText({ text }) {
+  const t = String(text || "");
+  const lines = t.replace(/\r\n/g, "\n").split("\n");
+
+  const blocks = [];
+  let list = null;
+
+  function flushList() {
+    if (list && list.items.length) {
+      blocks.push({ type: "list", ordered: list.ordered, items: list.items });
+    }
+    list = null;
+  }
+
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+
+    if (!line.trim()) {
+      flushList();
+      blocks.push({ type: "spacer" });
+      continue;
+    }
+
+    const h2 = line.startsWith("## ");
+    const h3 = line.startsWith("### ");
+    const h4 = line.startsWith("#### ");
+    if (h2 || h3 || h4) {
+      flushList();
+      blocks.push({
+        type: "h",
+        level: h2 ? 2 : h3 ? 3 : 4,
+        text: line.replace(/^####\s+|^###\s+|^##\s+/, "").trim(),
+      });
+      continue;
+    }
+
+    const bullet = /^[-•]\s+/.test(line);
+    const ordered = /^\d+\.\s+/.test(line);
+
+    if (bullet || ordered) {
+      const itemText = line.replace(/^[-•]\s+/, "").replace(/^\d+\.\s+/, "").trim();
+      if (!list) list = { ordered, items: [] };
+      // if switches ordered/unordered, flush
+      if (list.ordered !== ordered) {
+        flushList();
+        list = { ordered, items: [] };
+      }
+      list.items.push(itemText);
+      continue;
+    }
+
+    flushList();
+    blocks.push({ type: "p", text: line });
+  }
+
+  flushList();
+
+  return (
+    <div className="lrrAiFmt">
+      {blocks.map((b, idx) => {
+        if (b.type === "spacer") return <div key={idx} className="lrrAiSpacer" />;
+        if (b.type === "h") {
+          const Tag = b.level === 2 ? "h3" : b.level === 3 ? "h4" : "h5";
+          return (
+            <Tag key={idx} className={`lrrAiH lrrAiH-${b.level}`}>
+              {b.text}
+            </Tag>
+          );
+        }
+        if (b.type === "list") {
+          const ListTag = b.ordered ? "ol" : "ul";
+          return (
+            <ListTag key={idx} className={`lrrAiList ${b.ordered ? "ordered" : "bullets"}`}>
+              {b.items.map((it, i2) => (
+                <li key={i2}>{it}</li>
+              ))}
+            </ListTag>
+          );
+        }
+        return (
+          <p key={idx} className="lrrAiP">
+            {b.text}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 /* =========================================================
    2) Small presentational components
 ========================================================= */
@@ -337,8 +465,8 @@ function AccessStatusChip({ access, isPremium, isAdmin, hasFullAccess }) {
 }
 
 /**
- * ✅ One combined card (replaces PremiumLockHero + SubscriptionGuidePanel)
- * Uses existing CSS classes to avoid needing a CSS file update.
+ * ✅ Combined lock card (keep same design; we’ll only polish buttons in CSS)
+ * NOTE: this will now render BELOW transcript.
  */
 function SubscriptionGateCard({
   isPremium,
@@ -356,7 +484,6 @@ function SubscriptionGateCard({
   const status = getAccessStatus(access, isPremium, isAdmin, hasFullAccess);
   const reason = AccessReasonLabel(access);
 
-  // Optional institution-specific links only if backend provides them
   const accessCodeUrl =
     access?.accessCodeUrl ||
     access?.AccessCodeUrl ||
@@ -440,7 +567,6 @@ function SubscriptionGateCard({
             </button>
           ) : null}
 
-          {/* ✅ Always safe: points to real route */}
           <button type="button" className="lrr2Btn" onClick={() => onGo(ctas.secondaryUrl || SUBSCRIBE_ROUTE)}>
             {ctas.secondaryLabel}
           </button>
@@ -572,7 +698,7 @@ function AiLockedPanel({ access, onGo }) {
     <div className="lrr2Panel lrr2Panel--tight">
       <div className="lrr2PanelHead">
         <div className="lrr2PanelHeadLeft">
-          <div className="lrr2PanelTitle">LegalAI Summary</div>
+          <div className="lrr2PanelTitle">LegalAI</div>
           <div className="lrr2PanelSub">Available to subscribers only.</div>
         </div>
       </div>
@@ -648,6 +774,31 @@ export default function LawReportReader() {
   const searchInputRef = useRef(null);
   const searchCtlRef = useRef(null);
   const searchReqIdRef = useRef(0);
+
+  // AI (summary + chat)
+  const [aiTab, setAiTab] = useState("summary"); // summary | chat | related
+  const [summaryType, setSummaryType] = useState("basic"); // basic | extended
+  const [summaryText, setSummaryText] = useState("");
+  const [summaryMeta, setSummaryMeta] = useState(null);
+
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiErr, setAiErr] = useState("");
+  const [aiLastAction, setAiLastAction] = useState(null); // { kind, payload }
+
+  const [messages, setMessages] = useState(() => [
+    {
+      id: "sys_welcome",
+      role: "assistant",
+      content:
+        "## LegalAI\nAsk anything about this case — holdings, issues, ratio, authorities, or practical next steps.\n\n- Tip: Use **Suggested prompts** below.\n- Note: AI may be inaccurate; verify against the transcript and citations.",
+      createdAt: nowIso(),
+      kind: "info",
+    },
+  ]);
+  const [chatInput, setChatInput] = useState("");
+
+  const chatEndRef = useRef(null);
+  const aiMountedRef = useRef(false);
 
   /* -------------------------
      ✅ Option B: robust premium detection
@@ -743,7 +894,7 @@ export default function LawReportReader() {
       text: previewText,
     };
   }, [isPremium, shouldGateTranscript, textHasContent, rawContent, gateSourceText, previewPolicy]);
-  
+
   const showInlineBreak = useMemo(() => {
     return !!(contentOpen && preview.gated && preview.reachedLimit);
   }, [contentOpen, preview.gated, preview.reachedLimit]);
@@ -755,9 +906,30 @@ export default function LawReportReader() {
     return true;
   }, [report, availabilityLoading, hasContent, textHasContent]);
 
-  /* -------------------------
+  const shouldShowRightAiPanel = useMemo(() => {
+    // If transcript view is open, show split layout (AI on right) even without switching tabs
+    return view === "content";
+  }, [view]);
+
+  const suggestedPrompts = useMemo(() => {
+    const base = [
+      "Summarize the case in 8 bullet points.",
+      "What were the key issues for determination?",
+      "What was the holding and orders?",
+      "Extract the ratio decidendi and reasoning.",
+      "List cited authorities and how they were applied.",
+      "What practical action items follow from this decision?",
+    ];
+    if (isPremium && !hasFullAccess) {
+      // keep prompts, but AI panel may be locked anyway
+      return base;
+    }
+    return base;
+  }, [isPremium, hasFullAccess]);
+
+  /* ======================================================
      Effects
-  ------------------------- */
+  ====================================================== */
 
   useEffect(() => {
     function onScroll() {
@@ -845,6 +1017,25 @@ export default function LawReportReader() {
     setAvailabilityLoading(false);
     setAccessLoading(false);
 
+    // reset AI per report
+    setAiErr("");
+    setAiLastAction(null);
+    setAiTab("summary");
+    setSummaryType("basic");
+    setSummaryText("");
+    setSummaryMeta(null);
+    setMessages([
+      {
+        id: "sys_welcome",
+        role: "assistant",
+        content:
+          "## LegalAI\nAsk anything about this case — holdings, issues, ratio, authorities, or practical next steps.\n\n- Tip: Use **Suggested prompts** below.\n- Note: AI may be inaccurate; verify against the transcript and citations.",
+        createdAt: nowIso(),
+        kind: "info",
+      },
+    ]);
+    setChatInput("");
+
     if (Number.isFinite(reportId) && reportId > 0) load();
     else {
       setError("Invalid report id.");
@@ -892,7 +1083,7 @@ export default function LawReportReader() {
         }
       }
 
-      // ✅ access (only for premium) - uses Option B computed isPremium
+      // ✅ access (only for premium)
       if (isPremium && (isInst || isPublic)) {
         try {
           setAccessLoading(true);
@@ -975,6 +1166,15 @@ export default function LawReportReader() {
     return () => clearTimeout(t);
   }, [q]);
 
+  // Autoscroll chat
+  useEffect(() => {
+    if (!aiMountedRef.current) {
+      aiMountedRef.current = true;
+      return;
+    }
+    chatEndRef.current?.scrollIntoView?.({ behavior: "smooth", block: "end" });
+  }, [messages.length]);
+
   /* ======================================================
      Actions
   ====================================================== */
@@ -1006,7 +1206,6 @@ export default function LawReportReader() {
 
     const u = String(url);
 
-    // ✅ Hard-fix legacy /pricing links (they hit "*" -> /login)
     if (u === "/pricing" || u.startsWith("/pricing?") || u.startsWith("/pricing/")) {
       navigate(u.replace("/pricing", SUBSCRIBE_ROUTE));
       return;
@@ -1024,6 +1223,249 @@ export default function LawReportReader() {
     setSearchResults([]);
     setSearchErr("");
     navigate(`/dashboard/law-reports/${rid}`);
+  }
+
+  async function aiGetCachedSummary(type) {
+    setAiErr("");
+    setAiLastAction({ kind: "getSummary", payload: { type } });
+    setAiBusy(true);
+
+    try {
+      const res = await api.get(`/ai/law-reports/${reportId}/summary`, { params: { type } });
+      const payload = unwrapApi(res);
+
+      const summary = payload?.summary ?? payload?.data?.summary ?? "";
+      setSummaryText(String(summary || ""));
+      setSummaryMeta({
+        type: payload?.type || type,
+        createdAt: payload?.createdAt || null,
+        updatedAt: payload?.updatedAt || null,
+        cached: true,
+      });
+
+      // Also drop it into chat as an assistant message (nice UX)
+      if (summary) {
+        setMessages((prev) => {
+          const exists = prev.some((m) => m?.kind === "summary" && m?.summaryType === type);
+          if (exists) return prev;
+          return [
+            ...prev,
+            {
+              id: `sum_cached_${type}_${Date.now()}`,
+              role: "assistant",
+              content: String(summary),
+              createdAt: nowIso(),
+              kind: "summary",
+              summaryType: type,
+            },
+          ];
+        });
+      }
+    } catch (e) {
+      setAiErr(getApiErrorMessage(e, "No cached summary found yet."));
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  async function aiGenerateSummary({ type, forceRegenerate }) {
+    setAiErr("");
+    setAiLastAction({ kind: "genSummary", payload: { type, forceRegenerate } });
+    setAiBusy(true);
+
+    try {
+      const res = await api.post(`/ai/law-reports/${reportId}/summary`, {
+        type,
+        forceRegenerate: !!forceRegenerate,
+      });
+      const payload = unwrapApi(res);
+
+      const summary = payload?.summary ?? payload?.data?.summary ?? "";
+      setSummaryText(String(summary || ""));
+      setSummaryMeta({
+        type: payload?.type || type,
+        cached: !!payload?.cached,
+        createdAt: payload?.createdAt || null,
+        updatedAt: payload?.updatedAt || null,
+      });
+
+      if (summary) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `sum_${type}_${Date.now()}`,
+            role: "assistant",
+            content: String(summary),
+            createdAt: nowIso(),
+            kind: "summary",
+            summaryType: type,
+          },
+        ]);
+      }
+    } catch (e) {
+      setAiErr(getApiErrorMessage(e, "Failed to generate summary."));
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  async function aiSendChat(message) {
+    const msg = safeTrim(message);
+    if (!msg) return;
+
+    setAiErr("");
+    setAiLastAction({ kind: "chat", payload: { message: msg } });
+
+    const userMsg = {
+      id: `u_${Date.now()}`,
+      role: "user",
+      content: msg,
+      createdAt: nowIso(),
+      kind: "chat",
+    };
+
+    const typingMsg = {
+      id: `typing_${Date.now() + 1}`,
+      role: "assistant",
+      content: "",
+      createdAt: nowIso(),
+      kind: "typing",
+    };
+
+    setMessages((prev) => [...prev, userMsg, typingMsg]);
+    setChatInput("");
+    setAiBusy(true);
+
+    try {
+      const history = toChatHistory(
+        // include new user msg but exclude typing
+        [...messages.filter((m) => m?.kind !== "typing"), userMsg],
+        10
+      );
+
+      const res = await api.post(`/ai/law-reports/${reportId}/chat`, {
+        message: msg,
+        history,
+      });
+
+      const payload = unwrapApi(res);
+      // backend said: res.data.reply
+      const reply = payload?.reply ?? payload?.data?.reply ?? payload?.message ?? payload?.answer ?? "";
+
+      setMessages((prev) => {
+        const cleaned = prev.filter((m) => m?.id !== typingMsg.id);
+        return [
+          ...cleaned,
+          {
+            id: `a_${Date.now()}`,
+            role: "assistant",
+            content: String(reply || "I couldn’t generate a response. Please try again."),
+            createdAt: nowIso(),
+            kind: "chat",
+          },
+        ];
+      });
+    } catch (e) {
+      setMessages((prev) => prev.filter((m) => m?.id !== typingMsg.id));
+      setAiErr(getApiErrorMessage(e, "Chat failed."));
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  async function aiGenerateRelatedCases() {
+    setAiErr("");
+    setAiLastAction({ kind: "related", payload: {} });
+    setAiBusy(true);
+
+    try {
+      const res = await api.post(`/ai/law-reports/${reportId}/related-cases`, null, {
+        params: { takeKenya: 2, takeForeign: 2 },
+      });
+      const payload = unwrapApi(res);
+
+      const items = Array.isArray(payload?.items) ? payload.items : Array.isArray(payload?.data?.items) ? payload.data.items : [];
+      const disclaimer = payload?.disclaimer || payload?.data?.disclaimer || "AI suggestions may be inaccurate. Always verify citations and holdings.";
+
+      const text =
+        "## Related cases (AI)\n" +
+        `- Kenya: ${payload?.kenyaCount ?? ""}\n` +
+        `- Foreign: ${payload?.foreignCount ?? ""}\n\n` +
+        (items.length
+          ? items
+              .map((x, i2) => {
+                const title = (x?.title || x?.Title || `Case ${i2 + 1}`).trim();
+                const citation = (x?.citation || x?.Citation || "").trim();
+                const juris = (x?.jurisdiction || x?.Jurisdiction || "").trim();
+                const why = (x?.reason || x?.Reason || x?.note || "").trim();
+                const bits = [];
+                if (citation) bits.push(citation);
+                if (juris) bits.push(juris);
+                const meta = bits.length ? ` (${bits.join(" · ")})` : "";
+                return `- **${title}**${meta}${why ? ` — ${why}` : ""}`;
+              })
+              .join("\n")
+          : "- No related cases returned.\n") +
+        `\n\n### Disclaimer\n${disclaimer}`;
+
+      setMessages((prev) => [
+        ...prev,
+        { id: `rel_${Date.now()}`, role: "assistant", content: text, createdAt: nowIso(), kind: "related" },
+      ]);
+    } catch (e) {
+      setAiErr(getApiErrorMessage(e, "Failed to generate related cases."));
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  function aiRetry() {
+    const a = aiLastAction;
+    if (!a) return;
+    if (a.kind === "getSummary") return aiGetCachedSummary(a.payload.type);
+    if (a.kind === "genSummary") return aiGenerateSummary(a.payload);
+    if (a.kind === "chat") return aiSendChat(a.payload.message);
+    if (a.kind === "related") return aiGenerateRelatedCases();
+  }
+
+  function aiClearChat() {
+    setAiErr("");
+    setAiLastAction(null);
+    setMessages([
+      {
+        id: `sys_${Date.now()}`,
+        role: "assistant",
+        content:
+          "## New chat\nAsk anything about the case. I can extract issues, holdings, reasoning, authorities, and practical guidance.",
+        createdAt: nowIso(),
+        kind: "info",
+      },
+    ]);
+  }
+
+  function aiNewSummary() {
+    setAiErr("");
+    setAiLastAction(null);
+    setSummaryText("");
+    setSummaryMeta(null);
+    // Add a subtle assistant prompt for UX
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `sum_hint_${Date.now()}`,
+        role: "assistant",
+        content:
+          "### New summary\nChoose **Basic** or **Extended**, then click **Generate**. You can also **Force regenerate** to refresh cached output.",
+        createdAt: nowIso(),
+        kind: "info",
+      },
+    ]);
+  }
+
+  function copyText(text) {
+    const t = String(text || "");
+    if (!t) return;
+    navigator.clipboard?.writeText?.(t);
   }
 
   /* -------------------------
@@ -1076,6 +1518,324 @@ export default function LawReportReader() {
 
   const title = report.parties || report.title || "Law Report";
   const llrNo = report.reportNumber || report.llrNo || report.llrNumber || String(reportId);
+
+  function LegalAiPanel({ compact }) {
+    if (!aiAllowed) {
+      return <AiLockedPanel access={access} onGo={goUrl} />;
+    }
+
+    const hasSomeSummary = !!safeTrim(summaryText);
+    const showSummaryEmpty = aiTab === "summary" && !hasSomeSummary && !aiBusy;
+
+    return (
+      <div className={`lrrAi ${compact ? "isCompact" : ""}`}>
+        <div className="lrrAiHead">
+          <div className="lrrAiHeadLeft">
+            <div className="lrrAiTitle">LegalAI</div>
+            <div className="lrrAiSub">
+              Premium-grade summaries & chat. Verify against the transcript.
+            </div>
+          </div>
+
+          <div className="lrrAiHeadRight">
+            <button type="button" className="lrrAiBtn ghost" onClick={aiNewSummary} title="Start a new summary workflow">
+              New summary
+            </button>
+            <button type="button" className="lrrAiBtn ghost" onClick={aiClearChat} title="Clear messages">
+              Clear chat
+            </button>
+          </div>
+        </div>
+
+        {aiErr ? (
+          <div className="lrrAiAlert" role="alert">
+            <div className="lrrAiAlertTitle">Couldn’t complete that</div>
+            <div className="lrrAiAlertMsg">{aiErr}</div>
+            <div className="lrrAiAlertActions">
+              <button type="button" className="lrrAiBtn" onClick={aiRetry}>
+                Retry
+              </button>
+              <button type="button" className="lrrAiBtn ghost" onClick={() => setAiErr("")}>
+                Dismiss
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="lrrAiTabs" role="tablist" aria-label="LegalAI tabs">
+          <button
+            type="button"
+            className={`lrrAiTab ${aiTab === "summary" ? "isActive" : ""}`}
+            onClick={() => setAiTab("summary")}
+          >
+            Summary
+          </button>
+          <button
+            type="button"
+            className={`lrrAiTab ${aiTab === "chat" ? "isActive" : ""}`}
+            onClick={() => setAiTab("chat")}
+          >
+            Chat
+          </button>
+          <button
+            type="button"
+            className={`lrrAiTab ${aiTab === "related" ? "isActive" : ""}`}
+            onClick={() => setAiTab("related")}
+          >
+            Related cases
+          </button>
+        </div>
+
+        {/* Suggested prompts */}
+        <div className="lrrAiChips" aria-label="Suggested prompts">
+          {suggestedPrompts.slice(0, 6).map((p, idx) => (
+            <button
+              key={idx}
+              type="button"
+              className="lrrAiChip"
+              onClick={() => {
+                if (aiTab !== "chat") setAiTab("chat");
+                setChatInput(p);
+              }}
+              title="Use this prompt"
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+
+        {/* Body */}
+        <div className="lrrAiBody">
+          {aiTab === "summary" ? (
+            <div className="lrrAiCard">
+              <div className="lrrAiRow">
+                <div className="lrrAiSegment" role="group" aria-label="Summary type">
+                  <button
+                    type="button"
+                    className={`lrrAiSegBtn ${summaryType === "basic" ? "isOn" : ""}`}
+                    onClick={() => setSummaryType("basic")}
+                    title="Basic summary"
+                  >
+                    Basic
+                  </button>
+                  <button
+                    type="button"
+                    className={`lrrAiSegBtn ${summaryType === "extended" ? "isOn" : ""}`}
+                    onClick={() => setSummaryType("extended")}
+                    title="Extended summary"
+                  >
+                    Extended
+                  </button>
+                </div>
+
+                <div className="lrrAiRowActions">
+                  <button
+                    type="button"
+                    className="lrrAiBtn"
+                    disabled={aiBusy}
+                    onClick={() => aiGetCachedSummary(summaryType)}
+                    title="Load cached summary (if any)"
+                  >
+                    Load cached
+                  </button>
+
+                  <button
+                    type="button"
+                    className="lrrAiBtn primary"
+                    disabled={aiBusy}
+                    onClick={() => aiGenerateSummary({ type: summaryType, forceRegenerate: false })}
+                    title="Generate summary (uses cache if available server-side)"
+                  >
+                    Generate
+                  </button>
+
+                  <button
+                    type="button"
+                    className="lrrAiBtn ghost"
+                    disabled={aiBusy}
+                    onClick={() => aiGenerateSummary({ type: summaryType, forceRegenerate: true })}
+                    title="Force regenerate (refresh cached output)"
+                  >
+                    Force regenerate
+                  </button>
+                </div>
+              </div>
+
+              {aiBusy ? (
+                <div className="lrrAiLoading">
+                  <div className="lrrAiDots" aria-hidden="true">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                  <div className="lrrAiLoadingTxt">Generating…</div>
+                </div>
+              ) : null}
+
+              {showSummaryEmpty ? (
+                <div className="lrrAiEmpty">
+                  <div className="lrrAiEmptyTitle">No summary loaded yet</div>
+                  <div className="lrrAiEmptyMsg">
+                    Click <b>Generate</b> to create a structured summary, or <b>Load cached</b> if you generated one before.
+                  </div>
+                </div>
+              ) : null}
+
+              {hasSomeSummary ? (
+                <div className="lrrAiAnswer">
+                  <div className="lrrAiAnswerTop">
+                    <div className="lrrAiAnswerMeta">
+                      <span className="pill">Type: {summaryMeta?.type || summaryType}</span>
+                      {summaryMeta?.cached ? <span className="pill soft">cached</span> : null}
+                    </div>
+
+                    <div className="lrrAiAnswerActions">
+                      <button type="button" className="lrrAiIcon" onClick={() => copyText(summaryText)} title="Copy">
+                        Copy
+                      </button>
+                      <button
+                        type="button"
+                        className="lrrAiIcon"
+                        onClick={() => copyText(bulletsFromText(summaryText))}
+                        title="Copy as bullets"
+                      >
+                        Copy as bullets
+                      </button>
+                    </div>
+                  </div>
+
+                  <RichText text={summaryText} />
+                </div>
+              ) : null}
+            </div>
+          ) : aiTab === "related" ? (
+            <div className="lrrAiCard">
+              <div className="lrrAiRow">
+                <div className="lrrAiNote">
+                  Generate AI-suggested related cases (Kenya + Foreign). Always verify relevance and citations.
+                </div>
+
+                <div className="lrrAiRowActions">
+                  <button
+                    type="button"
+                    className="lrrAiBtn primary"
+                    disabled={aiBusy}
+                    onClick={aiGenerateRelatedCases}
+                  >
+                    Generate related cases
+                  </button>
+                </div>
+              </div>
+
+              {aiBusy ? (
+                <div className="lrrAiLoading">
+                  <div className="lrrAiDots" aria-hidden="true">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                  <div className="lrrAiLoadingTxt">Working…</div>
+                </div>
+              ) : null}
+
+              <div className="lrrAiChat">
+                {messages
+                  .filter((m) => m?.kind === "related")
+                  .slice(-3)
+                  .map((m) => (
+                    <div key={m.id} className="lrrAiMsg assistant">
+                      <div className="bubble">
+                        <div className="lrrAiMsgActions">
+                          <button type="button" className="lrrAiMini" onClick={() => copyText(m.content)} title="Copy">
+                            Copy
+                          </button>
+                          <button
+                            type="button"
+                            className="lrrAiMini"
+                            onClick={() => copyText(bulletsFromText(m.content))}
+                            title="Copy as bullets"
+                          >
+                            Copy bullets
+                          </button>
+                        </div>
+                        <RichText text={m.content} />
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          ) : (
+            <div className="lrrAiCard lrrAiCard--chat">
+              <div className="lrrAiChat">
+                {messages.map((m) => {
+                  const isUser = m.role === "user";
+                  const isTyping = m.kind === "typing";
+                  return (
+                    <div key={m.id} className={`lrrAiMsg ${isUser ? "user" : "assistant"}`}>
+                      <div className="bubble">
+                        {!isUser && !isTyping ? (
+                          <div className="lrrAiMsgActions">
+                            <button type="button" className="lrrAiMini" onClick={() => copyText(m.content)} title="Copy">
+                              Copy
+                            </button>
+                            <button
+                              type="button"
+                              className="lrrAiMini"
+                              onClick={() => copyText(bulletsFromText(m.content))}
+                              title="Copy as bullets"
+                            >
+                              Copy bullets
+                            </button>
+                          </div>
+                        ) : null}
+
+                        {isTyping ? (
+                          <div className="lrrAiTyping" aria-label="Assistant is typing">
+                            <span />
+                            <span />
+                            <span />
+                          </div>
+                        ) : (
+                          <RichText text={m.content} />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div ref={chatEndRef} />
+              </div>
+
+              <div className="lrrAiComposer">
+                <textarea
+                  className="lrrAiInput"
+                  value={chatInput}
+                  placeholder="Ask LegalAI about issues, holding, ratio, citations, arguments…"
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                      e.preventDefault();
+                      aiSendChat(chatInput);
+                    }
+                  }}
+                />
+                <div className="lrrAiComposerActions">
+                  <div className="lrrAiHint">Tip: Ctrl/⌘ + Enter to send</div>
+                  <button
+                    type="button"
+                    className="lrrAiBtn primary"
+                    disabled={aiBusy || !safeTrim(chatInput)}
+                    onClick={() => aiSendChat(chatInput)}
+                  >
+                    Send
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="lrr2Wrap" data-theme={readingTheme}>
@@ -1337,144 +2097,140 @@ export default function LawReportReader() {
               setContentOpen(false);
             }}
           >
-            LegalAI Summary <span className="lrr2TabBadge">AI</span>
+            LegalAI <span className="lrr2TabBadge">AI</span>
           </button>
         ) : (
           <button type="button" role="tab" aria-selected={false} className="lrr2Tab isDisabled" disabled>
-            LegalAI Summary <span className="lrr2TabBadge lock">Locked</span>
+            LegalAI <span className="lrr2TabBadge lock">Locked</span>
           </button>
         )}
       </div>
 
       <section className="lrr2Content">
         {view === "ai" ? (
-          aiAllowed ? (
-            <div className="lrr2Panel lrr2Panel--tight">
-              <div className="lrr2PanelHead">
-                <div className="lrr2PanelHeadLeft">
-                  <div className="lrr2PanelTitle">LegalAI Summary</div>
-                  <div className="lrr2PanelSub">Enabled (Step 3: re-plug your full AI panel cleanly).</div>
-                </div>
-              </div>
-              <div className="lrr2PanelEmpty">AI panel will be re-attached after Step 2 is stable.</div>
-            </div>
-          ) : (
-            <AiLockedPanel access={access} onGo={goUrl} />
-          )
+          <LegalAiPanel compact={false} />
         ) : !textHasContent ? (
           <div className="lrr2Empty">This report has no content yet.</div>
         ) : (
-          <article className="lrr2Article">
-            {/* Reader tools */}
-            <div className="lrr2TranscriptTools">
-              <div className="lrr2ReaderBar">
-                <div className="lrr2ReaderCluster">
-                  <button
-                    type="button"
-                    className="lrr2IconBtn"
-                    onClick={() => setFontScale((v) => Math.max(0.9, Number((v - 0.05).toFixed(2))))}
-                    title="Decrease text size"
-                    aria-label="Decrease text size"
-                  >
-                    <span className="lrr2IconBtnText">A−</span>
-                  </button>
+          <div className="lrr2Split">
+            {/* LEFT: Transcript */}
+            <article className="lrr2Article">
+              {/* Reader tools */}
+              <div className="lrr2TranscriptTools">
+                <div className="lrr2ReaderBar">
+                  <div className="lrr2ReaderCluster">
+                    <button
+                      type="button"
+                      className="lrr2IconBtn"
+                      onClick={() => setFontScale((v) => Math.max(0.9, Number((v - 0.05).toFixed(2))))}
+                      title="Decrease text size"
+                      aria-label="Decrease text size"
+                    >
+                      <span className="lrr2IconBtnText">A−</span>
+                    </button>
 
-                  <button
-                    type="button"
-                    className="lrr2IconBtn"
-                    onClick={() => setFontScale((v) => Math.min(1.2, Number((v + 0.05).toFixed(2))))}
-                    title="Increase text size"
-                    aria-label="Increase text size"
-                  >
-                    <span className="lrr2IconBtnText">A+</span>
-                  </button>
+                    <button
+                      type="button"
+                      className="lrr2IconBtn"
+                      onClick={() => setFontScale((v) => Math.min(1.2, Number((v + 0.05).toFixed(2))))}
+                      title="Increase text size"
+                      aria-label="Increase text size"
+                    >
+                      <span className="lrr2IconBtnText">A+</span>
+                    </button>
 
-                  <button
-                    type="button"
-                    className={`lrr2IconBtn ${serif ? "isOn" : ""}`}
-                    onClick={() => setSerif((v) => !v)}
-                    title={serif ? "Serif font (on)" : "Serif font (off)"}
-                    aria-label="Toggle serif font"
-                  >
-                    <span className="lrr2IconBtnText">Serif</span>
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      className={`lrr2IconBtn ${serif ? "isOn" : ""}`}
+                      onClick={() => setSerif((v) => !v)}
+                      title={serif ? "Serif font (on)" : "Serif font (off)"}
+                      aria-label="Toggle serif font"
+                    >
+                      <span className="lrr2IconBtnText">Serif</span>
+                    </button>
+                  </div>
 
-                <div className="lrr2ReaderCluster">
-                  <button
-                    type="button"
-                    className={`lrr2IconBtn ${readingTheme === "paper" ? "isOn" : ""}`}
-                    onClick={() => setReadingTheme("paper")}
-                    title="Paper theme"
-                    aria-label="Paper theme"
-                  >
-                    <span className="lrr2IconBtnText">Paper</span>
-                  </button>
+                  <div className="lrr2ReaderCluster">
+                    <button
+                      type="button"
+                      className={`lrr2IconBtn ${readingTheme === "paper" ? "isOn" : ""}`}
+                      onClick={() => setReadingTheme("paper")}
+                      title="Paper theme"
+                      aria-label="Paper theme"
+                    >
+                      <span className="lrr2IconBtnText">Paper</span>
+                    </button>
 
-                  <button
-                    type="button"
-                    className={`lrr2IconBtn ${readingTheme === "sepia" ? "isOn" : ""}`}
-                    onClick={() => setReadingTheme("sepia")}
-                    title="Sepia theme"
-                    aria-label="Sepia theme"
-                  >
-                    <span className="lrr2IconBtnText">Sepia</span>
-                  </button>
+                    <button
+                      type="button"
+                      className={`lrr2IconBtn ${readingTheme === "sepia" ? "isOn" : ""}`}
+                      onClick={() => setReadingTheme("sepia")}
+                      title="Sepia theme"
+                      aria-label="Sepia theme"
+                    >
+                      <span className="lrr2IconBtnText">Sepia</span>
+                    </button>
 
-                  <button
-                    type="button"
-                    className={`lrr2IconBtn ${readingTheme === "dark" ? "isOn" : ""}`}
-                    onClick={() => setReadingTheme("dark")}
-                    title="Dark theme"
-                    aria-label="Dark theme"
-                  >
-                    <span className="lrr2IconBtnText">Dark</span>
-                  </button>
+                    <button
+                      type="button"
+                      className={`lrr2IconBtn ${readingTheme === "dark" ? "isOn" : ""}`}
+                      onClick={() => setReadingTheme("dark")}
+                      title="Dark theme"
+                      aria-label="Dark theme"
+                    >
+                      <span className="lrr2IconBtnText">Dark</span>
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* ✅ One combined subscription card */}
-            <SubscriptionGateCard
-              isPremium={isPremium}
-              access={access}
-              isAdmin={isAdmin}
-              isInst={isInst}
-              isPublic={isPublic}
-              hasFullAccess={hasFullAccess}
-              onGo={goUrl}
-              onRefreshAccess={refreshAccessNow}
-            />
+              {/* Transcript */}
+              <div
+                className={[
+                  "lrr2Collapse",
+                  contentOpen ? "open" : "closed",
+                  `lrr2Theme-${readingTheme}`,
+                  fsClass,
+                  fontClass,
+                  preview.gated && preview.reachedLimit ? "isPreviewGated" : "",
+                ].join(" ")}
+              >
+                {preview.renderAsHtml ? (
+                  <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: preview.html }} />
+                ) : (
+                  <CaseContentWithGateBreak
+                    text={preview.text}
+                    showBreak={showInlineBreak}
+                    access={access}
+                    onGo={goUrl}
+                    onRefresh={refreshAccessNow}
+                  />
+                )}
+              </div>
 
-            {/* Transcript */}
-            <div
-              className={[
-                "lrr2Collapse",
-                contentOpen ? "open" : "closed",
-                `lrr2Theme-${readingTheme}`,
-                fsClass,
-                fontClass,
-                preview.gated && preview.reachedLimit ? "isPreviewGated" : "",
-              ].join(" ")}
-            >
-              {preview.renderAsHtml ? (
-                <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: preview.html }} />
-              ) : (
-                <CaseContentWithGateBreak
-                  text={preview.text}
-                  showBreak={showInlineBreak}
-                  access={access}
-                  onGo={goUrl}
-                  onRefresh={refreshAccessNow}
-                />
-              )}
-            </div>
+              {/* Sticky CTA if preview limit reached */}
+              {contentOpen && preview.gated && preview.reachedLimit ? <SubscribeGateOverlay access={access} onGo={goUrl} /> : null}
 
-            {/* Sticky CTA if preview limit reached */}
-            {contentOpen && preview.gated && preview.reachedLimit ? (
-              <SubscribeGateOverlay access={access} onGo={goUrl} />
+              {/* ✅ Lock guard moved BELOW transcript (as requested) */}
+              <SubscriptionGateCard
+                isPremium={isPremium}
+                access={access}
+                isAdmin={isAdmin}
+                isInst={isInst}
+                isPublic={isPublic}
+                hasFullAccess={hasFullAccess}
+                onGo={goUrl}
+                onRefreshAccess={refreshAccessNow}
+              />
+            </article>
+
+            {/* RIGHT: AI panel (desktop), stacked below on mobile via CSS */}
+            {shouldShowRightAiPanel ? (
+              <aside className="lrr2Aside">
+                <LegalAiPanel compact={true} />
+              </aside>
             ) : null}
-          </article>
+          </div>
         )}
       </section>
     </div>
