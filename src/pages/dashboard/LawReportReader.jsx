@@ -359,7 +359,6 @@ function buildDefaultCopyText({ report, title, llrNo }) {
   return parts.filter(Boolean).join("\n");
 }
 
-
 /** Mild “premium formatting” for chat replies that come as a single blob.
  *  - If the reply already contains markdown lists/headings, leave it.
  *  - If it’s one paragraph with many sentences, turn into a numbered list.
