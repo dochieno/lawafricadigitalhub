@@ -1005,6 +1005,8 @@ export default function LawReportReader() {
   const [fontScale, setFontScale] = useState(1);
   const [readingTheme, setReadingTheme] = useState("paper");
   const [serif, setSerif] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef(null);  
 
   const [progress, setProgress] = useState(0);
   const progressBarRef = useRef(null);
@@ -1332,6 +1334,28 @@ export default function LawReportReader() {
       cancelled = true;
     };
   }, [report, isInst, isPublic, isAdmin, isPremium]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+
+    function onKeyDown(e) {
+      if (e.key === "Escape") setSettingsOpen(false);
+    }
+
+    function onPointerDown(e) {
+      const el = settingsRef.current;
+      if (!el) return;
+      if (!el.contains(e.target)) setSettingsOpen(false);
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [settingsOpen]);
+
 
   useEffect(() => {
     const term = String(q || "").trim();
@@ -2381,13 +2405,114 @@ function parseSectionedSummary(text) {
     <div className="lrr2Wrap" data-theme={readingTheme}>
       <header className={`lrr2Header ${headerCompact ? "isCompact" : ""}`}>
         <div className="lrr2HeaderTop">
-          <div className="lrr2Brand">Law Africa Law Reports-Case File (Transcript)</div>
+          <div className="lrr2HeaderLeft">
+            <div className="lrr2BrandMark" aria-hidden="true">LA</div>
+            <div className="lrr2BrandBlock">
+              <div className="lrr2BrandTitle">LawAfrica</div>
+              <div className="lrr2BrandSub">Law Reports • Case File (Transcript)</div>
+            </div>
+          </div>
+
           <div className="lrr2HeaderRight">
+            {/* ⚙️ Reader settings (moved from transcript toolbar) */}
+            <div className="lrr2Settings" ref={settingsRef}>
+              <button
+                type="button"
+                className={`lrr2SettingsBtn ${settingsOpen ? "isOpen" : ""}`}
+                onClick={() => setSettingsOpen((v) => !v)}
+                aria-haspopup="menu"
+                aria-expanded={settingsOpen}
+                title="Reader settings"
+              >
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  />
+                  <path
+                    d="M19.4 13.5a8.2 8.2 0 0 0 .1-1.5 8.2 8.2 0 0 0-.1-1.5l2-1.6-2-3.4-2.4 1a7.9 7.9 0 0 0-2.6-1.5l-.4-2.6H10l-.4 2.6a7.9 7.9 0 0 0-2.6 1.5l-2.4-1-2 3.4 2 1.6A8.2 8.2 0 0 0 4.5 12c0 .5 0 1 .1 1.5l-2 1.6 2 3.4 2.4-1c.8.6 1.7 1.1 2.6 1.5l.4 2.6h4l.4-2.6c.9-.4 1.8-.9 2.6-1.5l2.4 1 2-3.4-2-1.6Z"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+
+                <span className="txt">Reader settings</span>
+
+                <span className="lrr2SettingsMini">
+                  <span className="pill">{Math.round(fontScale * 100)}%</span>
+                  <span className="pill">{serif ? "Serif" : "Sans"}</span>
+                  <span className="pill">{readingTheme}</span>
+                </span>
+              </button>
+
+              {settingsOpen ? (
+                <div className="lrr2SettingsMenu" role="menu" aria-label="Reader settings menu">
+                  <div className="lrr2SettingsGroup">
+                    <div className="lrr2SettingsLabel">Text</div>
+                    <div className="lrr2SettingsRow">
+                      <button
+                        type="button"
+                        className="lrr2SetBtn"
+                        onClick={() => setFontScale((v) => Math.max(0.9, Number((v - 0.05).toFixed(2))))}
+                      >
+                        A−
+                      </button>
+                      <button
+                        type="button"
+                        className="lrr2SetBtn"
+                        onClick={() => setFontScale((v) => Math.min(1.2, Number((v + 0.05).toFixed(2))))}
+                      >
+                        A+
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`lrr2SetBtn ${serif ? "isOn" : ""}`}
+                        onClick={() => setSerif((v) => !v)}
+                      >
+                        Serif
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="lrr2SettingsGroup">
+                    <div className="lrr2SettingsLabel">Theme</div>
+                    <div className="lrr2SettingsRow">
+                      <button
+                        type="button"
+                        className={`lrr2SetBtn ${readingTheme === "paper" ? "isOn" : ""}`}
+                        onClick={() => setReadingTheme("paper")}
+                      >
+                        Paper
+                      </button>
+                      <button
+                        type="button"
+                        className={`lrr2SetBtn ${readingTheme === "sepia" ? "isOn" : ""}`}
+                        onClick={() => setReadingTheme("sepia")}
+                      >
+                        Sepia
+                      </button>
+                      <button
+                        type="button"
+                        className={`lrr2SetBtn ${readingTheme === "dark" ? "isOn" : ""}`}
+                        onClick={() => setReadingTheme("dark")}
+                      >
+                        Dark
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
             <button className="lrr2LinkBtn" onClick={() => navigate("/dashboard/law-reports")}>
               ← Back
             </button>
           </div>
         </div>
+
 
         <div className="lrr2SearchRow">
           <div className="lrr2SearchBox" ref={searchBoxRef}>
@@ -2669,187 +2794,66 @@ function parseSectionedSummary(text) {
           )
         ) : view === "split" ? (
           <div className="lrr2Split">
-            <article className="lrr2Article">
-              <div className="lrr2TranscriptTools">
-                <div className="lrr2ReaderBar">
-                  <div className="lrr2ReaderCluster">
-                    <button
-                      type="button"
-                      className="lrr2IconBtn"
-                      onClick={() => setFontScale((v) => Math.max(0.9, Number((v - 0.05).toFixed(2))))}
-                      title="Decrease text size"
-                      aria-label="Decrease text size"
-                    >
-                      <span className="lrr2IconBtnText">A−</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className="lrr2IconBtn"
-                      onClick={() => setFontScale((v) => Math.min(1.2, Number((v + 0.05).toFixed(2))))}
-                      title="Increase text size"
-                      aria-label="Increase text size"
-                    >
-                      <span className="lrr2IconBtnText">A+</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`lrr2IconBtn ${serif ? "isOn" : ""}`}
-                      onClick={() => setSerif((v) => !v)}
-                      title={serif ? "Serif font (on)" : "Serif font (off)"}
-                      aria-label="Toggle serif font"
-                    >
-                      <span className="lrr2IconBtnText">Serif</span>
-                    </button>
-                  </div>
-
-                  <div className="lrr2ReaderCluster">
-                    <button
-                      type="button"
-                      className={`lrr2IconBtn ${readingTheme === "paper" ? "isOn" : ""}`}
-                      onClick={() => setReadingTheme("paper")}
-                      title="Paper theme"
-                      aria-label="Paper theme"
-                    >
-                      <span className="lrr2IconBtnText">Paper</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`lrr2IconBtn ${readingTheme === "sepia" ? "isOn" : ""}`}
-                      onClick={() => setReadingTheme("sepia")}
-                      title="Sepia theme"
-                      aria-label="Sepia theme"
-                    >
-                      <span className="lrr2IconBtnText">Sepia</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`lrr2IconBtn ${readingTheme === "dark" ? "isOn" : ""}`}
-                      onClick={() => setReadingTheme("dark")}
-                      title="Dark theme"
-                      aria-label="Dark theme"
-                    >
-                      <span className="lrr2IconBtnText">Dark</span>
-                    </button>
-                  </div>
+          <article className="lrr2Article lrr2PanelShell">
+            <div className="lrr2PanelHead">
+              <div className="lrr2PanelHeadLeft">
+                <div className="lrr2PanelTitle">Transcript</div>
+                <div className="lrr2PanelSub">
+                  {isPremium && !hasFullAccess ? "Preview mode • Subscribe to unlock full text" : "Full text available"}
                 </div>
               </div>
 
-              <div
-                className={[
-                  "lrr2Collapse",
-                  contentOpen ? "open" : "closed",
-                  `lrr2Theme-${readingTheme}`,
-                  fsClass,
-                  fontClass,
-                  preview.gated && preview.reachedLimit ? "isPreviewGated" : "",
-                ].join(" ")}
-              >
-                {preview.renderAsHtml ? (
-                  <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: preview.html }} />
+              <div className="lrr2PanelHeadRight">
+                {isPremium ? (
+                  <AccessStatusChip access={access} isPremium={isPremium} isAdmin={isAdmin} hasFullAccess={hasFullAccess} />
                 ) : (
-                  <CaseContentWithGateBreak
-                    text={preview.text}
-                    showBreak={showInlineBreak}
-                    access={access}
-                    onGo={goUrl}
-                    onRefresh={refreshAccessNow}
-                  />
+                  <span className="lrr2PanelPill ok">Free</span>
                 )}
               </div>
+            </div>
 
-              {contentOpen && preview.gated && preview.reachedLimit ? (
-                <SubscribeGateOverlay access={access} onGo={goUrl} />
-              ) : null}
+            {/* transcript body */}
+            <div
+              className={[
+                "lrr2Collapse",
+                contentOpen ? "open" : "closed",
+                `lrr2Theme-${readingTheme}`,
+                fsClass,
+                fontClass,
+                preview.gated && preview.reachedLimit ? "isPreviewGated" : "",
+              ].join(" ")}
+            >
+              {preview.renderAsHtml ? (
+                <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: preview.html }} />
+              ) : (
+                <CaseContentWithGateBreak
+                  text={preview.text}
+                  showBreak={showInlineBreak}
+                  access={access}
+                  onGo={goUrl}
+                  onRefresh={refreshAccessNow}
+                />
+              )}
+            </div>
+            {contentOpen && preview.gated && preview.reachedLimit ? <SubscribeGateOverlay access={access} onGo={goUrl} /> : null}
 
-              <SubscriptionGateCard
-                isPremium={isPremium}
-                access={access}
-                isAdmin={isAdmin}
-                isInst={isInst}
-                isPublic={isPublic}
-                hasFullAccess={hasFullAccess}
-                onGo={goUrl}
-                onRefreshAccess={refreshAccessNow}
-              />
-            </article>
-
+            <SubscriptionGateCard
+              isPremium={isPremium}
+              access={access}
+              isAdmin={isAdmin}
+              isInst={isInst}
+              isPublic={isPublic}
+              hasFullAccess={hasFullAccess}
+              onGo={goUrl}
+              onRefreshAccess={refreshAccessNow}
+            />
+          </article>
             <aside className="lrr2Aside">
               {aiAllowed ? <LegalAiPanel compact={true} /> : <AiLockedPanel access={access} onGo={goUrl} />}
             </aside>
           </div>
         ) : (
           <article className="lrr2Article">
-            <div className="lrr2TranscriptTools">
-              <div className="lrr2ReaderBar">
-                <div className="lrr2ReaderCluster">
-                  <button
-                    type="button"
-                    className="lrr2IconBtn"
-                    onClick={() => setFontScale((v) => Math.max(0.9, Number((v - 0.05).toFixed(2))))}
-                    title="Decrease text size"
-                    aria-label="Decrease text size"
-                  >
-                    <span className="lrr2IconBtnText">A−</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="lrr2IconBtn"
-                    onClick={() => setFontScale((v) => Math.min(1.2, Number((v + 0.05).toFixed(2))))}
-                    title="Increase text size"
-                    aria-label="Increase text size"
-                  >
-                    <span className="lrr2IconBtnText">A+</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`lrr2IconBtn ${serif ? "isOn" : ""}`}
-                    onClick={() => setSerif((v) => !v)}
-                    title={serif ? "Serif font (on)" : "Serif font (off)"}
-                    aria-label="Toggle serif font"
-                  >
-                    <span className="lrr2IconBtnText">Serif</span>
-                  </button>
-                </div>
-
-                <div className="lrr2ReaderCluster">
-                  <button
-                    type="button"
-                    className={`lrr2IconBtn ${readingTheme === "paper" ? "isOn" : ""}`}
-                    onClick={() => setReadingTheme("paper")}
-                    title="Paper theme"
-                    aria-label="Paper theme"
-                  >
-                    <span className="lrr2IconBtnText">Paper</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`lrr2IconBtn ${readingTheme === "sepia" ? "isOn" : ""}`}
-                    onClick={() => setReadingTheme("sepia")}
-                    title="Sepia theme"
-                    aria-label="Sepia theme"
-                  >
-                    <span className="lrr2IconBtnText">Sepia</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`lrr2IconBtn ${readingTheme === "dark" ? "isOn" : ""}`}
-                    onClick={() => setReadingTheme("dark")}
-                    title="Dark theme"
-                    aria-label="Dark theme"
-                  >
-                    <span className="lrr2IconBtnText">Dark</span>
-                  </button>
-                </div>
-              </div>
-            </div>
 
             <div
               className={[
