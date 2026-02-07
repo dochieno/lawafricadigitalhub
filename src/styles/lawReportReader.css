@@ -2469,3 +2469,31 @@
 .lrr2Wrap[data-theme="dark"] .lrrAiSectionHead {
   border-bottom-color: rgba(148,163,184,0.18);
 }
+/* Keep body text normal-weight; only headings bold */
+.lrrAi,
+.lrrAiCard,
+.lrrAiAnswer,
+.lrrAiMsg .bubble,
+.lrrAiSectionList,
+.lrrAiSectionList li,
+.lrrAiP,
+.lrrAiFmt p,
+.lrrAiFmt li {
+  font-weight: 400;
+}
+
+/* Headings / labels can stay bold */
+.lrrAiTitle,
+.lrrAiSectionHead .ttl,
+.lrrAiH,
+.lrrAiTakeawaysSum .kpttl,
+.lrrAiCaseTitle {
+  font-weight: 700;
+}
+
+/* Title outside cards */
+.lrrAiCaseTitle {
+  margin: 10px 2px 14px;
+  font-size: 14px;
+  line-height: 1.35;
+}

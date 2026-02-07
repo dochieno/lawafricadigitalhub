@@ -1486,44 +1486,58 @@ export default function LawReportReader() {
     const hasSomeSummary = !!safeTrim(summaryText);
     const showSummaryEmpty = aiTab === "summary" && !hasSomeSummary && !aiBusy;
 
-    function parseSectionedSummary(text) {
-      const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
+      function parseSectionedSummary(text) {
+        const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
 
-      const sections = [];
-      let cur = null;
+        let caseTitle = "";
+        const sections = [];
+        let cur = null;
 
-      const isHeader = (s) => /^[A-Z][A-Z0-9\s/()-]{2,}:\s*$/.test(s.trim());
+        // headers like "SUMMARY:" "FACTS:" "HOLDING/DECISION:" etc.
+        const isHeader = (s) => /^[A-Z][A-Z0-9\s/()-]{2,}:\s*$/.test(s.trim());
 
-      function pushCur() {
-        if (!cur) return;
-        cur.items = cur.items.map((x) => x.trim()).filter(Boolean);
-        if (cur.items.length) sections.push(cur);
-        cur = null;
-      }
-
-      for (const raw of lines) {
-        const line = raw.trimEnd();
-        if (!line.trim()) continue;
-
-        if (isHeader(line)) {
-          pushCur();
-          cur = { title: line.trim().replace(/:\s*$/, ""), items: [] };
-          continue;
+        function pushCur() {
+          if (!cur) return;
+          cur.items = cur.items.map((x) => x.trim()).filter(Boolean);
+          if (cur.items.length) sections.push(cur);
+          cur = null;
         }
 
-        const bullet = line.trim().replace(/^[-•]\s+/, "");
-        if (!cur) cur = { title: "SUMMARY", items: [] };
-        cur.items.push(bullet);
+        for (const raw of lines) {
+          const line = raw.trim();
+          if (!line) continue;
+
+          // Extract TITLE (don’t put it in cards)
+          const mTitle = line.match(/^TITLE\s*:\s*(.+)$/i);
+          if (mTitle?.[1]) {
+            caseTitle = mTitle[1].trim();
+            continue;
+          }
+
+          if (isHeader(line)) {
+            pushCur();
+            cur = { title: line.replace(/:\s*$/, "").trim(), items: [] };
+            continue;
+          }
+
+          // normalize bullet
+          const cleaned = line.replace(/^[-•]\s+/, "").trim();
+          if (!cleaned) continue;
+
+          if (!cur) cur = { title: "SUMMARY", items: [] };
+          cur.items.push(cleaned);
+        }
+
+        pushCur();
+
+        // If no sections detected, use paragraphs
+        if (!sections.length && String(text || "").trim()) {
+          return { caseTitle, sections: [{ title: "SUMMARY", items: splitIntoParagraphs(text).slice(0, 20) }] };
+        }
+
+        return { caseTitle, sections };
       }
 
-      pushCur();
-
-      if (!sections.length && String(text || "").trim()) {
-        return [{ title: "SUMMARY", items: splitIntoParagraphs(text).slice(0, 20) }];
-      }
-
-      return sections;
-    }
 
     function extractKeyTakeaways(sections) {
       const kp = sections.find((s) => s.title.toUpperCase().includes("KEY TAKEAWAYS"));
@@ -1698,13 +1712,15 @@ export default function LawReportReader() {
                   </div>
 
                   {(() => {
-                    const sections = parseSectionedSummary(summaryText);
+                  const parsed = parseSectionedSummary(summaryText);
+                  const sections = parsed.sections;
 
-                    const takeaways = extractKeyTakeaways(sections);
-                    const mainSections = sections.filter((s) => !s.title.toUpperCase().includes("KEY TAKEAWAYS"));
+                  const takeaways = extractKeyTakeaways(sections);
+                  const mainSections = sections.filter((s) => !s.title.toUpperCase().includes("KEY TAKEAWAYS"));
 
                     return (
                       <>
+                      {parsed.caseTitle ? <div className="lrrAiCaseTitle">{parsed.caseTitle}</div> : null}
                         <div className="lrrAiSections">
                           {mainSections.map((s, idx) => (
                             <section key={`${s.title}_${idx}`} className="lrrAiSectionCard">
@@ -1746,9 +1762,13 @@ export default function LawReportReader() {
                     );
                   })()}
 
-                  <div className="lrrAiRawFallback">
-                    <RichText text={summaryText} />
-                  </div>
+                  <details className="lrrAiRawToggle">
+                    <summary className="lrrAiRawToggleSum">Show raw output</summary>
+                    <div className="lrrAiRawFallback">
+                      <RichText text={summaryText} />
+                    </div>
+                  </details>
+
                 </div>
               ) : null}
             </div>
