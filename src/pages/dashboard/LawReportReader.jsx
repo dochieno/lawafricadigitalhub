@@ -1485,75 +1485,135 @@ export default function LawReportReader() {
     const hasSomeSummary = !!safeTrim(summaryText);
     const showSummaryEmpty = aiTab === "summary" && !hasSomeSummary && !aiBusy;
 
-    function parseSectionedSummary(text) {
-      const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
+function parseSectionedSummary(text) {
+  const raw = String(text || "").replace(/\r\n/g, "\n").trim();
+  const lines = raw.split("\n");
 
-      let caseTitle = "";
-      const sections = [];
-      let cur = null;
+  // Known section headings we want to render like your screenshot
+  const ALIASES = [
+    { key: "TITLE", labels: ["TITLE"] },
 
-      const isHeader = (s) => /^[A-Z][A-Z0-9\s/()-]{2,}:\s*$/.test(s.trim());
+    { key: "FACTS", labels: ["FACTS"] },
+    { key: "ISSUES", labels: ["ISSUES", "ISSUE"] },
+    { key: "HOLDING", labels: ["HOLDING/DECISION", "HOLDING", "DECISION", "HELD", "HOLDING & DECISION"] },
+    { key: "REASONING", labels: ["REASONING", "ANALYSIS", "DISCUSSION", "RATIONALE"] },
+    { key: "ORDERS", labels: ["ORDERS", "ORDER", "DISPOSITION"] },
+    { key: "RULE", labels: ["RULE", "RULE OF LAW", "LEGAL PRINCIPLE"] },
+    { key: "AUTHORITIES", labels: ["AUTHORITIES", "CASES CITED", "CITED CASES", "STATUTES", "STATUTES CITED"] },
+  ];
 
-      function pushCur() {
-        if (!cur) return;
-        cur.items = cur.items.map((x) => x.trim()).filter(Boolean);
-        if (cur.items.length) sections.push(cur);
-        cur = null;
-      }
+  const normLabel = (s) =>
+    String(s || "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .replace(/:$/, "")
+      .toUpperCase();
 
-      for (const raw of lines) {
-        const line = raw.trim();
-        if (!line) continue;
+  const labelToKey = new Map();
+  for (const a of ALIASES) for (const l of a.labels) labelToKey.set(normLabel(l), a.key);
 
-        const mTitle = line.match(/^TITLE\s*:\s*(.+)$/i);
-        if (mTitle?.[1]) {
-          caseTitle = mTitle[1].trim();
-          continue;
-        }
+  const looksLikeHeader = (line) => {
+    const t = normLabel(line);
+    // matches "FACTS:" or "FACTS"
+    if (labelToKey.has(t)) return true;
+    // matches "FACTS:" where t already stripped, also allow A-Z headings ending with :
+    if (/^[A-Z][A-Z0-9\s/()-]{2,}:$/.test(String(line || "").trim())) return true;
+    return false;
+  };
 
-        if (isHeader(line)) {
-          pushCur();
-          cur = { title: line.replace(/:\s*$/, "").trim(), items: [] };
-          continue;
-        }
+  const cleanItem = (s) => String(s || "").replace(/^[-•]\s+/, "").replace(/^\d+\.\s+/, "").trim();
 
-        const cleaned = line.replace(/^[-•]\s+/, "").trim();
-        if (!cleaned) continue;
+  const sections = [];
+  let caseTitle = "";
+  let cur = null;
 
-        if (!cur) cur = { title: "SUMMARY", items: [] };
-        cur.items.push(cleaned);
-      }
+  const pushCur = () => {
+    if (!cur) return;
 
+    // turn long lines into bullets if needed
+    const items = (cur.items || [])
+      .map((x) => cleanItem(x))
+      .filter(Boolean);
+
+    // If we got only 1 mega sentence, split by punctuation into bullets (keeps your neat list style)
+    let finalItems = items;
+    if (items.length === 1 && items[0].length > 140) {
+      const parts = items[0]
+        .split(/(?<=[.!?])\s+/)
+        .map((x) => x.trim())
+        .filter(Boolean);
+      if (parts.length >= 2) finalItems = parts;
+    }
+
+    if (finalItems.length) sections.push({ key: cur.key, title: cur.title, items: finalItems });
+    cur = null;
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    // capture "TITLE: something"
+    const mTitle = line.match(/^TITLE\s*:\s*(.+)$/i);
+    if (mTitle?.[1]) {
+      caseTitle = mTitle[1].trim();
+      continue;
+    }
+
+    // capture headers like "FACTS:" or "FACTS"
+    if (looksLikeHeader(line)) {
       pushCur();
 
-      // Fallback: no sections detected -> paragraphs
-      if (!sections.length && String(text || "").trim()) {
-        return { caseTitle, sections: [{ title: "SUMMARY", items: splitIntoParagraphs(text).slice(0, 20) }] };
-      }
+      const label = normLabel(line);
+      const key = labelToKey.get(label) || labelToKey.get(label.replace(/:$/, "")) || label;
 
-      // Merge duplicate section titles + de-dup items
-      const merged = new Map();
-      for (const s of sections) {
-        const key = String(s.title || "").trim().toUpperCase();
-        if (!merged.has(key)) merged.set(key, { title: s.title, items: [] });
-        merged.get(key).items.push(...(s.items || []));
-      }
-
-      const out = Array.from(merged.values()).map((s) => {
-        const seen = new Set();
-        const items = [];
-        for (const it of s.items || []) {
-          const k = String(it || "").trim().toLowerCase();
-          if (!k) continue;
-          if (seen.has(k)) continue;
-          seen.add(k);
-          items.push(it);
-        }
-        return { title: s.title, items };
-      });
-
-      return { caseTitle, sections: out };
+      cur = { key, title: label.replace(/:$/, ""), items: [] };
+      continue;
     }
+
+    // If we haven't started a section yet, treat as TITLE if it looks like a case name
+    if (!cur && !caseTitle && line.length < 180 && / v /i.test(line)) {
+      caseTitle = line;
+      continue;
+    }
+
+    if (!cur) {
+      // fallback: everything becomes SUMMARY if no explicit headings exist
+      cur = { key: "SUMMARY", title: "SUMMARY", items: [] };
+    }
+
+    cur.items.push(line);
+  }
+
+  pushCur();
+
+  // Merge duplicates by key + de-dupe items
+  const merged = new Map();
+  for (const s of sections) {
+    const k = String(s.key || s.title || "SUMMARY").toUpperCase();
+    if (!merged.has(k)) merged.set(k, { key: k, title: s.title, items: [] });
+    merged.get(k).items.push(...(s.items || []));
+  }
+
+  const deduped = Array.from(merged.values()).map((s) => {
+    const seen = new Set();
+    const out = [];
+    for (const it of s.items || []) {
+      const kk = cleanItem(it).toLowerCase();
+      if (!kk || seen.has(kk)) continue;
+      seen.add(kk);
+      out.push(it);
+    }
+    return { ...s, items: out };
+  });
+
+  // Preferred order (matches your screenshot vibe)
+  const ORDER = ["FACTS", "ISSUES", "HOLDING", "REASONING", "ORDERS", "RULE", "AUTHORITIES", "SUMMARY"];
+  deduped.sort((a, b) => ORDER.indexOf(a.key) - ORDER.indexOf(b.key));
+
+  return { caseTitle, sections: deduped };
+}
+
 
     function extractKeyTakeaways(sections) {
       const isKpTitle = (title) => {
@@ -1769,12 +1829,14 @@ export default function LawReportReader() {
 
                   {(() => {
                     const parsed = parseSectionedSummary(summaryText);
-                    const sections = parsed.sections;
+                    const sections = Array.isArray(parsed?.sections) ? parsed.sections : [];
 
+                    // Optional: keep your "KEY TAKEAWAYS" extraction if you still want it
                     const takeaways = extractKeyTakeaways(sections);
 
+                    // Remove takeaways section from the main stack (so it doesn't appear twice)
                     const mainSections = sections.filter((s) => {
-                      const t = String(s.title || "").toUpperCase();
+                      const t = String(s?.title || s?.key || "").toUpperCase();
                       return !(
                         t.includes("KEY TAKEAWAYS") ||
                         t.includes("KEY POINTS") ||
@@ -1785,30 +1847,46 @@ export default function LawReportReader() {
                       );
                     });
 
-                    return (
-                      <>
-                        {/* Title is displayed once (NOT as a card) */}
-                        {parsed.caseTitle ? <div className="lrrAiCaseTitle">{parsed.caseTitle}</div> : null}
+                    // Map headings to tones (left rail colors in CSS)
+                    const toneFor = (s) => {
+                      const t = String(s?.title || s?.key || "").toUpperCase();
+                      if (t.includes("FACT")) return "facts";
+                      if (t.includes("ISSUE")) return "issues";
+                      if (t.includes("HOLD") || t.includes("DECISION") || t.includes("HELD")) return "holding";
+                      if (t.includes("REASON") || t.includes("ANALYS") || t.includes("DISCUSS") || t.includes("RATION")) return "reasoning";
+                      if (t.includes("ORDER") || t.includes("DISPOSITION")) return "orders";
+                      if (t.includes("RULE") || t.includes("PRINCIPLE")) return "rule";
+                      if (t.includes("AUTHOR") || t.includes("CITED") || t.includes("STATUTE")) return "authorities";
+                      return "summary";
+                    };
 
-                        {/* 1 card per row (full width) */}
-                        <div className="lrrAiSections lrrAiSections--single">
+                    return (
+                      <div className="lrrAiCaseLayout">
+                        {/* Title is displayed once (NOT as a card) */}
+                        {parsed?.caseTitle ? <div className="lrrAiCaseTitle">{parsed.caseTitle}</div> : null}
+
+                        {/* Stacked cards like your screenshot */}
+                        <div className="lrrAiStack">
                           {mainSections.map((s, idx) => (
-                            <section key={`${s.title}_${idx}`} className="lrrAiSectionCard lrrAiSectionCard--full">
-                              <div className="lrrAiSectionHead">
-                                <span className="dot" aria-hidden="true" />
-                                <div className="ttl">{s.title}</div>
+                            <section
+                              key={`${s?.title || s?.key || "SEC"}_${idx}`}
+                              className={`lrrAiSCard lrrAiTone-${toneFor(s)}`}
+                            >
+                              <div className="lrrAiSHead">
+                                <span className="lrrAiSPill">{s?.title || s?.key || "SUMMARY"}</span>
                               </div>
 
-                              <ol className="lrrAiSectionList lrrAiSectionList--numbered">
-                                {s.items.map((it, i2) => (
+                              <ul className="lrrAiSBullets">
+                                {(s?.items || []).map((it, i2) => (
                                   <li key={i2}>{it}</li>
                                 ))}
-                              </ol>
+                              </ul>
                             </section>
                           ))}
                         </div>
 
-                        {takeaways.length ? (
+                        {/* Optional takeaways block (keep if you like it) */}
+                        {takeaways?.length ? (
                           <details className="lrrAiTakeaways" open>
                             <summary className="lrrAiTakeawaysSum">
                               <span className="kpttl">KEY TAKEAWAYS</span>
@@ -1819,18 +1897,19 @@ export default function LawReportReader() {
                             </summary>
 
                             <div className="lrrAiKpGrid">
-                              {takeaways.map((x, idx) => (
-                                <div key={x.id} className="lrrAiKpCard">
+                              {takeaways.map((x, i) => (
+                                <div key={x.id || i} className="lrrAiKpCard">
                                   <div className="lrrAiKpText">{x.text}</div>
-                                  <div className="lrrAiKpBadge">{`KP${idx + 1}`}</div>
+                                  <div className="lrrAiKpBadge">{`KP${i + 1}`}</div>
                                 </div>
                               ))}
                             </div>
                           </details>
                         ) : null}
-                      </>
+                      </div>
                     );
                   })()}
+
 
                   <details className="lrrAiRawToggle">
                     <summary className="lrrAiRawToggleSum">Show raw output</summary>
