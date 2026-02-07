@@ -1007,6 +1007,7 @@ export default function LawReportReader() {
   const [serif, setSerif] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef(null);  
+  
 
   const [progress, setProgress] = useState(0);
   const progressBarRef = useRef(null);
