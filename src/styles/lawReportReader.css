@@ -125,6 +125,23 @@
     #f3eee6;
 }
 
+/* LegalAI disclaimer – subtle, centered, premium */
+.lrrAiFooterDisc{
+  margin-top: 10px;
+  text-align: center;
+
+  font-size: 12px;          /* smaller */
+  font-style: italic;       /* italic */
+  font-weight: 400;         /* not bold */
+
+  color: rgba(17, 24, 39, 0.55);
+}
+
+/* Dark mode support */
+.lrr2Wrap[data-theme="dark"] .lrrAiDisclaimer {
+  color: rgba(226, 232, 240, 0.55);
+}
+
 .lrr2Wrap[data-theme="dark"] {
   --ink: rgba(226, 232, 240, 0.92);
   --muted: rgba(148, 163, 184, 0.72);
