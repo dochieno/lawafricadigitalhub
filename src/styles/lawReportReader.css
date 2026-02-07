@@ -2272,3 +2272,51 @@
 }
 
 .lrr2SegTab.isDisabled{ opacity:.55; cursor:not-allowed; transform:none; }
+/* =========================================
+   Meta premium icon + tighter popover anchor
+   Paste at the bottom (overrides)
+========================================= */
+
+/* Ensure the icon wrapper is the positioning anchor */
+.lrr2MetaInfoMenu,
+.lrr2MetaMore {
+  position: relative;
+}
+
+/* Tighten popover position specifically for meta (not other menus) */
+.lrr2MenuPopover--meta {
+  top: calc(100% + 6px) !important;   /* was +10px */
+  right: 0 !important;
+  margin-top: 0 !important;
+  transform: translateY(0) !important;
+}
+
+/* If your meta card ever uses overflow:hidden (it does), keep popover above it */
+.lrr2MetaCard {
+  overflow: visible; /* popovers can escape the card */
+}
+
+/* Premium crown icon button styling */
+.lrr2IconBtn--premium {
+  border-color: color-mix(in srgb, var(--border) 70%, rgba(161, 24, 30, 0.18));
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+}
+
+.lrr2IconBtn--premium svg {
+  width: 18px;
+  height: 18px;
+  opacity: 0.95;
+}
+
+/* Premium hover: subtle “brand glow” */
+.lrr2IconBtn--premium:hover {
+  border-color: color-mix(in srgb, var(--border) 60%, rgba(161, 24, 30, 0.32));
+  box-shadow: 0 14px 34px rgba(161, 24, 30, 0.10);
+}
+
+/* Optional: premium tooltip (works with your [data-tip] system) */
+.lrr2IconBtn--premium[data-tip]::after {
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+}

@@ -2715,25 +2715,28 @@ function parseSectionedSummary(text) {
 
             {/* ✅ More info icon moved NEXT TO META (visible icon + tooltip) */}
             <div className="lrr2Menu lrr2MetaInfoMenu" ref={metaMoreRef}>
-              <button
-                type="button"
-                className="lrr2IconBtn ghost"
-                title="More case details"
-                aria-label="More case details"
-                aria-haspopup="menu"
-                aria-expanded={metaMoreOpen}
-                onClick={() => setMetaMoreOpen((v) => !v)}
-              >
-                {/* info icon */}
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
-                  <path d="M12 10.5v6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                  <path d="M12 7.5h.01" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" />
-                </svg>
-              </button>
-
+            <button
+              type="button"
+              className="lrr2IconBtn ghost lrr2IconBtn--premium"
+              title="Premium case details"
+              aria-label="Premium case details"
+              aria-haspopup="menu"
+              aria-expanded={metaMoreOpen}
+              onClick={() => setMetaMoreOpen((v) => !v)}
+            >
+              {/* premium crown icon */}
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M5 18h14M6 18l-1-9 5 4 3-7 3 7 5-4-1 9"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
               {metaMoreOpen ? (
-                <div className="lrr2MenuPopover" role="menu" aria-label="Case details">
+                <div className="lrr2MenuPopover lrr2MenuPopover--meta" role="menu" aria-label="Case details">
                   {report.caseNumber ? (
                     <div className="lrr2MenuMetaRow">
                       <div className="k">Case No.</div>
@@ -2928,54 +2931,6 @@ function parseSectionedSummary(text) {
             Split
           </button>
         </div>
-      </div>
-
-      
-      <div className="lrr2SegTabs" role="tablist" aria-label="Reader tabs">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={view === "content"}
-          className={`lrr2SegTab ${view === "content" ? "isActive" : ""}`}
-          onClick={() => {
-            setView("content");
-            setContentOpen(true);
-          }}
-          title="Transcript"
-        >
-          Transcript
-          {isPremium && !hasFullAccess ? <span className="lrr2SegBadge lock">🔒</span> : null}
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          aria-selected={view === "ai"}
-          className={`lrr2SegTab ${view === "ai" ? "isActive" : ""} ${aiAllowed ? "" : "isDisabled"}`}
-          onClick={() => {
-            if (!aiAllowed) return;
-            setView("ai");
-            setContentOpen(false);
-          }}
-          title={aiAllowed ? "LegalAI" : "LegalAI (subscribers only)"}
-          disabled={!aiAllowed}
-        >
-          LegalAI <span className="lrr2SegBadge ai">✨</span>
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          aria-selected={view === "split"}
-          className={`lrr2SegTab ${view === "split" ? "isActive" : ""}`}
-          onClick={() => {
-            setView("split");
-            setContentOpen(true);
-          }}
-          title="Split view (Transcript + LegalAI)"
-        >
-          Split
-        </button>
       </div>
 
       <section className="lrr2Content">
