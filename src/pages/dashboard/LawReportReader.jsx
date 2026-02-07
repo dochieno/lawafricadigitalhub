@@ -1011,6 +1011,10 @@ export default function LawReportReader() {
   const [progress, setProgress] = useState(0);
   const progressBarRef = useRef(null);
   const [headerCompact, setHeaderCompact] = useState(false);
+  const [metaMoreOpen, setMetaMoreOpen] = useState(false);
+  const metaMoreRef = useRef(null);
+  const [copyMenuOpen, setCopyMenuOpen] = useState(false);
+  const copyMenuRef = useRef(null);
 
   const [q, setQ] = useState("");
   const [searching, setSearching] = useState(false);
@@ -1342,6 +1346,7 @@ export default function LawReportReader() {
       if (e.key === "Escape") setSettingsOpen(false);
     }
 
+
     function onPointerDown(e) {
       const el = settingsRef.current;
       if (!el) return;
@@ -1355,6 +1360,30 @@ export default function LawReportReader() {
       document.removeEventListener("pointerdown", onPointerDown);
     };
   }, [settingsOpen]);
+
+  useEffect(() => {
+  function onKeyDown(e) {
+    if (e.key === "Escape") {
+      setMetaMoreOpen(false);
+      setCopyMenuOpen(false);
+    }
+  }
+
+  function onPointerDown(e) {
+    const m = metaMoreRef.current;
+    const c = copyMenuRef.current;
+
+    if (m && !m.contains(e.target)) setMetaMoreOpen(false);
+    if (c && !c.contains(e.target)) setCopyMenuOpen(false);
+  }
+
+  document.addEventListener("keydown", onKeyDown);
+  document.addEventListener("pointerdown", onPointerDown);
+  return () => {
+    document.removeEventListener("keydown", onKeyDown);
+    document.removeEventListener("pointerdown", onPointerDown);
+  };
+}, []);
 
 
   useEffect(() => {
@@ -2603,139 +2632,167 @@ function parseSectionedSummary(text) {
       </button>
 
       <div className="lrr2TopGrid lrr2TopGrid--single">
-        <section className="lrr2MetaCard">
-          <div className="lrr2MetaGrid">
-            <div className="lrr2MetaRow">
-              {llrNo ? (
-                <div className="lrr2MetaTag" data-tip="LLR Number">
-                  <span className="lrr2MetaIcon">
-                    <svg viewBox="0 0 24 24" fill="none">
-                      <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" strokeWidth="1.6" />
-                      <path d="M8 9h8M8 13h6" stroke="currentColor" strokeWidth="1.6" />
-                    </svg>
-                  </span>
-                  {llrNo}
-                </div>
-              ) : null}
+        <div className="lrr2MetaOneRow">
+          {/* Left: primary chips (always visible) */}
+          <div className="lrr2MetaPrimary">
+            {llrNo ? (
+              <div className="lrr2MetaTag" data-tip="LLR Number">
+                <span className="lrr2MetaIcon">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" strokeWidth="1.6" />
+                    <path d="M8 9h8M8 13h6" stroke="currentColor" strokeWidth="1.6" />
+                  </svg>
+                </span>
+                {llrNo}
+              </div>
+            ) : null}
 
-              {report.caseNumber ? (
-                <div className="lrr2MetaTag" data-tip="Case Number">
-                  <span className="lrr2MetaIcon">
-                    <svg viewBox="0 0 24 24" fill="none">
-                      <path d="M7 7h10v10H7z" stroke="currentColor" strokeWidth="1.6" />
-                      <path d="M9 11h6M9 14h4" stroke="currentColor" strokeWidth="1.6" />
-                    </svg>
-                  </span>
-                  {report.caseNumber}
-                </div>
-              ) : null}
+            {report.court ? (
+              <div className="lrr2MetaTag" data-tip="Court">
+                <span className="lrr2MetaIcon">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M4 10h16" stroke="currentColor" strokeWidth="1.6" />
+                    <path d="M6 10V6h12v4" stroke="currentColor" strokeWidth="1.6" />
+                    <path d="M6 18h12" stroke="currentColor" strokeWidth="1.6" />
+                  </svg>
+                </span>
+                {report.court}
+              </div>
+            ) : null}
 
-              {report.court ? (
-                <div className="lrr2MetaTag" data-tip="Court">
-                  <span className="lrr2MetaIcon">
-                    <svg viewBox="0 0 24 24" fill="none">
-                      <path d="M4 10h16" stroke="currentColor" strokeWidth="1.6" />
-                      <path d="M6 10V6h12v4" stroke="currentColor" strokeWidth="1.6" />
-                      <path d="M6 18h12" stroke="currentColor" strokeWidth="1.6" />
-                    </svg>
-                  </span>
-                  {report.court}
-                </div>
-              ) : null}
+            {report.decisionDate ? (
+              <div className="lrr2MetaTag" data-tip="Decision Date">
+                <span className="lrr2MetaIcon">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" strokeWidth="1.6" />
+                    <path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" strokeWidth="1.6" />
+                  </svg>
+                </span>
+                {formatDate(report.decisionDate)}
+              </div>
+            ) : null}
 
-              {report.decisionTypeLabel ? (
-                <div className="lrr2MetaTag" data-tip="Decision Type">
-                  <span className="lrr2MetaIcon">
-                    <svg viewBox="0 0 24 24" fill="none">
-                      <path d="M12 3v18M5 12h14" stroke="currentColor" strokeWidth="1.6" />
-                    </svg>
+            {isPremium ? (
+              <div className="lrr2MetaInlineStatus">
+                {accessLoading ? (
+                  <span className="lrr2MetaHint" data-tip="Checking subscription access">
+                    checking access…
                   </span>
-                  {report.decisionTypeLabel}
-                </div>
-              ) : null}
+                ) : (
+                  <AccessStatusChip access={access} isPremium={isPremium} isAdmin={isAdmin} hasFullAccess={hasFullAccess} />
+                )}
+              </div>
+            ) : null}
+          </div>
 
-              {report.decisionDate ? (
-                <div className="lrr2MetaTag" data-tip="Decision Date">
-                  <span className="lrr2MetaIcon">
-                    <svg viewBox="0 0 24 24" fill="none">
-                      <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" strokeWidth="1.6" />
-                      <path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" strokeWidth="1.6" />
-                    </svg>
-                  </span>
-                  {formatDate(report.decisionDate)}
+          {/* Right: actions */}
+          <div className="lrr2MetaActions">
+            {/* Copy menu (replaces Copy title + Copy citation pills) */}
+            <div className="lrr2Menu" ref={copyMenuRef}>
+              <button
+                type="button"
+                className="lrr2IconBtn"
+                title="Copy…"
+                aria-haspopup="menu"
+                aria-expanded={copyMenuOpen}
+                onClick={() => setCopyMenuOpen((v) => !v)}
+              >
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M9 9h10v10H9z" stroke="currentColor" strokeWidth="1.8" />
+                  <path
+                    d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  />
+                </svg>
+                <span className="txt">Copy</span>
+              </button>
+
+              {copyMenuOpen ? (
+                <div className="lrr2MenuPopover" role="menu" aria-label="Copy menu">
+                  <button type="button" className="lrr2MenuItem" onClick={() => { navigator.clipboard?.writeText(`${title}`); setCopyMenuOpen(false); }}>
+                    Copy title
+                  </button>
+
+                  {report?.citation ? (
+                    <button type="button" className="lrr2MenuItem" onClick={() => { navigator.clipboard?.writeText(String(report.citation)); setCopyMenuOpen(false); }}>
+                      Copy citation
+                    </button>
+                  ) : null}
+
+                  {report?.caseNumber ? (
+                    <button type="button" className="lrr2MenuItem" onClick={() => { navigator.clipboard?.writeText(String(report.caseNumber)); setCopyMenuOpen(false); }}>
+                      Copy case number
+                    </button>
+                  ) : null}
+
+                  {llrNo ? (
+                    <button type="button" className="lrr2MenuItem" onClick={() => { navigator.clipboard?.writeText(String(llrNo)); setCopyMenuOpen(false); }}>
+                      Copy LLR number
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
             </div>
 
-            <div className="lrr2MetaRow">
-              {report.judges ? (
-                <div className="lrr2MetaTag" data-tip="Judge(s)">
-                  <span className="lrr2MetaIcon">
-                    <svg viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="8" r="3" stroke="currentColor" strokeWidth="1.6" />
-                      <path d="M5 20c1.5-4 12.5-4 14 0" stroke="currentColor" strokeWidth="1.6" />
-                    </svg>
-                  </span>
-                  {report.judges}
-                </div>
-              ) : null}
-
-              {report.country ? (
-                <div className="lrr2MetaTag" data-tip="Country">
-                  <span className="lrr2MetaIcon">
-                    <svg viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" />
-                      <path d="M3 12h18M12 3a15 15 0 0 1 0 18" stroke="currentColor" strokeWidth="1.4" />
-                    </svg>
-                  </span>
-                  {report.country}
-                </div>
-              ) : null}
-
+            {/* More (⋯) overflow menu */}
+            <div className="lrr2Menu" ref={metaMoreRef}>
               <button
                 type="button"
-                className="lrr2MetaAction"
-                data-action="true"
-                title="Copy title"
-                onClick={() => navigator.clipboard?.writeText(`${title}`)}
+                className="lrr2IconBtn ghost"
+                title="More details"
+                aria-haspopup="menu"
+                aria-expanded={metaMoreOpen}
+                onClick={() => setMetaMoreOpen((v) => !v)}
               >
-                Copy title
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M5 12h.01M12 12h.01M19 12h.01" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                </svg>
               </button>
 
-              {report?.citation ? (
-                <button
-                  type="button"
-                  className="lrr2MetaAction"
-                  data-action="true"
-                  title="Copy citation"
-                  onClick={() => navigator.clipboard?.writeText(String(report.citation))}
-                >
-                  Copy citation
-                </button>
-              ) : null}
+              {metaMoreOpen ? (
+                <div className="lrr2MenuPopover" role="menu" aria-label="Case details">
+                  {report.caseNumber ? (
+                    <div className="lrr2MenuMetaRow">
+                      <div className="k">Case No.</div>
+                      <div className="v">{report.caseNumber}</div>
+                    </div>
+                  ) : null}
 
-              {isPremium ? (
-                <div className="lrr2MetaHint">
-                  {accessLoading ? (
-                    <span className="lrr2MetaHint" data-tip="Checking subscription access">
-                      checking access…
-                    </span>
-                  ) : (
-                    <AccessStatusChip access={access} isPremium={isPremium} isAdmin={isAdmin} hasFullAccess={hasFullAccess} />
-                  )}
+                  {report.decisionTypeLabel ? (
+                    <div className="lrr2MenuMetaRow">
+                      <div className="k">Decision</div>
+                      <div className="v">{report.decisionTypeLabel}</div>
+                    </div>
+                  ) : null}
+
+                  {report.judges ? (
+                    <div className="lrr2MenuMetaRow">
+                      <div className="k">Judge(s)</div>
+                      <div className="v">{report.judges}</div>
+                    </div>
+                  ) : null}
+
+                  {report.country ? (
+                    <div className="lrr2MenuMetaRow">
+                      <div className="k">Country</div>
+                      <div className="v">{report.country}</div>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>
           </div>
-        </section>
-      </div>
+        </div>
 
-      <div className="lrr2Tabs" role="tablist" aria-label="Reader tabs">
+      </div>
+      
+      <div className="lrr2SegTabs" role="tablist" aria-label="Reader tabs">
         <button
           type="button"
           role="tab"
           aria-selected={view === "content"}
-          className={`lrr2Tab ${view === "content" ? "isActive" : ""}`}
+          className={`lrr2SegTab ${view === "content" ? "isActive" : ""}`}
           onClick={() => {
             setView("content");
             setContentOpen(true);
@@ -2743,34 +2800,30 @@ function parseSectionedSummary(text) {
           title="Transcript"
         >
           Transcript
-          {isPremium && !hasFullAccess ? <span className="lrr2TabBadge lock">Locked</span> : null}
+          {isPremium && !hasFullAccess ? <span className="lrr2SegBadge lock">🔒</span> : null}
         </button>
 
-        {aiAllowed ? (
-          <button
-            type="button"
-            role="tab"
-            aria-selected={view === "ai"}
-            className={`lrr2Tab ${view === "ai" ? "isActive" : ""}`}
-            onClick={() => {
-              setView("ai");
-              setContentOpen(false);
-            }}
-            title="LegalAI"
-          >
-            LegalAI <span className="lrr2TabBadge">AI</span>
-          </button>
-        ) : (
-          <button type="button" role="tab" aria-selected={false} className="lrr2Tab isDisabled" disabled>
-            LegalAI <span className="lrr2TabBadge lock">Locked</span>
-          </button>
-        )}
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === "ai"}
+          className={`lrr2SegTab ${view === "ai" ? "isActive" : ""} ${aiAllowed ? "" : "isDisabled"}`}
+          onClick={() => {
+            if (!aiAllowed) return;
+            setView("ai");
+            setContentOpen(false);
+          }}
+          title={aiAllowed ? "LegalAI" : "LegalAI (subscribers only)"}
+          disabled={!aiAllowed}
+        >
+          LegalAI <span className="lrr2SegBadge ai">✨</span>
+        </button>
 
         <button
           type="button"
           role="tab"
           aria-selected={view === "split"}
-          className={`lrr2Tab ${view === "split" ? "isActive" : ""}`}
+          className={`lrr2SegTab ${view === "split" ? "isActive" : ""}`}
           onClick={() => {
             setView("split");
             setContentOpen(true);

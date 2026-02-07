@@ -670,61 +670,6 @@
 }
 
 /* =========================================================
-   7) Tabs
-========================================================= */
-.lrr2Tabs {
-  margin-top: 12px;
-  padding: 6px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  box-shadow: var(--shadow);
-
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.lrr2Tab {
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  border-radius: 999px;
-  padding: 10px 14px;
-  cursor: pointer;
-  font-weight: 800;
-
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  transition: background .12s ease, transform .12s ease;
-}
-.lrr2Tab:hover { background: rgba(15, 23, 42, 0.05); transform: translateY(-1px); }
-.lrr2Tab.isActive {
-  background: rgba(161, 24, 30, 0.10);
-  box-shadow: inset 0 0 0 1px rgba(161, 24, 30, 0.18);
-}
-.lrr2Tab.isDisabled { opacity: .55; cursor: not-allowed; }
-
-.lrr2TabBadge {
-  font-size: 11px;
-  font-weight: 900;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: rgba(161, 24, 30, 0.14);
-  color: var(--la-red);
-  border: 1px solid rgba(161, 24, 30, 0.18);
-}
-.lrr2TabBadge.lock {
-  margin-left: 10px;
-  background: rgba(112,40,64,.12);
-  color: #702840;
-  border: 1px solid rgba(112,40,64,.22);
-}
-
-/* =========================================================
    8) Content + buttons
 ========================================================= */
 .lrr2Content { margin-top: 14px; }
@@ -1825,26 +1770,6 @@
   background: rgba(17, 24, 39, 0.92);
   color: #fff;
 }
-/* Header row should not wrap into a messy two-line overlap */
-.lrrAiHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: nowrap;
-}
-
-.lrrAiHeadLeft {
-  min-width: 0;
-}
-
-.lrrAiHeadRight {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
-  flex-wrap: nowrap;
-}
 
 /* Compact mode: hide subtitle + make actions icon-like */
 .lrrAi.isCompact .lrrAiSub {
@@ -1854,28 +1779,6 @@
 .lrrAi.isCompact .lrrAiHeadActions {
   gap: 6px;
 }
-.lrrAiIconBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid rgba(17, 24, 39, 0.12);
-  background: rgba(255,255,255,0.75);
-  padding: 8px 10px;
-  border-radius: 999px;
-  cursor: pointer;
-  font-weight: 700;
-}
-
-.lrrAiIconBtn svg {
-  width: 18px;
-  height: 18px;
-}
-
-.lrrAiIconBtn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
 /* Compact (split aside) => icon-only */
 .lrrAi.isCompact .lrrAiIconBtn .txt {
   display: none;
@@ -2162,3 +2065,113 @@
   border: 1px solid rgba(16,185,129,0.25);
   color: #065f46;
 }
+/* =========================
+   v2 Meta: single-row + overflow menus
+========================= */
+.lrr2MetaOneRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:nowrap;
+}
+
+.lrr2MetaPrimary{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  min-width:0;
+  flex:1 1 auto;
+  overflow:hidden;
+}
+
+.lrr2MetaPrimary > *{
+  flex:0 0 auto;
+}
+
+.lrr2MetaActions{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  flex:0 0 auto;
+  white-space:nowrap;
+}
+
+.lrr2MetaMore{
+  position:relative;
+}
+
+.lrr2MenuPopover{
+  position:absolute;
+  right:0;
+  top:calc(100% + 10px);
+  width:min(340px, 92vw);
+  border-radius:16px;
+  border:1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow2);
+  overflow:hidden;
+  z-index:120;
+}
+
+.lrr2MenuItem{
+  width:100%;
+  border:0;
+  background:transparent;
+  text-align:left;
+  padding:10px 12px;
+  cursor:pointer;
+  font-weight:750;
+  color:var(--ink);
+  display:flex;
+  gap:10px;
+  align-items:flex-start;
+  justify-content:space-between;
+}
+
+.lrr2MenuItem:hover{ background: rgba(15,23,42,0.05); }
+.lrr2MenuItem .muted{ color: var(--muted); font-weight:650; font-size:12px; }
+
+/* =========================
+   v2 Tabs: slimmer segmented control (matches JSX)
+========================= */
+.lrr2SegTabs{
+  margin-top: 12px;
+  padding: 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+
+  display:inline-flex;
+  gap:6px;
+  align-items:center;
+  flex-wrap:nowrap;
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+}
+
+.lrr2SegTab{
+  border:0;
+  background:transparent;
+  color:var(--ink);
+  border-radius:999px;
+  padding:8px 12px;
+  cursor:pointer;
+  font-weight:900;
+  font-size:12px;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  white-space:nowrap;
+  transition: background .12s ease, transform .12s ease;
+}
+
+.lrr2SegTab:hover{ background: rgba(15,23,42,0.05); transform: translateY(-1px); }
+
+.lrr2SegTab.isActive{
+  background: rgba(161,24,30,0.10);
+  box-shadow: inset 0 0 0 1px rgba(161,24,30,0.18);
+}
+
+.lrr2SegTab.isDisabled{ opacity:.55; cursor:not-allowed; transform:none; }
