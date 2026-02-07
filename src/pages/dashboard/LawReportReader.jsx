@@ -340,24 +340,29 @@ function bulletsFromText(text) {
  *  - If the reply already contains markdown lists/headings, leave it.
  *  - If it’s one paragraph with many sentences, turn into a numbered list.
  */
-function prettifyChatReplyForUi(text) {
-  const t = String(text || "").trim();
-  if (!t) return "";
-  if (/^#{1,4}\s+/m.test(t)) return t;
-  if (/^(\d+\.\s+|[-•]\s+)/m.test(t)) return t;
-  if (t.includes("\n\n")) return t;
+  function prettifyChatReplyForUi(text) {
+    const t = String(text || "").trim();
+    if (!t) return "";
 
-  const parts = t
-    .split(/(?<=[.!?])\s+/)
-    .map((x) => x.trim())
-    .filter(Boolean);
+    // If it already contains markdown headings or lists, keep it.
+    if (/^#{1,4}\s+/m.test(t)) return t;
+    if (/^(\d+\.\s+|[-•]\s+)/m.test(t)) return t;
+    if (t.includes("\n\n")) return t;
 
-  if (parts.length >= 3 && parts.length <= 10) {
-    return parts.map((p, i) => `${i + 1}. ${p}`).join("\n");
+    // Split into sentences
+    const parts = t
+      .split(/(?<=[.!?])\s+/)
+      .map((x) => x.trim())
+      .filter(Boolean);
+
+    // Use bullets instead of numbered list
+    if (parts.length >= 2 && parts.length <= 12) {
+      return parts.map((p) => `- ${p}`).join("\n");
+    }
+
+    return t;
   }
 
-  return t;
-}
 
 function RichText({ text }) {
   const t = String(text || "");
@@ -1621,43 +1626,57 @@ function parseSectionedSummary(text) {
         <div className="lrrAiHead">
           <div className="lrrAiHeadLeft">
             <div className="lrrAiTitle">LegalAI</div>
-            <div className="lrrAiSub">Premium-grade summaries & chat. Verify against the transcript.</div>
+            {!compact ? <div className="lrrAiSub">Premium-grade summaries & chat. Verify against the transcript.</div> : null}
           </div>
-
           <div className="lrrAiHeadRight">
             {aiTab === "summary" ? (
-              <div className="lrrAiHeadActions">
-                <button
-                  type="button"
-                  className="lrrAiBtn ghost"
-                  disabled={aiBusy || !hasSomeSummary}
-                  onClick={() => copyText(summaryText)}
-                  title="Copy summary"
-                >
-                  Copy
-                </button>
+            <div className="lrrAiHeadActions">
+              <button
+                type="button"
+                className="lrrAiIconBtn"
+                disabled={aiBusy || !hasSomeSummary}
+                onClick={() => copyText(summaryText)}
+                title="Copy summary"
+                aria-label="Copy summary"
+              >
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M9 9h10v10H9z" stroke="currentColor" strokeWidth="1.8" />
+                  <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" stroke="currentColor" strokeWidth="1.8" />
+                </svg>
+                <span className="txt">Copy</span>
+              </button>
 
-                <button
-                  type="button"
-                  className="lrrAiBtn ghost"
-                  disabled={aiBusy || !hasSomeSummary}
-                  onClick={() => copyText(bulletsFromText(summaryText))}
-                  title="Copy as bullets"
-                >
-                  Copy bullets
-                </button>
+              <button
+                type="button"
+                className="lrrAiIconBtn"
+                disabled={aiBusy || !hasSomeSummary}
+                onClick={() => copyText(bulletsFromText(summaryText))}
+                title="Copy as bullets"
+                aria-label="Copy as bullets"
+              >
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M8 7h13M8 12h13M8 17h13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                  <path d="M4.5 7h.01M4.5 12h.01M4.5 17h.01" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                </svg>
+                <span className="txt">Bullets</span>
+              </button>
 
-                <span className="lrrAiHeadSep" aria-hidden="true" />
+              <span className="lrrAiHeadSep" aria-hidden="true" />
 
-                <button
-                  type="button"
-                  className="lrrAiBtn ghost"
-                  onClick={aiNewSummary}
-                  title="Clear current summary"
-                >
-                  New summary
-                </button>
-              </div>
+              <button
+                type="button"
+                className="lrrAiIconBtn"
+                onClick={aiNewSummary}
+                title="New summary"
+                aria-label="New summary"
+              >
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+                <span className="txt">New</span>
+              </button>
+            </div>
+
             ) : (
               <div className="lrrAiHeadActions">
                 <button type="button" className="lrrAiBtn ghost" onClick={aiClearChat} title="Clear messages">
