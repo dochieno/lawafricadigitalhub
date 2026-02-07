@@ -1937,14 +1937,6 @@ function parseSectionedSummary(text) {
                   );
                 })()}
 
-
-
-                  <details className="lrrAiRawToggle">
-                    <summary className="lrrAiRawToggleSum">Show raw output</summary>
-                    <div className="lrrAiRawFallback">
-                      <RichText text={summaryText} />
-                    </div>
-                  </details>
                 </div>
               ) : null}
             </div>
