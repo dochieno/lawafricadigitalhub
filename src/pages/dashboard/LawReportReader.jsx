@@ -109,27 +109,33 @@ function getAccessPreviewPolicy(access) {
   return { maxChars: maxChars ?? 5000, maxParas: maxParas ?? 22 };
 }
 
+// ✅ Your actual route (from App.jsx)
+const SUBSCRIBE_ROUTE = "/dashboard/law-reports/subscribe";
+const TRIAL_ROUTE = "/dashboard/trials";
+
 function getAccessCtas(access) {
+  // ✅ Fix defaults: /pricing does NOT exist in your router -> it redirects to /login via "*"
   const primaryUrl =
     access?.ctaUrl ||
     access?.CtaUrl ||
     access?.data?.ctaUrl ||
     access?.data?.CtaUrl ||
-    "/pricing";
+    SUBSCRIBE_ROUTE;
 
   const primaryLabel =
     access?.ctaLabel ||
     access?.CtaLabel ||
     access?.data?.ctaLabel ||
     access?.data?.CtaLabel ||
-    "Subscribe to unlock";
+    "Subscribe to continue";
 
+  // ✅ Always provide a “View plans” destination (same subscribe page) unless backend supplies one
   const secondaryUrl =
     access?.secondaryCtaUrl ||
     access?.SecondaryCtaUrl ||
     access?.data?.secondaryCtaUrl ||
     access?.data?.SecondaryCtaUrl ||
-    "";
+    SUBSCRIBE_ROUTE;
 
   const secondaryLabel =
     access?.secondaryCtaLabel ||
@@ -183,12 +189,17 @@ function getAccessStatus(access, isPremium, isAdmin, hasFullAccess) {
     "";
 
   const t = `${reason} ${msg}`.toLowerCase();
-  if (t.includes("trial")) return { tone: "warn", label: "Trial doesn’t include Law Reports", hint: reason || msg || "" };
+  if (t.includes("trial"))
+    return { tone: "warn", label: "Trial doesn’t include Law Reports", hint: reason || msg || "" };
   if (t.includes("expired")) return { tone: "warn", label: "Subscription expired", hint: reason || msg || "" };
   if (t.includes("inactive")) return { tone: "warn", label: "Subscription inactive", hint: reason || msg || "" };
   if (t.includes("seat")) return { tone: "warn", label: "Seat limit reached", hint: reason || msg || "" };
 
-  return { tone: "warn", label: "Locked (preview only)", hint: reason || msg || "Subscribe to unlock full transcript." };
+  return {
+    tone: "warn",
+    label: "Locked (preview only)",
+    hint: reason || msg || "Subscribe to unlock full transcript.",
+  };
 }
 
 // ✅ updated: accepts isPremium explicitly
@@ -325,46 +336,11 @@ function AccessStatusChip({ access, isPremium, isAdmin, hasFullAccess }) {
   );
 }
 
-function PremiumLockHero({ access, onGo }) {
-  const ctas = getAccessCtas(access);
-  const reason = AccessReasonLabel(access);
-
-  return (
-    <div className="lrr2LockHero" role="note" aria-label="Premium content locked">
-      <div className="lrr2LockHeroIcon" aria-hidden="true">
-        🔒
-      </div>
-
-      <div className="lrr2LockHeroBody">
-        <div className="lrr2LockHeroTitle">Full transcript restricted</div>
-        <div className="lrr2LockHeroMsg">
-          You’re viewing a limited preview of this premium law report.
-          {reason ? <div className="lrr2LockHeroReason">{reason}</div> : null}
-        </div>
-
-        <ul className="lrr2LockHeroBenefits">
-          <li>Unlimited full case transcript access</li>
-          <li>LegalAI summary and tools</li>
-          <li>Related cases and citation tools</li>
-        </ul>
-
-        <div className="lrr2LockHeroActions">
-          {ctas.secondaryUrl ? (
-            <button type="button" className="lrr2Btn" onClick={() => onGo(ctas.secondaryUrl)}>
-              {ctas.secondaryLabel}
-            </button>
-          ) : null}
-
-          <button type="button" className="lrr2Btn primary" onClick={() => onGo(ctas.primaryUrl)}>
-            {ctas.primaryLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SubscriptionGuidePanel({
+/**
+ * ✅ One combined card (replaces PremiumLockHero + SubscriptionGuidePanel)
+ * Uses existing CSS classes to avoid needing a CSS file update.
+ */
+function SubscriptionGateCard({
   isPremium,
   access,
   isAdmin,
@@ -380,74 +356,80 @@ function SubscriptionGuidePanel({
   const status = getAccessStatus(access, isPremium, isAdmin, hasFullAccess);
   const reason = AccessReasonLabel(access);
 
-  const primary = { url: ctas.primaryUrl || "/pricing", label: ctas.primaryLabel || "Subscribe" };
-  const secondary = ctas.secondaryUrl ? { url: ctas.secondaryUrl, label: ctas.secondaryLabel || "View plans" } : null;
-
-  const showTrial = !!isPublic;
-  const trialUrl =
-    access?.trialUrl ||
-    access?.TrialUrl ||
-    access?.data?.trialUrl ||
-    access?.data?.TrialUrl ||
-    "/pricing?tab=trial";
-
-  const showAccessCode = !!isInst;
+  // Optional institution-specific links only if backend provides them
   const accessCodeUrl =
     access?.accessCodeUrl ||
     access?.AccessCodeUrl ||
     access?.data?.accessCodeUrl ||
     access?.data?.AccessCodeUrl ||
-    "/dashboard/institution/activate";
+    "";
 
-  const showContact = !!isInst && /seat|inactive/.test(String(reason || "").toLowerCase());
   const contactUrl =
     access?.contactUrl ||
     access?.ContactUrl ||
     access?.data?.contactUrl ||
     access?.data?.ContactUrl ||
-    "/support";
+    "";
+
+  const showTrial = !!isPublic;
+  const showAccessCode = !!isInst && !!String(accessCodeUrl || "").trim();
+  const showContact = !!isInst && !!String(contactUrl || "").trim();
 
   return (
-    <div className="lrr2SubGuide" role="note" aria-label="How to unlock full access">
-      <div className="lrr2SubGuideTop">
-        <div className="lrr2SubGuideTitle">Subscription required</div>
-        <div className="lrr2SubGuideStatus">
-          <span className={`lrr2Pill ${status.tone}`}>{status.label}</span>
-          {reason ? <span className="lrr2SubGuideReason">{reason}</span> : null}
-        </div>
+    <div className="lrr2LockHero" role="note" aria-label="Subscription required">
+      <div className="lrr2LockHeroIcon" aria-hidden="true">
+        🔒
       </div>
 
-      <div className="lrr2SubGuideBody">
-        <div className="lrr2SubGuideMsg">
-          You can preview this case, but the <b>full transcript</b> and <b>LegalAI</b> require an active Law Reports
-          subscription.
+      <div className="lrr2LockHeroBody">
+        <div className="lrr2LockHeroTitle">Full transcript restricted</div>
+
+        <div className="lrr2LockHeroMsg">
+          You’re viewing a limited preview of this premium law report.
+          {reason ? <div className="lrr2LockHeroReason">{reason}</div> : null}
+          <div className="lrr2SubGuideStatus" style={{ marginTop: 10 }}>
+            <span className={`lrr2Pill ${status.tone}`}>{status.label}</span>
+          </div>
         </div>
 
-        <ul className="lrr2SubGuideSteps">
-          {showTrial ? (
-            <li>
-              <b>Start a trial:</b> Try Law Reports access instantly (if eligible).
-            </li>
-          ) : null}
-
-          <li>
-            <b>Subscribe:</b> Choose a plan and pay. Access unlocks after successful payment.
-          </li>
-
-          {showAccessCode ? (
-            <li>
-              <b>Institution:</b> Use your access code or ask your admin to add a seat.
-            </li>
-          ) : null}
-
-          <li>
-            <b>Already paid?</b> Click <b>Refresh access</b> to re-check your subscription status.
-          </li>
+        <ul className="lrr2LockHeroBenefits">
+          <li>Unlimited full case transcript access</li>
+          <li>LegalAI summary and tools</li>
+          <li>Related cases and citation tools</li>
         </ul>
 
-        <div className="lrr2SubGuideActions">
+        <div className="lrr2SubGuideBody" style={{ padding: 0, marginTop: 10 }}>
+          <div className="lrr2SubGuideMsg" style={{ marginBottom: 10 }}>
+            You can preview this case, but the <b>full transcript</b> and <b>LegalAI</b> require an active Law Reports
+            subscription.
+          </div>
+
+          <ul className="lrr2SubGuideSteps" style={{ marginTop: 0 }}>
+            {showTrial ? (
+              <li>
+                <b>Start a trial:</b> Try Law Reports access instantly (if eligible).
+              </li>
+            ) : null}
+
+            <li>
+              <b>Subscribe:</b> Choose a plan and pay. Access unlocks after successful payment.
+            </li>
+
+            {showAccessCode ? (
+              <li>
+                <b>Institution:</b> Use your access code or ask your admin to add a seat.
+              </li>
+            ) : null}
+
+            <li>
+              <b>Already paid?</b> Click <b>Refresh access</b> to re-check your subscription status.
+            </li>
+          </ul>
+        </div>
+
+        <div className="lrr2LockHeroActions">
           {showTrial ? (
-            <button type="button" className="lrr2Btn" onClick={() => onGo(trialUrl)}>
+            <button type="button" className="lrr2Btn" onClick={() => onGo(TRIAL_ROUTE)}>
               Start trial
             </button>
           ) : null}
@@ -458,14 +440,13 @@ function SubscriptionGuidePanel({
             </button>
           ) : null}
 
-          {secondary ? (
-            <button type="button" className="lrr2Btn" onClick={() => onGo(secondary.url)}>
-              {secondary.label}
-            </button>
-          ) : null}
+          {/* ✅ Always safe: points to real route */}
+          <button type="button" className="lrr2Btn" onClick={() => onGo(ctas.secondaryUrl || SUBSCRIBE_ROUTE)}>
+            {ctas.secondaryLabel}
+          </button>
 
-          <button type="button" className="lrr2Btn primary" onClick={() => onGo(primary.url)}>
-            {primary.label}
+          <button type="button" className="lrr2Btn primary" onClick={() => onGo(ctas.primaryUrl || SUBSCRIBE_ROUTE)}>
+            {ctas.primaryLabel}
           </button>
 
           <button type="button" className="lrr2Btn ghost" onClick={onRefreshAccess}>
@@ -496,13 +477,11 @@ function SubscribeGateOverlay({ access, onGo }) {
         </div>
 
         <div className="lrr2GateActions">
-          {ctas.secondaryUrl ? (
-            <button type="button" className="lrr2Btn" onClick={() => onGo(ctas.secondaryUrl)}>
-              {ctas.secondaryLabel}
-            </button>
-          ) : null}
+          <button type="button" className="lrr2Btn" onClick={() => onGo(ctas.secondaryUrl || SUBSCRIBE_ROUTE)}>
+            {ctas.secondaryLabel}
+          </button>
 
-          <button type="button" className="lrr2Btn primary" onClick={() => onGo(ctas.primaryUrl)}>
+          <button type="button" className="lrr2Btn primary" onClick={() => onGo(ctas.primaryUrl || SUBSCRIBE_ROUTE)}>
             {ctas.primaryLabel}
           </button>
         </div>
@@ -544,13 +523,11 @@ function InlineSubscribeBreak({ access, onGo, onRefresh }) {
                 Refresh access
               </button>
 
-              {ctas.secondaryUrl ? (
-                <button type="button" className="lrr2Btn" onClick={() => onGo(ctas.secondaryUrl)}>
-                  {ctas.secondaryLabel}
-                </button>
-              ) : null}
+              <button type="button" className="lrr2Btn" onClick={() => onGo(ctas.secondaryUrl || SUBSCRIBE_ROUTE)}>
+                {ctas.secondaryLabel}
+              </button>
 
-              <button type="button" className="lrr2Btn primary" onClick={() => onGo(ctas.primaryUrl)}>
+              <button type="button" className="lrr2Btn primary" onClick={() => onGo(ctas.primaryUrl || SUBSCRIBE_ROUTE)}>
                 {ctas.primaryLabel}
               </button>
             </div>
@@ -564,7 +541,6 @@ function InlineSubscribeBreak({ access, onGo, onRefresh }) {
 function CaseContentWithGateBreak({ text, showBreak, access, onGo, onRefresh }) {
   const paras = useMemo(() => splitIntoParagraphs(text), [text]);
 
-  // ✅ compute breakIndex WITHOUT hooks (no conditional hook calls)
   const breakIndex = showBreak
     ? Math.min(paras.length, Math.max(3, Math.floor(paras.length * 0.65)))
     : -1;
@@ -579,8 +555,6 @@ function CaseContentWithGateBreak({ text, showBreak, access, onGo, onRefresh }) 
         return (
           <div key={idx}>
             {isHeading ? <h3 className="lrr2CaseH">{p}</h3> : <p className="lrr2CaseP">{p}</p>}
-
-            {/* ✅ insert the inline break after the paragraph at breakIndex */}
             {showBreak && breakIndex === idx + 1 ? (
               <InlineSubscribeBreak access={access} onGo={onGo} onRefresh={onRefresh} />
             ) : null}
@@ -611,7 +585,7 @@ function AiLockedPanel({ access, onGo }) {
         </div>
 
         <div className="lrr2LockInlineActions">
-          <button type="button" className="lrr2Btn primary" onClick={() => onGo(ctas.primaryUrl)}>
+          <button type="button" className="lrr2Btn primary" onClick={() => onGo(ctas.primaryUrl || SUBSCRIBE_ROUTE)}>
             {ctas.primaryLabel}
           </button>
         </div>
@@ -681,19 +655,15 @@ export default function LawReportReader() {
   const isPremium = useMemo(() => {
     if (!report) return false;
 
-    // primary: explicit premium flag
     const v = report?.isPremium ?? report?.IsPremium;
     if (v === true) return true;
 
-    // fallback 1: accessLevel says preview-only (gated by entitlement)
     const lvl = String(report?.accessLevel || report?.AccessLevel || "").toLowerCase();
     if (lvl === "previewonly") return true;
 
-    // fallback 2: required action implies paid entitlement needed
     const req = String(report?.requiredAction || report?.RequiredAction || "").toLowerCase();
     if (req === "subscribe" || req === "buy") return true;
 
-    // fallback 3: blocked meta present (still premium, but hard-stopped)
     const blocked = report?.isBlocked ?? report?.IsBlocked;
     if (blocked === true) return true;
 
@@ -732,10 +702,8 @@ export default function LawReportReader() {
   }, [rawContent]);
 
   const preview = useMemo(() => {
-    // Not premium or has access → show full
     if (!isPremium || !textHasContent || !shouldGateTranscript) {
       const renderHtml = isProbablyHtml(rawContent);
-
       const safeText = renderHtml ? rawContent : decodeHtmlEntities(rawContent);
 
       return {
@@ -747,7 +715,6 @@ export default function LawReportReader() {
       };
     }
 
-    // Premium + no access → preview (TEXT preview always)
     const paras = splitIntoParagraphs(gateSourceText);
     const maxParas = previewPolicy.maxParas;
     const maxChars = previewPolicy.maxChars;
@@ -776,11 +743,7 @@ export default function LawReportReader() {
       text: previewText,
     };
   }, [isPremium, shouldGateTranscript, textHasContent, rawContent, gateSourceText, previewPolicy]);
-
-  const showTranscriptGate = useMemo(() => {
-    return !!(isPremium && !hasFullAccess);
-  }, [isPremium, hasFullAccess]);
-
+  
   const showInlineBreak = useMemo(() => {
     return !!(contentOpen && preview.gated && preview.reachedLimit);
   }, [contentOpen, preview.gated, preview.reachedLimit]);
@@ -796,7 +759,6 @@ export default function LawReportReader() {
      Effects
   ------------------------- */
 
-  // Scroll/progress + compact header
   useEffect(() => {
     function onScroll() {
       const el = document.documentElement;
@@ -819,7 +781,6 @@ export default function LawReportReader() {
     progressBarRef.current.style.transform = `scaleX(${progress})`;
   }, [progress]);
 
-  // Close dropdown on outside click / Esc
   useEffect(() => {
     if (!openResults) return;
 
@@ -844,7 +805,6 @@ export default function LawReportReader() {
     };
   }, [openResults]);
 
-  // Cmd/Ctrl + K focuses search
   useEffect(() => {
     function onKey(e) {
       const isMac = navigator.platform.toLowerCase().includes("mac");
@@ -859,7 +819,6 @@ export default function LawReportReader() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Load report
   useEffect(() => {
     let cancelled = false;
 
@@ -880,7 +839,6 @@ export default function LawReportReader() {
       }
     }
 
-    // reset on id change
     setReport(null);
     setHasContent(true);
     setAccess(null);
@@ -898,14 +856,12 @@ export default function LawReportReader() {
     };
   }, [reportId]);
 
-  // Availability + access checks
   useEffect(() => {
     let cancelled = false;
 
     async function check() {
       if (!report?.legalDocumentId) return;
 
-      // Admin bypass
       if (isAdmin) {
         if (!cancelled) {
           setHasContent(true);
@@ -916,7 +872,6 @@ export default function LawReportReader() {
         return;
       }
 
-      // has content?
       const localHasText = !!String(report?.contentText || "").trim();
       if (localHasText) {
         if (!cancelled) {
@@ -960,14 +915,13 @@ export default function LawReportReader() {
     };
   }, [report, isInst, isPublic, isAdmin, isPremium]);
 
-  // Search (debounced + AbortController)
   useEffect(() => {
     const term = String(q || "").trim();
 
     try {
       searchCtlRef.current?.abort?.();
     } catch {
-      //ignore
+      // ignore
     }
     searchCtlRef.current = null;
 
@@ -1049,8 +1003,17 @@ export default function LawReportReader() {
 
   function goUrl(url) {
     if (!url) return;
-    if (String(url).startsWith("http")) window.open(url, "_blank", "noreferrer");
-    else navigate(url);
+
+    const u = String(url);
+
+    // ✅ Hard-fix legacy /pricing links (they hit "*" -> /login)
+    if (u === "/pricing" || u.startsWith("/pricing?") || u.startsWith("/pricing/")) {
+      navigate(u.replace("/pricing", SUBSCRIBE_ROUTE));
+      return;
+    }
+
+    if (u.startsWith("http")) window.open(u, "_blank", "noreferrer");
+    else navigate(u);
   }
 
   function pickReport(r) {
@@ -1096,9 +1059,7 @@ export default function LawReportReader() {
       <div className="lrr2Wrap">
         <div className="lrr2Error">
           <div className="lrr2ErrorTitle">Not available</div>
-          <div className="lrr2ErrorMsg">
-            {availabilityLoading ? "Checking availability…" : "This report isn’t available yet."}
-          </div>
+          <div className="lrr2ErrorMsg">{availabilityLoading ? "Checking availability…" : "This report isn’t available yet."}</div>
           <div className="lrr2TopActions">
             <button className="lrr2Btn" onClick={() => navigate("/dashboard/law-reports")}>
               ← Back
@@ -1331,7 +1292,12 @@ export default function LawReportReader() {
                       checking access…
                     </span>
                   ) : (
-                    <AccessStatusChip access={access} isPremium={isPremium} isAdmin={isAdmin} hasFullAccess={hasFullAccess} />
+                    <AccessStatusChip
+                      access={access}
+                      isPremium={isPremium}
+                      isAdmin={isAdmin}
+                      hasFullAccess={hasFullAccess}
+                    />
                   )}
                 </div>
               ) : null}
@@ -1468,23 +1434,17 @@ export default function LawReportReader() {
               </div>
             </div>
 
-            {/* Subscription UI (top explanation) */}
-            {showTranscriptGate ? (
-              <>
-                <PremiumLockHero access={access} onGo={goUrl} />
-
-                <SubscriptionGuidePanel
-                  isPremium={isPremium}
-                  access={access}
-                  isAdmin={isAdmin}
-                  isInst={isInst}
-                  isPublic={isPublic}
-                  hasFullAccess={hasFullAccess}
-                  onGo={goUrl}
-                  onRefreshAccess={refreshAccessNow}
-                />
-              </>
-            ) : null}
+            {/* ✅ One combined subscription card */}
+            <SubscriptionGateCard
+              isPremium={isPremium}
+              access={access}
+              isAdmin={isAdmin}
+              isInst={isInst}
+              isPublic={isPublic}
+              hasFullAccess={hasFullAccess}
+              onGo={goUrl}
+              onRefreshAccess={refreshAccessNow}
+            />
 
             {/* Transcript */}
             <div
