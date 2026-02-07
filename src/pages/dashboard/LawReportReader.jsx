@@ -336,6 +336,30 @@ function bulletsFromText(text) {
   return lines.map((l) => `- ${l}`).join("\n");
 }
 
+// Put this in the top Helpers section (NO hooks), outside the component
+function buildDefaultCopyText({ report, title, llrNo }) {
+  const parts = [];
+
+  if (title) parts.push(String(title));
+
+  const citation = safeTrim(report?.citation);
+  if (citation) parts.push(citation);
+
+  const court = safeTrim(report?.court);
+  if (court) parts.push(court);
+
+  const date = report?.decisionDate ? formatDate(report.decisionDate) : "";
+  if (date) parts.push(`Decision date: ${date}`);
+
+  const caseNo = safeTrim(report?.caseNumber);
+  if (caseNo) parts.push(`Case No: ${caseNo}`);
+
+  if (llrNo) parts.push(`LLR: ${llrNo}`);
+
+  return parts.filter(Boolean).join("\n");
+}
+
+
 /** Mild “premium formatting” for chat replies that come as a single blob.
  *  - If the reply already contains markdown lists/headings, leave it.
  *  - If it’s one paragraph with many sentences, turn into a numbered list.
@@ -1007,7 +1031,7 @@ export default function LawReportReader() {
   const [serif, setSerif] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef(null);  
-  
+
 
   const [progress, setProgress] = useState(0);
   const progressBarRef = useRef(null);
@@ -2637,7 +2661,7 @@ function parseSectionedSummary(text) {
           {/* Left: primary chips (always visible) */}
           <div className="lrr2MetaPrimary">
             {llrNo ? (
-              <div className="lrr2MetaTag" data-tip="LLR Number">
+              <div className="lrr2MetaTag" data-tip="LLR Number" title="LLR Number">
                 <span className="lrr2MetaIcon">
                   <svg viewBox="0 0 24 24" fill="none">
                     <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" strokeWidth="1.6" />
@@ -2649,7 +2673,7 @@ function parseSectionedSummary(text) {
             ) : null}
 
             {report.court ? (
-              <div className="lrr2MetaTag" data-tip="Court">
+              <div className="lrr2MetaTag" data-tip="Court" title="Court">
                 <span className="lrr2MetaIcon">
                   <svg viewBox="0 0 24 24" fill="none">
                     <path d="M4 10h16" stroke="currentColor" strokeWidth="1.6" />
@@ -2662,7 +2686,7 @@ function parseSectionedSummary(text) {
             ) : null}
 
             {report.decisionDate ? (
-              <div className="lrr2MetaTag" data-tip="Decision Date">
+              <div className="lrr2MetaTag" data-tip="Decision Date" title="Decision Date">
                 <span className="lrr2MetaIcon">
                   <svg viewBox="0 0 24 24" fill="none">
                     <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" strokeWidth="1.6" />
@@ -2676,78 +2700,36 @@ function parseSectionedSummary(text) {
             {isPremium ? (
               <div className="lrr2MetaInlineStatus">
                 {accessLoading ? (
-                  <span className="lrr2MetaHint" data-tip="Checking subscription access">
+                  <span className="lrr2MetaHint" data-tip="Checking subscription access" title="Checking subscription access">
                     checking access…
                   </span>
                 ) : (
-                  <AccessStatusChip access={access} isPremium={isPremium} isAdmin={isAdmin} hasFullAccess={hasFullAccess} />
+                  <AccessStatusChip
+                    access={access}
+                    isPremium={isPremium}
+                    isAdmin={isAdmin}
+                    hasFullAccess={hasFullAccess}
+                  />
                 )}
               </div>
             ) : null}
-          </div>
 
-          {/* Right: actions */}
-          <div className="lrr2MetaActions">
-            {/* Copy menu (replaces Copy title + Copy citation pills) */}
-            <div className="lrr2Menu" ref={copyMenuRef}>
-              <button
-                type="button"
-                className="lrr2IconBtn"
-                title="Copy…"
-                aria-haspopup="menu"
-                aria-expanded={copyMenuOpen}
-                onClick={() => setCopyMenuOpen((v) => !v)}
-              >
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M9 9h10v10H9z" stroke="currentColor" strokeWidth="1.8" />
-                  <path
-                    d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  />
-                </svg>
-                <span className="txt">Copy</span>
-              </button>
-
-              {copyMenuOpen ? (
-                <div className="lrr2MenuPopover" role="menu" aria-label="Copy menu">
-                  <button type="button" className="lrr2MenuItem" onClick={() => { navigator.clipboard?.writeText(`${title}`); setCopyMenuOpen(false); }}>
-                    Copy title
-                  </button>
-
-                  {report?.citation ? (
-                    <button type="button" className="lrr2MenuItem" onClick={() => { navigator.clipboard?.writeText(String(report.citation)); setCopyMenuOpen(false); }}>
-                      Copy citation
-                    </button>
-                  ) : null}
-
-                  {report?.caseNumber ? (
-                    <button type="button" className="lrr2MenuItem" onClick={() => { navigator.clipboard?.writeText(String(report.caseNumber)); setCopyMenuOpen(false); }}>
-                      Copy case number
-                    </button>
-                  ) : null}
-
-                  {llrNo ? (
-                    <button type="button" className="lrr2MenuItem" onClick={() => { navigator.clipboard?.writeText(String(llrNo)); setCopyMenuOpen(false); }}>
-                      Copy LLR number
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-
-            {/* More (⋯) overflow menu */}
-            <div className="lrr2Menu" ref={metaMoreRef}>
+            {/* ✅ More info icon moved NEXT TO META (visible icon + tooltip) */}
+            <div className="lrr2Menu lrr2MetaInfoMenu" ref={metaMoreRef}>
               <button
                 type="button"
                 className="lrr2IconBtn ghost"
-                title="More details"
+                title="More case details"
+                aria-label="More case details"
                 aria-haspopup="menu"
                 aria-expanded={metaMoreOpen}
                 onClick={() => setMetaMoreOpen((v) => !v)}
               >
+                {/* info icon */}
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M5 12h.01M12 12h.01M19 12h.01" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+                  <path d="M12 10.5v6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                  <path d="M12 7.5h.01" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" />
                 </svg>
               </button>
 
@@ -2784,9 +2766,171 @@ function parseSectionedSummary(text) {
               ) : null}
             </div>
           </div>
+
+          {/* Right: actions */}
+          <div className="lrr2MetaActions">
+            {/* ✅ Copy now copies useful info by default; dropdown is options */}
+            <div className="lrr2Menu lrr2CopyCombo" ref={copyMenuRef}>
+              {/* Main copy action */}
+              <button
+                type="button"
+                className="lrr2IconBtn"
+                title="Copy case details"
+                aria-label="Copy case details"
+                onClick={() => {
+                  const payload = buildDefaultCopyText({ report, title, llrNo });
+                  copyText(payload);
+                }}
+              >
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M9 9h10v10H9z" stroke="currentColor" strokeWidth="1.8" />
+                  <path
+                    d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  />
+                </svg>
+                <span className="txt">Copy</span>
+              </button>
+
+              {/* Small caret to open copy menu */}
+              <button
+                type="button"
+                className="lrr2IconBtn ghost"
+                title="Copy options"
+                aria-label="Copy options"
+                aria-haspopup="menu"
+                aria-expanded={copyMenuOpen}
+                onClick={() => setCopyMenuOpen((v) => !v)}
+              >
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M7 10l5 5 5-5"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+
+              {copyMenuOpen ? (
+                <div className="lrr2MenuPopover" role="menu" aria-label="Copy menu">
+                  <button
+                    type="button"
+                    className="lrr2MenuItem"
+                    onClick={() => {
+                      copyText(buildDefaultCopyText({ report, title, llrNo }));
+                      setCopyMenuOpen(false);
+                    }}
+                  >
+                    Copy full details
+                  </button>
+
+                  <button
+                    type="button"
+                    className="lrr2MenuItem"
+                    onClick={() => {
+                      copyText(`${title}`);
+                      setCopyMenuOpen(false);
+                    }}
+                  >
+                    Copy title
+                  </button>
+
+                  {report?.citation ? (
+                    <button
+                      type="button"
+                      className="lrr2MenuItem"
+                      onClick={() => {
+                        copyText(String(report.citation));
+                        setCopyMenuOpen(false);
+                      }}
+                    >
+                      Copy citation
+                    </button>
+                  ) : null}
+
+                  {report?.caseNumber ? (
+                    <button
+                      type="button"
+                      className="lrr2MenuItem"
+                      onClick={() => {
+                        copyText(String(report.caseNumber));
+                        setCopyMenuOpen(false);
+                      }}
+                    >
+                      Copy case number
+                    </button>
+                  ) : null}
+
+                  {llrNo ? (
+                    <button
+                      type="button"
+                      className="lrr2MenuItem"
+                      onClick={() => {
+                        copyText(String(llrNo));
+                        setCopyMenuOpen(false);
+                      }}
+                    >
+                      Copy LLR number
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </div>
         </div>
 
+        {/* ✅ Tabs moved into same container so they align with meta row */}
+        <div className="lrr2SegTabs" role="tablist" aria-label="Reader tabs">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === "content"}
+            className={`lrr2SegTab ${view === "content" ? "isActive" : ""}`}
+            onClick={() => {
+              setView("content");
+              setContentOpen(true);
+            }}
+            title="Transcript"
+          >
+            Transcript
+            {isPremium && !hasFullAccess ? <span className="lrr2SegBadge lock">🔒</span> : null}
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === "ai"}
+            className={`lrr2SegTab ${view === "ai" ? "isActive" : ""} ${aiAllowed ? "" : "isDisabled"}`}
+            onClick={() => {
+              if (!aiAllowed) return;
+              setView("ai");
+              setContentOpen(false);
+            }}
+            title={aiAllowed ? "LegalAI" : "LegalAI (subscribers only)"}
+            disabled={!aiAllowed}
+          >
+            LegalAI <span className="lrr2SegBadge ai">✨</span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === "split"}
+            className={`lrr2SegTab ${view === "split" ? "isActive" : ""}`}
+            onClick={() => {
+              setView("split");
+              setContentOpen(true);
+            }}
+            title="Split view (Transcript + LegalAI)"
+          >
+            Split
+          </button>
+        </div>
       </div>
+
       
       <div className="lrr2SegTabs" role="tablist" aria-label="Reader tabs">
         <button
