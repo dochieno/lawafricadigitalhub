@@ -1884,3 +1884,141 @@
 .lrrAi.isCompact .lrrAiIconBtn {
   padding: 8px;
 }
+/* =========================
+   LegalAI: Context chips + Status
+========================= */
+
+.lrrAiTitleRow{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.lrrAiStatus{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:12px;
+  line-height:1;
+  border:1px solid rgba(17,24,39,.10);
+  background:rgba(255,255,255,.6);
+  color:rgba(17,24,39,.75);
+}
+
+.lrrAiStatus .dot{
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:rgba(17,24,39,.35);
+}
+
+.lrrAiStatus.busy{
+  background:rgba(255,255,255,.72);
+}
+.lrrAiStatus.busy .dot{ background: rgba(161,18,18,.85); }
+
+.lrrAiStatus.cached .dot{ background: rgba(59,130,246,.85); }
+.lrrAiStatus.fresh .dot{ background: rgba(16,185,129,.85); }
+.lrrAiStatus.idle  .dot{ background: rgba(148,163,184,.9); }
+
+.lrrAiCtxRow{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:8px;
+}
+
+.lrrAiCtxChip{
+  display:inline-flex;
+  align-items:center;
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:12px;
+  line-height:1;
+  border:1px solid rgba(17,24,39,.10);
+  background:rgba(255,255,255,.55);
+  color:rgba(17,24,39,.78);
+  max-width:100%;
+}
+
+.lrrAiCtxChip.soft{
+  background:rgba(161,18,18,.06);
+  border-color:rgba(161,18,18,.16);
+  color:rgba(111,21,21,.95);
+}
+
+/* =========================
+   Chat empty state
+========================= */
+.lrrAiChatEmpty{
+  border:1px dashed rgba(17,24,39,.18);
+  background:rgba(255,255,255,.45);
+  border-radius:14px;
+  padding:16px;
+  text-align:center;
+  margin:8px 6px;
+}
+
+.lrrAiChatEmpty .t{
+  font-weight:650;
+  color:#111827;
+  font-size:13px;
+  margin-bottom:4px;
+}
+
+.lrrAiChatEmpty .s{
+  font-size:12px;
+  color:rgba(17,24,39,.65);
+}
+
+/* =========================
+   Split-view micro polish: prevent ugly wraps
+========================= */
+.lrr2ReaderBar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap; /* allow neat wrap instead of overlap */
+}
+
+.lrr2ReaderCluster{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+@media (max-width: 1100px){
+  .lrr2ReaderBar{
+    gap:8px;
+  }
+}
+
+/* If extremely narrow, allow horizontal scroll (premium feel, no broken layout) */
+@media (max-width: 520px){
+  .lrr2ReaderBar{
+    flex-wrap:nowrap;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    padding-bottom:6px;
+  }
+  .lrr2ReaderCluster{
+    flex-wrap:nowrap;
+  }
+}
+
+/* =========================
+   Disclaimer styling (center, italic, smaller, not bold)
+========================= */
+.lrrAiFooterDisc{
+  text-align:center;
+  font-style:italic;
+  font-weight:400;
+  font-size:12px;
+  color:rgba(17,24,39,.60);
+  padding:10px 12px;
+}

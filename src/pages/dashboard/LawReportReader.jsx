@@ -362,15 +362,9 @@ function bulletsFromText(text) {
 
     return t;
   }
-
-
   //Force unordered list:
-
   function forceUnorderedBullets(text) {
   const t = String(text || "").replace(/\r\n/g, "\n");
-
-  // Convert ordered list lines like "1. foo" or "12. foo" into "- foo"
-  // Also handles cases where the model uses "1." for every line.
   return t
     .split("\n")
     .map((line) => {
@@ -381,6 +375,246 @@ function bulletsFromText(text) {
     .join("\n");
 }
 
+// ---------------- Context chips (jurisdiction + issue) ----------------
+
+function titleCase(s) {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/\b[a-z]/g, (m) => m.toUpperCase())
+    .trim();
+}
+
+function inferIssuesFromText(text) {
+  const t = String(text || "").toLowerCase();
+  if (!t) return [];
+
+  const rules = [
+    { k: "sentenc", label: "Sentencing" },
+    { k: "bail", label: "Bail" },
+    { k: "appeal", label: "Appeal" },
+    { k: "judicial review", label: "Judicial Review" },
+    { k: "constitutional", label: "Constitutional" },
+    { k: "election", label: "Election" },
+    { k: "contract", label: "Contract" },
+    { k: "employment", label: "Employment" },
+    { k: "land", label: "Land" },
+    { k: "succession", label: "Succession" },
+    { k: "family", label: "Family" },
+    { k: "defamation", label: "Defamation" },
+    { k: "tax", label: "Tax" },
+    { k: "company", label: "Company" },
+    { k: "crime", label: "Criminal" },
+    { k: "wildlife", label: "Wildlife" },
+    { k: "environment", label: "Environment" },
+    { k: "procurement", label: "Procurement" },
+    { k: "injunction", label: "Injunction" },
+  ];
+
+  const out = [];
+  for (const r of rules) {
+    if (t.includes(r.k)) out.push(r.label);
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
+function buildContextChips(report, previewText) {
+  const chips = [];
+
+  const country =
+    report?.country ||
+    report?.Country ||
+    "";
+
+  const court =
+    report?.court ||
+    report?.Court ||
+    report?.courtTypeLabel ||
+    report?.CourtTypeLabel ||
+    "";
+
+  const decisionType =
+    report?.decisionTypeLabel ||
+    report?.DecisionTypeLabel ||
+    report?.decisionType ||
+    report?.DecisionType ||
+    "";
+
+  const jurisdiction = [court, country].filter(Boolean).join(" · ");
+  if (jurisdiction) chips.push({ tone: "neutral", label: jurisdiction });
+
+  if (decisionType) chips.push({ tone: "neutral", label: titleCase(decisionType) });
+
+  // issue inference: use title + a bit of transcript preview for accuracy
+  const title = report?.parties || report?.title || "";
+  const sample = `${title}\n${String(previewText || "").slice(0, 2200)}`;
+  const issues = inferIssuesFromText(sample);
+
+  for (const x of issues) chips.push({ tone: "soft", label: x });
+
+  return chips.slice(0, 4);
+}
+
+// ---------------- AI status indicator ----------------
+
+function getAiStatus({ aiBusy, aiTab, aiLastAction, summaryMeta, summaryText }) {
+  if (aiBusy) {
+    if (aiLastAction?.kind === "genSummary") return { tone: "busy", label: "Regenerating…" };
+    if (aiLastAction?.kind === "getSummary") return { tone: "busy", label: "Loading cached…" };
+    if (aiLastAction?.kind === "chat") return { tone: "busy", label: "Thinking…" };
+    if (aiLastAction?.kind === "related") return { tone: "busy", label: "Finding related cases…" };
+    return { tone: "busy", label: "Working…" };
+  }
+
+  if (aiTab === "summary") {
+    if (summaryMeta?.cached && String(summaryText || "").trim())
+      return { tone: "cached", label: "Cached summary" };
+    if (String(summaryText || "").trim())
+      return { tone: "fresh", label: "Fresh summary" };
+    return { tone: "idle", label: "No summary yet" };
+  }
+
+  if (aiTab === "chat") return { tone: "idle", label: "Ready" };
+  if (aiTab === "related") return { tone: "idle", label: "Ready" };
+
+  return { tone: "idle", label: "Ready" };
+}
+
+// ---------------- Chat auto-section formatting ----------------
+
+function autoSectionChatReply(text) {
+  const raw = String(text || "").replace(/\r\n/g, "\n").trim();
+  if (!raw) return "";
+
+  // If already has markdown headings or lists, keep (we only normalize bullets later)
+  if (/^#{1,4}\s+/m.test(raw)) return raw;
+
+  const lines = raw.split("\n").map((x) => x.trim()).filter(Boolean);
+
+  // Heuristic: if lines include "Heading:" patterns, sectionize them.
+  const sectionStarts = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (/^[A-Za-z][A-Za-z\s/&()-]{2,40}:\s*$/.test(lines[i])) {
+      sectionStarts.push(i);
+    }
+  }
+
+  // If no clear "Heading:" lines, attempt keyword sections for legal answers
+  const keywordSections = [
+    { key: "Ratio Decidendi", re: /\bratio\b|\bratio decidendi\b/i },
+    { key: "Issues", re: /\bissues?\b|\bissue for determination\b/i },
+    { key: "Holding", re: /\bholding\b|\bhe?ld\b|\bdecision\b/i },
+    { key: "Reasoning", re: /\breason(ing)?\b|\banalysis\b|\brationale\b/i },
+    { key: "Orders", re: /\borders?\b|\bdisposition\b/i },
+    { key: "Authorities", re: /\bauthorities\b|\bcases cited\b|\bcited\b|\bstatute\b/i },
+    { key: "Practical Steps", re: /\bpractical\b|\baction items\b|\bwhat to do\b/i },
+  ];
+
+  // If the assistant wrote paragraphs, we will bucket them.
+  if (sectionStarts.length === 0 && lines.length >= 3) {
+    const paras = raw.split(/\n\s*\n+/).map((p) => p.trim()).filter(Boolean);
+    if (paras.length >= 2) {
+      const buckets = new Map();
+      const rest = [];
+
+      for (const p of paras) {
+        const hit = keywordSections.find((k) => k.re.test(p));
+        if (hit) {
+          if (!buckets.has(hit.key)) buckets.set(hit.key, []);
+          buckets.get(hit.key).push(p);
+        } else {
+          rest.push(p);
+        }
+      }
+
+      const out = [];
+      for (const k of keywordSections) {
+        const arr = buckets.get(k.key);
+        if (!arr?.length) continue;
+
+        out.push(`### ${k.key}`);
+        const bullets = arr
+          .flatMap((block) =>
+            block
+              .split(/(?<=[.!?])\s+/)
+              .map((x) => x.trim())
+              .filter(Boolean)
+          )
+          .slice(0, 10);
+
+        for (const b of bullets) out.push(`- ${b}`);
+        out.push("");
+      }
+
+      if (rest.length) {
+        out.push("### Summary");
+        const bullets = rest
+          .join(" ")
+          .split(/(?<=[.!?])\s+/)
+          .map((x) => x.trim())
+          .filter(Boolean)
+          .slice(0, 10);
+        for (const b of bullets) out.push(`- ${b}`);
+      }
+
+      const final = out.join("\n").trim();
+      return final || raw;
+    }
+  }
+
+  // If we have explicit "Heading:" lines, build markdown headings + bullets.
+  if (sectionStarts.length) {
+    const out = [];
+    let curTitle = "";
+    let curItems = [];
+
+    const flush = () => {
+      if (!curTitle && !curItems.length) return;
+      const title = curTitle || "Summary";
+      out.push(`### ${title}`);
+      const items = curItems.length ? curItems : [];
+      if (!items.length) out.push("- (No details provided)");
+      else {
+        for (const it of items) {
+          const s = it.replace(/^(\d+\.|[-•])\s+/, "").trim();
+          if (s) out.push(`- ${s}`);
+        }
+      }
+      out.push("");
+      curTitle = "";
+      curItems = [];
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      if (/^[A-Za-z][A-Za-z\s/&()-]{2,40}:\s*$/.test(line)) {
+        flush();
+        curTitle = line.replace(/:\s*$/, "").trim();
+        continue;
+      }
+
+      // normalize numbered/bulleted lines into items; otherwise sentence-split
+      if (/^(\d+\.|[-•])\s+/.test(line)) {
+        curItems.push(line);
+      } else {
+        const parts = line
+          .split(/(?<=[.!?])\s+/)
+          .map((x) => x.trim())
+          .filter(Boolean);
+        if (parts.length) curItems.push(...parts);
+        else curItems.push(line);
+      }
+    }
+
+    flush();
+    const final = out.join("\n").trim();
+    return final || raw;
+  }
+
+  // Fall back: keep your existing “prettify”, but better bullets
+  return raw;
+}
 
 function RichText({ text }) {
   const t = String(text || "");
@@ -921,6 +1155,10 @@ export default function LawReportReader() {
     ];
   }, []);
 
+  const contextChips = useMemo(() => {
+  return buildContextChips(report, preview?.text || gateSourceText || "");
+}, [report, preview?.text, gateSourceText]);
+
   useEffect(() => {
     function onScroll() {
       const el = document.documentElement;
@@ -1324,9 +1562,9 @@ export default function LawReportReader() {
 
       const payload = unwrapApi(res);
       const replyRaw = payload?.reply ?? payload?.data?.reply ?? payload?.message ?? payload?.answer ?? "";
-      let reply = prettifyChatReplyForUi(String(replyRaw || ""));
-      reply = forceUnorderedBullets(reply);
-
+      let reply = autoSectionChatReply(String(replyRaw || ""));
+      reply = prettifyChatReplyForUi(reply);     // keep your mild polish
+      reply = forceUnorderedBullets(reply);      // ALWAYS enforce unordered bullets
 
       setMessages((prev) => {
         const cleaned = prev.filter((m) => m?.id !== typingMsg.id);
@@ -1640,16 +1878,42 @@ function parseSectionedSummary(text) {
 }
 
     const aiShellClass = `lrrAi lrrAi--premium ${compact ? "isCompact" : ""}`;
+    const aiStatus = getAiStatus({
+        aiBusy,
+        aiTab,
+        aiLastAction,
+        summaryMeta,
+        summaryText,
+      });
+
 
     return (
       <div className={aiShellClass}>
-        <div className="lrrAiHead">
-          <div className="lrrAiHeadLeft">
+      <div className="lrrAiHead">
+        <div className="lrrAiHeadLeft">
+          <div className="lrrAiTitleRow">
             <div className="lrrAiTitle">LegalAI</div>
-            {!compact ? <div className="lrrAiSub">Premium-grade summaries & chat. Verify against the transcript.</div> : null}
+
+            <span className={`lrrAiStatus ${aiStatus.tone}`} title={aiStatus.label}>
+              <span className="dot" aria-hidden="true" />
+              <span className="txt">{aiStatus.label}</span>
+            </span>
           </div>
-          <div className="lrrAiHeadRight">
-            {aiTab === "summary" ? (
+
+          {/* Context chips */}
+          {contextChips?.length ? (
+            <div className="lrrAiCtxRow" aria-label="Case context">
+              {contextChips.map((c, i) => (
+                <span key={i} className={`lrrAiCtxChip ${c.tone}`} title={c.label}>
+                  {c.label}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="lrrAiHeadRight">
+          {aiTab === "summary" ? (
             <div className="lrrAiHeadActions">
               <button
                 type="button"
@@ -1661,7 +1925,11 @@ function parseSectionedSummary(text) {
               >
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M9 9h10v10H9z" stroke="currentColor" strokeWidth="1.8" />
-                  <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" stroke="currentColor" strokeWidth="1.8" />
+                  <path
+                    d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  />
                 </svg>
                 <span className="txt">Copy</span>
               </button>
@@ -1683,29 +1951,23 @@ function parseSectionedSummary(text) {
 
               <span className="lrrAiHeadSep" aria-hidden="true" />
 
-              <button
-                type="button"
-                className="lrrAiIconBtn"
-                onClick={aiNewSummary}
-                title="New summary"
-                aria-label="New summary"
-              >
+              <button type="button" className="lrrAiIconBtn" onClick={aiNewSummary} title="New summary" aria-label="New summary">
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                 </svg>
                 <span className="txt">New</span>
               </button>
             </div>
-
-            ) : (
-              <div className="lrrAiHeadActions">
-                <button type="button" className="lrrAiBtn ghost" onClick={aiClearChat} title="Clear messages">
-                  Clear chat
-                </button>
-              </div>
-            )}
-          </div>
+          ) : (
+            <div className="lrrAiHeadActions">
+              <button type="button" className="lrrAiBtn ghost" onClick={aiClearChat} title="Clear messages">
+                Clear chat
+              </button>
+            </div>
+          )}
         </div>
+      </div>
+
 
         {aiErr ? (
           <div className="lrrAiAlert" role="alert">
@@ -2031,42 +2293,50 @@ function parseSectionedSummary(text) {
           {aiTab === "chat" ? (
             <div className="lrrAiCard lrrAiCard--chatPremium">
               <div className="lrrAiChat lrrAiChat--premium">
-                {messages
-                  // keep chat clean: exclude any summary messages if they exist from old sessions
-                  .filter((m) => m?.kind !== "summary" && m?.kind !== "info")
-                  .map((m) => {
-                    const isUser = m.role === "user";
-                    const isTyping = m.kind === "typing";
+            {(() => {
+              const chatMsgs = messages.filter((m) => m?.kind !== "summary" && m?.kind !== "info");
+              const hasAny = chatMsgs.length > 0;
 
-                    return (
-                      <div key={m.id} className={`lrrAiMsg ${isUser ? "user" : "assistant"}`}>
-                        <div className="bubble">
-                          {!isUser && !isTyping ? (
-                            <div className="lrrAiMsgActions">
-                              <button
-                                type="button"
-                                className="lrrAiMini"
-                                onClick={() => copyText(m.content)}
-                                title="Copy"
-                              >
-                                Copy
-                              </button>
-                            </div>
-                          ) : null}
+              if (!hasAny) {
+                return (
+                  <div className="lrrAiChatEmpty">
+                    <div className="t">Ask LegalAI about this case</div>
+                    <div className="s">Try: issues for determination, holding & orders, ratio decidendi, or cited authorities.</div>
+                  </div>
+                );
+              }
 
-                          {isTyping ? (
-                            <div className="lrrAiTyping" aria-label="Assistant is typing">
-                              <span />
-                              <span />
-                              <span />
-                            </div>
-                          ) : (
-                            <RichText text={m.content} />
-                          )}
+              return chatMsgs.map((m) => {
+                // keep your existing map body here unchanged
+                const isUser = m.role === "user";
+                const isTyping = m.kind === "typing";
+
+                return (
+                  <div key={m.id} className={`lrrAiMsg ${isUser ? "user" : "assistant"}`}>
+                    <div className="bubble">
+                      {!isUser && !isTyping ? (
+                        <div className="lrrAiMsgActions">
+                          <button type="button" className="lrrAiMini" onClick={() => copyText(m.content)} title="Copy">
+                            Copy
+                          </button>
                         </div>
-                      </div>
-                    );
-                  })}
+                      ) : null}
+
+                      {isTyping ? (
+                        <div className="lrrAiTyping" aria-label="Assistant is typing">
+                          <span />
+                          <span />
+                          <span />
+                        </div>
+                      ) : (
+                        <RichText text={m.content} />
+                      )}
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+
                 <div ref={chatEndRef} />
               </div>
 
@@ -2105,10 +2375,8 @@ function parseSectionedSummary(text) {
         </div>
       </div>
     );
-  }
-
+   }
   // ---------------- Page layout ----------------
-
   return (
     <div className="lrr2Wrap" data-theme={readingTheme}>
       <header className={`lrr2Header ${headerCompact ? "isCompact" : ""}`}>
