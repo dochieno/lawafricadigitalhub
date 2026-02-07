@@ -1,13 +1,8 @@
-// src/pages/dashboard/LawReportReader.jsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../../api/client";
 import { getAuthClaims } from "../../auth/auth";
 import "../../styles/lawReportReader.css";
-
-/* =========================================================
-   1) Pure helpers (NO React hooks)
-========================================================= */
 
 function unwrapApi(res) {
   const d = res?.data;
@@ -83,10 +78,6 @@ function isGlobalAdminUser() {
   );
 }
 
-/* -------------------------
-   Access + gating helpers
-------------------------- */
-
 function getHasFullAccess(access) {
   return access?.hasFullAccess === true || access?.data?.hasFullAccess === true;
 }
@@ -109,7 +100,6 @@ function getAccessPreviewPolicy(access) {
   return { maxChars: maxChars ?? 5000, maxParas: maxParas ?? 22 };
 }
 
-// ✅ Your actual route (from App.jsx)
 const SUBSCRIBE_ROUTE = "/dashboard/law-reports/subscribe";
 const TRIAL_ROUTE = "/dashboard/trials";
 
@@ -171,7 +161,6 @@ function AccessReasonLabel(access) {
   return "";
 }
 
-// ✅ updated: accepts isPremium explicitly
 function getAccessStatus(access, isPremium, isAdmin, hasFullAccess) {
   if (isAdmin) return { tone: "ok", label: "Admin access", hint: "Full access enabled." };
   if (!isPremium) return { tone: "ok", label: "Free report", hint: "Full transcript available." };
@@ -200,16 +189,11 @@ function getAccessStatus(access, isPremium, isAdmin, hasFullAccess) {
   };
 }
 
-// ✅ updated: accepts isPremium explicitly
 function getIsAiAllowed(isPremium, access, isAdmin) {
   if (isAdmin) return true;
   if (!isPremium) return true;
   return getHasFullAccess(access);
 }
-
-/* -------------------------
-   Content formatting
-------------------------- */
 
 function normalizeText(s) {
   return String(s || "")
@@ -314,10 +298,6 @@ function formatDate(d) {
   return dt.toISOString().slice(0, 10);
 }
 
-/* -------------------------
-   AI helpers
-------------------------- */
-
 function nowIso() {
   return new Date().toISOString();
 }
@@ -337,10 +317,15 @@ function bulletsFromText(text) {
   const t = normalizeText(text);
   if (!t) return "";
   const lines = t.split("\n").map((x) => x.trim()).filter(Boolean);
-  // If it already looks like bullets, keep them
   const alreadyBullets = lines.some((l) => /^[-•]\s+/.test(l));
-  if (alreadyBullets) return lines.map((l) => (l.startsWith("-") || l.startsWith("•") ? l.replace(/^•\s+/, "- ") : `- ${l}`)).join("\n");
-  // Otherwise, bullet each line; if single line, split by sentences lightly
+  if (alreadyBullets)
+    return lines
+      .map((l) =>
+        l.startsWith("-") || l.startsWith("•")
+          ? l.replace(/^•\s+/, "- ")
+          : `- ${l}`
+      )
+      .join("\n");
   if (lines.length === 1) {
     const one = lines[0];
     const parts = one.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter(Boolean);
@@ -349,12 +334,6 @@ function bulletsFromText(text) {
   return lines.map((l) => `- ${l}`).join("\n");
 }
 
-/**
- * Minimal rich formatter (no markdown lib):
- * - "## " / "### " headings
- * - bullets "- " / "• "
- * - numbered "1. "
- */
 function RichText({ text }) {
   const t = String(text || "");
   const lines = t.replace(/\r\n/g, "\n").split("\n");
@@ -397,7 +376,6 @@ function RichText({ text }) {
     if (bullet || ordered) {
       const itemText = line.replace(/^[-•]\s+/, "").replace(/^\d+\.\s+/, "").trim();
       if (!list) list = { ordered, items: [] };
-      // if switches ordered/unordered, flush
       if (list.ordered !== ordered) {
         flushList();
         list = { ordered, items: [] };
@@ -444,10 +422,6 @@ function RichText({ text }) {
   );
 }
 
-/* =========================================================
-   2) Small presentational components
-========================================================= */
-
 function AccessStatusChip({ access, isPremium, isAdmin, hasFullAccess }) {
   const s = getAccessStatus(access, isPremium, isAdmin, hasFullAccess);
 
@@ -464,10 +438,6 @@ function AccessStatusChip({ access, isPremium, isAdmin, hasFullAccess }) {
   );
 }
 
-/**
- * ✅ Combined lock card (keep same design; we’ll only polish buttons in CSS)
- * NOTE: this will now render BELOW transcript.
- */
 function SubscriptionGateCard({
   isPremium,
   access,
@@ -720,17 +690,9 @@ function AiLockedPanel({ access, onGo }) {
   );
 }
 
-/* =========================================================
-   3) Main reader component
-========================================================= */
-
 export default function LawReportReader() {
   const { id } = useParams();
   const navigate = useNavigate();
-
-  /* -------------------------
-     Hooks first (stable order)
-  ------------------------- */
 
   const reportId = useMemo(() => {
     const n = Number(id);
@@ -741,7 +703,7 @@ export default function LawReportReader() {
   const isPublic = isPublicUser();
   const isAdmin = isGlobalAdminUser();
 
-  const [view, setView] = useState("content"); // content | ai | split
+  const [view, setView] = useState("content");
   const [contentOpen, setContentOpen] = useState(true);
 
   const [report, setReport] = useState(null);
@@ -754,17 +716,14 @@ export default function LawReportReader() {
   const [access, setAccess] = useState(null);
   const [accessLoading, setAccessLoading] = useState(false);
 
-  // Reader prefs
   const [fontScale, setFontScale] = useState(1);
-  const [readingTheme, setReadingTheme] = useState("paper"); // paper | sepia | dark
+  const [readingTheme, setReadingTheme] = useState("paper");
   const [serif, setSerif] = useState(true);
 
-  // Progress bar
   const [progress, setProgress] = useState(0);
   const progressBarRef = useRef(null);
   const [headerCompact, setHeaderCompact] = useState(false);
 
-  // Search
   const [q, setQ] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchErr, setSearchErr] = useState("");
@@ -775,15 +734,14 @@ export default function LawReportReader() {
   const searchCtlRef = useRef(null);
   const searchReqIdRef = useRef(0);
 
-  // AI (summary + chat)
-  const [aiTab, setAiTab] = useState("summary"); // summary | chat | related
-  const [summaryType, setSummaryType] = useState("basic"); // basic | extended
+  const [aiTab, setAiTab] = useState("summary");
+  const [summaryType, setSummaryType] = useState("basic");
   const [summaryText, setSummaryText] = useState("");
   const [summaryMeta, setSummaryMeta] = useState(null);
 
   const [aiBusy, setAiBusy] = useState(false);
   const [aiErr, setAiErr] = useState("");
-  const [aiLastAction, setAiLastAction] = useState(null); // { kind, payload }
+  const [aiLastAction, setAiLastAction] = useState(null);
 
   const [messages, setMessages] = useState(() => [
     {
@@ -799,10 +757,8 @@ export default function LawReportReader() {
 
   const chatEndRef = useRef(null);
   const aiMountedRef = useRef(false);
+  const aiAutoLoadedRef = useRef(false);
 
-  /* -------------------------
-     ✅ Option B: robust premium detection
-  ------------------------- */
   const isPremium = useMemo(() => {
     if (!report) return false;
 
@@ -820,10 +776,6 @@ export default function LawReportReader() {
 
     return false;
   }, [report]);
-
-  /* -------------------------
-     Derived values (useMemo)
-  ------------------------- */
 
   const rawContent = useMemo(() => String(report?.contentText || ""), [report?.contentText]);
   const textHasContent = useMemo(() => !!rawContent.trim(), [rawContent]);
@@ -915,16 +867,8 @@ export default function LawReportReader() {
       "List cited authorities and how they were applied.",
       "What practical action items follow from this decision?",
     ];
-    if (isPremium && !hasFullAccess) {
-      // keep prompts, but AI panel may be locked anyway
-      return base;
-    }
     return base;
-  }, [isPremium, hasFullAccess]);
-
-  /* ======================================================
-     Effects
-  ====================================================== */
+  }, []);
 
   useEffect(() => {
     function onScroll() {
@@ -1012,7 +956,6 @@ export default function LawReportReader() {
     setAvailabilityLoading(false);
     setAccessLoading(false);
 
-    // reset AI per report
     setAiErr("");
     setAiLastAction(null);
     setAiTab("summary");
@@ -1030,6 +973,7 @@ export default function LawReportReader() {
       },
     ]);
     setChatInput("");
+    aiAutoLoadedRef.current = false;
 
     if (Number.isFinite(reportId) && reportId > 0) load();
     else {
@@ -1078,7 +1022,6 @@ export default function LawReportReader() {
         }
       }
 
-      // ✅ access (only for premium)
       if (isPremium && (isInst || isPublic)) {
         try {
           setAccessLoading(true);
@@ -1107,8 +1050,9 @@ export default function LawReportReader() {
     try {
       searchCtlRef.current?.abort?.();
     } catch {
-      // ignore
+      //ignore
     }
+
     searchCtlRef.current = null;
 
     if (term.length < 2) {
@@ -1161,7 +1105,6 @@ export default function LawReportReader() {
     return () => clearTimeout(t);
   }, [q]);
 
-  // Autoscroll chat
   useEffect(() => {
     if (!aiMountedRef.current) {
       aiMountedRef.current = true;
@@ -1169,10 +1112,6 @@ export default function LawReportReader() {
     }
     chatEndRef.current?.scrollIntoView?.({ behavior: "smooth", block: "end" });
   }, [messages.length]);
-
-  /* ======================================================
-     Actions
-  ====================================================== */
 
   async function refreshAccessNow() {
     if (!report?.legalDocumentId) return;
@@ -1220,48 +1159,61 @@ export default function LawReportReader() {
     navigate(`/dashboard/law-reports/${rid}`);
   }
 
-  async function aiGetCachedSummary(type) {
-    setAiErr("");
-    setAiLastAction({ kind: "getSummary", payload: { type } });
-    setAiBusy(true);
+  const aiGetCachedSummary = useCallback(
+    async (type) => {
+      setAiErr("");
+      setAiLastAction({ kind: "getSummary", payload: { type } });
+      setAiBusy(true);
 
-    try {
-      const res = await api.get(`/ai/law-reports/${reportId}/summary`, { params: { type } });
-      const payload = unwrapApi(res);
+      try {
+        const res = await api.get(`/ai/law-reports/${reportId}/summary`, { params: { type } });
+        const payload = unwrapApi(res);
 
-      const summary = payload?.summary ?? payload?.data?.summary ?? "";
-      setSummaryText(String(summary || ""));
-      setSummaryMeta({
-        type: payload?.type || type,
-        createdAt: payload?.createdAt || null,
-        updatedAt: payload?.updatedAt || null,
-        cached: true,
-      });
-
-      // Also drop it into chat as an assistant message (nice UX)
-      if (summary) {
-        setMessages((prev) => {
-          const exists = prev.some((m) => m?.kind === "summary" && m?.summaryType === type);
-          if (exists) return prev;
-          return [
-            ...prev,
-            {
-              id: `sum_cached_${type}_${Date.now()}`,
-              role: "assistant",
-              content: String(summary),
-              createdAt: nowIso(),
-              kind: "summary",
-              summaryType: type,
-            },
-          ];
+        const summary = payload?.summary ?? payload?.data?.summary ?? "";
+        setSummaryText(String(summary || ""));
+        setSummaryMeta({
+          type: payload?.type || type,
+          createdAt: payload?.createdAt || null,
+          updatedAt: payload?.updatedAt || null,
+          cached: true,
         });
+
+        if (summary) {
+          setMessages((prev) => {
+            const exists = prev.some((m) => m?.kind === "summary" && m?.summaryType === type);
+            if (exists) return prev;
+            return [
+              ...prev,
+              {
+                id: `sum_cached_${type}_${Date.now()}`,
+                role: "assistant",
+                content: String(summary),
+                createdAt: nowIso(),
+                kind: "summary",
+                summaryType: type,
+              },
+            ];
+          });
+        }
+      } catch (e) {
+        setAiErr(getApiErrorMessage(e, "No cached summary found yet."));
+      } finally {
+        setAiBusy(false);
       }
-    } catch (e) {
-      setAiErr(getApiErrorMessage(e, "No cached summary found yet."));
-    } finally {
-      setAiBusy(false);
-    }
-  }
+    },
+    [reportId]
+  );
+
+  useEffect(() => {
+    if (view !== "ai" && view !== "split") return;
+    if (!aiAllowed) return;
+    if (!reportId) return;
+    if (aiAutoLoadedRef.current) return;
+
+    aiAutoLoadedRef.current = true;
+    setSummaryType("basic");
+    aiGetCachedSummary("basic");
+  }, [view, aiAllowed, reportId, aiGetCachedSummary]);
 
   async function aiGenerateSummary({ type, forceRegenerate }) {
     setAiErr("");
@@ -1333,7 +1285,6 @@ export default function LawReportReader() {
 
     try {
       const history = toChatHistory(
-        // include new user msg but exclude typing
         [...messages.filter((m) => m?.kind !== "typing"), userMsg],
         10
       );
@@ -1344,7 +1295,6 @@ export default function LawReportReader() {
       });
 
       const payload = unwrapApi(res);
-      // backend said: res.data.reply
       const reply = payload?.reply ?? payload?.data?.reply ?? payload?.message ?? payload?.answer ?? "";
 
       setMessages((prev) => {
@@ -1379,8 +1329,15 @@ export default function LawReportReader() {
       });
       const payload = unwrapApi(res);
 
-      const items = Array.isArray(payload?.items) ? payload.items : Array.isArray(payload?.data?.items) ? payload.data.items : [];
-      const disclaimer = payload?.disclaimer || payload?.data?.disclaimer || "AI suggestions may be inaccurate. Always verify citations and holdings.";
+      const items = Array.isArray(payload?.items)
+        ? payload.items
+        : Array.isArray(payload?.data?.items)
+          ? payload.data.items
+          : [];
+      const disclaimer =
+        payload?.disclaimer ||
+        payload?.data?.disclaimer ||
+        "AI suggestions may be inaccurate. Always verify citations and holdings.";
 
       const text =
         "## Related cases (AI)\n" +
@@ -1443,7 +1400,6 @@ export default function LawReportReader() {
     setAiLastAction(null);
     setSummaryText("");
     setSummaryMeta(null);
-    // Add a subtle assistant prompt for UX
     setMessages((prev) => [
       ...prev,
       {
@@ -1463,10 +1419,6 @@ export default function LawReportReader() {
     navigator.clipboard?.writeText?.(t);
   }
 
-  /* -------------------------
-     Early returns
-  ------------------------- */
-
   if (loading) {
     return (
       <div className="lrr2Wrap">
@@ -1482,17 +1434,23 @@ export default function LawReportReader() {
           <div className="lrr2ErrorTitle">Report unavailable</div>
           <div className="lrr2ErrorMsg">{error || "Not found."}</div>
           <div className="lrr2TopActions">
-          <button
-            type="button"
-            className="lrr2IconPill"
-            data-tip="Back to Law Reports"
-            onClick={() => navigate("/dashboard/law-reports")}
-          >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            <span className="txt">Back</span>
-          </button>
+            <button
+              type="button"
+              className="lrr2IconPill"
+              data-tip="Back to Law Reports"
+              onClick={() => navigate("/dashboard/law-reports")}
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M15 18l-6-6 6-6"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <span className="txt">Back</span>
+            </button>
           </div>
         </div>
       </div>
@@ -1504,7 +1462,9 @@ export default function LawReportReader() {
       <div className="lrr2Wrap">
         <div className="lrr2Error">
           <div className="lrr2ErrorTitle">Not available</div>
-          <div className="lrr2ErrorMsg">{availabilityLoading ? "Checking availability…" : "This report isn’t available yet."}</div>
+          <div className="lrr2ErrorMsg">
+            {availabilityLoading ? "Checking availability…" : "This report isn’t available yet."}
+          </div>
           <div className="lrr2TopActions">
             <button className="lrr2Btn" onClick={() => navigate("/dashboard/law-reports")}>
               ← Back
@@ -1515,10 +1475,6 @@ export default function LawReportReader() {
     );
   }
 
-  /* -------------------------
-     Render
-  ------------------------- */
-
   const title = report.parties || report.title || "Law Report";
   const llrNo = report.reportNumber || report.llrNo || report.llrNumber || String(reportId);
 
@@ -1528,127 +1484,94 @@ export default function LawReportReader() {
     }
 
     const hasSomeSummary = !!safeTrim(summaryText);
-    const showSummaryEmpty = aiTab === "summary" && !hasSomeSummary && !aiBusy;  
+    const showSummaryEmpty = aiTab === "summary" && !hasSomeSummary && !aiBusy;
+
     function parseSectionedSummary(text) {
-        const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
+      const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
 
-        const sections = [];
-        let cur = null;
+      const sections = [];
+      let cur = null;
 
-        const isHeader = (s) => /^[A-Z][A-Z0-9\s/()-]{2,}:\s*$/.test(s.trim());
+      const isHeader = (s) => /^[A-Z][A-Z0-9\s/()-]{2,}:\s*$/.test(s.trim());
 
-        function pushCur() {
-          if (!cur) return;
-          cur.items = cur.items.map((x) => x.trim()).filter(Boolean);
-          if (cur.items.length) sections.push(cur);
-          cur = null;
-        }
-
-        for (const raw of lines) {
-          const line = raw.trimEnd();
-          if (!line.trim()) continue;
-
-          if (isHeader(line)) {
-            pushCur();
-            cur = { title: line.trim().replace(/:\s*$/, ""), items: [] };
-            continue;
-          }
-
-          // bullets
-          const bullet = line.trim().replace(/^[-•]\s+/, "");
-          if (!cur) cur = { title: "SUMMARY", items: [] };
-          cur.items.push(bullet);
-        }
-
-        pushCur();
-
-        // if nothing detected, fallback as one section
-        if (!sections.length && String(text || "").trim()) {
-          return [{ title: "SUMMARY", items: splitIntoParagraphs(text).slice(0, 20) }];
-        }
-
-        return sections;
+      function pushCur() {
+        if (!cur) return;
+        cur.items = cur.items.map((x) => x.trim()).filter(Boolean);
+        if (cur.items.length) sections.push(cur);
+        cur = null;
       }
 
-      function extractKeyTakeaways(sections) {
+      for (const raw of lines) {
+        const line = raw.trimEnd();
+        if (!line.trim()) continue;
+
+        if (isHeader(line)) {
+          pushCur();
+          cur = { title: line.trim().replace(/:\s*$/, ""), items: [] };
+          continue;
+        }
+
+        const bullet = line.trim().replace(/^[-•]\s+/, "");
+        if (!cur) cur = { title: "SUMMARY", items: [] };
+        cur.items.push(bullet);
+      }
+
+      pushCur();
+
+      if (!sections.length && String(text || "").trim()) {
+        return [{ title: "SUMMARY", items: splitIntoParagraphs(text).slice(0, 20) }];
+      }
+
+      return sections;
+    }
+
+    function extractKeyTakeaways(sections) {
       const kp = sections.find((s) => s.title.toUpperCase().includes("KEY TAKEAWAYS"));
       if (!kp) return [];
       return kp.items.map((t, idx) => ({ id: `kp_${idx}`, text: t }));
     }
-
-  
 
     return (
       <div className={`lrrAi ${compact ? "isCompact" : ""}`}>
         <div className="lrrAiHead">
           <div className="lrrAiHeadLeft">
             <div className="lrrAiTitle">LegalAI</div>
-            <div className="lrrAiSub">
-              Premium-grade summaries & chat. Verify against the transcript.
-            </div>
+            <div className="lrrAiSub">Premium-grade summaries & chat. Verify against the transcript.</div>
           </div>
 
-        <div className="lrrAiHeadRight">
-          {/* Copy actions (only when summary exists) */}
-          {hasSomeSummary ? (() => {
-            const sections = parseSectionedSummary(summaryText);
+          <div className="lrrAiHeadRight">
+            <div className="lrrAiHeadActions">
+              <button
+                type="button"
+                className="lrrAiBtn ghost"
+                disabled={aiBusy || !hasSomeSummary}
+                onClick={() => copyText(summaryText)}
+                title="Copy summary"
+              >
+                Copy
+              </button>
 
-            // pull out key takeaways if present
-            const takeaways = extractKeyTakeaways(sections);
-            const mainSections = sections.filter((s) => !s.title.toUpperCase().includes("KEY TAKEAWAYS"));
+              <button
+                type="button"
+                className="lrrAiBtn ghost"
+                disabled={aiBusy || !hasSomeSummary}
+                onClick={() => copyText(bulletsFromText(summaryText))}
+                title="Copy as bullets"
+              >
+                Copy bullets
+              </button>
 
-            return (
-              <div className="lrrAiAnswer">
-                {/* SECTION CARDS */}
-                <div className="lrrAiSections">
-                  {mainSections.map((s, idx) => (
-                    <section key={`${s.title}_${idx}`} className="lrrAiSectionCard">
-                      <div className="lrrAiSectionHead">
-                        <span className="dot" aria-hidden="true" />
-                        <div className="ttl">{s.title}</div>
-                      </div>
+              <span className="lrrAiHeadSep" aria-hidden="true" />
 
-                      <ul className="lrrAiSectionList">
-                        {s.items.map((it, i2) => (
-                          <li key={i2}>{it}</li>
-                        ))}
-                      </ul>
-                    </section>
-                  ))}
-                </div>
+              <button type="button" className="lrrAiBtn ghost" onClick={aiNewSummary} title="Start a new summary workflow">
+                New summary
+              </button>
 
-                {/* KEY TAKEAWAYS (collapsible) */}
-                {takeaways.length ? (
-                  <details className="lrrAiTakeaways" open>
-                    <summary className="lrrAiTakeawaysSum">
-                      <span className="kpttl">KEY TAKEAWAYS</span>
-                      <span className="kphint">(click to collapse)</span>
-                      <span className="chev" aria-hidden="true">▾</span>
-                    </summary>
-
-                    <div className="lrrAiKpGrid">
-                      {takeaways.map((x, idx) => (
-                        <div key={x.id} className="lrrAiKpCard">
-                          <div className="lrrAiKpText">{x.text}</div>
-                          <div className="lrrAiKpBadge">{`KP${idx + 1}`}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </details>
-                ) : null}
-              </div>
-            );
-          })() : null}
-
-          <button type="button" className="lrrAiBtn ghost" onClick={aiNewSummary} title="Start a new summary workflow">
-            New summary
-          </button>
-
-          <button type="button" className="lrrAiBtn ghost" onClick={aiClearChat} title="Clear messages">
-            Clear chat
-          </button>
-        </div>
-
+              <button type="button" className="lrrAiBtn ghost" onClick={aiClearChat} title="Clear messages">
+                Clear chat
+              </button>
+            </div>
+          </div>
         </div>
 
         {aiErr ? (
@@ -1667,30 +1590,17 @@ export default function LawReportReader() {
         ) : null}
 
         <div className="lrrAiTabs" role="tablist" aria-label="LegalAI tabs">
-          <button
-            type="button"
-            className={`lrrAiTab ${aiTab === "summary" ? "isActive" : ""}`}
-            onClick={() => setAiTab("summary")}
-          >
+          <button type="button" className={`lrrAiTab ${aiTab === "summary" ? "isActive" : ""}`} onClick={() => setAiTab("summary")}>
             Summary
           </button>
-          <button
-            type="button"
-            className={`lrrAiTab ${aiTab === "chat" ? "isActive" : ""}`}
-            onClick={() => setAiTab("chat")}
-          >
+          <button type="button" className={`lrrAiTab ${aiTab === "chat" ? "isActive" : ""}`} onClick={() => setAiTab("chat")}>
             Chat
           </button>
-          <button
-            type="button"
-            className={`lrrAiTab ${aiTab === "related" ? "isActive" : ""}`}
-            onClick={() => setAiTab("related")}
-          >
+          <button type="button" className={`lrrAiTab ${aiTab === "related" ? "isActive" : ""}`} onClick={() => setAiTab("related")}>
             Related cases
           </button>
         </div>
 
-        {/* Suggested prompts */}
         <div className="lrrAiChips" aria-label="Suggested prompts">
           {suggestedPrompts.slice(0, 6).map((p, idx) => (
             <button
@@ -1708,7 +1618,6 @@ export default function LawReportReader() {
           ))}
         </div>
 
-        {/* Body */}
         <div className="lrrAiBody">
           {aiTab === "summary" ? (
             <div className="lrrAiCard">
@@ -1733,13 +1642,7 @@ export default function LawReportReader() {
                 </div>
 
                 <div className="lrrAiRowActions">
-                  <button
-                    type="button"
-                    className="lrrAiBtn"
-                    disabled={aiBusy}
-                    onClick={() => aiGetCachedSummary(summaryType)}
-                    title="Load cached summary (if any)"
-                  >
+                  <button type="button" className="lrrAiBtn" disabled={aiBusy} onClick={() => aiGetCachedSummary(summaryType)} title="Load cached summary (if any)">
                     Load cached
                   </button>
 
@@ -1748,7 +1651,7 @@ export default function LawReportReader() {
                     className="lrrAiBtn primary"
                     disabled={aiBusy}
                     onClick={() => aiGenerateSummary({ type: summaryType, forceRegenerate: false })}
-                    title="Generate summary (uses cache if available server-side)"
+                    title="Generate summary"
                   >
                     Generate
                   </button>
@@ -1758,7 +1661,7 @@ export default function LawReportReader() {
                     className="lrrAiBtn ghost"
                     disabled={aiBusy}
                     onClick={() => aiGenerateSummary({ type: summaryType, forceRegenerate: true })}
-                    title="Force regenerate (refresh cached output)"
+                    title="Force regenerate"
                   >
                     Force regenerate
                   </button>
@@ -1794,24 +1697,68 @@ export default function LawReportReader() {
                     </div>
                   </div>
 
-                  <RichText text={summaryText} />
+                  {(() => {
+                    const sections = parseSectionedSummary(summaryText);
+
+                    const takeaways = extractKeyTakeaways(sections);
+                    const mainSections = sections.filter((s) => !s.title.toUpperCase().includes("KEY TAKEAWAYS"));
+
+                    return (
+                      <>
+                        <div className="lrrAiSections">
+                          {mainSections.map((s, idx) => (
+                            <section key={`${s.title}_${idx}`} className="lrrAiSectionCard">
+                              <div className="lrrAiSectionHead">
+                                <span className="dot" aria-hidden="true" />
+                                <div className="ttl">{s.title}</div>
+                              </div>
+
+                              <ul className="lrrAiSectionList">
+                                {s.items.map((it, i2) => (
+                                  <li key={i2}>{it}</li>
+                                ))}
+                              </ul>
+                            </section>
+                          ))}
+                        </div>
+
+                        {takeaways.length ? (
+                          <details className="lrrAiTakeaways" open>
+                            <summary className="lrrAiTakeawaysSum">
+                              <span className="kpttl">KEY TAKEAWAYS</span>
+                              <span className="kphint">(click to collapse)</span>
+                              <span className="chev" aria-hidden="true">
+                                ▾
+                              </span>
+                            </summary>
+
+                            <div className="lrrAiKpGrid">
+                              {takeaways.map((x, idx) => (
+                                <div key={x.id} className="lrrAiKpCard">
+                                  <div className="lrrAiKpText">{x.text}</div>
+                                  <div className="lrrAiKpBadge">{`KP${idx + 1}`}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        ) : null}
+                      </>
+                    );
+                  })()}
+
+                  <div className="lrrAiRawFallback">
+                    <RichText text={summaryText} />
+                  </div>
                 </div>
               ) : null}
             </div>
           ) : aiTab === "related" ? (
             <div className="lrrAiCard">
               <div className="lrrAiRow">
-                <div className="lrrAiNote">
-                  Generate AI-suggested related cases (Kenya + Foreign). Always verify relevance and citations.
-                </div>
+                <div className="lrrAiNote">Generate AI-suggested related cases (Kenya + Foreign). Always verify relevance and citations.</div>
 
                 <div className="lrrAiRowActions">
-                  <button
-                    type="button"
-                    className="lrrAiBtn primary"
-                    disabled={aiBusy}
-                    onClick={aiGenerateRelatedCases}
-                  >
+                  <button type="button" className="lrrAiBtn primary" disabled={aiBusy} onClick={aiGenerateRelatedCases}>
                     Generate related cases
                   </button>
                 </div>
@@ -1839,12 +1786,7 @@ export default function LawReportReader() {
                           <button type="button" className="lrrAiMini" onClick={() => copyText(m.content)} title="Copy">
                             Copy
                           </button>
-                          <button
-                            type="button"
-                            className="lrrAiMini"
-                            onClick={() => copyText(bulletsFromText(m.content))}
-                            title="Copy as bullets"
-                          >
+                          <button type="button" className="lrrAiMini" onClick={() => copyText(bulletsFromText(m.content))} title="Copy as bullets">
                             Copy bullets
                           </button>
                         </div>
@@ -1868,12 +1810,7 @@ export default function LawReportReader() {
                             <button type="button" className="lrrAiMini" onClick={() => copyText(m.content)} title="Copy">
                               Copy
                             </button>
-                            <button
-                              type="button"
-                              className="lrrAiMini"
-                              onClick={() => copyText(bulletsFromText(m.content))}
-                              title="Copy as bullets"
-                            >
+                            <button type="button" className="lrrAiMini" onClick={() => copyText(bulletsFromText(m.content))} title="Copy as bullets">
                               Copy bullets
                             </button>
                           </div>
@@ -1910,12 +1847,7 @@ export default function LawReportReader() {
                 />
                 <div className="lrrAiComposerActions">
                   <div className="lrrAiHint">Tip: Ctrl/⌘ + Enter to send</div>
-                  <button
-                    type="button"
-                    className="lrrAiBtn primary"
-                    disabled={aiBusy || !safeTrim(chatInput)}
-                    onClick={() => aiSendChat(chatInput)}
-                  >
+                  <button type="button" className="lrrAiBtn primary" disabled={aiBusy || !safeTrim(chatInput)} onClick={() => aiSendChat(chatInput)}>
                     Send
                   </button>
                 </div>
@@ -1923,13 +1855,10 @@ export default function LawReportReader() {
             </div>
           )}
         </div>
+
         <div className="lrrAiFooter">
-          <div className="lrrAiFooterTip">
-            Tip: Use the suggested prompts above. Ctrl/⌘ + Enter sends a message in Chat.
-          </div>
-          <div className="lrrAiFooterDisc">
-            Disclaimer: AI output may be inaccurate. Verify against the transcript and citations.
-          </div>
+          <div className="lrrAiFooterTip">Tip: Use the suggested prompts above. Ctrl/⌘ + Enter sends a message in Chat.</div>
+          <div className="lrrAiFooterDisc">Disclaimer: AI output may be inaccurate. Verify against the transcript and citations.</div>
         </div>
       </div>
     );
@@ -1947,7 +1876,6 @@ export default function LawReportReader() {
           </div>
         </div>
 
-        {/* Search row */}
         <div className="lrr2SearchRow">
           <div className="lrr2SearchBox" ref={searchBoxRef}>
             <div className="lrr2SearchLead" aria-hidden="true">
@@ -2036,7 +1964,6 @@ export default function LawReportReader() {
         ↑
       </button>
 
-      {/* Meta */}
       <div className="lrr2TopGrid lrr2TopGrid--single">
         <section className="lrr2MetaCard">
           <div className="lrr2MetaGrid">
@@ -2127,24 +2054,12 @@ export default function LawReportReader() {
                 </div>
               ) : null}
 
-              <button
-                type="button"
-                className="lrr2MetaAction"
-                data-action="true"
-                title="Copy title"
-                onClick={() => navigator.clipboard?.writeText(`${title}`)}
-              >
+              <button type="button" className="lrr2MetaAction" data-action="true" title="Copy title" onClick={() => navigator.clipboard?.writeText(`${title}`)}>
                 Copy title
               </button>
 
               {report?.citation ? (
-                <button
-                  type="button"
-                  className="lrr2MetaAction"
-                  data-action="true"
-                  title="Copy citation"
-                  onClick={() => navigator.clipboard?.writeText(String(report.citation))}
-                >
+                <button type="button" className="lrr2MetaAction" data-action="true" title="Copy citation" onClick={() => navigator.clipboard?.writeText(String(report.citation))}>
                   Copy citation
                 </button>
               ) : null}
@@ -2156,12 +2071,7 @@ export default function LawReportReader() {
                       checking access…
                     </span>
                   ) : (
-                    <AccessStatusChip
-                      access={access}
-                      isPremium={isPremium}
-                      isAdmin={isAdmin}
-                      hasFullAccess={hasFullAccess}
-                    />
+                    <AccessStatusChip access={access} isPremium={isPremium} isAdmin={isAdmin} hasFullAccess={hasFullAccess} />
                   )}
                 </div>
               ) : null}
@@ -2170,9 +2080,7 @@ export default function LawReportReader() {
         </section>
       </div>
 
-      {/* Tabs */}
       <div className="lrr2Tabs" role="tablist" aria-label="Reader tabs">
-        {/* Transcript */}
         <button
           type="button"
           role="tab"
@@ -2188,7 +2096,6 @@ export default function LawReportReader() {
           {isPremium && !hasFullAccess ? <span className="lrr2TabBadge lock">Locked</span> : null}
         </button>
 
-        {/* LegalAI */}
         {aiAllowed ? (
           <button
             type="button"
@@ -2209,7 +2116,6 @@ export default function LawReportReader() {
           </button>
         )}
 
-        {/* Split */}
         <button
           type="button"
           role="tab"
@@ -2225,143 +2131,20 @@ export default function LawReportReader() {
         </button>
       </div>
 
-        <section className="lrr2Content">
-          {!textHasContent ? (
-            <div className="lrr2Empty">This report has no content yet.</div>
-          ) : view === "ai" ? (
-            // ✅ AI full width
-            aiAllowed ? (
-              <div className="lrr2Panel lrr2Panel--tight">
-                <LegalAiPanel compact={false} />
-              </div>
-            ) : (
-              <AiLockedPanel access={access} onGo={goUrl} />
-            )
-          ) : view === "split" ? (
-            // ✅ Split view (Transcript + AI)
-            <div className="lrr2Split">
-              {/* LEFT: Transcript */}
-              <article className="lrr2Article">
-                {/* Reader tools */}
-                <div className="lrr2TranscriptTools">
-                  <div className="lrr2ReaderBar">
-                    <div className="lrr2ReaderCluster">
-                      <button
-                        type="button"
-                        className="lrr2IconBtn"
-                        onClick={() => setFontScale((v) => Math.max(0.9, Number((v - 0.05).toFixed(2))))}
-                        title="Decrease text size"
-                        aria-label="Decrease text size"
-                      >
-                        <span className="lrr2IconBtnText">A−</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className="lrr2IconBtn"
-                        onClick={() => setFontScale((v) => Math.min(1.2, Number((v + 0.05).toFixed(2))))}
-                        title="Increase text size"
-                        aria-label="Increase text size"
-                      >
-                        <span className="lrr2IconBtnText">A+</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className={`lrr2IconBtn ${serif ? "isOn" : ""}`}
-                        onClick={() => setSerif((v) => !v)}
-                        title={serif ? "Serif font (on)" : "Serif font (off)"}
-                        aria-label="Toggle serif font"
-                      >
-                        <span className="lrr2IconBtnText">Serif</span>
-                      </button>
-                    </div>
-
-                    <div className="lrr2ReaderCluster">
-                      <button
-                        type="button"
-                        className={`lrr2IconBtn ${readingTheme === "paper" ? "isOn" : ""}`}
-                        onClick={() => setReadingTheme("paper")}
-                        title="Paper theme"
-                        aria-label="Paper theme"
-                      >
-                        <span className="lrr2IconBtnText">Paper</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className={`lrr2IconBtn ${readingTheme === "sepia" ? "isOn" : ""}`}
-                        onClick={() => setReadingTheme("sepia")}
-                        title="Sepia theme"
-                        aria-label="Sepia theme"
-                      >
-                        <span className="lrr2IconBtnText">Sepia</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className={`lrr2IconBtn ${readingTheme === "dark" ? "isOn" : ""}`}
-                        onClick={() => setReadingTheme("dark")}
-                        title="Dark theme"
-                        aria-label="Dark theme"
-                      >
-                        <span className="lrr2IconBtnText">Dark</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Transcript */}
-                <div
-                  className={[
-                    "lrr2Collapse",
-                    contentOpen ? "open" : "closed",
-                    `lrr2Theme-${readingTheme}`,
-                    fsClass,
-                    fontClass,
-                    preview.gated && preview.reachedLimit ? "isPreviewGated" : "",
-                  ].join(" ")}
-                >
-                  {preview.renderAsHtml ? (
-                    <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: preview.html }} />
-                  ) : (
-                    <CaseContentWithGateBreak
-                      text={preview.text}
-                      showBreak={showInlineBreak}
-                      access={access}
-                      onGo={goUrl}
-                      onRefresh={refreshAccessNow}
-                    />
-                  )}
-                </div>
-
-                {/* Sticky CTA if preview limit reached */}
-                {contentOpen && preview.gated && preview.reachedLimit ? (
-                  <SubscribeGateOverlay access={access} onGo={goUrl} />
-                ) : null}
-
-                {/* ✅ Lock guard BELOW transcript */}
-                <SubscriptionGateCard
-                  isPremium={isPremium}
-                  access={access}
-                  isAdmin={isAdmin}
-                  isInst={isInst}
-                  isPublic={isPublic}
-                  hasFullAccess={hasFullAccess}
-                  onGo={goUrl}
-                  onRefreshAccess={refreshAccessNow}
-                />
-              </article>
-
-              {/* RIGHT: AI */}
-              <aside className="lrr2Aside">
-                {aiAllowed ? <LegalAiPanel compact={true} /> : <AiLockedPanel access={access} onGo={goUrl} />}
-              </aside>
+      <section className="lrr2Content">
+        {!textHasContent ? (
+          <div className="lrr2Empty">This report has no content yet.</div>
+        ) : view === "ai" ? (
+          aiAllowed ? (
+            <div className="lrr2Panel lrr2Panel--tight">
+              <LegalAiPanel compact={false} />
             </div>
           ) : (
-            // ✅ Transcript full width (default = "content")
+            <AiLockedPanel access={access} onGo={goUrl} />
+          )
+        ) : view === "split" ? (
+          <div className="lrr2Split">
             <article className="lrr2Article">
-              {/* Reader tools */}
               <div className="lrr2TranscriptTools">
                 <div className="lrr2ReaderBar">
                   <div className="lrr2ReaderCluster">
@@ -2397,40 +2180,21 @@ export default function LawReportReader() {
                   </div>
 
                   <div className="lrr2ReaderCluster">
-                    <button
-                      type="button"
-                      className={`lrr2IconBtn ${readingTheme === "paper" ? "isOn" : ""}`}
-                      onClick={() => setReadingTheme("paper")}
-                      title="Paper theme"
-                      aria-label="Paper theme"
-                    >
+                    <button type="button" className={`lrr2IconBtn ${readingTheme === "paper" ? "isOn" : ""}`} onClick={() => setReadingTheme("paper")} title="Paper theme" aria-label="Paper theme">
                       <span className="lrr2IconBtnText">Paper</span>
                     </button>
 
-                    <button
-                      type="button"
-                      className={`lrr2IconBtn ${readingTheme === "sepia" ? "isOn" : ""}`}
-                      onClick={() => setReadingTheme("sepia")}
-                      title="Sepia theme"
-                      aria-label="Sepia theme"
-                    >
+                    <button type="button" className={`lrr2IconBtn ${readingTheme === "sepia" ? "isOn" : ""}`} onClick={() => setReadingTheme("sepia")} title="Sepia theme" aria-label="Sepia theme">
                       <span className="lrr2IconBtnText">Sepia</span>
                     </button>
 
-                    <button
-                      type="button"
-                      className={`lrr2IconBtn ${readingTheme === "dark" ? "isOn" : ""}`}
-                      onClick={() => setReadingTheme("dark")}
-                      title="Dark theme"
-                      aria-label="Dark theme"
-                    >
+                    <button type="button" className={`lrr2IconBtn ${readingTheme === "dark" ? "isOn" : ""}`} onClick={() => setReadingTheme("dark")} title="Dark theme" aria-label="Dark theme">
                       <span className="lrr2IconBtnText">Dark</span>
                     </button>
                   </div>
                 </div>
               </div>
 
-              {/* Transcript */}
               <div
                 className={[
                   "lrr2Collapse",
@@ -2444,22 +2208,12 @@ export default function LawReportReader() {
                 {preview.renderAsHtml ? (
                   <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: preview.html }} />
                 ) : (
-                  <CaseContentWithGateBreak
-                    text={preview.text}
-                    showBreak={showInlineBreak}
-                    access={access}
-                    onGo={goUrl}
-                    onRefresh={refreshAccessNow}
-                  />
+                  <CaseContentWithGateBreak text={preview.text} showBreak={showInlineBreak} access={access} onGo={goUrl} onRefresh={refreshAccessNow} />
                 )}
               </div>
 
-              {/* Sticky CTA if preview limit reached */}
-              {contentOpen && preview.gated && preview.reachedLimit ? (
-                <SubscribeGateOverlay access={access} onGo={goUrl} />
-              ) : null}
+              {contentOpen && preview.gated && preview.reachedLimit ? <SubscribeGateOverlay access={access} onGo={goUrl} /> : null}
 
-              {/* ✅ Lock guard BELOW transcript */}
               <SubscriptionGateCard
                 isPremium={isPremium}
                 access={access}
@@ -2471,10 +2225,93 @@ export default function LawReportReader() {
                 onRefreshAccess={refreshAccessNow}
               />
             </article>
-          )}
-        </section>
 
+            <aside className="lrr2Aside">{aiAllowed ? <LegalAiPanel compact={true} /> : <AiLockedPanel access={access} onGo={goUrl} />}</aside>
+          </div>
+        ) : (
+          <article className="lrr2Article">
+            <div className="lrr2TranscriptTools">
+              <div className="lrr2ReaderBar">
+                <div className="lrr2ReaderCluster">
+                  <button
+                    type="button"
+                    className="lrr2IconBtn"
+                    onClick={() => setFontScale((v) => Math.max(0.9, Number((v - 0.05).toFixed(2))))}
+                    title="Decrease text size"
+                    aria-label="Decrease text size"
+                  >
+                    <span className="lrr2IconBtnText">A−</span>
+                  </button>
 
+                  <button
+                    type="button"
+                    className="lrr2IconBtn"
+                    onClick={() => setFontScale((v) => Math.min(1.2, Number((v + 0.05).toFixed(2))))}
+                    title="Increase text size"
+                    aria-label="Increase text size"
+                  >
+                    <span className="lrr2IconBtnText">A+</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`lrr2IconBtn ${serif ? "isOn" : ""}`}
+                    onClick={() => setSerif((v) => !v)}
+                    title={serif ? "Serif font (on)" : "Serif font (off)"}
+                    aria-label="Toggle serif font"
+                  >
+                    <span className="lrr2IconBtnText">Serif</span>
+                  </button>
+                </div>
+
+                <div className="lrr2ReaderCluster">
+                  <button type="button" className={`lrr2IconBtn ${readingTheme === "paper" ? "isOn" : ""}`} onClick={() => setReadingTheme("paper")} title="Paper theme" aria-label="Paper theme">
+                    <span className="lrr2IconBtnText">Paper</span>
+                  </button>
+
+                  <button type="button" className={`lrr2IconBtn ${readingTheme === "sepia" ? "isOn" : ""}`} onClick={() => setReadingTheme("sepia")} title="Sepia theme" aria-label="Sepia theme">
+                    <span className="lrr2IconBtnText">Sepia</span>
+                  </button>
+
+                  <button type="button" className={`lrr2IconBtn ${readingTheme === "dark" ? "isOn" : ""}`} onClick={() => setReadingTheme("dark")} title="Dark theme" aria-label="Dark theme">
+                    <span className="lrr2IconBtnText">Dark</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className={[
+                "lrr2Collapse",
+                contentOpen ? "open" : "closed",
+                `lrr2Theme-${readingTheme}`,
+                fsClass,
+                fontClass,
+                preview.gated && preview.reachedLimit ? "isPreviewGated" : "",
+              ].join(" ")}
+            >
+              {preview.renderAsHtml ? (
+                <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: preview.html }} />
+              ) : (
+                <CaseContentWithGateBreak text={preview.text} showBreak={showInlineBreak} access={access} onGo={goUrl} onRefresh={refreshAccessNow} />
+              )}
+            </div>
+
+            {contentOpen && preview.gated && preview.reachedLimit ? <SubscribeGateOverlay access={access} onGo={goUrl} /> : null}
+
+            <SubscriptionGateCard
+              isPremium={isPremium}
+              access={access}
+              isAdmin={isAdmin}
+              isInst={isInst}
+              isPublic={isPublic}
+              hasFullAccess={hasFullAccess}
+              onGo={goUrl}
+              onRefreshAccess={refreshAccessNow}
+            />
+          </article>
+        )}
+      </section>
     </div>
   );
 }

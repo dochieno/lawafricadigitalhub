@@ -2001,7 +2001,6 @@
   gap:6px;
 }
 
-
 /* Key points list */
 .lrrAiKeyList {
   margin: 0;
@@ -2081,4 +2080,392 @@
   background: rgba(161,24,30,.14);
   border-color: rgba(161,24,30,.26);
   color: rgba(255,255,255,.92);
+}
+/* =========================
+   LegalAI header actions
+========================= */
+.lrrAiHeadRight {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.lrrAiHeadActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.lrrAiHeadSep {
+  width: 1px;
+  height: 18px;
+  background: rgba(17, 24, 39, 0.12);
+  margin: 0 2px;
+}
+
+/* Buttons: keep slim + premium */
+.lrrAiBtn {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+}
+
+.lrrAiBtn.ghost {
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(17, 24, 39, 0.12);
+}
+
+/* =========================
+   Section cards layout
+========================= */
+.lrrAiSections {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr;
+  margin-top: 10px;
+}
+
+@media (min-width: 900px) {
+  .lrrAiSections {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.lrrAiSectionCard {
+  border: 1px solid rgba(17, 24, 39, 0.10);
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 16px;
+  padding: 12px 12px 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+}
+
+.lrrAiSectionHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.lrrAiSectionHead .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(161, 18, 18, 0.9); /* LawAfrica maroon */
+}
+
+.lrrAiSectionHead .ttl {
+  font-weight: 800;
+  font-size: 12.5px;
+  letter-spacing: 0.4px;
+  color: rgba(17, 24, 39, 0.92);
+  text-transform: uppercase;
+}
+
+.lrrAiSectionList {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.lrrAiSectionList li {
+  margin: 6px 0;
+  line-height: 1.45;
+  color: rgba(17, 24, 39, 0.88);
+}
+
+/* =========================
+   Key Takeaways
+========================= */
+.lrrAiTakeaways {
+  margin-top: 14px;
+  border: 1px solid rgba(17, 24, 39, 0.10);
+  background: rgba(255, 255, 255, 0.70);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.lrrAiTakeawaysSum {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px;
+  user-select: none;
+}
+
+.lrrAiTakeawaysSum::-webkit-details-marker { display: none; }
+
+.lrrAiTakeawaysSum .kpttl {
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  font-size: 12.5px;
+}
+
+.lrrAiTakeawaysSum .kphint {
+  font-size: 12px;
+  color: rgba(17, 24, 39, 0.55);
+}
+
+.lrrAiTakeawaysSum .chev {
+  margin-left: auto;
+  opacity: 0.6;
+}
+
+.lrrAiKpGrid {
+  padding: 0 12px 12px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 900px) {
+  .lrrAiKpGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.lrrAiKpCard {
+  position: relative;
+  border: 1px solid rgba(17, 24, 39, 0.10);
+  border-radius: 14px;
+  padding: 12px 12px 12px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.lrrAiKpText {
+  font-weight: 650;
+  line-height: 1.45;
+  color: rgba(17, 24, 39, 0.92);
+}
+
+.lrrAiKpBadge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(161, 18, 18, 0.20);
+  background: rgba(161, 18, 18, 0.08);
+  color: rgba(161, 18, 18, 0.95);
+  font-weight: 800;
+}
+
+/* optional: keep raw rich text subtle */
+.lrrAiRawFallback {
+  margin-top: 12px;
+  opacity: 0.9;
+}
+/* =========================================================
+   99) FINAL POLISH OVERRIDES (dedupe + premium stability)
+   Paste at the very bottom of this file.
+========================================================= */
+
+/* --------- Consistent focus states everywhere ---------- */
+.lrr2Wrap :where(button, [role="button"], input, textarea):focus-visible {
+  outline: none;
+  box-shadow: var(--focusRing);
+  border-color: var(--focusBorder);
+}
+
+/* --------- Reduce jittery hover transforms on mobile ---------- */
+@media (hover: none) {
+  .lrr2Wrap :where(.lrr2Btn, .lrr2IconBtn, .lrr2LinkBtn, .lrrAiBtn, .lrrAiChip, .lrrAiMini):hover {
+    transform: none !important;
+  }
+}
+
+/* --------- Fix: duplicated .lrr2Split definitions fighting ---------- */
+.lrr2Split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px; /* original intent */
+  gap: 14px;
+  align-items: start;
+}
+@media (max-width: 980px) {
+  .lrr2Split { grid-template-columns: 1fr; }
+}
+
+/* Optional mode variants (kept, but consistent) */
+.lrr2Split.isSingle { grid-template-columns: 1fr; }
+.lrr2Split.isAiOnly .lrr2Article { display: none; }
+.lrr2Split.isTranscriptOnly .lrr2Aside { display: none; }
+
+/* Sticky aside uses one value (avoid 114 vs 118 drift) */
+.lrr2Aside {
+  position: sticky;
+  top: 114px;
+  align-self: start;
+  min-width: 0;
+}
+@media (max-width: 980px) {
+  .lrr2Aside { position: static; top: auto; }
+}
+
+/* --------- AI header: make it truly one-row, premium & tight ---------- */
+.lrrAiHeadRight,
+.lrrAiHeadActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;      /* keep one row */
+  white-space: nowrap;
+}
+
+/* Separator line (for your header actions) */
+.lrrAiHeadSep {
+  width: 1px;
+  height: 18px;
+  background: color-mix(in srgb, var(--border) 70%, transparent);
+  margin: 0 2px;
+}
+
+/* AI buttons: one canonical style (removes conflicting earlier defs) */
+.lrrAiBtn,
+.lrrAiIconBtn {
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-weight: 850;
+  font-size: 12px;
+  letter-spacing: 0.1px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, rgba(161,24,30,0.14));
+  background: color-mix(in srgb, var(--surface) 74%, transparent);
+  color: var(--ink);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: transform .12s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
+}
+
+.lrrAiBtn:hover,
+.lrrAiIconBtn:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  border-color: color-mix(in srgb, var(--border) 60%, rgba(161,24,30,0.22));
+  box-shadow: 0 12px 28px rgba(2,6,23,.10);
+}
+
+.lrrAiBtn.primary {
+  background: linear-gradient(135deg, var(--la-red), var(--la-red2));
+  color: #fff;
+  border-color: rgba(161,24,30,0.30);
+  box-shadow: 0 12px 28px rgba(161,24,30,.18);
+}
+.lrrAiBtn.ghost {
+  background: color-mix(in srgb, var(--surface) 68%, transparent);
+}
+
+/* --------- AI cards: unify radius/shadow and remove “double card” look ---------- */
+.lrrAiCard,
+.lrrAiKeyCard,
+.lrrAiTakeaways,
+.lrrAiSectionCard {
+  border-radius: 18px;
+}
+
+/* Slightly softer card shadow (more premium, less heavy) */
+.lrrAiCard,
+.lrrAiSectionCard,
+.lrrAiTakeaways {
+  box-shadow: 0 14px 40px rgba(2,6,23,.08);
+}
+
+/* --------- Section cards: choose ONE model (no duplicates) ---------- */
+.lrrAiSections {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr; /* default */
+  margin-top: 10px;
+}
+
+/* Two columns only on wide desktop */
+@media (min-width: 980px) {
+  .lrrAiSections {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Section head style: consistent typography and stripe */
+.lrrAiSectionHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  margin: -14px -14px 12px; /* creates “header band” inside padding */
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: linear-gradient(90deg, rgba(112,40,64,.08), rgba(14,165,165,.06));
+}
+
+.lrrAiSectionHead .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: rgba(161, 24, 30, 0.85);
+}
+
+.lrrAiSectionHead .ttl {
+  font-weight: 950;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--ink) 92%, transparent);
+}
+
+/* Section list text: readable and consistent */
+.lrrAiSectionList li {
+  margin: 7px 0;
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--ink) 92%, transparent);
+  font-weight: 650;
+}
+
+/* --------- Key takeaways: ensure badge NEVER overlaps text ---------- */
+/* Force the non-overlap flex variant as the winner */
+.lrrAiKpCard {
+  position: static !important;
+  display: flex !important;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+}
+.lrrAiKpBadge {
+  position: static !important;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-weight: 900;
+  font-size: 12px;
+  border: 1px solid rgba(112,40,64,.22);
+  background: rgba(112,40,64,.10);
+  color: rgba(112,40,64,.92);
+}
+.lrrAiKpText {
+  flex: 1;
+  min-width: 0;
+}
+
+/* --------- Chat bubbles: consistent spacing & typography ---------- */
+.lrrAiMsg .bubble {
+  line-height: 1.6;
+}
+.lrrAiMsg.user .bubble {
+  background: linear-gradient(135deg, rgba(161,24,30,0.14), rgba(112,40,64,0.10));
+}
+
+/* --------- Dark theme: keep contrast crisp ---------- */
+.lrr2Wrap[data-theme="dark"] .lrrAiBtn,
+.lrr2Wrap[data-theme="dark"] .lrrAiIconBtn,
+.lrr2Wrap[data-theme="dark"] .lrrAiChip,
+.lrr2Wrap[data-theme="dark"] .lrrAiMini {
+  background: rgba(2, 6, 23, 0.42);
+  border-color: rgba(148, 163, 184, 0.22);
+  color: rgba(226, 232, 240, 0.92);
+}
+.lrr2Wrap[data-theme="dark"] .lrrAiSectionHead {
+  border-bottom-color: rgba(148,163,184,0.18);
 }
