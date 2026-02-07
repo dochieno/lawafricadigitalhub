@@ -1,8 +1,13 @@
+// src/pages/dashboard/LawReportReader.jsx
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../../api/client";
 import { getAuthClaims } from "../../auth/auth";
 import "../../styles/lawReportReader.css";
+
+/* =========================================================
+   Helpers (NO React hooks)
+========================================================= */
 
 function unwrapApi(res) {
   const d = res?.data;
@@ -51,6 +56,7 @@ function isPublicUser() {
 
 function isGlobalAdminUser() {
   const c = getAuthClaims();
+
   const rolesRaw =
     c?.roles ??
     c?.payload?.roles ??
@@ -320,11 +326,7 @@ function bulletsFromText(text) {
   const alreadyBullets = lines.some((l) => /^[-•]\s+/.test(l));
   if (alreadyBullets)
     return lines
-      .map((l) =>
-        l.startsWith("-") || l.startsWith("•")
-          ? l.replace(/^•\s+/, "- ")
-          : `- ${l}`
-      )
+      .map((l) => (l.startsWith("-") || l.startsWith("•") ? l.replace(/^•\s+/, "- ") : `- ${l}`))
       .join("\n");
   if (lines.length === 1) {
     const one = lines[0];
@@ -332,6 +334,29 @@ function bulletsFromText(text) {
     return parts.map((p) => `- ${p}`).join("\n");
   }
   return lines.map((l) => `- ${l}`).join("\n");
+}
+
+/** Mild “premium formatting” for chat replies that come as a single blob.
+ *  - If the reply already contains markdown lists/headings, leave it.
+ *  - If it’s one paragraph with many sentences, turn into a numbered list.
+ */
+function prettifyChatReplyForUi(text) {
+  const t = String(text || "").trim();
+  if (!t) return "";
+  if (/^#{1,4}\s+/m.test(t)) return t;
+  if (/^(\d+\.\s+|[-•]\s+)/m.test(t)) return t;
+  if (t.includes("\n\n")) return t;
+
+  const parts = t
+    .split(/(?<=[.!?])\s+/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+
+  if (parts.length >= 3 && parts.length <= 10) {
+    return parts.map((p, i) => `${i + 1}. ${p}`).join("\n");
+  }
+
+  return t;
 }
 
 function RichText({ text }) {
@@ -690,6 +715,10 @@ function AiLockedPanel({ access, onGo }) {
   );
 }
 
+/* =========================================================
+   Page
+========================================================= */
+
 export default function LawReportReader() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -748,7 +777,7 @@ export default function LawReportReader() {
       id: "sys_welcome",
       role: "assistant",
       content:
-        "## LegalAI\nAsk anything about this case — holdings, issues, ratio, authorities, or practical next steps.\n\n- Tip: Use **Suggested prompts** below.\n- Note: AI may be inaccurate; verify against the transcript and citations.",
+        "## LegalAI\nAsk anything about this case: issues, holding, ratio, authorities, practical next steps.\n\n_Disclaimer: AI may be inaccurate. Verify against the transcript._",
       createdAt: nowIso(),
       kind: "info",
     },
@@ -859,7 +888,7 @@ export default function LawReportReader() {
   }, [report, availabilityLoading, hasContent, textHasContent]);
 
   const suggestedPrompts = useMemo(() => {
-    const base = [
+    return [
       "Summarize the case in 8 bullet points.",
       "What were the key issues for determination?",
       "What was the holding and orders?",
@@ -867,7 +896,6 @@ export default function LawReportReader() {
       "List cited authorities and how they were applied.",
       "What practical action items follow from this decision?",
     ];
-    return base;
   }, []);
 
   useEffect(() => {
@@ -967,7 +995,7 @@ export default function LawReportReader() {
         id: "sys_welcome",
         role: "assistant",
         content:
-          "## LegalAI\nAsk anything about this case — holdings, issues, ratio, authorities, or practical next steps.\n\n- Tip: Use **Suggested prompts** below.\n- Note: AI may be inaccurate; verify against the transcript and citations.",
+          "## LegalAI\nAsk anything about this case: issues, holding, ratio, authorities, practical next steps.\n\n_Disclaimer: AI may be inaccurate. Verify against the transcript._",
         createdAt: nowIso(),
         kind: "info",
       },
@@ -1159,8 +1187,11 @@ export default function LawReportReader() {
     navigate(`/dashboard/law-reports/${rid}`);
   }
 
+  // ---------------- AI: Cached summary (now: clicking Basic/Extended auto-loads cached) ----------------
+
   const aiGetCachedSummary = useCallback(
     async (type) => {
+      if (!reportId) return;
       setAiErr("");
       setAiLastAction({ kind: "getSummary", payload: { type } });
       setAiBusy(true);
@@ -1178,24 +1209,10 @@ export default function LawReportReader() {
           cached: true,
         });
 
-        if (summary) {
-          setMessages((prev) => {
-            const exists = prev.some((m) => m?.kind === "summary" && m?.summaryType === type);
-            if (exists) return prev;
-            return [
-              ...prev,
-              {
-                id: `sum_cached_${type}_${Date.now()}`,
-                role: "assistant",
-                content: String(summary),
-                createdAt: nowIso(),
-                kind: "summary",
-                summaryType: type,
-              },
-            ];
-          });
-        }
+        // IMPORTANT: Do NOT push summary into chat history (prevents duplicates & removes summary from chat window).
       } catch (e) {
+        setSummaryText("");
+        setSummaryMeta({ type, cached: true });
         setAiErr(getApiErrorMessage(e, "No cached summary found yet."));
       } finally {
         setAiBusy(false);
@@ -1236,19 +1253,7 @@ export default function LawReportReader() {
         updatedAt: payload?.updatedAt || null,
       });
 
-      if (summary) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `sum_${type}_${Date.now()}`,
-            role: "assistant",
-            content: String(summary),
-            createdAt: nowIso(),
-            kind: "summary",
-            summaryType: type,
-          },
-        ]);
-      }
+      // IMPORTANT: Do NOT push summary into chat history (prevents duplicates & removes summary from chat window).
     } catch (e) {
       setAiErr(getApiErrorMessage(e, "Failed to generate summary."));
     } finally {
@@ -1285,7 +1290,7 @@ export default function LawReportReader() {
 
     try {
       const history = toChatHistory(
-        [...messages.filter((m) => m?.kind !== "typing"), userMsg],
+        [...messages.filter((m) => m?.kind !== "typing" && m?.kind !== "summary"), userMsg],
         10
       );
 
@@ -1295,7 +1300,8 @@ export default function LawReportReader() {
       });
 
       const payload = unwrapApi(res);
-      const reply = payload?.reply ?? payload?.data?.reply ?? payload?.message ?? payload?.answer ?? "";
+      const replyRaw = payload?.reply ?? payload?.data?.reply ?? payload?.message ?? payload?.answer ?? "";
+      const reply = prettifyChatReplyForUi(String(replyRaw || ""));
 
       setMessages((prev) => {
         const cleaned = prev.filter((m) => m?.id !== typingMsg.id);
@@ -1304,7 +1310,7 @@ export default function LawReportReader() {
           {
             id: `a_${Date.now()}`,
             role: "assistant",
-            content: String(reply || "I couldn’t generate a response. Please try again."),
+            content: reply || "I couldn’t generate a response. Please try again.",
             createdAt: nowIso(),
             kind: "chat",
           },
@@ -1341,8 +1347,8 @@ export default function LawReportReader() {
 
       const text =
         "## Related cases (AI)\n" +
-        `- Kenya: ${payload?.kenyaCount ?? ""}\n` +
-        `- Foreign: ${payload?.foreignCount ?? ""}\n\n` +
+        `1. Kenya: ${payload?.kenyaCount ?? ""}\n` +
+        `2. Foreign: ${payload?.foreignCount ?? ""}\n\n` +
         (items.length
           ? items
               .map((x, i2) => {
@@ -1354,10 +1360,10 @@ export default function LawReportReader() {
                 if (citation) bits.push(citation);
                 if (juris) bits.push(juris);
                 const meta = bits.length ? ` (${bits.join(" · ")})` : "";
-                return `- **${title}**${meta}${why ? ` — ${why}` : ""}`;
+                return `${i2 + 1}. **${title}**${meta}${why ? ` — ${why}` : ""}`;
               })
               .join("\n")
-          : "- No related cases returned.\n") +
+          : "1. No related cases returned.\n") +
         `\n\n### Disclaimer\n${disclaimer}`;
 
       setMessages((prev) => [
@@ -1387,8 +1393,7 @@ export default function LawReportReader() {
       {
         id: `sys_${Date.now()}`,
         role: "assistant",
-        content:
-          "## New chat\nAsk anything about the case. I can extract issues, holdings, reasoning, authorities, and practical guidance.",
+        content: "## New chat\nAsk anything about the case. I can extract issues, holdings, reasoning, authorities, and practical guidance.",
         createdAt: nowIso(),
         kind: "info",
       },
@@ -1400,17 +1405,7 @@ export default function LawReportReader() {
     setAiLastAction(null);
     setSummaryText("");
     setSummaryMeta(null);
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `sum_hint_${Date.now()}`,
-        role: "assistant",
-        content:
-          "### New summary\nChoose **Basic** or **Extended**, then click **Generate**. You can also **Force regenerate** to refresh cached output.",
-        createdAt: nowIso(),
-        kind: "info",
-      },
-    ]);
+    // No chat messages here (keeps chat clean)
   }
 
   function copyText(text) {
@@ -1418,6 +1413,8 @@ export default function LawReportReader() {
     if (!t) return;
     navigator.clipboard?.writeText?.(t);
   }
+
+  // ---------------- Render guards ----------------
 
   if (loading) {
     return (
@@ -1478,6 +1475,8 @@ export default function LawReportReader() {
   const title = report.parties || report.title || "Law Report";
   const llrNo = report.reportNumber || report.llrNo || report.llrNumber || String(reportId);
 
+  // ---------------- LegalAI Panel (Premium layout) ----------------
+
   function LegalAiPanel({ compact }) {
     if (!aiAllowed) {
       return <AiLockedPanel access={access} onGo={goUrl} />;
@@ -1486,58 +1485,75 @@ export default function LawReportReader() {
     const hasSomeSummary = !!safeTrim(summaryText);
     const showSummaryEmpty = aiTab === "summary" && !hasSomeSummary && !aiBusy;
 
-      function parseSectionedSummary(text) {
-        const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
+    function parseSectionedSummary(text) {
+      const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
 
-        let caseTitle = "";
-        const sections = [];
-        let cur = null;
+      let caseTitle = "";
+      const sections = [];
+      let cur = null;
 
-        // headers like "SUMMARY:" "FACTS:" "HOLDING/DECISION:" etc.
-        const isHeader = (s) => /^[A-Z][A-Z0-9\s/()-]{2,}:\s*$/.test(s.trim());
+      const isHeader = (s) => /^[A-Z][A-Z0-9\s/()-]{2,}:\s*$/.test(s.trim());
 
-        function pushCur() {
-          if (!cur) return;
-          cur.items = cur.items.map((x) => x.trim()).filter(Boolean);
-          if (cur.items.length) sections.push(cur);
-          cur = null;
-        }
-
-        for (const raw of lines) {
-          const line = raw.trim();
-          if (!line) continue;
-
-          // Extract TITLE (don’t put it in cards)
-          const mTitle = line.match(/^TITLE\s*:\s*(.+)$/i);
-          if (mTitle?.[1]) {
-            caseTitle = mTitle[1].trim();
-            continue;
-          }
-
-          if (isHeader(line)) {
-            pushCur();
-            cur = { title: line.replace(/:\s*$/, "").trim(), items: [] };
-            continue;
-          }
-
-          // normalize bullet
-          const cleaned = line.replace(/^[-•]\s+/, "").trim();
-          if (!cleaned) continue;
-
-          if (!cur) cur = { title: "SUMMARY", items: [] };
-          cur.items.push(cleaned);
-        }
-
-        pushCur();
-
-        // If no sections detected, use paragraphs
-        if (!sections.length && String(text || "").trim()) {
-          return { caseTitle, sections: [{ title: "SUMMARY", items: splitIntoParagraphs(text).slice(0, 20) }] };
-        }
-
-        return { caseTitle, sections };
+      function pushCur() {
+        if (!cur) return;
+        cur.items = cur.items.map((x) => x.trim()).filter(Boolean);
+        if (cur.items.length) sections.push(cur);
+        cur = null;
       }
 
+      for (const raw of lines) {
+        const line = raw.trim();
+        if (!line) continue;
+
+        const mTitle = line.match(/^TITLE\s*:\s*(.+)$/i);
+        if (mTitle?.[1]) {
+          caseTitle = mTitle[1].trim();
+          continue;
+        }
+
+        if (isHeader(line)) {
+          pushCur();
+          cur = { title: line.replace(/:\s*$/, "").trim(), items: [] };
+          continue;
+        }
+
+        const cleaned = line.replace(/^[-•]\s+/, "").trim();
+        if (!cleaned) continue;
+
+        if (!cur) cur = { title: "SUMMARY", items: [] };
+        cur.items.push(cleaned);
+      }
+
+      pushCur();
+
+      // Fallback: no sections detected -> paragraphs
+      if (!sections.length && String(text || "").trim()) {
+        return { caseTitle, sections: [{ title: "SUMMARY", items: splitIntoParagraphs(text).slice(0, 20) }] };
+      }
+
+      // Merge duplicate section titles + de-dup items
+      const merged = new Map();
+      for (const s of sections) {
+        const key = String(s.title || "").trim().toUpperCase();
+        if (!merged.has(key)) merged.set(key, { title: s.title, items: [] });
+        merged.get(key).items.push(...(s.items || []));
+      }
+
+      const out = Array.from(merged.values()).map((s) => {
+        const seen = new Set();
+        const items = [];
+        for (const it of s.items || []) {
+          const k = String(it || "").trim().toLowerCase();
+          if (!k) continue;
+          if (seen.has(k)) continue;
+          seen.add(k);
+          items.push(it);
+        }
+        return { title: s.title, items };
+      });
+
+      return { caseTitle, sections: out };
+    }
 
     function extractKeyTakeaways(sections) {
       const isKpTitle = (title) => {
@@ -1552,14 +1568,15 @@ export default function LawReportReader() {
         );
       };
 
-  const kp = sections.find((s) => isKpTitle(s.title));
-  if (!kp) return [];
-  return kp.items.map((t, idx) => ({ id: `kp_${idx}`, text: t }));
-}
+      const kp = sections.find((s) => isKpTitle(s.title));
+      if (!kp) return [];
+      return kp.items.map((t, idx) => ({ id: `kp_${idx}`, text: t }));
+    }
 
+    const aiShellClass = `lrrAi lrrAi--premium ${compact ? "isCompact" : ""}`;
 
     return (
-      <div className={`lrrAi ${compact ? "isCompact" : ""}`}>
+      <div className={aiShellClass}>
         <div className="lrrAiHead">
           <div className="lrrAiHeadLeft">
             <div className="lrrAiTitle">LegalAI</div>
@@ -1567,37 +1584,46 @@ export default function LawReportReader() {
           </div>
 
           <div className="lrrAiHeadRight">
-            <div className="lrrAiHeadActions">
-              <button
-                type="button"
-                className="lrrAiBtn ghost"
-                disabled={aiBusy || !hasSomeSummary}
-                onClick={() => copyText(summaryText)}
-                title="Copy summary"
-              >
-                Copy
-              </button>
+            {aiTab === "summary" ? (
+              <div className="lrrAiHeadActions">
+                <button
+                  type="button"
+                  className="lrrAiBtn ghost"
+                  disabled={aiBusy || !hasSomeSummary}
+                  onClick={() => copyText(summaryText)}
+                  title="Copy summary"
+                >
+                  Copy
+                </button>
 
-              <button
-                type="button"
-                className="lrrAiBtn ghost"
-                disabled={aiBusy || !hasSomeSummary}
-                onClick={() => copyText(bulletsFromText(summaryText))}
-                title="Copy as bullets"
-              >
-                Copy bullets
-              </button>
+                <button
+                  type="button"
+                  className="lrrAiBtn ghost"
+                  disabled={aiBusy || !hasSomeSummary}
+                  onClick={() => copyText(bulletsFromText(summaryText))}
+                  title="Copy as bullets"
+                >
+                  Copy bullets
+                </button>
 
-              <span className="lrrAiHeadSep" aria-hidden="true" />
+                <span className="lrrAiHeadSep" aria-hidden="true" />
 
-              <button type="button" className="lrrAiBtn ghost" onClick={aiNewSummary} title="Start a new summary workflow">
-                New summary
-              </button>
-
-              <button type="button" className="lrrAiBtn ghost" onClick={aiClearChat} title="Clear messages">
-                Clear chat
-              </button>
-            </div>
+                <button
+                  type="button"
+                  className="lrrAiBtn ghost"
+                  onClick={aiNewSummary}
+                  title="Clear current summary"
+                >
+                  New summary
+                </button>
+              </div>
+            ) : (
+              <div className="lrrAiHeadActions">
+                <button type="button" className="lrrAiBtn ghost" onClick={aiClearChat} title="Clear messages">
+                  Clear chat
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1617,62 +1643,79 @@ export default function LawReportReader() {
         ) : null}
 
         <div className="lrrAiTabs" role="tablist" aria-label="LegalAI tabs">
-          <button type="button" className={`lrrAiTab ${aiTab === "summary" ? "isActive" : ""}`} onClick={() => setAiTab("summary")}>
+          <button
+            type="button"
+            className={`lrrAiTab ${aiTab === "summary" ? "isActive" : ""}`}
+            onClick={() => setAiTab("summary")}
+          >
             Summary
           </button>
-          <button type="button" className={`lrrAiTab ${aiTab === "chat" ? "isActive" : ""}`} onClick={() => setAiTab("chat")}>
+          <button
+            type="button"
+            className={`lrrAiTab ${aiTab === "chat" ? "isActive" : ""}`}
+            onClick={() => setAiTab("chat")}
+          >
             Chat
           </button>
-          <button type="button" className={`lrrAiTab ${aiTab === "related" ? "isActive" : ""}`} onClick={() => setAiTab("related")}>
+          <button
+            type="button"
+            className={`lrrAiTab ${aiTab === "related" ? "isActive" : ""}`}
+            onClick={() => setAiTab("related")}
+          >
             Related cases
           </button>
         </div>
 
-        <div className="lrrAiChips" aria-label="Suggested prompts">
-          {suggestedPrompts.slice(0, 6).map((p, idx) => (
-            <button
-              key={idx}
-              type="button"
-              className="lrrAiChip"
-              onClick={() => {
-                if (aiTab !== "chat") setAiTab("chat");
-                setChatInput(p);
-              }}
-              title="Use this prompt"
-            >
-              {p}
-            </button>
-          ))}
-        </div>
+        {/* Suggested prompts: show only when in Chat (keeps UI clean & avoids duplicate “tips”) */}
+        {aiTab === "chat" ? (
+          <div className="lrrAiChips" aria-label="Suggested prompts">
+            {suggestedPrompts.slice(0, 6).map((p, idx) => (
+              <button
+                key={idx}
+                type="button"
+                className="lrrAiChip"
+                onClick={() => {
+                  setChatInput(p);
+                }}
+                title="Use this prompt"
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         <div className="lrrAiBody">
+          {/* ---------------- Summary ---------------- */}
           {aiTab === "summary" ? (
-            <div className="lrrAiCard">
-              <div className="lrrAiRow">
+            <div className="lrrAiCard lrrAiCard--summary">
+              <div className="lrrAiRow lrrAiRow--premium">
                 <div className="lrrAiSegment" role="group" aria-label="Summary type">
                   <button
                     type="button"
                     className={`lrrAiSegBtn ${summaryType === "basic" ? "isOn" : ""}`}
-                    onClick={() => setSummaryType("basic")}
-                    title="Basic summary"
+                    onClick={() => {
+                      setSummaryType("basic");
+                      aiGetCachedSummary("basic"); // click loads cached summary (requested)
+                    }}
+                    title="Basic (cached)"
                   >
                     Basic
                   </button>
                   <button
                     type="button"
                     className={`lrrAiSegBtn ${summaryType === "extended" ? "isOn" : ""}`}
-                    onClick={() => setSummaryType("extended")}
-                    title="Extended summary"
+                    onClick={() => {
+                      setSummaryType("extended");
+                      aiGetCachedSummary("extended"); // click loads cached summary (requested)
+                    }}
+                    title="Extended (cached)"
                   >
                     Extended
                   </button>
                 </div>
 
                 <div className="lrrAiRowActions">
-                  <button type="button" className="lrrAiBtn" disabled={aiBusy} onClick={() => aiGetCachedSummary(summaryType)} title="Load cached summary (if any)">
-                    Load cached
-                  </button>
-
                   <button
                     type="button"
                     className="lrrAiBtn primary"
@@ -1702,21 +1745,21 @@ export default function LawReportReader() {
                     <span />
                     <span />
                   </div>
-                  <div className="lrrAiLoadingTxt">Generating…</div>
+                  <div className="lrrAiLoadingTxt">Working…</div>
                 </div>
               ) : null}
 
               {showSummaryEmpty ? (
                 <div className="lrrAiEmpty">
-                  <div className="lrrAiEmptyTitle">No summary loaded yet</div>
+                  <div className="lrrAiEmptyTitle">No cached summary yet</div>
                   <div className="lrrAiEmptyMsg">
-                    Click <b>Generate</b> to create a structured summary, or <b>Load cached</b> if you generated one before.
+                    Click <b>Generate</b> to create it once, then Basic/Extended will load instantly next time.
                   </div>
                 </div>
               ) : null}
 
               {hasSomeSummary ? (
-                <div className="lrrAiAnswer">
+                <div className="lrrAiAnswer lrrAiAnswer--premium">
                   <div className="lrrAiAnswerTop">
                     <div className="lrrAiAnswerMeta">
                       <span className="pill">Type: {summaryMeta?.type || summaryType}</span>
@@ -1725,39 +1768,42 @@ export default function LawReportReader() {
                   </div>
 
                   {(() => {
-                  const parsed = parseSectionedSummary(summaryText);
-                  const sections = parsed.sections;
+                    const parsed = parseSectionedSummary(summaryText);
+                    const sections = parsed.sections;
 
-                  const takeaways = extractKeyTakeaways(sections);
-                  const mainSections = sections.filter((s) => {
-                  const t = String(s.title || "").toUpperCase();
-                  return !(
-                    t.includes("KEY TAKEAWAYS") ||
-                    t.includes("KEY POINTS") ||
-                    t.includes("KEY POINT") ||
-                    t.includes("KEY HIGHLIGHTS") ||
-                    t.includes("HIGHLIGHTS") ||
-                    t.includes("TAKEAWAYS")
-                  );
-                });
+                    const takeaways = extractKeyTakeaways(sections);
 
+                    const mainSections = sections.filter((s) => {
+                      const t = String(s.title || "").toUpperCase();
+                      return !(
+                        t.includes("KEY TAKEAWAYS") ||
+                        t.includes("KEY POINTS") ||
+                        t.includes("KEY POINT") ||
+                        t.includes("KEY HIGHLIGHTS") ||
+                        t.includes("HIGHLIGHTS") ||
+                        t.includes("TAKEAWAYS")
+                      );
+                    });
 
                     return (
                       <>
-                      {parsed.caseTitle ? <div className="lrrAiCaseTitle">{parsed.caseTitle}</div> : null}
-                        <div className="lrrAiSections">
+                        {/* Title is displayed once (NOT as a card) */}
+                        {parsed.caseTitle ? <div className="lrrAiCaseTitle">{parsed.caseTitle}</div> : null}
+
+                        {/* 1 card per row (full width) */}
+                        <div className="lrrAiSections lrrAiSections--single">
                           {mainSections.map((s, idx) => (
-                            <section key={`${s.title}_${idx}`} className="lrrAiSectionCard">
+                            <section key={`${s.title}_${idx}`} className="lrrAiSectionCard lrrAiSectionCard--full">
                               <div className="lrrAiSectionHead">
                                 <span className="dot" aria-hidden="true" />
                                 <div className="ttl">{s.title}</div>
                               </div>
 
-                              <ul className="lrrAiSectionList">
+                              <ol className="lrrAiSectionList lrrAiSectionList--numbered">
                                 {s.items.map((it, i2) => (
                                   <li key={i2}>{it}</li>
                                 ))}
-                              </ul>
+                              </ol>
                             </section>
                           ))}
                         </div>
@@ -1792,18 +1838,22 @@ export default function LawReportReader() {
                       <RichText text={summaryText} />
                     </div>
                   </details>
-
                 </div>
               ) : null}
             </div>
-          ) : aiTab === "related" ? (
-            <div className="lrrAiCard">
-              <div className="lrrAiRow">
-                <div className="lrrAiNote">Generate AI-suggested related cases (Kenya + Foreign). Always verify relevance and citations.</div>
+          ) : null}
+
+          {/* ---------------- Related cases ---------------- */}
+          {aiTab === "related" ? (
+            <div className="lrrAiCard lrrAiCard--related">
+              <div className="lrrAiRow lrrAiRow--premium">
+                <div className="lrrAiNote">
+                  Generate AI-suggested related cases (Kenya + Foreign). Always verify relevance and citations.
+                </div>
 
                 <div className="lrrAiRowActions">
                   <button type="button" className="lrrAiBtn primary" disabled={aiBusy} onClick={aiGenerateRelatedCases}>
-                    Generate related cases
+                    Generate
                   </button>
                 </div>
               </div>
@@ -1819,7 +1869,7 @@ export default function LawReportReader() {
                 </div>
               ) : null}
 
-              <div className="lrrAiChat">
+              <div className="lrrAiChat lrrAiChat--premium">
                 {messages
                   .filter((m) => m?.kind === "related")
                   .slice(-3)
@@ -1830,9 +1880,6 @@ export default function LawReportReader() {
                           <button type="button" className="lrrAiMini" onClick={() => copyText(m.content)} title="Copy">
                             Copy
                           </button>
-                          <button type="button" className="lrrAiMini" onClick={() => copyText(bulletsFromText(m.content))} title="Copy as bullets">
-                            Copy bullets
-                          </button>
                         </div>
                         <RichText text={m.content} />
                       </div>
@@ -1840,43 +1887,52 @@ export default function LawReportReader() {
                   ))}
               </div>
             </div>
-          ) : (
-            <div className="lrrAiCard lrrAiCard--chat">
-              <div className="lrrAiChat">
-                {messages.map((m) => {
-                  const isUser = m.role === "user";
-                  const isTyping = m.kind === "typing";
-                  return (
-                    <div key={m.id} className={`lrrAiMsg ${isUser ? "user" : "assistant"}`}>
-                      <div className="bubble">
-                        {!isUser && !isTyping ? (
-                          <div className="lrrAiMsgActions">
-                            <button type="button" className="lrrAiMini" onClick={() => copyText(m.content)} title="Copy">
-                              Copy
-                            </button>
-                            <button type="button" className="lrrAiMini" onClick={() => copyText(bulletsFromText(m.content))} title="Copy as bullets">
-                              Copy bullets
-                            </button>
-                          </div>
-                        ) : null}
+          ) : null}
 
-                        {isTyping ? (
-                          <div className="lrrAiTyping" aria-label="Assistant is typing">
-                            <span />
-                            <span />
-                            <span />
-                          </div>
-                        ) : (
-                          <RichText text={m.content} />
-                        )}
+          {/* ---------------- Chat ---------------- */}
+          {aiTab === "chat" ? (
+            <div className="lrrAiCard lrrAiCard--chatPremium">
+              <div className="lrrAiChat lrrAiChat--premium">
+                {messages
+                  // keep chat clean: exclude any summary messages if they exist from old sessions
+                  .filter((m) => m?.kind !== "summary")
+                  .map((m) => {
+                    const isUser = m.role === "user";
+                    const isTyping = m.kind === "typing";
+
+                    return (
+                      <div key={m.id} className={`lrrAiMsg ${isUser ? "user" : "assistant"}`}>
+                        <div className="bubble">
+                          {!isUser && !isTyping ? (
+                            <div className="lrrAiMsgActions">
+                              <button
+                                type="button"
+                                className="lrrAiMini"
+                                onClick={() => copyText(m.content)}
+                                title="Copy"
+                              >
+                                Copy
+                              </button>
+                            </div>
+                          ) : null}
+
+                          {isTyping ? (
+                            <div className="lrrAiTyping" aria-label="Assistant is typing">
+                              <span />
+                              <span />
+                              <span />
+                            </div>
+                          ) : (
+                            <RichText text={m.content} />
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
                 <div ref={chatEndRef} />
               </div>
 
-              <div className="lrrAiComposer">
+              <div className="lrrAiComposer lrrAiComposer--premium">
                 <textarea
                   className="lrrAiInput"
                   value={chatInput}
@@ -1890,23 +1946,30 @@ export default function LawReportReader() {
                   }}
                 />
                 <div className="lrrAiComposerActions">
-                  <div className="lrrAiHint">Tip: Ctrl/⌘ + Enter to send</div>
-                  <button type="button" className="lrrAiBtn primary" disabled={aiBusy || !safeTrim(chatInput)} onClick={() => aiSendChat(chatInput)}>
+                  <div className="lrrAiHint">Ctrl/⌘ + Enter to send</div>
+                  <button
+                    type="button"
+                    className="lrrAiBtn primary"
+                    disabled={aiBusy || !safeTrim(chatInput)}
+                    onClick={() => aiSendChat(chatInput)}
+                  >
                     Send
                   </button>
                 </div>
               </div>
             </div>
-          )}
+          ) : null}
         </div>
 
-        <div className="lrrAiFooter">
-          <div className="lrrAiFooterTip">Tip: Use the suggested prompts above. Ctrl/⌘ + Enter sends a message in Chat.</div>
+        {/* Single, non-duplicated disclaimer line (premium footer) */}
+        <div className="lrrAiFooter lrrAiFooter--premium">
           <div className="lrrAiFooterDisc">Disclaimer: AI output may be inaccurate. Verify against the transcript and citations.</div>
         </div>
       </div>
     );
   }
+
+  // ---------------- Page layout ----------------
 
   return (
     <div className="lrr2Wrap" data-theme={readingTheme}>
@@ -2098,12 +2161,24 @@ export default function LawReportReader() {
                 </div>
               ) : null}
 
-              <button type="button" className="lrr2MetaAction" data-action="true" title="Copy title" onClick={() => navigator.clipboard?.writeText(`${title}`)}>
+              <button
+                type="button"
+                className="lrr2MetaAction"
+                data-action="true"
+                title="Copy title"
+                onClick={() => navigator.clipboard?.writeText(`${title}`)}
+              >
                 Copy title
               </button>
 
               {report?.citation ? (
-                <button type="button" className="lrr2MetaAction" data-action="true" title="Copy citation" onClick={() => navigator.clipboard?.writeText(String(report.citation))}>
+                <button
+                  type="button"
+                  className="lrr2MetaAction"
+                  data-action="true"
+                  title="Copy citation"
+                  onClick={() => navigator.clipboard?.writeText(String(report.citation))}
+                >
                   Copy citation
                 </button>
               ) : null}
@@ -2224,15 +2299,33 @@ export default function LawReportReader() {
                   </div>
 
                   <div className="lrr2ReaderCluster">
-                    <button type="button" className={`lrr2IconBtn ${readingTheme === "paper" ? "isOn" : ""}`} onClick={() => setReadingTheme("paper")} title="Paper theme" aria-label="Paper theme">
+                    <button
+                      type="button"
+                      className={`lrr2IconBtn ${readingTheme === "paper" ? "isOn" : ""}`}
+                      onClick={() => setReadingTheme("paper")}
+                      title="Paper theme"
+                      aria-label="Paper theme"
+                    >
                       <span className="lrr2IconBtnText">Paper</span>
                     </button>
 
-                    <button type="button" className={`lrr2IconBtn ${readingTheme === "sepia" ? "isOn" : ""}`} onClick={() => setReadingTheme("sepia")} title="Sepia theme" aria-label="Sepia theme">
+                    <button
+                      type="button"
+                      className={`lrr2IconBtn ${readingTheme === "sepia" ? "isOn" : ""}`}
+                      onClick={() => setReadingTheme("sepia")}
+                      title="Sepia theme"
+                      aria-label="Sepia theme"
+                    >
                       <span className="lrr2IconBtnText">Sepia</span>
                     </button>
 
-                    <button type="button" className={`lrr2IconBtn ${readingTheme === "dark" ? "isOn" : ""}`} onClick={() => setReadingTheme("dark")} title="Dark theme" aria-label="Dark theme">
+                    <button
+                      type="button"
+                      className={`lrr2IconBtn ${readingTheme === "dark" ? "isOn" : ""}`}
+                      onClick={() => setReadingTheme("dark")}
+                      title="Dark theme"
+                      aria-label="Dark theme"
+                    >
                       <span className="lrr2IconBtnText">Dark</span>
                     </button>
                   </div>
@@ -2252,11 +2345,19 @@ export default function LawReportReader() {
                 {preview.renderAsHtml ? (
                   <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: preview.html }} />
                 ) : (
-                  <CaseContentWithGateBreak text={preview.text} showBreak={showInlineBreak} access={access} onGo={goUrl} onRefresh={refreshAccessNow} />
+                  <CaseContentWithGateBreak
+                    text={preview.text}
+                    showBreak={showInlineBreak}
+                    access={access}
+                    onGo={goUrl}
+                    onRefresh={refreshAccessNow}
+                  />
                 )}
               </div>
 
-              {contentOpen && preview.gated && preview.reachedLimit ? <SubscribeGateOverlay access={access} onGo={goUrl} /> : null}
+              {contentOpen && preview.gated && preview.reachedLimit ? (
+                <SubscribeGateOverlay access={access} onGo={goUrl} />
+              ) : null}
 
               <SubscriptionGateCard
                 isPremium={isPremium}
@@ -2270,7 +2371,9 @@ export default function LawReportReader() {
               />
             </article>
 
-            <aside className="lrr2Aside">{aiAllowed ? <LegalAiPanel compact={true} /> : <AiLockedPanel access={access} onGo={goUrl} />}</aside>
+            <aside className="lrr2Aside">
+              {aiAllowed ? <LegalAiPanel compact={true} /> : <AiLockedPanel access={access} onGo={goUrl} />}
+            </aside>
           </div>
         ) : (
           <article className="lrr2Article">
@@ -2309,15 +2412,33 @@ export default function LawReportReader() {
                 </div>
 
                 <div className="lrr2ReaderCluster">
-                  <button type="button" className={`lrr2IconBtn ${readingTheme === "paper" ? "isOn" : ""}`} onClick={() => setReadingTheme("paper")} title="Paper theme" aria-label="Paper theme">
+                  <button
+                    type="button"
+                    className={`lrr2IconBtn ${readingTheme === "paper" ? "isOn" : ""}`}
+                    onClick={() => setReadingTheme("paper")}
+                    title="Paper theme"
+                    aria-label="Paper theme"
+                  >
                     <span className="lrr2IconBtnText">Paper</span>
                   </button>
 
-                  <button type="button" className={`lrr2IconBtn ${readingTheme === "sepia" ? "isOn" : ""}`} onClick={() => setReadingTheme("sepia")} title="Sepia theme" aria-label="Sepia theme">
+                  <button
+                    type="button"
+                    className={`lrr2IconBtn ${readingTheme === "sepia" ? "isOn" : ""}`}
+                    onClick={() => setReadingTheme("sepia")}
+                    title="Sepia theme"
+                    aria-label="Sepia theme"
+                  >
                     <span className="lrr2IconBtnText">Sepia</span>
                   </button>
 
-                  <button type="button" className={`lrr2IconBtn ${readingTheme === "dark" ? "isOn" : ""}`} onClick={() => setReadingTheme("dark")} title="Dark theme" aria-label="Dark theme">
+                  <button
+                    type="button"
+                    className={`lrr2IconBtn ${readingTheme === "dark" ? "isOn" : ""}`}
+                    onClick={() => setReadingTheme("dark")}
+                    title="Dark theme"
+                    aria-label="Dark theme"
+                  >
                     <span className="lrr2IconBtnText">Dark</span>
                   </button>
                 </div>
@@ -2337,7 +2458,13 @@ export default function LawReportReader() {
               {preview.renderAsHtml ? (
                 <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: preview.html }} />
               ) : (
-                <CaseContentWithGateBreak text={preview.text} showBreak={showInlineBreak} access={access} onGo={goUrl} onRefresh={refreshAccessNow} />
+                <CaseContentWithGateBreak
+                  text={preview.text}
+                  showBreak={showInlineBreak}
+                  access={access}
+                  onGo={goUrl}
+                  onRefresh={refreshAccessNow}
+                />
               )}
             </div>
 
