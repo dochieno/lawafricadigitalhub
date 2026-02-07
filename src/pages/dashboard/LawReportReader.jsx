@@ -743,6 +743,8 @@ export default function LawReportReader() {
 
   const [view, setView] = useState("content"); // content | ai
   const [contentOpen, setContentOpen] = useState(true);
+  const [layoutMode, setLayoutMode] = useState("split"); // split | transcript | ai
+
 
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1487,9 +1489,17 @@ export default function LawReportReader() {
           <div className="lrr2ErrorTitle">Report unavailable</div>
           <div className="lrr2ErrorMsg">{error || "Not found."}</div>
           <div className="lrr2TopActions">
-            <button className="lrr2Btn" onClick={() => navigate("/dashboard/law-reports")}>
-              ← Back to Law Reports
-            </button>
+          <button
+            type="button"
+            className="lrr2IconPill"
+            data-tip="Back to Law Reports"
+            onClick={() => navigate("/dashboard/law-reports")}
+          >
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span className="txt">Back</span>
+          </button>
           </div>
         </div>
       </div>
@@ -1878,7 +1888,13 @@ export default function LawReportReader() {
             />
 
             <button type="button" className="lrr2SearchBtn" onClick={() => setOpenResults((v) => !v)}>
-              {searching ? "Searching…" : "Search"}
+              <>
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="1.8" />
+                  <path d="M16.5 16.5L21 21" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+                {searching ? "Searching…" : "Search"}
+              </>
             </button>
 
             {openResults && (searchErr || searchResults.length > 0) ? (
@@ -2106,133 +2122,172 @@ export default function LawReportReader() {
         )}
       </div>
 
-      <section className="lrr2Content">
-        {view === "ai" ? (
-          <LegalAiPanel compact={false} />
-        ) : !textHasContent ? (
-          <div className="lrr2Empty">This report has no content yet.</div>
-        ) : (
-          <div className="lrr2Split">
-            {/* LEFT: Transcript */}
-            <article className="lrr2Article">
-              {/* Reader tools */}
-              <div className="lrr2TranscriptTools">
-                <div className="lrr2ReaderBar">
-                  <div className="lrr2ReaderCluster">
-                    <button
-                      type="button"
-                      className="lrr2IconBtn"
-                      onClick={() => setFontScale((v) => Math.max(0.9, Number((v - 0.05).toFixed(2))))}
-                      title="Decrease text size"
-                      aria-label="Decrease text size"
-                    >
-                      <span className="lrr2IconBtnText">A−</span>
-                    </button>
+          <div className="lrr2ModeBar">
+            <div className="lrr2ModeGroup" role="group" aria-label="Layout options">
+              <button type="button" className={`lrr2ModeBtn ${layoutMode==="transcript" ? "isOn" : ""}`} onClick={() => setLayoutMode("transcript")} data-tip="Transcript only">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M5 6h14M5 12h14M5 18h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+                Transcript
+              </button>
 
-                    <button
-                      type="button"
-                      className="lrr2IconBtn"
-                      onClick={() => setFontScale((v) => Math.min(1.2, Number((v + 0.05).toFixed(2))))}
-                      title="Increase text size"
-                      aria-label="Increase text size"
-                    >
-                      <span className="lrr2IconBtnText">A+</span>
-                    </button>
+              <button type="button" className={`lrr2ModeBtn ${layoutMode==="split" ? "isOn" : ""}`} onClick={() => setLayoutMode("split")} data-tip="Split view">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M11 4v16M5 6h5M5 12h5M5 18h5M13 6h6M13 12h6M13 18h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+                Split
+              </button>
 
-                    <button
-                      type="button"
-                      className={`lrr2IconBtn ${serif ? "isOn" : ""}`}
-                      onClick={() => setSerif((v) => !v)}
-                      title={serif ? "Serif font (on)" : "Serif font (off)"}
-                      aria-label="Toggle serif font"
-                    >
-                      <span className="lrr2IconBtnText">Serif</span>
-                    </button>
-                  </div>
-
-                  <div className="lrr2ReaderCluster">
-                    <button
-                      type="button"
-                      className={`lrr2IconBtn ${readingTheme === "paper" ? "isOn" : ""}`}
-                      onClick={() => setReadingTheme("paper")}
-                      title="Paper theme"
-                      aria-label="Paper theme"
-                    >
-                      <span className="lrr2IconBtnText">Paper</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`lrr2IconBtn ${readingTheme === "sepia" ? "isOn" : ""}`}
-                      onClick={() => setReadingTheme("sepia")}
-                      title="Sepia theme"
-                      aria-label="Sepia theme"
-                    >
-                      <span className="lrr2IconBtnText">Sepia</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`lrr2IconBtn ${readingTheme === "dark" ? "isOn" : ""}`}
-                      onClick={() => setReadingTheme("dark")}
-                      title="Dark theme"
-                      aria-label="Dark theme"
-                    >
-                      <span className="lrr2IconBtnText">Dark</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Transcript */}
-              <div
-                className={[
-                  "lrr2Collapse",
-                  contentOpen ? "open" : "closed",
-                  `lrr2Theme-${readingTheme}`,
-                  fsClass,
-                  fontClass,
-                  preview.gated && preview.reachedLimit ? "isPreviewGated" : "",
-                ].join(" ")}
-              >
-                {preview.renderAsHtml ? (
-                  <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: preview.html }} />
-                ) : (
-                  <CaseContentWithGateBreak
-                    text={preview.text}
-                    showBreak={showInlineBreak}
-                    access={access}
-                    onGo={goUrl}
-                    onRefresh={refreshAccessNow}
-                  />
-                )}
-              </div>
-
-              {/* Sticky CTA if preview limit reached */}
-              {contentOpen && preview.gated && preview.reachedLimit ? <SubscribeGateOverlay access={access} onGo={goUrl} /> : null}
-
-              {/* ✅ Lock guard moved BELOW transcript (as requested) */}
-              <SubscriptionGateCard
-                isPremium={isPremium}
-                access={access}
-                isAdmin={isAdmin}
-                isInst={isInst}
-                isPublic={isPublic}
-                hasFullAccess={hasFullAccess}
-                onGo={goUrl}
-                onRefreshAccess={refreshAccessNow}
-              />
-            </article>
-
-            {/* RIGHT: AI panel (desktop), stacked below on mobile via CSS */}
-            {shouldShowRightAiPanel ? (
-              <aside className="lrr2Aside">
-                <LegalAiPanel compact={true} />
-              </aside>
-            ) : null}
+              <button type="button" className={`lrr2ModeBtn ${layoutMode==="ai" ? "isOn" : ""}`} onClick={() => setLayoutMode("ai")} data-tip="LegalAI only">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M7 8h10M7 12h6M7 16h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/><path d="M4 5h16v14H4z" stroke="currentColor" strokeWidth="1.8"/></svg>
+                LegalAI
+              </button>
+            </div>
           </div>
-        )}
-      </section>
+
+        <section className="lrr2Content">
+          {/* If user explicitly switched to AI tab, keep existing behavior */}
+          {view === "ai" ? (
+            <div className={["lrr2Split", "isAiOnly"].join(" ")}>
+              <aside className="lrr2Aside">
+                <LegalAiPanel compact={false} />
+              </aside>
+            </div>
+          ) : !textHasContent ? (
+            <div className="lrr2Empty">This report has no content yet.</div>
+          ) : (
+            <div
+              className={[
+                "lrr2Split",
+                layoutMode === "ai" ? "isAiOnly" : "",
+                layoutMode === "transcript" ? "isTranscriptOnly" : "",
+                layoutMode === "split" ? "isSplit" : "",
+              ].join(" ")}
+            >
+              {/* LEFT: Transcript (hide when AI-only) */}
+              {layoutMode !== "ai" ? (
+                <article className="lrr2Article">
+                  {/* Reader tools */}
+                  <div className="lrr2TranscriptTools">
+                    <div className="lrr2ReaderBar">
+                      <div className="lrr2ReaderCluster">
+                        <button
+                          type="button"
+                          className="lrr2IconBtn"
+                          onClick={() => setFontScale((v) => Math.max(0.9, Number((v - 0.05).toFixed(2))))}
+                          title="Decrease text size"
+                          aria-label="Decrease text size"
+                        >
+                          <span className="lrr2IconBtnText">A−</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          className="lrr2IconBtn"
+                          onClick={() => setFontScale((v) => Math.min(1.2, Number((v + 0.05).toFixed(2))))}
+                          title="Increase text size"
+                          aria-label="Increase text size"
+                        >
+                          <span className="lrr2IconBtnText">A+</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          className={`lrr2IconBtn ${serif ? "isOn" : ""}`}
+                          onClick={() => setSerif((v) => !v)}
+                          title={serif ? "Serif font (on)" : "Serif font (off)"}
+                          aria-label="Toggle serif font"
+                        >
+                          <span className="lrr2IconBtnText">Serif</span>
+                        </button>
+                      </div>
+
+                      <div className="lrr2ReaderCluster">
+                        <button
+                          type="button"
+                          className={`lrr2IconBtn ${readingTheme === "paper" ? "isOn" : ""}`}
+                          onClick={() => setReadingTheme("paper")}
+                          title="Paper theme"
+                          aria-label="Paper theme"
+                        >
+                          <span className="lrr2IconBtnText">Paper</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          className={`lrr2IconBtn ${readingTheme === "sepia" ? "isOn" : ""}`}
+                          onClick={() => setReadingTheme("sepia")}
+                          title="Sepia theme"
+                          aria-label="Sepia theme"
+                        >
+                          <span className="lrr2IconBtnText">Sepia</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          className={`lrr2IconBtn ${readingTheme === "dark" ? "isOn" : ""}`}
+                          onClick={() => setReadingTheme("dark")}
+                          title="Dark theme"
+                          aria-label="Dark theme"
+                        >
+                          <span className="lrr2IconBtnText">Dark</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Transcript */}
+                  <div
+                    className={[
+                      "lrr2Collapse",
+                      contentOpen ? "open" : "closed",
+                      `lrr2Theme-${readingTheme}`,
+                      fsClass,
+                      fontClass,
+                      preview.gated && preview.reachedLimit ? "isPreviewGated" : "",
+                    ].join(" ")}
+                  >
+                    {preview.renderAsHtml ? (
+                      <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: preview.html }} />
+                    ) : (
+                      <CaseContentWithGateBreak
+                        text={preview.text}
+                        showBreak={showInlineBreak}
+                        access={access}
+                        onGo={goUrl}
+                        onRefresh={refreshAccessNow}
+                      />
+                    )}
+                  </div>
+
+                  {/* Sticky CTA if preview limit reached */}
+                  {contentOpen && preview.gated && preview.reachedLimit ? (
+                    <SubscribeGateOverlay access={access} onGo={goUrl} />
+                  ) : null}
+
+                  {/* ✅ Lock guard moved BELOW transcript */}
+                  <SubscriptionGateCard
+                    isPremium={isPremium}
+                    access={access}
+                    isAdmin={isAdmin}
+                    isInst={isInst}
+                    isPublic={isPublic}
+                    hasFullAccess={hasFullAccess}
+                    onGo={goUrl}
+                    onRefreshAccess={refreshAccessNow}
+                  />
+                </article>
+              ) : null}
+
+              {/* RIGHT: AI panel
+                  - Show in split mode (desktop aside)
+                  - Show in AI-only mode as full width
+              */}
+              {layoutMode !== "transcript" && shouldShowRightAiPanel ? (
+                <aside className="lrr2Aside">
+                  <LegalAiPanel compact={layoutMode === "split"} />
+                </aside>
+              ) : null}
+            </div>
+          )}
+        </section>
+
     </div>
   );
 }
