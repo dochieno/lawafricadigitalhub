@@ -1857,6 +1857,150 @@
   background: rgba(161,24,30,.10);
   color: var(--la-red);
 }
+/* ===== AI header: keep one row ===== */
+.lrrAiHeadRight{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:nowrap;           /* key */
+  white-space:nowrap;         /* key */
+}
+
+.lrrAiHeadActions{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  flex-wrap:nowrap;
+}
+
+.lrrAiIconBtn{
+  border:1px solid rgba(15,23,42,.12);
+  background: rgba(255,255,255,.75);
+  border-radius: 999px;
+  padding: 8px 10px;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  font-weight:800;
+  cursor:pointer;
+}
+.lrrAiIconBtn svg{ width:18px;height:18px; opacity:.9; }
+.lrrAiIconBtn:hover{ transform: translateY(-1px); }
+.lrrAiIconBtn:focus-visible{ outline:none; box-shadow: 0 0 0 4px rgba(161,24,30,.12); }
+
+/* ===== Section cards (FACTS/ISSUES/HOLDING/REASONING) ===== */
+.lrrAiSections{
+  display:grid;
+  gap:12px;
+}
+
+.lrrAiSectionCard{
+  border:1px solid rgba(15,23,42,.10);
+  border-radius:16px;
+  background: rgba(255,255,255,.78);
+  box-shadow: 0 10px 26px rgba(2,6,23,.06);
+  overflow:hidden;
+}
+
+.lrrAiSectionHead{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 12px;
+  border-bottom:1px solid rgba(15,23,42,.08);
+  background: linear-gradient(90deg, rgba(112,40,64,.08), rgba(14,165,165,.06));
+}
+.lrrAiSectionHead .dot{
+  width:8px;height:8px;border-radius:999px;background: rgba(161,24,30,.75);
+}
+.lrrAiSectionHead .ttl{
+  font-weight:950;
+  letter-spacing:.06em;
+  font-size:12px;
+}
+
+.lrrAiSectionList{
+  margin:0;
+  padding:10px 16px 14px 18px;
+}
+.lrrAiSectionList li{
+  margin:8px 0;
+  line-height:1.55;
+}
+
+/* ===== Key takeaways block ===== */
+.lrrAiTakeaways{
+  margin-top: 12px;
+  border:1px solid rgba(15,23,42,.10);
+  border-radius:16px;
+  background: rgba(255,255,255,.78);
+  box-shadow: 0 10px 26px rgba(2,6,23,.06);
+  overflow:hidden;
+}
+
+.lrrAiTakeawaysSum{
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:12px 12px;
+  border-bottom:1px solid rgba(15,23,42,.08);
+  user-select:none;
+}
+.lrrAiTakeawaysSum .kpttl{ font-weight:950; letter-spacing:.06em; font-size:12px; }
+.lrrAiTakeawaysSum .kphint{ color: rgba(15,23,42,.55); font-size:12px; font-weight:700; }
+.lrrAiTakeawaysSum .chev{ margin-left:auto; opacity:.7; }
+
+.lrrAiKpGrid{
+  padding:12px;
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap:10px;
+}
+
+@media (max-width: 720px){
+  .lrrAiKpGrid{ grid-template-columns: 1fr; }
+}
+
+.lrrAiKpCard{
+  border:1px solid rgba(15,23,42,.10);
+  border-radius:14px;
+  background: rgba(255,255,255,.86);
+  padding:12px;
+  display:flex;               /* key: badge will NOT overlap text */
+  align-items:flex-start;
+  gap:10px;
+}
+
+.lrrAiKpText{
+  flex:1;
+  min-width:0;
+  line-height:1.45;
+}
+
+.lrrAiKpBadge{
+  flex:0 0 auto;
+  border-radius: 999px;
+  padding:6px 10px;
+  font-weight:900;
+  font-size:12px;
+  border:1px solid rgba(112,40,64,.22);
+  background: rgba(112,40,64,.10);
+  color: rgba(112,40,64,.92);
+}
+
+/* ===== Footer (tips + disclaimer at bottom) ===== */
+.lrrAiFooter{
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(15,23,42,.10);
+  color: rgba(15,23,42,.68);
+  font-size: 12.5px;
+  font-weight: 650;
+  display:grid;
+  gap:6px;
+}
+
 
 /* Key points list */
 .lrrAiKeyList {

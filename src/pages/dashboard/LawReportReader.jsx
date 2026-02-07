@@ -1528,7 +1528,55 @@ export default function LawReportReader() {
     }
 
     const hasSomeSummary = !!safeTrim(summaryText);
-    const showSummaryEmpty = aiTab === "summary" && !hasSomeSummary && !aiBusy;
+    const showSummaryEmpty = aiTab === "summary" && !hasSomeSummary && !aiBusy;  
+    function parseSectionedSummary(text) {
+        const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
+
+        const sections = [];
+        let cur = null;
+
+        const isHeader = (s) => /^[A-Z][A-Z0-9\s/()-]{2,}:\s*$/.test(s.trim());
+
+        function pushCur() {
+          if (!cur) return;
+          cur.items = cur.items.map((x) => x.trim()).filter(Boolean);
+          if (cur.items.length) sections.push(cur);
+          cur = null;
+        }
+
+        for (const raw of lines) {
+          const line = raw.trimEnd();
+          if (!line.trim()) continue;
+
+          if (isHeader(line)) {
+            pushCur();
+            cur = { title: line.trim().replace(/:\s*$/, ""), items: [] };
+            continue;
+          }
+
+          // bullets
+          const bullet = line.trim().replace(/^[-•]\s+/, "");
+          if (!cur) cur = { title: "SUMMARY", items: [] };
+          cur.items.push(bullet);
+        }
+
+        pushCur();
+
+        // if nothing detected, fallback as one section
+        if (!sections.length && String(text || "").trim()) {
+          return [{ title: "SUMMARY", items: splitIntoParagraphs(text).slice(0, 20) }];
+        }
+
+        return sections;
+      }
+
+      function extractKeyTakeaways(sections) {
+      const kp = sections.find((s) => s.title.toUpperCase().includes("KEY TAKEAWAYS"));
+      if (!kp) return [];
+      return kp.items.map((t, idx) => ({ id: `kp_${idx}`, text: t }));
+    }
+
+  
 
     return (
       <div className={`lrrAi ${compact ? "isCompact" : ""}`}>
@@ -1540,14 +1588,67 @@ export default function LawReportReader() {
             </div>
           </div>
 
-          <div className="lrrAiHeadRight">
-            <button type="button" className="lrrAiBtn ghost" onClick={aiNewSummary} title="Start a new summary workflow">
-              New summary
-            </button>
-            <button type="button" className="lrrAiBtn ghost" onClick={aiClearChat} title="Clear messages">
-              Clear chat
-            </button>
-          </div>
+        <div className="lrrAiHeadRight">
+          {/* Copy actions (only when summary exists) */}
+          {hasSomeSummary ? (() => {
+            const sections = parseSectionedSummary(summaryText);
+
+            // pull out key takeaways if present
+            const takeaways = extractKeyTakeaways(sections);
+            const mainSections = sections.filter((s) => !s.title.toUpperCase().includes("KEY TAKEAWAYS"));
+
+            return (
+              <div className="lrrAiAnswer">
+                {/* SECTION CARDS */}
+                <div className="lrrAiSections">
+                  {mainSections.map((s, idx) => (
+                    <section key={`${s.title}_${idx}`} className="lrrAiSectionCard">
+                      <div className="lrrAiSectionHead">
+                        <span className="dot" aria-hidden="true" />
+                        <div className="ttl">{s.title}</div>
+                      </div>
+
+                      <ul className="lrrAiSectionList">
+                        {s.items.map((it, i2) => (
+                          <li key={i2}>{it}</li>
+                        ))}
+                      </ul>
+                    </section>
+                  ))}
+                </div>
+
+                {/* KEY TAKEAWAYS (collapsible) */}
+                {takeaways.length ? (
+                  <details className="lrrAiTakeaways" open>
+                    <summary className="lrrAiTakeawaysSum">
+                      <span className="kpttl">KEY TAKEAWAYS</span>
+                      <span className="kphint">(click to collapse)</span>
+                      <span className="chev" aria-hidden="true">▾</span>
+                    </summary>
+
+                    <div className="lrrAiKpGrid">
+                      {takeaways.map((x, idx) => (
+                        <div key={x.id} className="lrrAiKpCard">
+                          <div className="lrrAiKpText">{x.text}</div>
+                          <div className="lrrAiKpBadge">{`KP${idx + 1}`}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                ) : null}
+              </div>
+            );
+          })() : null}
+
+          <button type="button" className="lrrAiBtn ghost" onClick={aiNewSummary} title="Start a new summary workflow">
+            New summary
+          </button>
+
+          <button type="button" className="lrrAiBtn ghost" onClick={aiClearChat} title="Clear messages">
+            Clear chat
+          </button>
+        </div>
+
         </div>
 
         {aiErr ? (
@@ -1691,20 +1792,6 @@ export default function LawReportReader() {
                       <span className="pill">Type: {summaryMeta?.type || summaryType}</span>
                       {summaryMeta?.cached ? <span className="pill soft">cached</span> : null}
                     </div>
-
-                    <div className="lrrAiAnswerActions">
-                      <button type="button" className="lrrAiIcon" onClick={() => copyText(summaryText)} title="Copy">
-                        Copy
-                      </button>
-                      <button
-                        type="button"
-                        className="lrrAiIcon"
-                        onClick={() => copyText(bulletsFromText(summaryText))}
-                        title="Copy as bullets"
-                      >
-                        Copy as bullets
-                      </button>
-                    </div>
                   </div>
 
                   <RichText text={summaryText} />
@@ -1835,6 +1922,14 @@ export default function LawReportReader() {
               </div>
             </div>
           )}
+        </div>
+        <div className="lrrAiFooter">
+          <div className="lrrAiFooterTip">
+            Tip: Use the suggested prompts above. Ctrl/⌘ + Enter sends a message in Chat.
+          </div>
+          <div className="lrrAiFooterDisc">
+            Disclaimer: AI output may be inaccurate. Verify against the transcript and citations.
+          </div>
         </div>
       </div>
     );
