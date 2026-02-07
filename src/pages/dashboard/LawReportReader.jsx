@@ -364,6 +364,24 @@ function bulletsFromText(text) {
   }
 
 
+  //Force unordered list:
+
+  function forceUnorderedBullets(text) {
+  const t = String(text || "").replace(/\r\n/g, "\n");
+
+  // Convert ordered list lines like "1. foo" or "12. foo" into "- foo"
+  // Also handles cases where the model uses "1." for every line.
+  return t
+    .split("\n")
+    .map((line) => {
+      const m = line.match(/^\s*(\d+)\.\s+(.*)$/);
+      if (m) return `- ${m[2].trim()}`;
+      return line;
+    })
+    .join("\n");
+}
+
+
 function RichText({ text }) {
   const t = String(text || "");
   const lines = t.replace(/\r\n/g, "\n").split("\n");
@@ -433,7 +451,7 @@ function RichText({ text }) {
           );
         }
         if (b.type === "list") {
-          const ListTag = b.ordered ? "ol" : "ul";
+          const ListTag = "ul"; // chat always uses unordered lists
           return (
             <ListTag key={idx} className={`lrrAiList ${b.ordered ? "ordered" : "bullets"}`}>
               {b.items.map((it, i2) => (
@@ -1306,7 +1324,9 @@ export default function LawReportReader() {
 
       const payload = unwrapApi(res);
       const replyRaw = payload?.reply ?? payload?.data?.reply ?? payload?.message ?? payload?.answer ?? "";
-      const reply = prettifyChatReplyForUi(String(replyRaw || ""));
+      let reply = prettifyChatReplyForUi(String(replyRaw || ""));
+      reply = forceUnorderedBullets(reply);
+
 
       setMessages((prev) => {
         const cleaned = prev.filter((m) => m?.id !== typingMsg.id);
