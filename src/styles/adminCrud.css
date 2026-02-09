@@ -1556,3 +1556,71 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+/* =========================================================
+   FULL-WIDTH TipTap editor inside Admin modal
+========================================================= */
+
+/* Make the editor section truly span the modal */
+.admin-modal .admin-field.admin-span2 {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Editor wrapper (your ReportTiptapEditor root) */
+.admin-modal .tiptap-editor,
+.admin-modal .tiptap-wrapper,
+.admin-modal .tiptap-container {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Toolbar full width */
+.admin-modal .tiptap-toolbar {
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Editor canvas */
+.admin-modal .tiptap-content,
+.admin-modal .ProseMirror {
+  width: 100%;
+  max-width: 100%;
+  min-height: 360px;
+  padding: 16px 18px;
+  box-sizing: border-box;
+}
+
+/* Make modal body allow editor to grow */
+.admin-modal-body {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Let grid stretch */
+.admin-modal-body .admin-grid {
+  flex: 1;
+  align-content: start;
+}
+
+/* Make editor field grow */
+.admin-modal .admin-field.admin-span2:last-child {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Let editor itself grow vertically */
+.admin-modal .admin-field.admin-span2:last-child .tiptap-editor,
+.admin-modal .admin-field.admin-span2:last-child .tiptap-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-modal .admin-field.admin-span2:last-child .ProseMirror {
+  flex: 1;
+  overflow-y: auto;
+}
