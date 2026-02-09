@@ -1624,3 +1624,30 @@
   flex: 1;
   overflow-y: auto;
 }
+/* =========================================================
+   Admin modal grid helpers (missing in CSS)
+========================================================= */
+
+/* Make elements span full width across the 2-column modal grid */
+.admin-grid .admin-span2 {
+  grid-column: 1 / -1;
+}
+
+/* (optional) tighter: allow wide blocks to truly fill without squeezing */
+.admin-grid .admin-span2 > * {
+  max-width: 100%;
+}
+/* Let the TipTap section use more vertical space in the modal */
+.admin-grid .admin-span2 {
+  min-width: 0;
+}
+
+.admin-modal-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-modal-body .admin-grid {
+  flex: 1;
+  align-content: start;
+}
