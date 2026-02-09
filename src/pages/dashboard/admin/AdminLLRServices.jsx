@@ -203,22 +203,13 @@ function Icon({ name }) {
     case "plus":
       return (
         <svg {...common}>
-          <path
-            d="M12 5v14M5 12h14"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
+          <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       );
     case "search":
       return (
         <svg {...common}>
-          <path
-            d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z"
-            stroke="currentColor"
-            strokeWidth="2"
-          />
+          <path d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z" stroke="currentColor" strokeWidth="2" />
           <path
             d="M21 21l-4.35-4.35"
             stroke="currentColor"
@@ -723,13 +714,14 @@ export default function AdminLLRServices() {
   }
 
   return (
-    <div className="admin-page admin-page-wide">
+    <div className="admin-page admin-page-wide admin-llrservices">
       <div className="admin-header">
         <div>
           <h1 className="admin-title">Admin · LLR Services (Reports)</h1>
           <p className="admin-subtitle">
-            Category is fixed to <b>LLR Services</b>. Create/Edit now includes the <b>formatted editor</b> (single entry
-            flow). The <b>File</b> button opens the full-page editor (optional).
+            Category is fixed to <span className="laEm">LLR Services</span>. Create/Edit now includes the{" "}
+            <span className="laEm">formatted editor</span> (single entry flow). The{" "}
+            <span className="laEm">File</span> button opens the full-page editor (optional).
           </p>
         </div>
 
@@ -746,7 +738,7 @@ export default function AdminLLRServices() {
 
       {(error || info) && <div className={`admin-alert ${error ? "error" : "ok"}`}>{error || info}</div>}
 
-      <div className="admin-card admin-card-fill">
+      <div className="admin-card admin-card-fill laSurfaceCard">
         <div className="admin-toolbar">
           <div className="toolbarRow">
             <div className="searchWrap">
@@ -754,21 +746,21 @@ export default function AdminLLRServices() {
                 <Icon name="search" />
               </span>
               <input
-                className="admin-search admin-search-wide"
+                className="admin-search admin-search-wide laSearch"
                 placeholder="Search by title, report number, year, country, parties, citation, court type, town..."
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
             </div>
 
-            <div className="admin-pill muted" title="Total results">
+            <div className="admin-pill muted laCountPill" title="Total results">
               {loading ? "Loading…" : `${filtered.length} report(s)`}
             </div>
           </div>
         </div>
 
-        <div className="admin-table-wrap">
-          <table className="admin-table">
+        <div className="admin-table-wrap laTableWrap">
+          <table className="admin-table laTable">
             <thead>
               <tr>
                 <th style={{ width: "46%" }}>Title</th>
@@ -790,8 +782,8 @@ export default function AdminLLRServices() {
             <tbody>
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={9} style={{ color: "#6b7280", padding: 16, fontWeight: 800 }}>
-                    No reports found. Click <b>New report</b> to add one.
+                  <td colSpan={9} className="laEmptyRow">
+                    No reports found. Click <span className="laEm">New report</span> to add one.
                   </td>
                 </tr>
               )}
@@ -827,38 +819,38 @@ export default function AdminLLRServices() {
                 const courtLabel = courtTownDisplay(r);
 
                 return (
-                  <tr key={id ?? idx} className={`${idx % 2 === 1 ? "row-zebra" : ""} row-hover`}>
+                  <tr key={id ?? idx} className={`laRow ${idx % 2 === 1 ? "row-zebra" : ""} row-hover`}>
                     <td>
                       <div className="titleCell">
-                        <div className="titleMain">{title || "—"}</div>
+                        <div className="titleMain laTitleMain">{title || "—"}</div>
 
-                        <div className="chips">
+                        <div className="chips laChips">
                           {courtLabel && courtLabel !== "—" ? (
-                            <span className="chip" title="Court type & town">
-                              <strong>Court:</strong>&nbsp;{courtLabel}
+                            <span className="chip laChipSoft" title="Court type & town">
+                              <span className="chipKey">Court:</span>&nbsp;{courtLabel}
                             </span>
                           ) : (
-                            <span className="chip muted" title="Court type & town">
+                            <span className="chip muted laChipSoft" title="Court type & town">
                               Court: —
                             </span>
                           )}
 
                           {citation ? (
-                            <span className="chip" title="Citation">
-                              <strong>Citation:</strong>&nbsp;{citation}
+                            <span className="chip laChipSoft" title="Citation">
+                              <span className="chipKey">Citation:</span>&nbsp;{citation}
                             </span>
                           ) : (
-                            <span className="chip muted" title="Citation">
+                            <span className="chip muted laChipSoft" title="Citation">
                               Citation: —
                             </span>
                           )}
 
                           {caseNumber ? (
-                            <span className="chip" title="Case number">
-                              <strong>Case No.:</strong>&nbsp;{caseNumber}
+                            <span className="chip laChipSoft" title="Case number">
+                              <span className="chipKey">Case No.:</span>&nbsp;{caseNumber}
                             </span>
                           ) : (
-                            <span className="chip muted" title="Case number">
+                            <span className="chip muted laChipSoft" title="Case number">
                               Case No.: —
                             </span>
                           )}
@@ -872,7 +864,7 @@ export default function AdminLLRServices() {
 
                     <td>
                       <span
-                        className={`chip ${decisionVal === 1 ? "good" : decisionVal === 2 ? "warn" : "muted"}`}
+                        className={`chip laChipSoft ${decisionVal === 1 ? "good" : decisionVal === 2 ? "warn" : "muted"}`}
                         title="Decision type"
                       >
                         {decisionLabel}
@@ -880,17 +872,21 @@ export default function AdminLLRServices() {
                     </td>
 
                     <td>
-                      <span className={`chip ${caseLabel !== "—" ? "" : "muted"}`} title="Case type">
+                      <span className={`chip laChipSoft ${caseLabel !== "—" ? "" : "muted"}`} title="Case type">
                         {caseLabel}
                       </span>
                     </td>
 
-                    <td>{parties || "—"}</td>
+                    <td className="laParties">{parties || "—"}</td>
                     <td className="tight">{decisionDate ? String(decisionDate).slice(0, 10) : "—"}</td>
 
                     <td>
-                      <div className="actionsRow">
-                        <IconButton title="Edit report details + formatted content" onClick={() => openEdit(r)} disabled={busy}>
+                      <div className="actionsRow laActions">
+                        <IconButton
+                          title="Edit report details + formatted content"
+                          onClick={() => openEdit(r)}
+                          disabled={busy}
+                        >
                           <Icon name="edit" />
                         </IconButton>
 
@@ -926,7 +922,8 @@ export default function AdminLLRServices() {
                   {editing ? `Edit Report #${pick(editing, ["id", "Id"], "")}` : "Create Law Report"}
                 </h3>
                 <div className="admin-modal-subtitle">
-                  Single entry: edit metadata + formatted content here. The <b>File</b> screen is optional.
+                  Single entry: edit metadata + formatted content here. The <span className="laEm">File</span> screen is
+                  optional.
                 </div>
               </div>
 
@@ -963,9 +960,7 @@ export default function AdminLLRServices() {
                     placeholder="Optional (leave blank if backend generates it) — or click Auto title"
                     disabled={busy}
                   />
-                  <div className="hint">
-                    Tip: If blank, your backend may auto-generate. Setting it here gives you control.
-                  </div>
+                  <div className="hint">Tip: If blank, your backend may auto-generate. Setting it here gives you control.</div>
                 </div>
 
                 <div className="admin-field">
@@ -1217,9 +1212,7 @@ export default function AdminLLRServices() {
                     disabled={busy}
                   />
 
-                  <div className="hint">
-                    Paste from Word is supported. This content is saved together with the report (no extra step).
-                  </div>
+                  <div className="hint">Paste from Word is supported. This content is saved together with the report (no extra step).</div>
                 </div>
               </div>
             </div>
@@ -1251,8 +1244,8 @@ export default function AdminLLRServices() {
         }
         right={
           <span className="admin-footer-muted">
-            Tip: Use <b>Search</b> to filter. Create/Edit now includes the formatted editor. <b>File</b> opens the
-            full-page editor (optional).
+            Tip: Use <span className="laEm">Search</span> to filter. Create/Edit now includes the formatted editor.{" "}
+            <span className="laEm">File</span> opens the full-page editor (optional).
           </span>
         }
       />
