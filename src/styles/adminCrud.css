@@ -1336,3 +1336,223 @@
   width: 1%;
   white-space: nowrap;
 }
+/* =========================================================
+   AdminLLRServices (Reports) — move inline styles here
+   Paste at END of adminCrud.css
+========================================================= */
+
+/* Card/table wrapper */
+.admin-card-fill {
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.admin-table-wrap {
+  max-height: 72vh;
+  overflow: auto;
+  border-radius: 18px;
+}
+
+/* Zebra/hover helpers */
+.row-zebra {
+  background: #fafafa;
+}
+
+.row-hover:hover td {
+  background: #fbfbff;
+}
+
+.num-cell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.tight {
+  white-space: nowrap;
+}
+
+/* Title cell + chips */
+.titleCell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 280px;
+}
+
+.titleMain {
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  font-weight: 900;
+  font-size: 11px;
+  color: #374151;
+  max-width: 520px;
+}
+
+.chip strong {
+  font-weight: 950;
+}
+
+.chip.good {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+.chip.warn {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #9a3412;
+}
+
+.chip.muted {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+  color: #6b7280;
+}
+
+/* Toolbar row + search icon */
+.toolbarRow {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.searchWrap {
+  position: relative;
+  flex: 1;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6b7280;
+}
+
+.admin-search-wide {
+  padding-left: 42px; /* makes room for search icon */
+}
+
+/* Actions row in table */
+.actionsRow {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+/* Header icon actions */
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.headerActions .la-icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+}
+
+/* =========================================================
+   Icon buttons used in AdminLLRServices.jsx
+   (keep JSX as-is; provide a stable style here)
+========================================================= */
+.la-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  cursor: pointer;
+  color: #111827;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.05);
+  transition: background 0.15s ease, transform 0.06s ease, border-color 0.15s ease;
+}
+
+.la-icon-btn:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.la-icon-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.la-icon-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.la-icon-btn.primary {
+  border-color: #c7d2fe;
+}
+
+.la-icon-btn.primary:hover:not(:disabled) {
+  background: #f5f7ff;
+}
+
+.la-icon-btn.danger {
+  border-color: #fecaca;
+}
+
+.la-icon-btn.danger:hover:not(:disabled) {
+  background: #fff5f5;
+}
+
+/* =========================================================
+   Modal editor label row + mini buttons (TipTap section)
+========================================================= */
+.editorLabelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.miniActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.miniBtn {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-weight: 900;
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.04);
+}
+
+.miniBtn:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.miniBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

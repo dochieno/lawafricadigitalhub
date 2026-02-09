@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../../../api/client";
 import "../../../styles/adminCrud.css";
 import AdminPageFooter from "../../../components/AdminPageFooter";
+import ReportTiptapEditor from "../../../components/editor/ReportTiptapEditor";
 
 /* =========================
    Helpers
@@ -92,6 +93,26 @@ function dateInputFromIso(iso) {
 function normalizeText(v) {
   const s = String(v ?? "").trim();
   return s ? s : "";
+}
+
+function htmlLooksEmpty(html) {
+  const s = String(html ?? "").trim();
+  if (!s) return true;
+
+  const text = s
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return !text;
+}
+
+function safeDefaultHtml(value) {
+  const v = String(value ?? "").trim();
+  return v ? v : "<p></p>";
 }
 
 /* =========================
@@ -267,6 +288,8 @@ function IconButton({ title, onClick, disabled, tone = "neutral", children }) {
    Component
 ========================= */
 const emptyForm = {
+  title: "",
+
   countryId: "",
   service: 1,
   citation: "",
@@ -276,20 +299,17 @@ const emptyForm = {
   decisionType: 1,
   caseType: 2,
 
-  // legacy optional
   court: "",
-
-  // new
   courtType: 3,
 
-  // ✅ postcode + town (town editable)
   postCode: "",
   town: "",
 
   parties: "",
   judges: "",
   decisionDate: "",
-  contentText: "",
+
+  contentText: "<p></p>",
 };
 
 export default function AdminLLRServices() {
@@ -299,7 +319,7 @@ export default function AdminLLRServices() {
   const [countries, setCountries] = useState([]);
   const [countryMap, setCountryMap] = useState(new Map());
 
-  // ✅ Towns state (country-scoped)
+  // Towns state (country-scoped)
   const [towns, setTowns] = useState([]);
   const [townByPostCode, setTownByPostCode] = useState(new Map());
   const [townsLoading, setTownsLoading] = useState(false);
@@ -316,6 +336,7 @@ export default function AdminLLRServices() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ ...emptyForm });
 
+  const originalContentRef = useRef("<p></p>");
   const firstLoadRef = useRef(true);
 
   function setField(k, v) {
@@ -327,11 +348,21 @@ export default function AdminLLRServices() {
     setForm({ ...emptyForm });
     setTowns([]);
     setTownByPostCode(new Map());
+    originalContentRef.current = "<p></p>";
   }
 
   function closeModal() {
     if (busy) return;
     setOpen(false);
+  }
+
+  function autoTitleDraft(next = form) {
+    const rn = normalizeText(next.reportNumber);
+    const year = normalizeText(next.year);
+    const parties = normalizeText(next.parties);
+    const ct = COURT_TYPE_OPTIONS.find((x) => x.value === toInt(next.courtType, 0))?.label || "";
+    const bits = [rn && year ? `${rn} (${year})` : rn || year, parties, ct].filter(Boolean);
+    return bits.join(" — ").trim();
   }
 
   async function fetchCountries() {
@@ -349,7 +380,6 @@ export default function AdminLLRServices() {
     }
   }
 
-  // ✅ Load towns for a specific country (controller requires countryId)
   async function fetchTownsForCountry(countryId) {
     const cid = toInt(countryId, 0);
     if (!cid) {
@@ -370,7 +400,6 @@ export default function AdminLLRServices() {
       const res = await api.get("/towns", { params: { countryId: cid, take: 500 } });
       const list = Array.isArray(res.data) ? res.data : [];
 
-      // Normalize + sort by postcode for dropdown usability
       const normalized = list
         .map((x) => ({
           id: x?.id ?? x?.Id ?? null,
@@ -490,6 +519,8 @@ export default function AdminLLRServices() {
       service: 1,
       courtType: 3,
       year: String(new Date().getUTCFullYear()),
+      contentText: "<p></p>",
+      title: "",
     }));
     setOpen(true);
   }
@@ -516,8 +547,13 @@ export default function AdminLLRServices() {
       if (cid) await fetchTownsForCountry(cid);
 
       const pc = pick(d, ["postCode", "PostCode", "postcode", "Postcode"], "") ?? "";
+      const contentHtml = safeDefaultHtml(pick(d, ["contentText", "ContentText"], "") ?? "<p></p>");
+
+      originalContentRef.current = contentHtml;
 
       setForm({
+        title: pick(d, ["title", "Title"], "") ?? "",
+
         countryId: cid,
         service: enumToInt(pick(d, ["service", "Service"], 1), SERVICE_OPTIONS, 1),
         citation: pick(d, ["citation", "Citation"], "") ?? "",
@@ -536,7 +572,8 @@ export default function AdminLLRServices() {
         parties: pick(d, ["parties", "Parties"], "") ?? "",
         judges: pick(d, ["judges", "Judges"], "") ?? "",
         decisionDate: dateInputFromIso(pick(d, ["decisionDate", "DecisionDate"], "")),
-        contentText: pick(d, ["contentText", "ContentText"], "") ?? "",
+
+        contentText: contentHtml,
       });
 
       const pc2 = normalizeText(pc);
@@ -555,6 +592,9 @@ export default function AdminLLRServices() {
   function buildPayload() {
     return {
       category: 6,
+
+      title: normalizeText(form.title) || null,
+
       countryId: toInt(form.countryId, 0),
       service: toInt(form.service, 1),
 
@@ -576,7 +616,7 @@ export default function AdminLLRServices() {
       judges: normalizeText(form.judges) || null,
       decisionDate: isoOrNullFromDateInput(form.decisionDate),
 
-      contentText: String(form.contentText ?? ""),
+      contentText: safeDefaultHtml(form.contentText),
     };
   }
 
@@ -589,7 +629,8 @@ export default function AdminLLRServices() {
     if (!year || year < 1900 || year > 2100) return "Year must be between 1900 and 2100.";
 
     if (!toInt(form.courtType, 0)) return "Court Type is required.";
-    if (!editing?.id && !String(form.contentText ?? "").trim()) return "Content text is required on Create.";
+
+    if (!editing?.id && htmlLooksEmpty(form.contentText)) return "Report content is required on Create (paste the case).";
 
     return "";
   }
@@ -598,16 +639,26 @@ export default function AdminLLRServices() {
     const msg = validate();
     if (msg) return setError(msg);
 
+    const hadContentBefore = !htmlLooksEmpty(originalContentRef.current);
+    const isEmptyNow = htmlLooksEmpty(form.contentText);
+    const isEditing = !!pick(editing, ["id", "Id"], null);
+
+    if (isEditing && hadContentBefore && isEmptyNow) {
+      const ok = window.confirm(
+        "You are about to save this report with EMPTY content.\n\nThis will clear the formatted body.\n\nContinue?"
+      );
+      if (!ok) return;
+    }
+
     setBusy(true);
     setError("");
     setInfo("");
 
     try {
       const payload = buildPayload();
-
       const id = pick(editing, ["id", "Id"], null);
+
       if (id) {
-        // ✅ Edit modal updates full report (existing behavior)
         await api.put(`/law-reports/${id}`, payload);
         setInfo("Saved changes.");
       } else {
@@ -673,65 +724,12 @@ export default function AdminLLRServices() {
 
   return (
     <div className="admin-page admin-page-wide">
-      <style>{`
-        .admin-card-fill { border-radius: 18px; overflow:hidden; }
-        .admin-table-wrap { max-height: 72vh; overflow:auto; border-radius: 18px; }
-        .admin-table { font-size: 13px; }
-        .admin-table thead th { position: sticky; top: 0; z-index: 2; background: #fafafa; }
-        .row-zebra { background: #fafafa; }
-        .row-hover:hover td { background: #fbfbff; }
-        .num-cell { text-align:right; font-variant-numeric: tabular-nums; }
-        .tight { white-space: nowrap; }
-        .hint { color:#6b7280; font-size:12px; font-weight:700; }
-        .titleCell { display:flex; flex-direction:column; gap:8px; min-width: 280px; }
-        .titleMain { font-weight: 950; line-height: 1.25; }
-        .chips { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-        .chip {
-          display:inline-flex; align-items:center;
-          padding: 4px 10px;
-          border-radius: 999px;
-          border:1px solid #e5e7eb;
-          background:#fff;
-          font-weight: 900;
-          font-size: 11px;
-          color:#374151;
-          max-width: 520px;
-        }
-        .chip.good { background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
-        .chip.warn { background:#fff7ed; border-color:#fed7aa; color:#9a3412; }
-        .chip.muted { background:#f3f4f6; border-color:#e5e7eb; color:#6b7280; }
-        .chip strong { font-weight: 950; }
-        .actionsRow { display:flex; justify-content:flex-end; gap:10px; align-items:center; flex-wrap:nowrap; }
-        .toolbarRow { display:flex; gap:12px; align-items:center; }
-        .searchWrap { position: relative; flex: 1; }
-        .searchIcon { position:absolute; left: 12px; top: 50%; transform: translateY(-50%); color:#6b7280; }
-        .admin-search-wide { padding-left: 42px; }
-
-        .la-icon-btn {
-          display:inline-flex; align-items:center; justify-content:center;
-          width: 36px; height: 36px;
-          border-radius: 12px;
-          border: 1px solid #e5e7eb;
-          background: #fff;
-          cursor: pointer;
-          color: #111827;
-        }
-        .la-icon-btn:hover { background:#fafafa; }
-        .la-icon-btn:disabled { opacity: .55; cursor: not-allowed; }
-        .la-icon-btn.primary { border-color:#c7d2fe; }
-        .la-icon-btn.primary:hover { background:#f5f7ff; }
-        .la-icon-btn.danger { border-color:#fecaca; }
-        .la-icon-btn.danger:hover { background:#fff5f5; }
-
-        .headerActions { display:flex; align-items:center; gap:10px; }
-        .headerActions .la-icon-btn { width: 34px; height: 34px; border-radius: 11px; }
-      `}</style>
-
       <div className="admin-header">
         <div>
           <h1 className="admin-title">Admin · LLR Services (Reports)</h1>
           <p className="admin-subtitle">
-            Category is fixed to <b>LLR Services</b>. Use <b>Report Content</b> to edit the full formatted body.
+            Category is fixed to <b>LLR Services</b>. Create/Edit now includes the <b>formatted editor</b> (single entry
+            flow). The <b>File</b> button opens the full-page editor (optional).
           </p>
         </div>
 
@@ -750,7 +748,7 @@ export default function AdminLLRServices() {
 
       <div className="admin-card admin-card-fill">
         <div className="admin-toolbar">
-          <div className="toolbarRow" style={{ width: "100%" }}>
+          <div className="toolbarRow">
             <div className="searchWrap">
               <span className="searchIcon">
                 <Icon name="search" />
@@ -892,12 +890,12 @@ export default function AdminLLRServices() {
 
                     <td>
                       <div className="actionsRow">
-                        <IconButton title="Edit report details" onClick={() => openEdit(r)} disabled={busy}>
+                        <IconButton title="Edit report details + formatted content" onClick={() => openEdit(r)} disabled={busy}>
                           <Icon name="edit" />
                         </IconButton>
 
                         <IconButton
-                          title="Edit formatted report content"
+                          title="Open full-page editor (optional)"
                           onClick={() => openContent(r)}
                           disabled={busy}
                           tone="primary"
@@ -921,15 +919,14 @@ export default function AdminLLRServices() {
       {/* ===================== CREATE/EDIT MODAL ===================== */}
       {open && (
         <div className="admin-modal-overlay" onClick={closeModal}>
-          <div className="admin-modal" style={{ maxWidth: 1100 }} onClick={(e) => e.stopPropagation()}>
+          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
             <div className="admin-modal-head">
               <div>
                 <h3 className="admin-modal-title">
                   {editing ? `Edit Report #${pick(editing, ["id", "Id"], "")}` : "Create Law Report"}
                 </h3>
                 <div className="admin-modal-subtitle">
-                  Saves the <b>LawReport</b> and updates its linked <b>LegalDocument</b>. Use <b>Report Content</b>{" "}
-                  for full formatted editing.
+                  Single entry: edit metadata + formatted content here. The <b>File</b> screen is optional.
                 </div>
               </div>
 
@@ -940,6 +937,37 @@ export default function AdminLLRServices() {
 
             <div className="admin-modal-body admin-modal-scroll">
               <div className="admin-grid">
+                {/* Title */}
+                <div className="admin-field admin-span2">
+                  <div className="editorLabelRow">
+                    <label>Title</label>
+                    <div className="miniActions">
+                      <button
+                        type="button"
+                        className="miniBtn"
+                        disabled={busy}
+                        onClick={() => {
+                          const t = autoTitleDraft(form);
+                          if (t) setField("title", t);
+                        }}
+                        title="Generate a sensible title from report number/year/parties/court"
+                      >
+                        Auto title
+                      </button>
+                    </div>
+                  </div>
+
+                  <input
+                    value={form.title}
+                    onChange={(e) => setField("title", e.target.value)}
+                    placeholder="Optional (leave blank if backend generates it) — or click Auto title"
+                    disabled={busy}
+                  />
+                  <div className="hint">
+                    Tip: If blank, your backend may auto-generate. Setting it here gives you control.
+                  </div>
+                </div>
+
                 <div className="admin-field">
                   <label>Country *</label>
 
@@ -1153,27 +1181,50 @@ export default function AdminLLRServices() {
                   />
                 </div>
 
+                {/* TipTap */}
                 <div className="admin-field admin-span2">
-                  <label>Content Text {editing?.id ? "(optional here)" : "*"}</label>
-                  <textarea
-                    rows={10}
-                    value={form.contentText}
-                    onChange={(e) => setField("contentText", e.target.value)}
-                    placeholder={
-                      editing?.id
-                        ? "Optional: use Report Content for formatted editing."
-                        : "Required on Create: paste report body here (you can format later in Report Content)."
-                    }
+                  <div className="editorLabelRow">
+                    <label>Formatted Report Content {editing?.id ? "" : "*"}</label>
+
+                    <div className="miniActions">
+                      {!!pick(editing, ["id", "Id"], null) && (
+                        <button
+                          type="button"
+                          className="miniBtn"
+                          disabled={busy}
+                          onClick={() => openContent(editing)}
+                          title="Open the full-page editor (optional)"
+                        >
+                          Open full editor
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        className="miniBtn"
+                        disabled={busy}
+                        onClick={() => setField("contentText", "<p></p>")}
+                        title="Clear content"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+
+                  <ReportTiptapEditor
+                    value={safeDefaultHtml(form.contentText)}
+                    onChange={(html) => setField("contentText", html)}
                     disabled={busy}
                   />
+
                   <div className="hint">
-                    Tip: Use <b>Report Content</b> for formatting (bold, headings, links).
+                    Paste from Word is supported. This content is saved together with the report (no extra step).
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="admin-modal-foot" style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <div className="admin-modal-foot">
               <button className="admin-btn" onClick={closeModal} disabled={busy}>
                 Cancel
               </button>
@@ -1200,7 +1251,8 @@ export default function AdminLLRServices() {
         }
         right={
           <span className="admin-footer-muted">
-            Tip: Use <b>Search</b> to filter. Use the <b>File</b> button to edit formatted content.
+            Tip: Use <b>Search</b> to filter. Create/Edit now includes the formatted editor. <b>File</b> opens the
+            full-page editor (optional).
           </span>
         }
       />
