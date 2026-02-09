@@ -115,6 +115,28 @@ function safeDefaultHtml(value) {
   return v ? v : "<p></p>";
 }
 
+function normalizeLightList(resData) {
+  // Accept many shapes: array, {data:[]}, {items:[]}, {results:[]}
+  const d = resData?.data ?? resData;
+  if (Array.isArray(d)) return d;
+  if (d && typeof d === "object") {
+    const arr = d.items ?? d.results ?? d.data ?? d.value ?? d.contentProducts ?? d.products ?? null;
+    return Array.isArray(arr) ? arr : [];
+  }
+  return [];
+}
+
+function normalizeProductRow(x) {
+  const id = pick(x, ["id", "Id"], null);
+  const name = normalizeText(pick(x, ["name", "Name", "title", "Title"], ""));
+  const code = normalizeText(pick(x, ["code", "Code", "slug", "Slug"], ""));
+  return {
+    id: id == null ? null : toInt(id, 0),
+    name,
+    code,
+  };
+}
+
 /* =========================
    Options
 ========================= */
@@ -281,6 +303,9 @@ function IconButton({ title, onClick, disabled, tone = "neutral", children }) {
 const emptyForm = {
   title: "",
 
+  // ✅ NEW: user selects product (so we can auto-map into product_documents join table)
+  contentProductId: "",
+
   countryId: "",
   service: 1,
   citation: "",
@@ -310,6 +335,11 @@ export default function AdminLLRServices() {
   const [countries, setCountries] = useState([]);
   const [countryMap, setCountryMap] = useState(new Map());
 
+  // ✅ NEW: Content Products (light list for dropdown)
+  const [products, setProducts] = useState([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const defaultProductIdRef = useRef(null);
+
   // Towns state (country-scoped)
   const [towns, setTowns] = useState([]);
   const [townByPostCode, setTownByPostCode] = useState(new Map());
@@ -330,6 +360,9 @@ export default function AdminLLRServices() {
   const originalContentRef = useRef("<p></p>");
   const firstLoadRef = useRef(true);
 
+  // ✅ NEW: remember product before editing so we can sync mapping on Save
+  const originalProductIdRef = useRef(null);
+
   function setField(k, v) {
     setForm((p) => ({ ...p, [k]: v }));
   }
@@ -340,6 +373,7 @@ export default function AdminLLRServices() {
     setTowns([]);
     setTownByPostCode(new Map());
     originalContentRef.current = "<p></p>";
+    originalProductIdRef.current = null;
   }
 
   function closeModal() {
@@ -368,6 +402,51 @@ export default function AdminLLRServices() {
     } catch {
       setCountries([]);
       setCountryMap(new Map());
+    }
+  }
+
+  // ✅ NEW: fetch content products for dropdown (tries a few routes to match your API)
+  async function fetchContentProductsLight() {
+    setProductsLoading(true);
+    try {
+      const routes = [
+        "/content-products",
+        "/admin/content-products",
+        "/content-products/admin",
+        "/content-products?light=true",
+        "/admin/content-products?light=true",
+      ];
+
+      let list = [];
+      for (const url of routes) {
+        try {
+          const res = await api.get(url);
+          const raw = normalizeLightList(res.data);
+          if (raw.length) {
+            list = raw;
+            break;
+          }
+        } catch {
+          // try next route
+        }
+      }
+
+      const normalized = list.map(normalizeProductRow).filter((x) => x.id && x.name);
+
+      // Pick default: prefer "LawAfrica Reports"
+      const pickDefault =
+        normalized.find((p) => p.name.toLowerCase().includes("lawafrica reports")) ||
+        normalized.find((p) => p.name.toLowerCase().includes("reports")) ||
+        normalized[0] ||
+        null;
+
+      setProducts(normalized);
+      defaultProductIdRef.current = pickDefault?.id ?? null;
+    } catch {
+      setProducts([]);
+      defaultProductIdRef.current = null;
+    } finally {
+      setProductsLoading(false);
     }
   }
 
@@ -460,9 +539,52 @@ export default function AdminLLRServices() {
     }
   }
 
+  // ✅ NEW: mapping helpers (same API used by AdminProductDocuments.jsx)
+  async function readProductMappings(productId) {
+    const pid = toInt(productId, 0);
+    if (!pid) return [];
+    const res = await api.get(`/content-products/${pid}/documents`);
+    const data = res.data?.data ?? res.data;
+    return Array.isArray(data) ? data : [];
+  }
+
+  async function ensureProductDocMapping({ productId, legalDocumentId, sortOrder = 0 }) {
+    const pid = toInt(productId, 0);
+    const did = toInt(legalDocumentId, 0);
+    if (!pid || !did) return;
+
+    // avoid duplicates (also ok if backend enforces unique)
+    try {
+      const rows2 = await readProductMappings(pid);
+      const already = rows2.some((r) => toInt(r.legalDocumentId ?? r.LegalDocumentId, 0) === did);
+      if (already) return;
+    } catch {
+      // ignore and try create
+    }
+
+    await api.post(`/content-products/${pid}/documents`, {
+      legalDocumentId: did,
+      sortOrder: toInt(sortOrder, 0),
+    });
+  }
+
+  async function removeProductDocMapping({ productId, legalDocumentId }) {
+    const pid = toInt(productId, 0);
+    const did = toInt(legalDocumentId, 0);
+    if (!pid || !did) return;
+
+    const rows2 = await readProductMappings(pid);
+    const hit = rows2.find((r) => toInt(r.legalDocumentId ?? r.LegalDocumentId, 0) === did);
+    const mapId = hit?.id ?? hit?.Id ?? null;
+    if (!mapId) return;
+
+    await api.delete(`/content-products/${pid}/documents/${mapId}`);
+  }
+
   useEffect(() => {
     (async () => {
       await fetchCountries();
+      await fetchContentProductsLight(); // ✅ NEW
       await fetchList();
       firstLoadRef.current = false;
     })();
@@ -503,6 +625,9 @@ export default function AdminLLRServices() {
     setError("");
     setInfo("");
     resetForm();
+
+    const defaultPid = defaultProductIdRef.current;
+
     setForm((p) => ({
       ...p,
       decisionType: 1,
@@ -512,7 +637,9 @@ export default function AdminLLRServices() {
       year: String(new Date().getUTCFullYear()),
       contentText: "<p></p>",
       title: "",
+      contentProductId: defaultPid ? String(defaultPid) : "",
     }));
+
     setOpen(true);
   }
 
@@ -540,10 +667,24 @@ export default function AdminLLRServices() {
       const pc = pick(d, ["postCode", "PostCode", "postcode", "Postcode"], "") ?? "";
       const contentHtml = safeDefaultHtml(pick(d, ["contentText", "ContentText"], "") ?? "<p></p>");
 
+      // ✅ NEW: contentProductId from API (supports a few property names)
+      const pid =
+        pick(d, ["contentProductId", "ContentProductId"], null) ??
+        pick(d, ["productId", "ProductId"], null) ??
+        null;
+
+      originalProductIdRef.current = pid ? toInt(pid, 0) : null;
+
       originalContentRef.current = contentHtml;
 
       setForm({
         title: pick(d, ["title", "Title"], "") ?? "",
+
+        contentProductId: pid
+          ? String(pid)
+          : defaultProductIdRef.current
+          ? String(defaultProductIdRef.current)
+          : "",
 
         countryId: cid,
         service: enumToInt(pick(d, ["service", "Service"], 1), SERVICE_OPTIONS, 1),
@@ -581,10 +722,15 @@ export default function AdminLLRServices() {
   }
 
   function buildPayload() {
+    const pid = toInt(form.contentProductId, 0);
+
     return {
       category: 6,
 
       title: normalizeText(form.title) || null,
+
+      // ✅ NEW: prefer backend support; also used by our mapping sync below
+      contentProductId: pid ? pid : null,
 
       countryId: toInt(form.countryId, 0),
       service: toInt(form.service, 1),
@@ -621,6 +767,11 @@ export default function AdminLLRServices() {
 
     if (!toInt(form.courtType, 0)) return "Court Type is required.";
 
+    // ✅ If products loaded, enforce selection (prevents “manual mapping” scenario)
+    if (products.length > 0 && !toInt(form.contentProductId, 0)) {
+      return "Content Product is required (select where this report belongs).";
+    }
+
     if (!editing?.id && htmlLooksEmpty(form.contentText)) return "Report content is required on Create (paste the case).";
 
     return "";
@@ -649,12 +800,51 @@ export default function AdminLLRServices() {
       const payload = buildPayload();
       const id = pick(editing, ["id", "Id"], null);
 
+      const nextPid = toInt(form.contentProductId, 0);
+
       if (id) {
         await api.put(`/law-reports/${id}`, payload);
+
+        // ✅ NEW: keep product_documents join table in sync (same API as AdminProductDocuments)
+        // - if product changed: remove old mapping, add new mapping
+        // - if product same: ensure mapping exists
+        try {
+          const oldPid = toInt(originalProductIdRef.current, 0);
+          const docId = toInt(id, 0);
+
+          if (oldPid && nextPid && oldPid !== nextPid) {
+            await removeProductDocMapping({ productId: oldPid, legalDocumentId: docId });
+            await ensureProductDocMapping({ productId: nextPid, legalDocumentId: docId, sortOrder: 0 });
+          } else if (nextPid) {
+            await ensureProductDocMapping({ productId: nextPid, legalDocumentId: docId, sortOrder: 0 });
+          }
+        } catch (mapErr) {
+          console.warn("Mapping sync failed:", mapErr);
+        }
+
+        originalProductIdRef.current = nextPid || null;
         setInfo("Saved changes.");
       } else {
         const res = await api.post("/law-reports", payload);
-        const newId = pick(res.data, ["id", "Id"], null);
+
+        // Your API might return {id} or {data:{id}}; handle both
+        const data = res?.data?.data ?? res?.data;
+        const newId = pick(data, ["id", "Id"], null);
+
+        // ✅ NEW: auto-map to product docs join table so docs count updates automatically
+        if (nextPid && newId) {
+          try {
+            await ensureProductDocMapping({ productId: nextPid, legalDocumentId: newId, sortOrder: 0 });
+          } catch (mapErr) {
+            console.warn("Mapping create failed:", mapErr);
+            setInfo(
+              newId
+                ? `Report created (#${newId}). (Mapping failed — you can map manually in Product Documents.)`
+                : "Report created. (Mapping failed — you can map manually.)"
+            );
+          }
+        }
+
         setInfo(newId ? `Report created (#${newId}).` : "Report created.");
       }
 
@@ -713,6 +903,12 @@ export default function AdminLLRServices() {
     return courtPart || town || "—";
   }
 
+  const productNameById = useMemo(() => {
+    const m = new Map();
+    for (const p of products) m.set(p.id, p.name);
+    return m;
+  }, [products]);
+
   return (
     <div className="admin-page admin-page-wide admin-llrservices">
       <div className="admin-header">
@@ -720,8 +916,8 @@ export default function AdminLLRServices() {
           <h1 className="admin-title">Admin · LLR Services (Reports)</h1>
           <p className="admin-subtitle">
             Category is fixed to <span className="laEm">LLR Services</span>. Create/Edit now includes the{" "}
-            <span className="laEm">formatted editor</span> (single entry flow). The{" "}
-            <span className="laEm">File</span> button opens the full-page editor (optional).
+            <span className="laEm">formatted editor</span> (single entry flow). The <span className="laEm">File</span>{" "}
+            button opens the full-page editor (optional).
           </p>
         </div>
 
@@ -864,7 +1060,9 @@ export default function AdminLLRServices() {
 
                     <td>
                       <span
-                        className={`chip laChipSoft ${decisionVal === 1 ? "good" : decisionVal === 2 ? "warn" : "muted"}`}
+                        className={`chip laChipSoft ${
+                          decisionVal === 1 ? "good" : decisionVal === 2 ? "warn" : "muted"
+                        }`}
                         title="Decision type"
                       >
                         {decisionLabel}
@@ -961,6 +1159,56 @@ export default function AdminLLRServices() {
                     disabled={busy}
                   />
                   <div className="hint">Tip: If blank, your backend may auto-generate. Setting it here gives you control.</div>
+                </div>
+
+                {/* ✅ NEW: Content Product */}
+                <div className="admin-field admin-span2">
+                  <label>Content Product *</label>
+
+                  {products.length > 0 ? (
+                    <select
+                      className="adminSelect"
+                      value={String(form.contentProductId || "")}
+                      onChange={(e) => setField("contentProductId", e.target.value)}
+                      disabled={busy}
+                    >
+                      <option value="">Select product…</option>
+                      {products.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <>
+                      <input
+                        type="number"
+                        min="1"
+                        className="adminSelect"
+                        value={String(form.contentProductId || "")}
+                        onChange={(e) => setField("contentProductId", e.target.value)}
+                        placeholder={productsLoading ? "Loading products…" : "ContentProductId (e.g. LawAfrica Reports id)"}
+                        disabled={busy || productsLoading}
+                      />
+                      <div className="hint">
+                        Tip: This links the report to a product so Docs count updates automatically. If this stays empty,
+                        your backend should apply a default product.
+                      </div>
+                    </>
+                  )}
+
+                  <div className="hint">
+                    Used to auto-map this report to a product (so you don’t manually map later).{" "}
+                    {toInt(form.contentProductId, 0) && productNameById.get(toInt(form.contentProductId, 0)) ? (
+                      <>
+                        Selected: <span className="laEm">{productNameById.get(toInt(form.contentProductId, 0))}</span>
+                      </>
+                    ) : (
+                      <>
+                        {productsLoading ? "Loading products…" : "Pick the product where this report belongs."}
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 <div className="admin-field">
