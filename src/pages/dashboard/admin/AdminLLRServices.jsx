@@ -145,6 +145,11 @@ function formatIsoDateShort(iso) {
   }
 }
 
+function sortValue(v) {
+  if (v === null || v === undefined) return "";
+  return typeof v === "string" ? v.toLowerCase() : String(v).toLowerCase();
+}
+
 /* =========================
    Options
 ========================= */
@@ -268,6 +273,18 @@ function Icon({ name }) {
           <path d="M6 6l1 16h10l1-16" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
         </svg>
       );
+    case "chevUp":
+      return (
+        <svg {...common}>
+          <path d="M18 15l-6-6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "chevDown":
+      return (
+        <svg {...common}>
+          <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
     default:
       return null;
   }
@@ -317,6 +334,9 @@ const emptyForm = {
   postCode: "",
   town: "",
 
+  // ✅ NEW (backend)
+  courtCategory: "", // Court Division
+
   // Parties
   parties: "",
   judges: "",
@@ -356,7 +376,12 @@ export default function AdminLLRServices() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
+  // search + filters + sort
   const [q, setQ] = useState("");
+  const [countryFilter, setCountryFilter] = useState(""); // string id
+  const [sortKey, setSortKey] = useState("updated"); // title|country|reportNumber|year|decision|caseType|date|updated
+  const [sortDir, setSortDir] = useState("desc"); // asc|desc
+
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
@@ -394,16 +419,17 @@ export default function AdminLLRServices() {
   }
 
   function computeCourtDisplay(next = form) {
-    const courtName = getSelectedCourtName(next);
+    // NOTE: backend now builds Court string including CourtCategory if you did it there,
+    // but for UI preview we mirror the same idea:
+    const courtName = getSelectedCourtName(next) || normalizeText(next.court);
+    const cat = normalizeText(next.courtCategory);
     const town = normalizeText(next.town);
 
-    if (courtName && town) return `${courtName} at ${town}`;
-    if (courtName) return courtName;
+    let base = courtName;
 
-    // fallback: legacy text + town
-    const legacyCourt = normalizeText(next.court);
-    if (legacyCourt && town) return `${legacyCourt} at ${town}`;
-    return legacyCourt || town || "";
+    if (cat) base = base ? `${base} — ${cat}` : cat;
+    if (base && town) return `${base} at ${town}`;
+    return base || town || "";
   }
 
   function autoTitleDraft(next = form) {
@@ -411,13 +437,11 @@ export default function AdminLLRServices() {
     const year = normalizeText(next.year);
     const parties = normalizeText(next.parties);
     const courtPart = normalizeText(computeCourtDisplay(next));
-
-    // ✅ Remove “additional court just before citation” by NOT embedding citation here.
     const bits = [rn && year ? `${rn} (${year})` : rn || year, parties, courtPart].filter(Boolean);
     return bits.join(" — ").trim();
   }
 
-  // ✅ Title is hidden and always kept in sync
+  // Title hidden and always kept in sync
   useEffect(() => {
     if (!open) return;
 
@@ -433,7 +457,8 @@ export default function AdminLLRServices() {
     form.parties,
     form.courtId,
     form.town,
-    form.court, // legacy
+    form.courtCategory,
+    form.court,
     courts,
   ]);
 
@@ -565,24 +590,23 @@ export default function AdminLLRServices() {
         .map((x) => ({
           id: x?.id ?? x?.Id ?? null,
           countryId: toInt(x?.countryId ?? x?.CountryId ?? cid, cid),
-          // ✅ We still store this field but UI will show Town instead of Postcode.
+          // still stored internally (code)
           postCode: normalizeText(x?.postCode ?? x?.PostCode ?? ""),
           name: normalizeText(x?.name ?? x?.Name ?? ""),
         }))
-        .filter((x) => x.postCode);
+        .filter((x) => x.postCode || x.name);
 
       normalized.sort((a, b) => {
-        // Sort by town name primarily (premium feel)
         const an = a.name || "";
         const bn = b.name || "";
         const byName = an.localeCompare(bn);
         if (byName !== 0) return byName;
-        return a.postCode.localeCompare(b.postCode);
+        return (a.postCode || "").localeCompare(b.postCode || "");
       });
 
       const m = new Map();
       for (const t of normalized) {
-        if (!m.has(t.postCode)) m.set(t.postCode, t);
+        if (t.postCode && !m.has(t.postCode)) m.set(t.postCode, t);
       }
 
       setTowns(normalized);
@@ -611,18 +635,11 @@ export default function AdminLLRServices() {
   }
 
   function handleTownSelect(postCode) {
-    // Internally we still store the selected town by its postcode/code
     const pc = normalizeText(postCode);
     setField("postCode", pc);
 
-    if (!pc) return;
-    const hit = townByPostCode.get(pc);
-    if (!hit) return;
-
-    if (hit.name) setField("town", hit.name);
-    if (hit.countryId && String(form.countryId || "") !== String(hit.countryId)) {
-      handleCountryChange(String(hit.countryId));
-    }
+    const hit = pc ? townByPostCode.get(pc) : null;
+    if (hit?.name) setField("town", hit.name);
   }
 
   async function fetchList() {
@@ -695,16 +712,28 @@ export default function AdminLLRServices() {
     })();
   }, []);
 
+  const productNameById = useMemo(() => {
+    const m = new Map();
+    for (const p of products) m.set(p.id, p.name);
+    return m;
+  }, [products]);
+
+  // Filters + Search
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return rows;
 
     return rows.filter((r) => {
+      const countryId = pick(r, ["countryId", "CountryId"], null);
+      if (countryFilter && String(countryId ?? "") !== String(countryFilter)) return false;
+
+      if (!s) return true;
+
       const title = String(pick(r, ["title", "Title"], "")).toLowerCase();
       const reportNumber = String(pick(r, ["reportNumber", "ReportNumber"], "")).toLowerCase();
       const year = String(pick(r, ["year", "Year"], "")).toLowerCase();
       const citation = String(pick(r, ["citation", "Citation"], "")).toLowerCase();
       const town = String(pick(r, ["town", "Town"], "")).toLowerCase();
+      const div = String(pick(r, ["courtCategory", "CourtCategory"], "")).toLowerCase();
 
       const courtName = String(pick(r, ["courtName", "CourtName"], "")).toLowerCase();
       const courtCode = String(pick(r, ["courtCode", "CourtCode"], "")).toLowerCase();
@@ -713,7 +742,6 @@ export default function AdminLLRServices() {
       const caseNo = String(pick(r, ["caseNumber", "CaseNumber"], "")).toLowerCase();
       const judges = String(pick(r, ["judges", "Judges"], "")).toLowerCase();
 
-      const countryId = pick(r, ["countryId", "CountryId"], null);
       const countryName = (countryMap.get(Number(countryId)) || "").toLowerCase();
 
       const courtTypeLabel = String(pick(r, ["courtTypeLabel", "CourtTypeLabel"], "")).toLowerCase();
@@ -724,10 +752,97 @@ export default function AdminLLRServices() {
           SERVICE_OPTIONS.find((x) => x.value === enumToInt(serviceVal, SERVICE_OPTIONS, 0))?.label ||
           "").toLowerCase();
 
-      const meta = `${reportNumber} ${year} ${citation} ${courtName} ${courtCode} ${legacyCourt} ${courtTypeLabel} ${town} ${caseNo} ${judges} ${countryName} ${serviceLabel}`;
+      const meta = `${reportNumber} ${year} ${citation} ${courtName} ${courtCode} ${legacyCourt} ${courtTypeLabel} ${div} ${town} ${caseNo} ${judges} ${countryName} ${serviceLabel}`;
       return title.includes(s) || meta.includes(s);
     });
-  }, [rows, q, countryMap]);
+  }, [rows, q, countryFilter, countryMap]);
+
+  // Sorting
+  const sorted = useMemo(() => {
+    const dir = sortDir === "asc" ? 1 : -1;
+
+    const keyFn = (r) => {
+      const countryId = pick(r, ["countryId", "CountryId"], null);
+      const countryName = countryMap.get(Number(countryId)) || "";
+
+      switch (sortKey) {
+        case "title":
+          return sortValue(pick(r, ["title", "Title"], ""));
+        case "country":
+          return sortValue(countryName);
+        case "reportNumber":
+          return sortValue(pick(r, ["reportNumber", "ReportNumber"], ""));
+        case "year":
+          return toInt(pick(r, ["year", "Year"], 0), 0);
+        case "decision": {
+          const raw = pick(r, ["decisionTypeLabel", "DecisionTypeLabel"], null) ?? pick(r, ["decisionType", "DecisionType"], null);
+          const label = normalizeText(raw) || labelFrom(DECISION_OPTIONS, raw);
+          return sortValue(label);
+        }
+        case "caseType": {
+          const raw = pick(r, ["caseTypeLabel", "CaseTypeLabel"], null) ?? pick(r, ["caseType", "CaseType"], null);
+          const label = normalizeText(raw) || labelFrom(CASETYPE_OPTIONS, raw);
+          return sortValue(label);
+        }
+        case "date": {
+          const iso = pick(r, ["decisionDate", "DecisionDate"], null);
+          const t = iso ? new Date(iso).getTime() : 0;
+          return Number.isFinite(t) ? t : 0;
+        }
+        case "updated": {
+          const iso = pick(r, ["updatedAt", "UpdatedAt", "lastUpdated", "LastUpdated"], null);
+          const t = iso ? new Date(iso).getTime() : 0;
+          return Number.isFinite(t) ? t : 0;
+        }
+        default:
+          return sortValue(pick(r, ["title", "Title"], ""));
+      }
+    };
+
+    const copy = [...filtered];
+    copy.sort((a, b) => {
+      const av = keyFn(a);
+      const bv = keyFn(b);
+
+      if (typeof av === "number" && typeof bv === "number") {
+        if (av === bv) return 0;
+        return av > bv ? dir : -dir;
+      }
+
+      const as = String(av ?? "");
+      const bs = String(bv ?? "");
+      return as.localeCompare(bs) * dir;
+    });
+
+    return copy;
+  }, [filtered, sortKey, sortDir, countryMap]);
+
+  function toggleSort(nextKey) {
+    if (sortKey === nextKey) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(nextKey);
+      setSortDir("asc");
+    }
+  }
+
+  function SortHeader({ k, children, alignRight = false, width }) {
+    const active = sortKey === k;
+    return (
+      <th
+        style={{ width, cursor: "pointer", userSelect: "none", textAlign: alignRight ? "right" : "left" }}
+        onClick={() => toggleSort(k)}
+        title="Click to sort"
+      >
+        <span className={`laTh ${active ? "active" : ""}`}>
+          {children}
+          <span className="laSortIcon" aria-hidden="true">
+            {active ? (sortDir === "asc" ? <Icon name="chevUp" /> : <Icon name="chevDown" />) : null}
+          </span>
+        </span>
+      </th>
+    );
+  }
 
   function openCreate() {
     setError("");
@@ -746,6 +861,7 @@ export default function AdminLLRServices() {
       contentText: "<p></p>",
       title: "",
       contentProductId: defaultPid ? String(defaultPid) : "",
+      courtCategory: "",
     }));
 
     setOpen(true);
@@ -774,7 +890,6 @@ export default function AdminLLRServices() {
         await Promise.all([fetchTownsForCountry(cid), fetchCourtsForCountry(cid)]);
       }
 
-      // Postcode can come as TownPostCode (new) or PostCode (legacy)
       const pc =
         pick(d, ["townPostCode", "TownPostCode"], null) ??
         pick(d, ["postCode", "PostCode", "postcode", "Postcode"], null) ??
@@ -782,7 +897,6 @@ export default function AdminLLRServices() {
 
       const contentHtml = safeDefaultHtml(pick(d, ["contentText", "ContentText"], "") ?? "<p></p>");
 
-      // courtId can come as courtId/CourtId (new)
       const courtId =
         pick(d, ["courtId", "CourtId"], null) ??
         pick(d, ["courtRefId", "CourtRefId"], null) ??
@@ -795,6 +909,8 @@ export default function AdminLLRServices() {
 
       originalProductIdRef.current = pid ? toInt(pid, 0) : null;
       originalContentRef.current = contentHtml;
+
+      const courtCategory = pick(d, ["courtCategory", "CourtCategory"], "") ?? "";
 
       const nextForm = {
         title: pick(d, ["title", "Title"], "") ?? "",
@@ -821,6 +937,8 @@ export default function AdminLLRServices() {
         postCode: String(pc ?? ""),
         town: pick(d, ["town", "Town"], "") ?? "",
 
+        courtCategory: String(courtCategory ?? ""),
+
         parties: pick(d, ["parties", "Parties"], "") ?? "",
         judges: pick(d, ["judges", "Judges"], "") ?? "",
         decisionDate: dateInputFromIso(pick(d, ["decisionDate", "DecisionDate"], "")),
@@ -828,14 +946,12 @@ export default function AdminLLRServices() {
         contentText: contentHtml,
       };
 
-      // If town missing but postcode present => fill from map
       const pc2 = normalizeText(nextForm.postCode);
       if (pc2 && !normalizeText(nextForm.town)) {
         const hit = townByPostCode.get(pc2);
         if (hit?.name) nextForm.town = hit.name;
       }
 
-      // Title hidden; ensure correct immediately
       nextForm.title = autoTitleDraft(nextForm);
 
       setForm(nextForm);
@@ -856,8 +972,6 @@ export default function AdminLLRServices() {
 
     return {
       category: 6,
-
-      // Title hidden & auto-generated
       title: normalizeText(form.title) || null,
 
       contentProductId: pid ? pid : null,
@@ -876,9 +990,10 @@ export default function AdminLLRServices() {
       courtId: courtId ? courtId : null,
       court: courtDisplay,
 
+      courtCategory: normalizeText(form.courtCategory) || null,
+
       courtType: toInt(form.courtType, 3),
 
-      // ✅ Keep for resolver/back-compat, but UI is “Town”
       postCode: normalizeText(form.postCode) || null,
       town: normalizeText(form.town) || null,
 
@@ -931,7 +1046,6 @@ export default function AdminLLRServices() {
     setInfo("");
 
     try {
-      // ensure title synced before save
       const syncedTitle = autoTitleDraft(form);
       const payload = { ...buildPayload(), title: syncedTitle || buildPayload().title };
 
@@ -1023,26 +1137,24 @@ export default function AdminLLRServices() {
     });
   }
 
-  function courtTownDisplay(row) {
+  function courtTownDivisionDisplay(row) {
     const courtName = normalizeText(pick(row, ["courtName", "CourtName"], ""));
     const legacyCourt = normalizeText(pick(row, ["court", "Court"], ""));
     const courtTypeLabel = normalizeText(pick(row, ["courtTypeLabel", "CourtTypeLabel"], ""));
     const town = normalizeText(pick(row, ["town", "Town"], ""));
+    const div = normalizeText(pick(row, ["courtCategory", "CourtCategory"], ""));
 
     const base = courtName || legacyCourt || courtTypeLabel;
-    if (base && town) return `${base} — ${town}`;
-    return base || town || "—";
-  }
+    let out = base;
 
-  const productNameById = useMemo(() => {
-    const m = new Map();
-    for (const p of products) m.set(p.id, p.name);
-    return m;
-  }, [products]);
+    if (div) out = out ? `${out} — ${div}` : div;
+    if (out && town) return `${out} — ${town}`;
+    return out || town || "—";
+  }
 
   return (
     <div className="admin-page admin-page-wide admin-llrservices">
-      {/* Scoped premium tweaks + SCROLL FIX */}
+      {/* Scoped premium tweaks + scroll + sort/filters */}
       <style>{`
         .admin-llrservices .admin-modal { border-radius: 18px; border: 1px solid rgba(17,24,39,0.10); box-shadow: 0 24px 70px rgba(0,0,0,0.16); }
         .admin-llrservices .admin-modal-head { background: linear-gradient(180deg, rgba(107,35,59,0.10), rgba(255,255,255,0)); border-bottom: 1px solid rgba(17,24,39,0.08); }
@@ -1066,25 +1178,35 @@ export default function AdminLLRServices() {
         .admin-llrservices .laRow2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
         @media (max-width: 900px) { .admin-llrservices .laRow2 { grid-template-columns: 1fr; } }
 
-        /* ✅ FIX LOST SCROLLBAR: ensure table wrapper can scroll */
+        /* Scroll fix */
         .admin-llrservices .laSurfaceCard { display:flex; flex-direction:column; min-height: 0; }
-        .admin-llrservices .laTableWrap { overflow: auto; max-height: calc(100vh - 260px); }
+        .admin-llrservices .laTableWrap { overflow: auto; max-height: calc(100vh - 290px); }
         .admin-llrservices .laTableWrap::-webkit-scrollbar { height: 10px; width: 10px; }
         .admin-llrservices .laTableWrap::-webkit-scrollbar-thumb { background: rgba(17,24,39,0.18); border-radius: 999px; }
         .admin-llrservices .laTableWrap:hover::-webkit-scrollbar-thumb { background: rgba(17,24,39,0.28); }
 
-        /* Tighter title chips */
+        /* Chips */
         .admin-llrservices .laChips { display:flex; flex-wrap:wrap; gap: 8px; margin-top: 6px; }
         .admin-llrservices .laChipSoft { border-radius: 999px; border: 1px solid rgba(17,24,39,0.10); background: rgba(255,255,255,0.85); }
         .admin-llrservices .chipKey { color: rgba(17,24,39,0.65); font-weight: 600; }
+
+        /* Sort headers */
+        .admin-llrservices .laTh { display:inline-flex; align-items:center; gap: 8px; }
+        .admin-llrservices .laTh.active { color: rgba(107,35,59,1); }
+        .admin-llrservices .laSortIcon svg { width: 16px; height: 16px; opacity: 0.85; }
+
+        /* Toolbar filters */
+        .admin-llrservices .laFiltersRow { display:flex; gap: 10px; align-items:center; flex-wrap: wrap; }
+        .admin-llrservices .laSelect { min-width: 190px; }
+        .admin-llrservices .laMini { min-width: 160px; }
+        .admin-llrservices .laClearBtn { border-radius: 999px; }
       `}</style>
 
       <div className="admin-header">
         <div>
           <h1 className="admin-title">Admin · LLR Services (Reports)</h1>
           <p className="admin-subtitle">
-            Category is fixed to <span className="laEm">LLR Services</span>. Court text is auto-built as{" "}
-            <span className="laEm">“Court at Town”</span>.
+            Added <span className="laEm">Court Division</span> (maps to <span className="laEm">CourtCategory</span>). Town is selected via dropdown.
           </p>
         </div>
 
@@ -1103,21 +1225,76 @@ export default function AdminLLRServices() {
 
       <div className="admin-card admin-card-fill laSurfaceCard">
         <div className="admin-toolbar">
-          <div className="toolbarRow">
-            <div className="searchWrap">
+          <div className="toolbarRow laFiltersRow">
+            <div className="searchWrap" style={{ flex: 1, minWidth: 260 }}>
               <span className="searchIcon">
                 <Icon name="search" />
               </span>
               <input
                 className="admin-search admin-search-wide laSearch"
-                placeholder="Search by title, report number, year, country, citation, court, town..."
+                placeholder="Search by title, report no, year, country, citation, court, division, town..."
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
             </div>
 
+            <select
+              className="laSelect"
+              value={String(countryFilter || "")}
+              onChange={(e) => setCountryFilter(e.target.value)}
+              title="Filter by country"
+              disabled={loading}
+            >
+              <option value="">All countries</option>
+              {countries.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="laMini"
+              value={`${sortKey}:${sortDir}`}
+              onChange={(e) => {
+                const [k, d] = String(e.target.value).split(":");
+                setSortKey(k);
+                setSortDir(d === "asc" ? "asc" : "desc");
+              }}
+              title="Sort"
+              disabled={loading}
+            >
+              <option value="updated:desc">Sort: Updated (desc)</option>
+              <option value="updated:asc">Sort: Updated (asc)</option>
+              <option value="date:desc">Sort: Decision date (desc)</option>
+              <option value="date:asc">Sort: Decision date (asc)</option>
+              <option value="year:desc">Sort: Year (desc)</option>
+              <option value="year:asc">Sort: Year (asc)</option>
+              <option value="title:asc">Sort: Title (A→Z)</option>
+              <option value="title:desc">Sort: Title (Z→A)</option>
+              <option value="country:asc">Sort: Country (A→Z)</option>
+              <option value="country:desc">Sort: Country (Z→A)</option>
+              <option value="reportNumber:asc">Sort: Report No (A→Z)</option>
+              <option value="reportNumber:desc">Sort: Report No (Z→A)</option>
+            </select>
+
+            <button
+              type="button"
+              className="admin-btn laClearBtn"
+              onClick={() => {
+                setQ("");
+                setCountryFilter("");
+                setSortKey("updated");
+                setSortDir("desc");
+              }}
+              disabled={loading || busy}
+              title="Clear search, filters and sort"
+            >
+              Clear
+            </button>
+
             <div className="admin-pill muted laCountPill" title="Total results">
-              {loading ? "Loading…" : `${filtered.length} report(s)`}
+              {loading ? "Loading…" : `${sorted.length} report(s)`}
             </div>
           </div>
         </div>
@@ -1126,23 +1303,33 @@ export default function AdminLLRServices() {
           <table className="admin-table laTable">
             <thead>
               <tr>
-                <th style={{ width: "54%" }}>Title</th>
-                <th style={{ width: "12%" }}>Country</th>
-                <th style={{ width: "12%" }}>Report No.</th>
-                <th style={{ width: "6%" }} className="num-cell">
+                <SortHeader k="title" width="56%">
+                  Title
+                </SortHeader>
+                <SortHeader k="country" width="12%">
+                  Country
+                </SortHeader>
+                <SortHeader k="reportNumber" width="12%">
+                  Report No.
+                </SortHeader>
+                <SortHeader k="year" width="6%">
                   Year
-                </th>
-                <th style={{ width: "10%" }}>Decision</th>
-                <th style={{ width: "10%" }}>Case Type</th>
-                <th style={{ width: "8%" }} className="tight">
+                </SortHeader>
+                <SortHeader k="decision" width="10%">
+                  Decision
+                </SortHeader>
+                <SortHeader k="caseType" width="10%">
+                  Case Type
+                </SortHeader>
+                <SortHeader k="date" width="8%">
                   Date
-                </th>
+                </SortHeader>
                 <th style={{ width: "12%", textAlign: "right" }}>Actions</th>
               </tr>
             </thead>
 
             <tbody>
-              {!loading && filtered.length === 0 && (
+              {!loading && sorted.length === 0 && (
                 <tr>
                   <td colSpan={8} className="laEmptyRow">
                     No reports found. Click <span className="laEm">New report</span> to add one.
@@ -1150,7 +1337,7 @@ export default function AdminLLRServices() {
                 </tr>
               )}
 
-              {filtered.map((r, idx) => {
+              {sorted.map((r, idx) => {
                 const id = pick(r, ["id", "Id"], null);
 
                 const decisionRaw = pick(r, ["decisionType", "DecisionType"], null);
@@ -1177,7 +1364,8 @@ export default function AdminLLRServices() {
                 const year = pick(r, ["year", "Year"], null);
                 const decisionDate = pick(r, ["decisionDate", "DecisionDate"], null);
 
-                const courtLabel = courtTownDisplay(r);
+                // ✅ we hide "Town (Text)" chip and instead show Town together with Court Division inside Court chip
+                const courtLabel = courtTownDivisionDisplay(r);
 
                 return (
                   <tr key={id ?? idx} className={`laRow ${idx % 2 === 1 ? "row-zebra" : ""} row-hover`}>
@@ -1187,16 +1375,15 @@ export default function AdminLLRServices() {
 
                         <div className="chips laChips">
                           {courtLabel && courtLabel !== "—" ? (
-                            <span className="chip laChipSoft" title="Court & town">
+                            <span className="chip laChipSoft" title="Court • Division • Town">
                               <span className="chipKey">Court:</span>&nbsp;{courtLabel}
                             </span>
                           ) : (
-                            <span className="chip muted laChipSoft" title="Court & town">
+                            <span className="chip muted laChipSoft" title="Court • Division • Town">
                               Court: —
                             </span>
                           )}
 
-                          {/* ✅ keep citation only (no extra court before citation) */}
                           {citation ? (
                             <span className="chip laChipSoft" title="Citation">
                               <span className="chipKey">Citation:</span>&nbsp;{citation}
@@ -1209,11 +1396,11 @@ export default function AdminLLRServices() {
 
                           {caseNumber ? (
                             <span className="chip laChipSoft" title="Case file / number">
-                              <span className="chipKey">Case File:</span>&nbsp;{caseNumber}
+                              <span className="chipKey">Case No.:</span>&nbsp;{caseNumber}
                             </span>
                           ) : (
                             <span className="chip muted laChipSoft" title="Case file / number">
-                              Case File: —
+                              Case No.: —
                             </span>
                           )}
                         </div>
@@ -1247,7 +1434,12 @@ export default function AdminLLRServices() {
                           <Icon name="edit" />
                         </IconButton>
 
-                        <IconButton title="Open full-page editor (optional)" onClick={() => openContent(r)} disabled={busy} tone="primary">
+                        <IconButton
+                          title="Open full-page editor (optional)"
+                          onClick={() => openContent(r)}
+                          disabled={busy}
+                          tone="primary"
+                        >
                           <Icon name="file" />
                         </IconButton>
 
@@ -1273,7 +1465,7 @@ export default function AdminLLRServices() {
                 <h3 className="admin-modal-title">
                   {editing ? `Edit Report #${pick(editing, ["id", "Id"], "")}` : "Create Law Report"}
                 </h3>
-                <div className="admin-modal-subtitle">Case File is shown as a chip in the list view.</div>
+                <div className="admin-modal-subtitle">Court Division maps to CourtCategory (optional).</div>
               </div>
 
               <button className="admin-btn" onClick={closeModal} disabled={busy}>
@@ -1292,21 +1484,19 @@ export default function AdminLLRServices() {
                     placeholder="e.g. A v B"
                     disabled={busy}
                   />
-                  <div className="hint">
-                    Title is generated automatically using Report No, Year, Parties and Court (auto text).
-                  </div>
+                  <div className="hint">Title is generated automatically using Report No, Year, Parties and Court (auto text).</div>
                 </div>
 
                 {/* Hidden Title (kept for payload) */}
                 <input type="hidden" value={form.title} readOnly />
 
-                {/* ✅ Court (auto text) + Content Product on SAME ROW */}
+                {/* Court (auto text) + Content Product on SAME ROW */}
                 <div className="admin-field admin-span2">
                   <div className="laRow2">
                     <div className="admin-field" style={{ margin: 0 }}>
                       <label>Court (auto text)</label>
                       <input value={computeCourtDisplay(form)} readOnly disabled />
-                      <div className="hint">Built from selected Court + Town.</div>
+                      <div className="hint">Preview includes Division + Town.</div>
                     </div>
 
                     <div className="admin-field" style={{ margin: 0 }}>
@@ -1391,7 +1581,12 @@ export default function AdminLLRServices() {
 
                 <div className="admin-field">
                   <label>Report Number *</label>
-                  <input value={form.reportNumber} onChange={(e) => setField("reportNumber", e.target.value)} placeholder="e.g. CAR353" disabled={busy} />
+                  <input
+                    value={form.reportNumber}
+                    onChange={(e) => setField("reportNumber", e.target.value)}
+                    placeholder="e.g. CAR353"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field">
@@ -1408,16 +1603,26 @@ export default function AdminLLRServices() {
                 </div>
 
                 <div className="admin-field">
-                  <label>Case File</label>
-                  <input value={form.caseNumber} onChange={(e) => setField("caseNumber", e.target.value)} placeholder="e.g. Petition 12 of 2020" disabled={busy} />
+                  <label>Case No.</label>
+                  <input
+                    value={form.caseNumber}
+                    onChange={(e) => setField("caseNumber", e.target.value)}
+                    placeholder="e.g. Petition 12 of 2020"
+                    disabled={busy}
+                  />
                 </div>
 
                 <div className="admin-field">
                   <label>Citation</label>
-                  <input value={form.citation} onChange={(e) => setField("citation", e.target.value)} placeholder="Optional (preferred if available)" disabled={busy} />
+                  <input
+                    value={form.citation}
+                    onChange={(e) => setField("citation", e.target.value)}
+                    placeholder="Optional (preferred if available)"
+                    disabled={busy}
+                  />
                 </div>
 
-                {/* Courts dropdown (country-scoped) */}
+                {/* Court + Town + Court Division */}
                 <div className="admin-field">
                   <label>Court *</label>
                   <select
@@ -1460,26 +1665,27 @@ export default function AdminLLRServices() {
                     )}
 
                     {towns.map((t) => (
-                      <option key={`${t.postCode}`} value={t.postCode}>
-                        {t.name}
+                      <option key={`${t.postCode || t.name}`} value={t.postCode || ""}>
+                        {t.name || "—"}
                         {t.postCode ? ` (${t.postCode})` : ""}
                       </option>
                     ))}
                   </select>
-                  <div className="hint">Selecting a Town sets Town name and stores its code internally.</div>
+                  <div className="hint">Town name is stored for display; Town code is stored internally.</div>
                 </div>
 
-                {/* ✅ Town text + Decision Date same row */}
+                {/* ✅ Replace Town(Text) with Court Division + Decision Date */}
                 <div className="admin-field admin-span2">
                   <div className="laRow2">
                     <div className="admin-field" style={{ margin: 0 }}>
-                      <label>Town (text)</label>
+                      <label>Court Division</label>
                       <input
-                        value={form.town}
-                        onChange={(e) => setField("town", e.target.value)}
-                        placeholder="Auto-filled, but you can edit"
+                        value={form.courtCategory}
+                        onChange={(e) => setField("courtCategory", e.target.value)}
+                        placeholder='e.g. "Environmental Court", "Industrial" (optional)'
                         disabled={busy}
                       />
+                      <div className="hint">Saved to backend as CourtCategory (nullable).</div>
                     </div>
 
                     <div className="admin-field" style={{ margin: 0 }}>
@@ -1493,6 +1699,9 @@ export default function AdminLLRServices() {
                     </div>
                   </div>
                 </div>
+
+                {/* Hidden Town Text field (kept for payload, but not editable) */}
+                <input type="hidden" value={form.town} readOnly />
 
                 {/* Legacy fallback UI (only if no courts exist for selected country) */}
                 {!courtsLoading && toInt(form.countryId, 0) && courts.length === 0 && (
@@ -1544,7 +1753,13 @@ export default function AdminLLRServices() {
 
                 <div className="admin-field admin-span2">
                   <label>Judges</label>
-                  <textarea rows={2} value={form.judges} onChange={(e) => setField("judges", e.target.value)} placeholder="Separate by newline or semicolon" disabled={busy} />
+                  <textarea
+                    rows={2}
+                    value={form.judges}
+                    onChange={(e) => setField("judges", e.target.value)}
+                    placeholder="Separate by newline or semicolon"
+                    disabled={busy}
+                  />
                 </div>
 
                 {/* TipTap */}
@@ -1554,7 +1769,13 @@ export default function AdminLLRServices() {
 
                     <div className="miniActions">
                       {!!pick(editing, ["id", "Id"], null) && (
-                        <button type="button" className="miniBtn" disabled={busy} onClick={() => openContent(editing)} title="Open the full-page editor (optional)">
+                        <button
+                          type="button"
+                          className="miniBtn"
+                          disabled={busy}
+                          onClick={() => openContent(editing)}
+                          title="Open the full-page editor (optional)"
+                        >
                           Open full editor
                         </button>
                       )}
@@ -1594,13 +1815,12 @@ export default function AdminLLRServices() {
             <span className="admin-footer-dot">•</span>
             <span className="admin-footer-muted">LLR Services</span>
             <span className="admin-footer-dot">•</span>
-            <span className="admin-footer-muted">{loading ? "Loading…" : `${filtered.length} report(s)`}</span>
+            <span className="admin-footer-muted">{loading ? "Loading…" : `${sorted.length} report(s)`}</span>
           </>
         }
         right={
           <span className="admin-footer-muted">
-            Tip: Select a <span className="laEm">Country</span> to load <span className="laEm">Courts</span> and{" "}
-            <span className="laEm">Towns</span>.
+            Tip: Use <span className="laEm">Country filter</span> + click column headers to sort.
           </span>
         }
       />
