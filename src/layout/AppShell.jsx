@@ -96,10 +96,6 @@ export default function AppShell() {
             <NavLink to="/dashboard/library" className="nav-link">
               Library
             </NavLink>
-
-            <NavLink to="/dashboard/admin/courts" className="nav-link nav-child">
-              Courts
-            </NavLink>
             
             <NavLink to="/dashboard/law-reports" className="nav-link">
               Law Reports
@@ -240,6 +236,10 @@ export default function AppShell() {
                       LLR Services
                     </NavLink>
 
+                   <NavLink to="/dashboard/admin/courts" className="nav-link nav-child">
+                    Courts
+                  </NavLink>
+                  
                     <NavLink to="/dashboard/admin/llr-services/import" className="nav-link nav-child">
                       Import Cases
                     </NavLink>

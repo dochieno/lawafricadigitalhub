@@ -1,0 +1,156 @@
+/* =======================================================
+   FILE: src/styles/adminCourts.css
+   Purpose: Courts page styling (AU-style, no inline css)
+   Depends on: adminUsers.css (au-*), adminCrud.css (modals)
+======================================================= */
+
+.la-courts .au-subtitle b {
+  font-weight: 900;
+}
+
+.la-courtsTopbar {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.la-courtsFilters {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.la-courtsField {
+  display: grid;
+  gap: 6px;
+  min-width: 260px;
+}
+
+.la-courtsLabel {
+  font-size: 12px;
+  color: rgba(17, 24, 39, 0.65);
+  font-weight: 800;
+}
+
+.la-courtsField select {
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  padding: 0 12px;
+  background: transparent;
+  color: inherit;
+  outline: none;
+}
+
+.la-courtsCheck {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  user-select: none;
+  font-weight: 800;
+  color: rgba(17, 24, 39, 0.8);
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.la-courtsCheck input {
+  width: 16px;
+  height: 16px;
+  accent-color: #6b233b;
+}
+
+.la-courtsKpis {
+  margin-top: 12px;
+}
+
+.la-courtsBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.la-btnIcon {
+  display: inline-flex;
+  align-items: center;
+}
+
+.la-courtsTable .la-courtsCode {
+  font-weight: 900;
+  letter-spacing: 0.2px;
+}
+
+.la-courtsTable .la-courtsName {
+  font-weight: 900;
+}
+
+.la-muted {
+  color: rgba(17, 24, 39, 0.45);
+}
+
+/* ===== Modal refinements ===== */
+.la-courtsModal .admin-modal-title {
+  font-weight: 950;
+}
+
+.la-courtsGrid .admin-field textarea {
+  resize: vertical;
+}
+
+.la-courtsCheckRow {
+  padding-top: 6px;
+}
+
+.la-courtsCheckLarge {
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  background: rgba(255, 255, 255, 0.75);
+  padding: 10px 12px;
+}
+
+.la-courtsHelp {
+  color: rgba(17, 24, 39, 0.55);
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+.la-courtsSample {
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.la-courtsSampleTitle {
+  font-weight: 900;
+  margin-bottom: 8px;
+  color: rgba(17, 24, 39, 0.85);
+}
+
+.la-courtsSamplePre {
+  margin: 0;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(17, 24, 39, 0.05);
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 980px) {
+  .la-courtsTopbar {
+    grid-template-columns: 1fr;
+  }
+
+  .la-courtsFilters {
+    justify-content: flex-start;
+  }
+
+  .la-courtsField {
+    min-width: 220px;
+  }
+}
