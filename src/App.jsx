@@ -4,6 +4,7 @@ import ProtectedRoute from "./routes/ProtectedRoute";
 import AdminOrInstitutionAdminRoute from "./routes/AdminOrInstitutionAdminRoute";
 import AdminRoute from "./routes/AdminRoute";
 import AdminTocTest from "./pages/dashboard/admin/AdminTocTest";
+import AdminCourts from "./pages/dashboard/admin/AdminCourts";
 
 import AdminLLRImport from "./pages/dashboard/admin/AdminLLRImport";
 import LawReportReader from "./pages/dashboard/LawReportReader";
@@ -150,6 +151,7 @@ export default function App() {
               <Route path="admin/documents" element={<AdminDocuments />} />
               <Route path="admin/toc-test" element={<AdminTocTest />} />
               <Route path="admin/llr-services" element={<AdminLLRServices />} />
+              <Route path="admin/courts" element={<AdminCourts />} />
               <Route path="admin/llr-services/import" element={<AdminLLRImport />} />
               <Route path="/dashboard/dev/content-blocks" element={<DevContentBlocksTest />} />
               <Route path="admin/llr-services/:legalDocumentId/content" element={<AdminReportContent />} />

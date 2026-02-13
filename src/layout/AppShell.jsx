@@ -97,6 +97,10 @@ export default function AppShell() {
               Library
             </NavLink>
 
+            <NavLink to="/dashboard/admin/courts" className="nav-link nav-child">
+              Courts
+            </NavLink>
+            
             <NavLink to="/dashboard/law-reports" className="nav-link">
               Law Reports
             </NavLink>
