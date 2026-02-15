@@ -203,6 +203,11 @@ export default function LawReports() {
   const [countries, setCountries] = useState([]);
   const [countriesLoaded, setCountriesLoaded] = useState(false);
 
+  //Towns
+  const [towns, setTowns] = useState([]);
+  const [townId, setTownId] = useState("");
+
+
   // ✅ Country selection (fallback from claims, but user can change)
   const [countryId, setCountryId] = useState(() => getUserCountryIdFallback());
 
@@ -325,6 +330,29 @@ export default function LawReports() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  //Load Towns
+
+  useEffect(() => {
+  if (!countryId) {
+    setTowns([]);
+    return;
+  }
+
+  const loadTowns = async () => {
+    try {
+      const res = await api.get("/towns", {
+        params: { countryId, take: 500 }
+      });
+      setTowns(res.data || []);
+    } catch (err) {
+      console.error("Failed to load towns", err);
+    }
+  };
+
+  loadTowns();
+}, [countryId]);
+
+
   // ------------------------------------------------------------
   // Load dropdown options (case/decision) + Courts (FK)
   // ------------------------------------------------------------
@@ -435,6 +463,7 @@ export default function LawReports() {
             courtType: f.courtTypeId ? Number(f.courtTypeId) : undefined,
             courtId: f.courtId ? Number(f.courtId) : undefined,
             townOrPostCode: f.townOrPostCode || undefined,
+            townId: townId || undefined,
             caseType: f.caseType ? Number(f.caseType) : undefined,
             decisionType: f.decisionType ? Number(f.decisionType) : undefined,
             sort: f.sortBy || "year_desc",
@@ -484,7 +513,7 @@ export default function LawReports() {
     return () => {
       cancelled = true;
     };
-  }, [debouncedFilters, page]);
+  }, [debouncedFilters, townId,page]);
 
   // ------------------------------------------------------------
   // Client-mode enrichment
@@ -1027,12 +1056,17 @@ export default function LawReports() {
                   ))}
                 </select>
               </div>
-
-              <div className="lr-field">
-                <div className="lr-label">Town / Post Code</div>
-                <input className="lr-input" value={townOrPostCode} onChange={(e) => setTownOrPostCode(e.target.value)} placeholder="e.g. Mombasa / 00100" />
-              </div>
-
+              <select
+                value={townId}
+                onChange={(e) => setTownId(e.target.value)}
+              >
+                <option value="">All towns</option>
+                {towns.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} ({t.postCode})
+                  </option>
+                ))}
+              </select>
               <div className="lr-panel-actions">
                 <button className="lr-btn secondary" onClick={resetFilters}>Clear</button>
                 <button className="lr-btn" onClick={() => showToast("Tip: try Court Type + Decision + Year")}>Tip</button>
