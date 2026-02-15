@@ -1977,6 +1977,48 @@ async function downloadPdfNow() {
     report.CaseNumber ||
     "";
 
+  // ---------------- Left rail details (safe pickers) ----------------
+
+  const parties =
+    report?.parties ||
+    report?.Parties ||
+    report?.title ||
+    report?.Title ||
+    "";
+
+  const courtName =
+    report?.court ||
+    report?.Court ||
+    report?.courtTypeLabel ||
+    report?.CourtTypeLabel ||
+    report?.courtName ||
+    report?.CourtName ||
+    ""; // (works whether you return Court string or Court model label)
+
+  const town =
+    report?.town ||
+    report?.Town ||
+    report?.location ||
+    report?.Location ||
+    report?.courtTown ||
+    report?.CourtTown ||
+    "";
+
+  const decisionType =
+    report?.decisionTypeLabel ||
+    report?.DecisionTypeLabel ||
+    report?.decisionType ||
+    report?.DecisionType ||
+    "";
+
+  const caseType =
+    report?.caseTypeLabel ||
+    report?.CaseTypeLabel ||
+    report?.caseType ||
+    report?.CaseType ||
+    "";
+
+  const decisionDate = report?.decisionDate || report?.DecisionDate || "";
 
   // ---------------- LegalAI Panel (Premium layout) ----------------
 
@@ -2818,292 +2860,287 @@ function parseSectionedSummary(text) {
         ↑
       </button>
 
-      <div className="lrr2TopGrid lrr2TopGrid--single">
-        <div className="lrr2MetaOneRow">
-          {/* Left: primary chips (always visible) */}
-          <div className="lrr2MetaPrimary">
+{/* =========================
+    REPLACEMENT for:
+    <div className="lrr2TopGrid ...">...</div>
+    <section className="lrr2Content">...</section>
+   ========================= */}
+<div className="lrr2BodyGrid">
+  {/* ---------- LEFT RAIL ---------- */}
+  <aside className="lrr2SideRail" aria-label="Case navigation and details">
+    <div className="lrr2SideCard">
+      {/* Tabs FIRST */}
+      <div className="lrr2SegTabs lrr2SegTabs--rail" role="tablist" aria-label="Reader tabs">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === "content"}
+          className={`lrr2SegTab ${view === "content" ? "isActive" : ""}`}
+          onClick={() => {
+            setView("content");
+            setContentOpen(true);
+          }}
+          title="Transcript"
+        >
+          Transcript
+          {isPremium && !hasFullAccess ? <span className="lrr2SegBadge lock">🔒</span> : null}
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === "ai"}
+          className={`lrr2SegTab ${view === "ai" ? "isActive" : ""} ${aiAllowed ? "" : "isDisabled"}`}
+          onClick={() => {
+            if (!aiAllowed) return;
+            setView("ai");
+            setContentOpen(false);
+          }}
+          title={aiAllowed ? "LegalAI" : "LegalAI (subscribers only)"}
+          disabled={!aiAllowed}
+        >
+          LegalAI <span className="lrr2SegBadge ai">✨</span>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === "split"}
+          className={`lrr2SegTab ${view === "split" ? "isActive" : ""}`}
+          onClick={() => {
+            setView("split");
+            setContentOpen(true);
+          }}
+          title="Split view (Transcript + LegalAI)"
+        >
+          Split
+        </button>
+      </div>
+
+      {/* Details BELOW tabs */}
+      <div className="lrr2RailDetails" aria-label="Case details">
+        <div className="lrr2RailTitle">Case details</div>
+
+        <div className="lrr2RailList">
           {caseNo ? (
-            <div className="lrr2MetaTag" data-tip="Case Number" title="Case Number">
-              <span className="lrr2MetaIcon">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" strokeWidth="1.6" />
-                  <path d="M8 9h8M8 13h10" stroke="currentColor" strokeWidth="1.6" />
-                </svg>
-              </span>
-              {caseNo}
+            <div className="row">
+              <div className="k">Case Number</div>
+              <div className="v">{caseNo}</div>
             </div>
           ) : null}
 
-            {report.decisionDate ? (
-              <div className="lrr2MetaTag" data-tip="Decision Date" title="Decision Date">
-                <span className="lrr2MetaIcon">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" strokeWidth="1.6" />
-                    <path d="M8 3v4M16 3v4M4 10h16" stroke="currentColor" strokeWidth="1.6" />
-                  </svg>
-                </span>
-                {formatDate(report.decisionDate)}
-              </div>
-            ) : null}
-
-            {isPremium ? (
-              <div className="lrr2MetaInlineStatus">
-                {accessLoading ? (
-                  <span className="lrr2MetaHint" data-tip="Checking subscription access" title="Checking subscription access">
-                    checking access…
-                  </span>
-                ) : (
-                  <AccessStatusChip
-                    access={access}
-                    isPremium={isPremium}
-                    isAdmin={isAdmin}
-                    hasFullAccess={hasFullAccess}
-                  />
-                )}
-              </div>
-            ) : null}
-
-            {/* ✅ More info icon moved NEXT TO META (visible icon + tooltip) */}
-            <div className="lrr2Menu lrr2MetaInfoMenu" ref={metaMoreRef}>
-            <button
-              type="button"
-              className="lrr2IconBtn ghost lrr2IconBtn--premium"
-              title="Premium case details"
-              aria-label="Premium case details"
-              aria-haspopup="menu"
-              aria-expanded={metaMoreOpen}
-              onClick={() => setMetaMoreOpen((v) => !v)}
-            >
-              {/* premium crown icon */}
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M5 18h14M6 18l-1-9 5 4 3-7 3 7 5-4-1 9"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-              {metaMoreOpen ? (
-                <div className="lrr2MenuPopover lrr2MenuPopover--meta" role="menu" aria-label="Case details">
-                  {report.caseNumber ? (
-                    <div className="lrr2MenuMetaRow">
-                      <div className="k">Case No.</div>
-                      <div className="v">{report.caseNumber}</div>
-                    </div>
-                  ) : null}
-
-                  {report.decisionTypeLabel ? (
-                    <div className="lrr2MenuMetaRow">
-                      <div className="k">Decision</div>
-                      <div className="v">{report.decisionTypeLabel}</div>
-                    </div>
-                  ) : null}
-
-                  {report.judges ? (
-                    <div className="lrr2MenuMetaRow">
-                      <div className="k">Judge(s)</div>
-                      <div className="v">{report.judges}</div>
-                    </div>
-                  ) : null}
-
-                  {report.country ? (
-                    <div className="lrr2MenuMetaRow">
-                      <div className="k">Country</div>
-                      <div className="v">{report.country}</div>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
+          {parties ? (
+            <div className="row">
+              <div className="k">Parties</div>
+              <div className="v">{parties}</div>
             </div>
-          </div>
+          ) : null}
 
-          {/* Right: actions */}
-          <div className="lrr2MetaActions">
-            {/* ✅ Copy now copies useful info by default; dropdown is options */}
-
-                       <div className="lrr2Menu lrr2CopyCombo" ref={copyMenuRef}>
-              {/* Main copy action */}
-              <button
-                type="button"
-                className="lrr2IconBtn"
-                title="Copy case details"
-                aria-label="Copy case details"
-                onClick={() => {
-                  const payload = buildDefaultCopyText({ report, title, caseNo });
-                  copyText(payload);
-                }}
-              >
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M9 9h10v10H9z" stroke="currentColor" strokeWidth="1.8" />
-                  <path
-                    d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  />
-                </svg>
-                <span className="txt">Copy</span>
-              </button>
-
-              {/* Small caret to open copy menu */}
-              <button
-                type="button"
-                className="lrr2IconBtn ghost"
-                title="Copy options"
-                aria-label="Copy options"
-                aria-haspopup="menu"
-                aria-expanded={copyMenuOpen}
-                onClick={() => setCopyMenuOpen((v) => !v)}
-              >
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path
-                    d="M7 10l5 5 5-5"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-
-              {copyMenuOpen ? (
-                <div className="lrr2MenuPopover" role="menu" aria-label="Copy menu">
-                  <button
-                    type="button"
-                    className="lrr2MenuItem"
-                    onClick={() => {
-                      copyText(buildDefaultCopyText({ report, title, caseNo }));
-                      setCopyMenuOpen(false);
-                    }}
-                  >
-                    Copy full details
-                  </button>
-
-                  <button
-                    type="button"
-                    className="lrr2MenuItem"
-                    onClick={() => {
-                      copyText(`${title}`);
-                      setCopyMenuOpen(false);
-                    }}
-                  >
-                    Copy title
-                  </button>
-
-                  {report?.citation ? (
-                    <button
-                      type="button"
-                      className="lrr2MenuItem"
-                      onClick={() => {
-                        copyText(String(report.citation));
-                        setCopyMenuOpen(false);
-                      }}
-                    >
-                      Copy citation
-                    </button>
-                  ) : null}
-
-                  {report?.caseNumber ? (
-                    <button
-                      type="button"
-                      className="lrr2MenuItem"
-                      onClick={() => {
-                        copyText(String(report.caseNumber));
-                        setCopyMenuOpen(false);
-                      }}
-                    >
-                      Copy case number
-                    </button>
-                  ) : null}
-
-                {caseNo ? (
-                  <button
-                    type="button"
-                    className="lrr2MenuItem"
-                    onClick={() => {
-                      copyText(String(caseNo));
-                      setCopyMenuOpen(false);
-                    }}
-                  >
-                    Copy case number
-                  </button>
-                ) : null}
-
-                </div>
-              ) : null}
+          {courtName ? (
+            <div className="row">
+              <div className="k">Court</div>
+              <div className="v">{courtName}</div>
             </div>
-          </div>
+          ) : null}
+
+          {town ? (
+            <div className="row">
+              <div className="k">Town</div>
+              <div className="v">{town}</div>
+            </div>
+          ) : null}
+
+          {decisionDate ? (
+            <div className="row">
+              <div className="k">Decision date</div>
+              <div className="v">{formatDate(decisionDate)}</div>
+            </div>
+          ) : null}
+
+          {decisionType ? (
+            <div className="row">
+              <div className="k">Decision type</div>
+              <div className="v">{decisionType}</div>
+            </div>
+          ) : null}
+
+          {caseType ? (
+            <div className="row">
+              <div className="k">Case type</div>
+              <div className="v">{caseType}</div>
+            </div>
+          ) : null}
         </div>
 
-        {/* ✅ Tabs moved into same container so they align with meta row */}
-          <div className="lrr2SegTabsRow">
-            {/* Left: tabs (scroll if needed) */}
-            <div className="lrr2SegTabs" role="tablist" aria-label="Reader tabs">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={view === "content"}
-                className={`lrr2SegTab ${view === "content" ? "isActive" : ""}`}
-                onClick={() => {
-                  setView("content");
-                  setContentOpen(true);
-                }}
-                title="Transcript"
-              >
-                Transcript
-                {isPremium && !hasFullAccess ? <span className="lrr2SegBadge lock">🔒</span> : null}
-              </button>
+        {/* Access chip (premium) */}
+        {isPremium ? (
+          <div className="lrr2RailAccess">
+            {accessLoading ? (
+              <span className="lrr2MetaHint" title="Checking subscription access">
+                checking access…
+              </span>
+            ) : (
+              <AccessStatusChip access={access} isPremium={isPremium} isAdmin={isAdmin} hasFullAccess={hasFullAccess} />
+            )}
+          </div>
+        ) : null}
 
-              <button
-                type="button"
-                role="tab"
-                aria-selected={view === "ai"}
-                className={`lrr2SegTab ${view === "ai" ? "isActive" : ""} ${aiAllowed ? "" : "isDisabled"}`}
-                onClick={() => {
-                  if (!aiAllowed) return;
-                  setView("ai");
-                  setContentOpen(false);
-                }}
-                title={aiAllowed ? "LegalAI" : "LegalAI (subscribers only)"}
-                disabled={!aiAllowed}
-              >
-                LegalAI <span className="lrr2SegBadge ai">✨</span>
-              </button>
+        {/* Actions */}
+        <div className="lrr2RailActions">
+          <button
+            type="button"
+            className="lrr2IconBtn"
+            title="Copy case details"
+            aria-label="Copy case details"
+            onClick={() => {
+              const payload = buildDefaultCopyText({ report, title, caseNo });
+              copyText(payload);
+            }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M9 9h10v10H9z" stroke="currentColor" strokeWidth="1.8" />
+              <path
+                d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              />
+            </svg>
+            <span className="txt">Copy</span>
+          </button>
 
-              <button
-                type="button"
-                role="tab"
-                aria-selected={view === "split"}
-                className={`lrr2SegTab ${view === "split" ? "isActive" : ""}`}
-                onClick={() => {
-                  setView("split");
-                  setContentOpen(true);
-                }}
-                title="Split view (Transcript + LegalAI)"
-              >
-                Split
-              </button>
+          <button
+            type="button"
+            className={`lrr2SegActionBtn ${pdfBusy ? "isBusy" : ""}`}
+            onClick={downloadPdfNow}
+            disabled={!canDownloadPdf || pdfBusy}
+            title={!canDownloadPdf ? "Subscribe to unlock downloads" : "Download PDF"}
+            aria-label="Download PDF"
+          >
+            {pdfBusy ? "Preparing…" : pdfBtnLabel}
+          </button>
+        </div>
+
+        {pdfErr ? <div className="lrr2SegActionErr" style={{ marginTop: 8 }}>{pdfErr}</div> : null}
+      </div>
+    </div>
+  </aside>
+
+  {/* ---------- MAIN CONTENT ---------- */}
+  <main className="lrr2Main" aria-label="Case content">
+    <section className="lrr2Content lrr2Content--main">
+      {!textHasContent ? (
+        <div className="lrr2Empty">This report has no content yet.</div>
+      ) : view === "ai" ? (
+        aiAllowed ? (
+          <div className="lrr2Panel lrr2Panel--tight">
+            <LegalAiPanel compact={false} />
+          </div>
+        ) : (
+          <AiLockedPanel access={access} onGo={goUrl} />
+        )
+      ) : view === "split" ? (
+        <div className="lrr2Split">
+          <article className="lrr2Article lrr2PanelShell">
+            <div className="lrr2PanelHead">
+              <div className="lrr2PanelHeadLeft">
+                <div className="lrr2PanelTitle">Transcript</div>
+                <div className="lrr2PanelSub">
+                  {isPremium && !hasFullAccess ? "Preview mode • Subscribe to unlock full text" : "Full text available"}
+                </div>
+              </div>
+
+              <div className="lrr2PanelHeadRight">
+                {isPremium ? (
+                  <AccessStatusChip access={access} isPremium={isPremium} isAdmin={isAdmin} hasFullAccess={hasFullAccess} />
+                ) : (
+                  <span className="lrr2PanelPill ok">Free</span>
+                )}
+              </div>
             </div>
 
-            {/* Right: actions */}
-            <div className="lrr2SegActions">
-              <button
-                type="button"
-                className={`lrr2SegActionBtn ${pdfBusy ? "isBusy" : ""}`}
-                onClick={downloadPdfNow}
-                disabled={!canDownloadPdf || pdfBusy}
-                title={!canDownloadPdf ? "Subscribe to unlock downloads" : "Download PDF"}
-                aria-label="Download PDF"
-              >
-                {pdfBusy ? "Preparing…" : pdfBtnLabel}
-              </button>
-
-              {pdfErr ? <span className="lrr2SegActionErr">{pdfErr}</span> : null}
+            <div
+              className={[
+                "lrr2Collapse",
+                contentOpen ? "open" : "closed",
+                `lrr2Theme-${readingTheme}`,
+                fsClass,
+                fontClass,
+                preview.gated && preview.reachedLimit ? "isPreviewGated" : "",
+              ].join(" ")}
+            >
+              {preview.renderAsHtml ? (
+                <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: preview.html }} />
+              ) : (
+                <CaseContentWithGateBreak
+                  text={preview.text}
+                  showBreak={showInlineBreak}
+                  access={access}
+                  onGo={goUrl}
+                  onRefresh={refreshAccessNow}
+                />
+              )}
             </div>
+
+            {contentOpen && preview.gated && preview.reachedLimit ? <SubscribeGateOverlay access={access} onGo={goUrl} /> : null}
+
+            <SubscriptionGateCard
+              isPremium={isPremium}
+              access={access}
+              isAdmin={isAdmin}
+              isInst={isInst}
+              isPublic={isPublic}
+              hasFullAccess={hasFullAccess}
+              onGo={goUrl}
+              onRefreshAccess={refreshAccessNow}
+            />
+          </article>
+
+          <aside className="lrr2Aside">
+            {aiAllowed ? <LegalAiPanel compact={true} /> : <AiLockedPanel access={access} onGo={goUrl} />}
+          </aside>
+        </div>
+      ) : (
+        <article className="lrr2Article">
+          <div
+            className={[
+              "lrr2Collapse",
+              contentOpen ? "open" : "closed",
+              `lrr2Theme-${readingTheme}`,
+              fsClass,
+              fontClass,
+              preview.gated && preview.reachedLimit ? "isPreviewGated" : "",
+            ].join(" ")}
+          >
+            {preview.renderAsHtml ? (
+              <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: preview.html }} />
+            ) : (
+              <CaseContentWithGateBreak
+                text={preview.text}
+                showBreak={showInlineBreak}
+                access={access}
+                onGo={goUrl}
+                onRefresh={refreshAccessNow}
+              />
+            )}
           </div>
 
-      </div>
+          {contentOpen && preview.gated && preview.reachedLimit ? <SubscribeGateOverlay access={access} onGo={goUrl} /> : null}
+
+          <SubscriptionGateCard
+            isPremium={isPremium}
+            access={access}
+            isAdmin={isAdmin}
+            isInst={isInst}
+            isPublic={isPublic}
+            hasFullAccess={hasFullAccess}
+            onGo={goUrl}
+            onRefreshAccess={refreshAccessNow}
+          />
+        </article>
+      )}
+    </section>
+  </main>
+</div>
 
       <section className="lrr2Content">
         {!textHasContent ? (
