@@ -1,26 +1,19 @@
 /* src/styles/userProfileMenu.css */
 
-/* -----------------------------------------
-   LawAfrica Brand Tokens (safe defaults)
-   If you already define these globally, this
-   will still work (these just fill gaps).
------------------------------------------- */
 :root {
   --la-red: #a1181e;
   --la-red-hover: #861317;
 
-  /* “classic + hot” supporting tones */
   --la-teal: #0ea5a8;
   --la-teal-deep: #0b6b73;
 
-  --la-dark: #0f172a; /* slate-900 */
-  --la-gray: #64748b; /* slate-500 */
+  --la-dark: #0f172a;
+  --la-gray: #64748b;
 
   --la-card: #ffffff;
   --la-border: rgba(15, 23, 42, 0.10);
   --la-shadow: 0 18px 45px rgba(2, 6, 23, 0.18);
 
-  /* Gradient used across buttons/rings */
   --la-grad: linear-gradient(135deg, var(--la-red) 0%, #d11f2a 35%, var(--la-teal) 100%);
   --la-grad-soft: linear-gradient(135deg, rgba(161, 24, 30, 0.14), rgba(14, 165, 168, 0.12));
 }
@@ -30,9 +23,7 @@
   position: relative;
 }
 
-/* -----------------------------------------
-   Avatar trigger (lux ring + hover glow)
------------------------------------------- */
+/* Avatar trigger */
 .profile-trigger {
   border: none;
   background: transparent;
@@ -51,13 +42,11 @@
   border-radius: 999px;
   background: var(--la-grad);
   opacity: 0.85;
-  filter: blur(0px);
   z-index: 0;
   transition: opacity 0.15s ease, filter 0.15s ease;
 }
 
 .profile-trigger::after {
-  /* Inner “cutout” so gradient looks like a ring */
   content: "";
   position: absolute;
   inset: 1px;
@@ -72,12 +61,10 @@
 
 .profile-trigger:hover::before {
   opacity: 1;
-  filter: blur(0.4px);
 }
 
 .profile-trigger.is-open::before {
   opacity: 1;
-  filter: blur(0.6px);
 }
 
 .profile-trigger img,
@@ -91,7 +78,6 @@
   display: block;
 }
 
-/* Initials fallback */
 .profile-initials {
   background: var(--la-grad);
   color: #fff;
@@ -103,25 +89,31 @@
   text-transform: uppercase;
 }
 
-/* -----------------------------------------
-   Dropdown (modern glass + branded header)
------------------------------------------- */
+/* Dropdown */
 .profile-dropdown {
   position: absolute;
   top: 54px;
   right: 0;
-  width: 300px;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(10px);
+  width: 320px;
+
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+
   border: 1px solid rgba(15, 23, 42, 0.10);
   border-radius: 16px;
-  box-shadow: var(--la-shadow);
-  padding: 14px;
+  box-shadow:
+    0 22px 60px rgba(2, 6, 23, 0.18),
+    0 10px 22px rgba(2, 6, 23, 0.10);
+
+  padding: 12px;
   z-index: 999;
   overflow: hidden;
+
+  transform-origin: top right;
+  animation: laPop 160ms ease-out;
 }
 
-/* Top branded strip */
+/* subtle premium top wash */
 .profile-dropdown::before {
   content: "";
   position: absolute;
@@ -130,24 +122,107 @@
   top: -60px;
   height: 120px;
   background: var(--la-grad);
-  opacity: 0.20;
-  filter: blur(0.2px);
+  opacity: 0.16;
   transform: rotate(-6deg);
 }
 
-/* User info */
+/* arrow pointer */
+.pm-arrow {
+  position: absolute;
+  top: -8px;
+  right: 18px;
+  width: 14px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.94);
+  border-left: 1px solid rgba(15, 23, 42, 0.10);
+  border-top: 1px solid rgba(15, 23, 42, 0.10);
+  transform: rotate(45deg);
+  border-top-left-radius: 4px;
+  z-index: 2;
+}
+
+@keyframes laPop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Header card */
 .profile-info {
   position: relative;
   z-index: 1;
-  margin-bottom: 12px;
+
   padding: 10px 10px 12px;
   border-radius: 14px;
   background: var(--la-grad-soft);
   border: 1px solid rgba(15, 23, 42, 0.08);
 }
 
+.pm-idrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.pm-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--la-grad);
+  box-shadow: 0 10px 20px rgba(161, 24, 30, 0.18);
+}
+
+.pm-title {
+  font-weight: 900;
+  letter-spacing: 0.2px;
+  font-size: 12.5px;
+  text-transform: uppercase;
+  color: rgba(15, 23, 42, 0.82);
+}
+
+.pm-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pm-avatar-mini {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  display: grid;
+  place-items: center;
+  flex: 0 0 40px;
+}
+
+.pm-avatar-mini img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.pm-avatar-mini span {
+  font-weight: 900;
+  font-size: 13px;
+  color: rgba(15, 23, 42, 0.85);
+}
+
+.pm-user-meta {
+  min-width: 0;
+}
+
 .profile-name {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 900;
   color: var(--la-dark);
   line-height: 1.2;
@@ -162,7 +237,7 @@
   white-space: nowrap;
 }
 
-/* Message (success/error neutral styling) */
+/* message */
 .profile-msg {
   position: relative;
   z-index: 1;
@@ -176,84 +251,121 @@
   color: rgba(2, 6, 23, 0.78);
 }
 
-/* Action list */
-.profile-actions {
+/* actions list */
+.pm-actions {
   position: relative;
   z-index: 1;
   margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-/* -----------------------------------------
-   Button system (premium gradients)
------------------------------------------- */
-.profile-action {
+.pm-divider {
+  height: 1px;
+  background: rgba(15, 23, 42, 0.08);
+  margin: 4px 4px;
+}
+
+/* compact item row */
+.pm-item {
   width: 100%;
-  height: 44px;
-  border-radius: 12px;
-  font-size: 13.5px;
-  font-weight: 900;
-  cursor: pointer;
-  border: none;
-  margin-top: 10px;
-  transition: transform 0.14s ease, box-shadow 0.14s ease, background 0.14s ease, opacity 0.14s ease;
-  display: inline-flex;
+  border: 1px solid transparent;
+  background: transparent;
+  text-align: left;
+
+  display: flex;
   align-items: center;
-  justify-content: center;
-  letter-spacing: 0.2px;
+  gap: 10px;
+
+  padding: 10px 10px;
+  border-radius: 12px;
+
+  cursor: pointer;
+  transition: background 0.12s ease, transform 0.12s ease, border-color 0.12s ease;
+  color: rgba(15, 23, 42, 0.86);
 }
 
-.profile-action:disabled {
+.pm-item:hover:not(:disabled) {
+  background: rgba(15, 23, 42, 0.05);
+  transform: translateY(-1px);
+  border-color: rgba(15, 23, 42, 0.06);
+}
+
+.pm-item:disabled {
   opacity: 0.65;
   cursor: not-allowed;
   transform: none;
-  box-shadow: none;
 }
 
-/* Primary */
-.profile-action.primary {
-  color: #fff;
-  background: var(--la-grad);
-  box-shadow: 0 12px 26px rgba(161, 24, 30, 0.22);
+.pm-ic {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 18px;
+  opacity: 0.92;
 }
 
-.profile-action.primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 16px 32px rgba(161, 24, 30, 0.26);
+.pm-ic svg {
+  width: 18px;
+  height: 18px;
 }
 
-/* Outline */
-.profile-action.outline {
-  background: rgba(255, 255, 255, 0.72);
-  color: var(--la-red);
-  border: 1.5px solid rgba(161, 24, 30, 0.35);
+.pm-item-label {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.15px;
+  flex: 1;
 }
 
-.profile-action.outline:hover:not(:disabled) {
-  transform: translateY(-1px);
-  background: rgba(161, 24, 30, 0.06);
-  border-color: rgba(161, 24, 30, 0.55);
+.pm-kbd {
+  font-size: 11px;
+  font-weight: 900;
+  color: rgba(15, 23, 42, 0.55);
+  background: rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  padding: 3px 6px;
+  border-radius: 999px;
 }
 
-/* Danger (remove) */
-.profile-action.danger {
-  background: rgba(161, 24, 30, 0.08);
-  color: var(--la-red);
-  border: 1.5px solid rgba(161, 24, 30, 0.18);
+.pm-hint {
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(15, 23, 42, 0.55);
+  background: rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  padding: 3px 8px;
+  border-radius: 999px;
 }
 
-.profile-action.danger:hover:not(:disabled) {
-  transform: translateY(-1px);
-  background: rgba(161, 24, 30, 0.12);
-  border-color: rgba(161, 24, 30, 0.28);
+/* emphasis variants */
+.pm-danger {
+  color: rgb(134, 20, 31);
 }
 
-/* Upload progress */
+.pm-danger:hover:not(:disabled) {
+  background: rgba(134, 20, 31, 0.08);
+  border-color: rgba(134, 20, 31, 0.12);
+}
+
+.pm-logout {
+  color: rgba(15, 23, 42, 0.90);
+}
+
+.pm-logout:hover:not(:disabled) {
+  background: rgba(134, 20, 31, 0.10);
+  border-color: rgba(134, 20, 31, 0.14);
+}
+
+/* upload progress */
 .upload-progress {
   width: 100%;
   height: 7px;
   background: rgba(2, 6, 23, 0.08);
   border-radius: 999px;
-  margin-top: 10px;
+  margin-top: 8px;
   overflow: hidden;
   border: 1px solid rgba(2, 6, 23, 0.08);
 }
@@ -262,21 +374,4 @@
   height: 100%;
   background: var(--la-grad);
   transition: width 0.18s ease;
-}
-
-/* Small polish: make dropdown feel “snappy” */
-.profile-dropdown {
-  transform-origin: top right;
-  animation: laPop 160ms ease-out;
-}
-
-@keyframes laPop {
-  from {
-    opacity: 0;
-    transform: translateY(-6px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
 }

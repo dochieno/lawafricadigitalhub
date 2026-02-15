@@ -10,30 +10,136 @@ function resolveAvatarUrl(user) {
     user?.profileImageUrl ||
     user?.ProfileImageUrl ||
     user?.avatarUrl ||
-    user?.ProfileImageURL; // just in case older shape
+    user?.ProfileImageURL;
 
   if (!raw) return null;
 
-  // Already absolute
   if (/^https?:\/\//i.test(raw)) return raw;
 
   const cleaned = String(raw).trim().replaceAll("\\", "/");
 
-  // canonical
   if (cleaned.startsWith("/storage/")) return `${API_ORIGIN}${cleaned}`;
 
-  // legacy "Storage/..."
   if (cleaned.toLowerCase().startsWith("storage/")) {
     return `${API_ORIGIN}/storage/${cleaned.substring("storage/".length)}`;
   }
 
-  // filename-only
   if (!cleaned.includes("/")) {
     return `${API_ORIGIN}/storage/ProfileImages/${cleaned}`;
   }
 
-  // other relative paths
   return `${API_ORIGIN}/${cleaned.startsWith("/") ? cleaned.slice(1) : cleaned}`;
+}
+
+/* ----------------------------
+   Tiny inline icons (no deps)
+----------------------------- */
+function Ic({ children }) {
+  return (
+    <span className="pm-ic" aria-hidden="true">
+      {children}
+    </span>
+  );
+}
+
+function IcCamera() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none">
+      <path
+        d="M4 7a2 2 0 0 1 2-2h2l1.2-1.6A2 2 0 0 1 10.8 3h2.4a2 2 0 0 1 1.6.8L16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path
+        d="M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+function IcTrash() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none">
+      <path d="M4 7h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path
+        d="M10 11v6M14 11v6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M6 7l1 14h10l1-14"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IcLogout() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none">
+      <path
+        d="M10 7V6a2 2 0 0 1 2-2h7v16h-7a2 2 0 0 1-2-2v-1"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path
+        d="M4 12h9"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M7 9l-3 3 3 3"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IcMail() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none">
+      <path d="M4 7h16v10H4V7Z" stroke="currentColor" strokeWidth="2" />
+      <path
+        d="m5 8 7 5 7-5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IcUser() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none">
+      <path
+        d="M16 10a4 4 0 1 0-8 0 4 4 0 0 0 8 0Z"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path
+        d="M4 21a8 8 0 0 1 16 0"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
 }
 
 export default function UserProfileMenu({ user, onLogout }) {
@@ -67,7 +173,6 @@ export default function UserProfileMenu({ user, onLogout }) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // validations
     if (!file.type.startsWith("image/")) {
       setMsg("Please select a valid image file.");
       e.target.value = "";
@@ -89,7 +194,6 @@ export default function UserProfileMenu({ user, onLogout }) {
       setUploading(true);
       setProgress(0);
 
-      // ✅ IMPORTANT: your route is /api/profile/image (lowercase controller)
       await api.post("/profile/image", formData, {
         headers: { "Content-Type": "multipart/form-data" },
         onUploadProgress: (evt) => {
@@ -98,7 +202,6 @@ export default function UserProfileMenu({ user, onLogout }) {
         },
       });
 
-      // Pull latest /api/profile/me
       await refreshUser();
 
       setMsg("Profile photo updated.");
@@ -154,26 +257,86 @@ export default function UserProfileMenu({ user, onLogout }) {
       </button>
 
       {open && (
-        <div className="profile-dropdown" role="menu">
+        <div className="profile-dropdown" role="menu" aria-label="Profile menu">
+          {/* Arrow pointer */}
+          <div className="pm-arrow" aria-hidden="true" />
+
+          {/* Header */}
           <div className="profile-info">
-            <div className="profile-name">
-              {user?.name || user?.Username || "User"}
+            <div className="pm-idrow">
+              <span className="pm-dot" />
+              <div className="pm-title">Account</div>
             </div>
-            <div className="profile-email">
-              {user?.email || user?.Email || ""}
+
+            <div className="pm-user">
+              <div className="pm-avatar-mini" aria-hidden="true">
+                {avatarSrc ? (
+                  <img src={avatarSrc} alt="" />
+                ) : (
+                  <span>{initials}</span>
+                )}
+              </div>
+
+              <div className="pm-user-meta">
+                <div className="profile-name">{user?.name || user?.Username || "User"}</div>
+                <div className="profile-email">{user?.email || user?.Email || ""}</div>
+              </div>
             </div>
           </div>
 
           {msg && <div className="profile-msg">{msg}</div>}
 
-          <div className="profile-actions">
+          {/* Actions list (compact, like admin menu) */}
+          <div className="pm-actions" role="presentation">
             <button
-              className="profile-action primary"
+              className="pm-item"
               onClick={triggerFileSelect}
               disabled={uploading}
               type="button"
             >
-              {uploading ? "Uploading..." : avatarSrc ? "Change photo" : "Upload photo"}
+              <Ic><IcCamera /></Ic>
+              <span className="pm-item-label">
+                {uploading ? "Uploading..." : avatarSrc ? "Change photo" : "Upload photo"}
+              </span>
+              <span className="pm-kbd" aria-hidden="true">⌘U</span>
+            </button>
+
+            {avatarSrc && (
+              <button
+                className="pm-item pm-danger"
+                onClick={handleRemoveImage}
+                disabled={uploading}
+                type="button"
+              >
+                <Ic><IcTrash /></Ic>
+                <span className="pm-item-label">Remove photo</span>
+              </button>
+            )}
+
+            <div className="pm-divider" aria-hidden="true" />
+
+            <button className="pm-item pm-muted" type="button" disabled>
+              <Ic><IcUser /></Ic>
+              <span className="pm-item-label">Profile</span>
+              <span className="pm-hint" aria-hidden="true">Coming soon</span>
+            </button>
+
+            <button className="pm-item pm-muted" type="button" disabled>
+              <Ic><IcMail /></Ic>
+              <span className="pm-item-label">Notifications</span>
+              <span className="pm-hint" aria-hidden="true">Coming soon</span>
+            </button>
+
+            <div className="pm-divider" aria-hidden="true" />
+
+            <button
+              className="pm-item pm-logout"
+              onClick={onLogout}
+              disabled={uploading}
+              type="button"
+            >
+              <Ic><IcLogout /></Ic>
+              <span className="pm-item-label">Logout</span>
             </button>
 
             {uploading && (
@@ -184,26 +347,6 @@ export default function UserProfileMenu({ user, onLogout }) {
                 />
               </div>
             )}
-
-            {avatarSrc && (
-              <button
-                className="profile-action danger"
-                onClick={handleRemoveImage}
-                disabled={uploading}
-                type="button"
-              >
-                Remove photo
-              </button>
-            )}
-
-            <button
-              className="profile-action outline"
-              onClick={onLogout}
-              disabled={uploading}
-              type="button"
-            >
-              Logout
-            </button>
           </div>
 
           <input
