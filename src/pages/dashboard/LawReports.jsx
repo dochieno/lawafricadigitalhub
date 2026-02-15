@@ -839,49 +839,59 @@ export default function LawReports() {
   // ------------------------------------------------------------
   // Unified meta + excerpt per mode
   // ------------------------------------------------------------
-function getMetaForRow(r) {
-  if (mode === "server") {
-    return {
-      caseNumber: r?.caseNumber || "",   // ✅ ADD THIS
+    function getMetaForRow(r) {
+      if (mode === "server") {
+        return {
+          // ✅ Canonical display title already computed by backend: Parties + Citation
+          title: r?.title || "",
+          parties: r?.parties || "",
+          citation: r?.citation || "",
 
-      title: r?.title || "",
-      parties: r?.parties || "",
+          // keep these for tags/filters, not for the title
+          reportNumber: r?.reportNumber || "",
 
-      citation: r?.citation || "",
-      year: r?.year || null,
-      caseType: r?.caseTypeLabel || "",
-      decisionType: r?.decisionTypeLabel || "",
-      courtType: r?.courtTypeLabel || "",
-      courtName: r?.courtName || "",
+          year: r?.year || null,
+          caseType: r?.caseTypeLabel || "",
+          decisionType: r?.decisionTypeLabel || "",
+          courtType: r?.courtTypeLabel || "",
+          courtName: r?.courtName || "",
+          judges: r?.judges || "",
+          judgmentDate: r?.decisionDate ? String(r.decisionDate).slice(0, 10) : "",
 
-      // 🔥 REMOVE town from display (court already contains it now)
-      town: "", 
-      postCode: "",
+          // not shown (court string includes it elsewhere if needed)
+          town: "",
+          postCode: "",
+        };
+      }
 
-      judges: r?.judges || "",
-      judgmentDate: r?.decisionDate
-        ? String(r.decisionDate).slice(0, 10)
-        : "",
-    };
-  }
-}
+      // client mode keeps existing parsing logic
+      return extractReportMeta(r);
+    }
 
   function getExcerptForRow(r) {
     if (mode === "server") return truncateText(cleanPreview(r?.previewText || ""), 100);
     return truncateText(cleanPreview(makeReportExcerpt(r, 260)), 100);
   }
 
-function buildTags(meta) {
-  const list = [];
+  function buildTags(meta) {
+    const list = [];
 
-  if (meta.caseNumber) list.push(meta.caseNumber); // ✅ primary
-  if (meta.decisionType) list.push(meta.decisionType);
-  if (meta.caseType) list.push(meta.caseType);
-  if (meta.courtName || meta.court) list.push(meta.courtName || meta.court);
-  if (meta.citation) list.push(meta.citation);
+    // ✅ Citation is now part of the identity
+    if (meta.citation) list.push(meta.citation);
 
-  return list;
-}
+    // Court next (most useful contextual tag)
+    if (meta.courtName || meta.court) list.push(meta.courtName || meta.court);
+
+    // then types
+    if (meta.decisionType) list.push(meta.decisionType);
+    if (meta.caseType) list.push(meta.caseType);
+
+    // optional: internal reference (keep but de-emphasize)
+    if (meta.reportNumber) list.push(meta.reportNumber);
+
+    return list;
+  }
+
   return (
     <div className="lr-wrap lr-theme">
       {toast && <div className={`lr-toast ${toast.type === "error" ? "error" : ""}`}>{toast.message}</div>}
@@ -966,10 +976,18 @@ function buildTags(meta) {
 
               {showAdvanced && (
                 <>
-                  <div className="lr-field">
-                    <div className="lr-label">Report Number</div>
-                    <input className="lr-input" value={reportNumber} onChange={(e) => setReportNumber(e.target.value)} placeholder="e.g. HCK027…" />
-                  </div>
+              <div className="lr-field">
+                <div className="lr-label">Internal Report Ref (optional)</div>
+                <input
+                  className="lr-input"
+                  value={reportNumber}
+                  onChange={(e) => setReportNumber(e.target.value)}
+                  placeholder="e.g. HCKE00000000001"
+                />
+                <div className="lr-soft" style={{ marginTop: 6 }}>
+                  This is system-generated. Use mainly for support/troubleshooting.
+                </div>
+              </div>
 
                   <div className="lr-field">
                     <div className="lr-label">Parties</div>
@@ -1148,7 +1166,8 @@ function buildTags(meta) {
                     const shown = tags.slice(0, maxTags);
                     const remaining = Math.max(0, tags.length - shown.length);
 
-                    const cardTitle = meta.caseNumber || meta.title || meta.parties ||"Untitled report";
+                    const cardTitle = meta.title || meta.parties || "Untitled report";
+                    
                     return (
                       <article
                         key={`${mode}-${r.id}`}

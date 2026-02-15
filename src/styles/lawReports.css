@@ -600,3 +600,28 @@
   opacity: 1;
   transform: translateY(0);
 }
+/* =========================================
+   Card title wrapping + modern line clamp
+   ========================================= */
+
+.lr-card2-title {
+  white-space: normal;
+  overflow: hidden;
+
+  /* Standard (future-proof) */
+  line-clamp: 2;
+
+  /* Required for clamp to work */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+
+  /* WebKit fallback (Chrome, Edge, Safari) */
+  -webkit-line-clamp: 2;
+
+  /* Better word breaking */
+  word-break: break-word;
+  overflow-wrap: anywhere;
+
+  line-height: 1.25;
+  max-width: 100%;
+}
