@@ -347,11 +347,7 @@ function Icon({ name }) {
     case "info":
       return (
         <svg {...common}>
-          <path
-            d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z"
-            stroke="currentColor"
-            strokeWidth="2"
-          />
+          <path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z" stroke="currentColor" strokeWidth="2" />
           <path d="M12 10v7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           <path d="M12 7h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
@@ -518,7 +514,6 @@ export default function AdminLLRServices() {
   function autoTitleDraft(next = form) {
     const parties = normalizeText(next.parties);
     const citation = normalizeText(next.citation);
-
     // ✅ Title format: "Parties [space] Citation"
     const bits = [parties, citation].filter(Boolean);
     return bits.join(" ").trim();
@@ -527,7 +522,6 @@ export default function AdminLLRServices() {
   // Title hidden and always kept in sync
   useEffect(() => {
     if (!open) return;
-
     const nextTitle = autoTitleDraft(form);
     if (nextTitle && nextTitle !== form.title) {
       setForm((p) => ({ ...p, title: nextTitle }));
@@ -663,7 +657,6 @@ export default function AdminLLRServices() {
         .map((x) => ({
           id: x?.id ?? x?.Id ?? null,
           countryId: toInt(x?.countryId ?? x?.CountryId ?? cid, cid),
-          // still stored internally (code)
           postCode: normalizeText(x?.postCode ?? x?.PostCode ?? ""),
           name: normalizeText(x?.name ?? x?.Name ?? ""),
         }))
@@ -867,6 +860,7 @@ export default function AdminLLRServices() {
       await fetchList();
     })();
   }, []);
+
   // Filters + Search
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -1112,7 +1106,6 @@ export default function AdminLLRServices() {
       }
 
       nextForm.title = autoTitleDraft(nextForm);
-
       setForm(nextForm);
     } catch (e) {
       setError(getApiErrorMessage(e, "Failed to load report details."));
@@ -1309,35 +1302,89 @@ export default function AdminLLRServices() {
 
   return (
     <div className="admin-page admin-page-wide admin-llrservices">
-      {/* Scoped premium tweaks + scroll + sort/filters */}
+      {/* Scoped premium tweaks + uniform row layout */}
       <style>{`
-        .admin-llrservices .admin-modal { border-radius: 18px; border: 1px solid rgba(17,24,39,0.10); box-shadow: 0 24px 70px rgba(0,0,0,0.16); }
-        .admin-llrservices .admin-modal-head { background: linear-gradient(180deg, rgba(107,35,59,0.10), rgba(255,255,255,0)); border-bottom: 1px solid rgba(17,24,39,0.08); }
+        .admin-llrservices .admin-modal {
+          border-radius: 18px;
+          border: 1px solid rgba(17,24,39,0.10);
+          box-shadow: 0 24px 70px rgba(0,0,0,0.16);
+          overflow: hidden;
+        }
+        .admin-llrservices .admin-modal-head {
+          background: linear-gradient(180deg, rgba(107,35,59,0.10), rgba(255,255,255,0));
+          border-bottom: 1px solid rgba(17,24,39,0.08);
+        }
         .admin-llrservices .admin-modal-title { letter-spacing: -0.2px; }
-        .admin-llrservices .admin-field > label { font-weight: 600; color: rgba(17,24,39,0.82); display:flex; align-items:center; gap: 8px; }
-        .admin-llrservices input, .admin-llrservices select, .admin-llrservices textarea {
+
+        /* Make modal form feel premium + aligned */
+        .admin-llrservices .admin-modal-body { padding-top: 6px; }
+        .admin-llrservices .admin-grid { gap: 14px; }
+
+        .admin-llrservices .admin-field { min-width: 0; }
+        .admin-llrservices .admin-field > label {
+          font-weight: 650;
+          color: rgba(17,24,39,0.82);
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 6px;
+        }
+
+        /* Force uniform control sizing */
+        .admin-llrservices input,
+        .admin-llrservices select,
+        .admin-llrservices textarea {
+          width: 100%;
+          box-sizing: border-box;
           border: 1px solid rgba(17,24,39,0.12);
           border-radius: 12px;
           background: rgba(255,255,255,0.92);
-          transition: box-shadow .15s ease, border-color .15s ease;
+          transition: box-shadow .15s ease, border-color .15s ease, background .15s ease;
         }
-        .admin-llrservices input:focus, .admin-llrservices select:focus, .admin-llrservices textarea:focus {
+        .admin-llrservices input,
+        .admin-llrservices select {
+          height: 46px;
+          padding: 10px 12px;
+        }
+        .admin-llrservices textarea {
+          padding: 10px 12px;
+          min-height: 86px;
+          resize: vertical;
+        }
+        .admin-llrservices select { appearance: auto; }
+
+        .admin-llrservices input:disabled,
+        .admin-llrservices select:disabled,
+        .admin-llrservices textarea:disabled {
+          background: rgba(17,24,39,0.03);
+          color: rgba(17,24,39,0.55);
+        }
+
+        .admin-llrservices input:focus,
+        .admin-llrservices select:focus,
+        .admin-llrservices textarea:focus {
           outline: none;
           border-color: rgba(107,35,59,0.45);
           box-shadow: 0 0 0 4px rgba(107,35,59,0.10);
+          background: #fff;
         }
+
         .admin-llrservices .admin-btn.primary { background: #6b233b; border-color: #6b233b; }
         .admin-llrservices .admin-btn.primary:hover { filter: brightness(0.96); }
 
-        /* 2-col row helper */
-        .admin-llrservices .laRow2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-        @media (max-width: 900px) { .admin-llrservices .laRow2 { grid-template-columns: 1fr; } }
+        /* ✅ Uniform "two fields per row" grid — equal widths */
+        .admin-llrservices .laRow2 {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 14px;
+          align-items: start;
+        }
+        .admin-llrservices .laRow2 > .admin-field { margin: 0 !important; }
+        @media (max-width: 900px) {
+          .admin-llrservices .laRow2 { grid-template-columns: 1fr; }
+        }
 
-        /* 2-col row helper with asymmetric widths (nice for Country/Town, Product/Service etc) */
-        .admin-llrservices .laRow2a { display:grid; grid-template-columns: 1.05fr 0.95fr; gap: 14px; }
-        @media (max-width: 900px) { .admin-llrservices .laRow2a { grid-template-columns: 1fr; } }
-
-        /* Scroll fix */
+        /* Table scroll fix */
         .admin-llrservices .laSurfaceCard { display:flex; flex-direction:column; min-height: 0; }
         .admin-llrservices .laTableWrap { overflow: auto; max-height: calc(100vh - 290px); }
         .admin-llrservices .laTableWrap::-webkit-scrollbar { height: 10px; width: 10px; }
@@ -1347,7 +1394,7 @@ export default function AdminLLRServices() {
         /* Chips */
         .admin-llrservices .laChips { display:flex; flex-wrap:wrap; gap: 8px; margin-top: 6px; }
         .admin-llrservices .laChipSoft { border-radius: 999px; border: 1px solid rgba(17,24,39,0.10); background: rgba(255,255,255,0.85); }
-        .admin-llrservices .chipKey { color: rgba(17,24,39,0.65); font-weight: 600; }
+        .admin-llrservices .chipKey { color: rgba(17,24,39,0.65); font-weight: 650; }
 
         /* Sort headers */
         .admin-llrservices .laTh { display:inline-flex; align-items:center; gap: 8px; }
@@ -1356,8 +1403,8 @@ export default function AdminLLRServices() {
 
         /* Toolbar filters */
         .admin-llrservices .laFiltersRow { display:flex; gap: 10px; align-items:center; flex-wrap: wrap; }
-        .admin-llrservices .laSelect { min-width: 190px; }
-        .admin-llrservices .laMini { min-width: 160px; }
+        .admin-llrservices .laSelect { min-width: 190px; height: 42px; }
+        .admin-llrservices .laMini { min-width: 160px; height: 42px; }
         .admin-llrservices .laClearBtn { border-radius: 999px; }
 
         /* Attachments UI */
@@ -1369,24 +1416,33 @@ export default function AdminLLRServices() {
         }
         .admin-llrservices .laAttachRow { display:flex; gap: 10px; align-items:center; flex-wrap: wrap; }
         .admin-llrservices .laAttachMeta { display:flex; flex-direction:column; gap: 2px; min-width: 240px; }
-        .admin-llrservices .laAttachName { font-weight: 700; color: rgba(17,24,39,0.86); }
+        .admin-llrservices .laAttachName { font-weight: 750; color: rgba(17,24,39,0.86); }
         .admin-llrservices .laAttachSub { color: rgba(17,24,39,0.6); font-size: 12px; }
         .admin-llrservices .laPillBtn {
           border-radius: 999px;
           padding: 8px 12px;
           display:inline-flex; align-items:center; gap: 8px;
+          height: 40px;
         }
         .admin-llrservices .laPillBtn svg { width: 16px; height: 16px; }
         .admin-llrservices .laFileInput {
-          padding: 8px;
+          padding: 9px 10px;
           border-radius: 12px;
           border: 1px dashed rgba(17,24,39,0.18);
           background: rgba(255,255,255,0.9);
+          height: 40px;
         }
 
         /* Tooltip */
         .admin-llrservices .laLabelWrap { display:inline-flex; align-items:center; gap: 8px; }
-        .admin-llrservices .laTip { position: relative; display:inline-flex; align-items:center; justify-content:center; width: 18px; height: 18px; border-radius: 999px; color: rgba(17,24,39,0.55); cursor: help; }
+        .admin-llrservices .laTip {
+          position: relative;
+          display:inline-flex; align-items:center; justify-content:center;
+          width: 18px; height: 18px;
+          border-radius: 999px;
+          color: rgba(17,24,39,0.55);
+          cursor: help;
+        }
         .admin-llrservices .laTip:hover { color: rgba(107,35,59,0.9); }
         .admin-llrservices .laTip svg { width: 16px; height: 16px; }
         .admin-llrservices .laTipBubble {
@@ -1422,7 +1478,6 @@ export default function AdminLLRServices() {
           visibility: visible;
         }
 
-        /* Reduce the old hint noise (keep spacing clean) */
         .admin-llrservices .hint { display:none; }
       `}</style>
 
@@ -1727,10 +1782,7 @@ export default function AdminLLRServices() {
                 {/* Parties */}
                 <div className="admin-field admin-span2">
                   <label>
-                    <LabelWithTip
-                      text="Parties *"
-                      tip="Required. Title is auto-generated as: Parties + Citation."
-                    />
+                    <LabelWithTip text="Parties *" tip="Required. Title is auto-generated as: Parties + Citation." />
                   </label>
                   <input
                     value={form.parties}
@@ -1743,10 +1795,10 @@ export default function AdminLLRServices() {
                 {/* Hidden Title (kept for payload) */}
                 <input type="hidden" value={form.title} readOnly />
 
-                {/* ✅ Content Product + Service on SAME ROW */}
+                {/* ✅ Content Product + Service on SAME ROW (uniform widths) */}
                 <div className="admin-field admin-span2">
-                  <div className="laRow2a">
-                    <div className="admin-field" style={{ margin: 0 }}>
+                  <div className="laRow2">
+                    <div className="admin-field">
                       <label>
                         <LabelWithTip
                           text="Content Product *"
@@ -1756,7 +1808,6 @@ export default function AdminLLRServices() {
 
                       {products.length > 0 ? (
                         <select
-                          className="adminSelect"
                           value={String(form.contentProductId || "")}
                           onChange={(e) => setField("contentProductId", e.target.value)}
                           disabled={busy || attachBusy}
@@ -1772,7 +1823,6 @@ export default function AdminLLRServices() {
                         <input
                           type="number"
                           min="1"
-                          className="adminSelect"
                           value={String(form.contentProductId || "")}
                           onChange={(e) => setField("contentProductId", e.target.value)}
                           placeholder={productsLoading ? "Loading products…" : "ContentProductId"}
@@ -1781,12 +1831,9 @@ export default function AdminLLRServices() {
                       )}
                     </div>
 
-                    <div className="admin-field" style={{ margin: 0 }}>
+                    <div className="admin-field">
                       <label>
-                        <LabelWithTip
-                          text="Service *"
-                          tip="Legacy/branding grouping (LLR / ULR / TLR etc)."
-                        />
+                        <LabelWithTip text="Service *" tip="Legacy/branding grouping (LLR / ULR / TLR etc)." />
                       </label>
                       <select
                         value={String(form.service)}
@@ -1803,15 +1850,12 @@ export default function AdminLLRServices() {
                   </div>
                 </div>
 
-                {/* ✅ Country + Town on SAME ROW */}
+                {/* ✅ Country + Town on SAME ROW (uniform widths) */}
                 <div className="admin-field admin-span2">
-                  <div className="laRow2a">
-                    <div className="admin-field" style={{ margin: 0 }}>
+                  <div className="laRow2">
+                    <div className="admin-field">
                       <label>
-                        <LabelWithTip
-                          text="Country *"
-                          tip="Select country first to load Courts and Towns."
-                        />
+                        <LabelWithTip text="Country *" tip="Select country first to load Courts and Towns." />
                       </label>
 
                       {countries.length > 0 ? (
@@ -1839,7 +1883,7 @@ export default function AdminLLRServices() {
                       )}
                     </div>
 
-                    <div className="admin-field" style={{ margin: 0 }}>
+                    <div className="admin-field">
                       <label>
                         <LabelWithTip
                           text="Town"
@@ -1868,101 +1912,119 @@ export default function AdminLLRServices() {
                   </div>
                 </div>
 
-                <div className="admin-field">
-                  <label>
-                    <LabelWithTip text="Year *" tip="Must be between 1900 and 2100." />
-                  </label>
-                  <input
-                    type="number"
-                    min="1900"
-                    max="2100"
-                    value={form.year}
-                    onChange={(e) => setField("year", e.target.value)}
-                    placeholder="e.g. 2020"
-                    disabled={busy || attachBusy}
-                  />
-                </div>
-
-                <div className="admin-field">
-                  <label>
-                    <LabelWithTip text="Case No." tip="Optional. Example: Petition 12 of 2020." />
-                  </label>
-                  <input
-                    value={form.caseNumber}
-                    onChange={(e) => setField("caseNumber", e.target.value)}
-                    placeholder="e.g. Petition 12 of 2020"
-                    disabled={busy || attachBusy}
-                  />
-                </div>
-
-                <div className="admin-field">
-                  <label>
-                    <LabelWithTip text="Citation" tip="Optional but preferred (used in title and search)." />
-                  </label>
-                  <input
-                    value={form.citation}
-                    onChange={(e) => setField("citation", e.target.value)}
-                    placeholder="Optional"
-                    disabled={busy || attachBusy}
-                  />
-                </div>
-
-                {/* Court */}
-                <div className="admin-field">
-                  <label>
-                    <LabelWithTip text="Court *" tip="Courts are loaded per Country. If none exist, legacy fallback appears." />
-                  </label>
-                  <select
-                    value={String(form.courtId || "")}
-                    onChange={(e) => setField("courtId", e.target.value)}
-                    disabled={busy || attachBusy || !toInt(form.countryId, 0)}
-                  >
-                    {!toInt(form.countryId, 0) ? (
-                      <option value="">Select country first…</option>
-                    ) : (
-                      <option value="">
-                        {courtsLoading
-                          ? "Loading courts…"
-                          : courts.length
-                          ? "Select court…"
-                          : "No courts found (create courts first)"}
-                      </option>
-                    )}
-
-                    {courts.map((c) => (
-                      <option key={c.id} value={String(c.id)}>
-                        {c.name}
-                        {c.code ? ` (${c.code})` : ""}
-                        {c.isActive ? "" : " — Inactive"}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Court Division + Decision Date */}
-                <div className="admin-field">
-                  <label>
-                    <LabelWithTip text="Court Division" tip='Optional. Saved as "CourtCategory" (e.g., Industrial, Environmental).' />
-                  </label>
-                  <input
-                    value={form.courtCategory}
-                    onChange={(e) => setField("courtCategory", e.target.value)}
-                    placeholder='e.g. "Industrial" (optional)'
-                    disabled={busy || attachBusy}
-                  />
-                </div>
-
+                {/* ✅ Year + Case No on SAME ROW (uniform widths) */}
                 <div className="admin-field admin-span2">
-                  <label>
-                    <LabelWithTip text="Decision Date *" tip="Required. Used for consistency and citations." />
-                  </label>
-                  <input
-                    type="date"
-                    value={form.decisionDate}
-                    onChange={(e) => setField("decisionDate", e.target.value)}
-                    disabled={busy || attachBusy}
-                    style={{ maxWidth: 260 }}
-                  />
+                  <div className="laRow2">
+                    <div className="admin-field">
+                      <label>
+                        <LabelWithTip text="Year *" tip="Must be between 1900 and 2100." />
+                      </label>
+                      <input
+                        type="number"
+                        min="1900"
+                        max="2100"
+                        value={form.year}
+                        onChange={(e) => setField("year", e.target.value)}
+                        placeholder="e.g. 2020"
+                        disabled={busy || attachBusy}
+                      />
+                    </div>
+
+                    <div className="admin-field">
+                      <label>
+                        <LabelWithTip text="Case No." tip="Optional. Example: Petition 12 of 2020." />
+                      </label>
+                      <input
+                        value={form.caseNumber}
+                        onChange={(e) => setField("caseNumber", e.target.value)}
+                        placeholder="e.g. Petition 12 of 2020"
+                        disabled={busy || attachBusy}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* ✅ Citation + Decision Date on SAME ROW (uniform widths) */}
+                <div className="admin-field admin-span2">
+                  <div className="laRow2">
+                    <div className="admin-field">
+                      <label>
+                        <LabelWithTip text="Citation" tip="Optional but preferred (used in title and search)." />
+                      </label>
+                      <input
+                        value={form.citation}
+                        onChange={(e) => setField("citation", e.target.value)}
+                        placeholder="Optional"
+                        disabled={busy || attachBusy}
+                      />
+                    </div>
+
+                    <div className="admin-field">
+                      <label>
+                        <LabelWithTip text="Decision Date *" tip="Required. Used for consistency and citations." />
+                      </label>
+                      <input
+                        type="date"
+                        value={form.decisionDate}
+                        onChange={(e) => setField("decisionDate", e.target.value)}
+                        disabled={busy || attachBusy}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* ✅ Court + Court Division on SAME ROW (uniform widths) */}
+                <div className="admin-field admin-span2">
+                  <div className="laRow2">
+                    <div className="admin-field">
+                      <label>
+                        <LabelWithTip
+                          text="Court *"
+                          tip="Courts are loaded per Country. If none exist, legacy fallback appears."
+                        />
+                      </label>
+                      <select
+                        value={String(form.courtId || "")}
+                        onChange={(e) => setField("courtId", e.target.value)}
+                        disabled={busy || attachBusy || !toInt(form.countryId, 0)}
+                      >
+                        {!toInt(form.countryId, 0) ? (
+                          <option value="">Select country first…</option>
+                        ) : (
+                          <option value="">
+                            {courtsLoading
+                              ? "Loading courts…"
+                              : courts.length
+                              ? "Select court…"
+                              : "No courts found (create courts first)"}
+                          </option>
+                        )}
+
+                        {courts.map((c) => (
+                          <option key={c.id} value={String(c.id)}>
+                            {c.name}
+                            {c.code ? ` (${c.code})` : ""}
+                            {c.isActive ? "" : " — Inactive"}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="admin-field">
+                      <label>
+                        <LabelWithTip
+                          text="Court Division"
+                          tip='Optional. Saved as "CourtCategory" (e.g., Industrial, Environmental).'
+                        />
+                      </label>
+                      <input
+                        value={form.courtCategory}
+                        onChange={(e) => setField("courtCategory", e.target.value)}
+                        placeholder='e.g. "Industrial" (optional)'
+                        disabled={busy || attachBusy}
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Hidden Town Text field (kept for payload, but not editable) */}
@@ -1972,7 +2034,10 @@ export default function AdminLLRServices() {
                 {!courtsLoading && toInt(form.countryId, 0) && courts.length === 0 && (
                   <div className="admin-field admin-span2">
                     <label>
-                      <LabelWithTip text="Legacy Court (optional text)" tip="Only used when there are no Court records for this country." />
+                      <LabelWithTip
+                        text="Legacy Court (optional text)"
+                        tip="Only used when there are no Court records for this country."
+                      />
                     </label>
                     <input
                       value={form.court}
@@ -1986,7 +2051,7 @@ export default function AdminLLRServices() {
                 {/* ✅ Case Type + Decision Type on SAME ROW */}
                 <div className="admin-field admin-span2">
                   <div className="laRow2">
-                    <div className="admin-field" style={{ margin: 0 }}>
+                    <div className="admin-field">
                       <label>
                         <LabelWithTip text="Case Type *" tip="Criminal / Civil / etc." />
                       </label>
@@ -2003,7 +2068,7 @@ export default function AdminLLRServices() {
                       </select>
                     </div>
 
-                    <div className="admin-field" style={{ margin: 0 }}>
+                    <div className="admin-field">
                       <label>
                         <LabelWithTip text="Decision Type *" tip="Judgment / Ruling / Order / etc." />
                       </label>
@@ -2036,7 +2101,7 @@ export default function AdminLLRServices() {
                   />
                 </div>
 
-                {/* ✅ Attachment card moved here (just before content formatter, after judges) */}
+                {/* Attachment */}
                 <div className="admin-field admin-span2">
                   <label>
                     <LabelWithTip
@@ -2054,7 +2119,9 @@ export default function AdminLLRServices() {
                       <div className="laAttachRow">
                         <div className="laAttachMeta">
                           <div className="laAttachName">
-                            {attachmentMeta.hasAttachment ? attachmentMeta.originalName || "Attachment available" : "No attachment"}
+                            {attachmentMeta.hasAttachment
+                              ? attachmentMeta.originalName || "Attachment available"
+                              : "No attachment"}
                           </div>
                           <div className="laAttachSub">
                             {attachmentMeta.hasAttachment ? (
@@ -2083,7 +2150,9 @@ export default function AdminLLRServices() {
                           type="button"
                           className="admin-btn laPillBtn"
                           disabled={busy || attachBusy || !attachmentMeta.hasAttachment}
-                          onClick={() => downloadAttachment(pick(editing, ["id", "Id"], null), attachmentMeta.originalName)}
+                          onClick={() =>
+                            downloadAttachment(pick(editing, ["id", "Id"], null), attachmentMeta.originalName)
+                          }
                           title="Download attachment"
                         >
                           <Icon name="download" />
