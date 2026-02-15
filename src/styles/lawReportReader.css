@@ -190,6 +190,46 @@
   margin-right: auto;
 }
 
+/* Tabs + actions row wrapper */
+.lrr2SegTabsRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  width:100%;
+}
+
+/* Make tabs scroll instead of overflowing the page */
+.lrr2SegTabs{
+  display:flex;
+  gap:10px;
+  flex:1;
+  min-width:0;
+  overflow-x:auto;
+  overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+}
+.lrr2SegTabs::-webkit-scrollbar{ display:none; }
+
+/* Actions stay fixed on the right */
+.lrr2SegActions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex:0 0 auto;
+  white-space:nowrap;
+}
+
+/* Prevent pdf error from stretching layout */
+.lrr2SegActionErr{
+  max-width:260px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  opacity:.85;
+}
+
 /* =========================================================
    3) Loading / error
 ========================================================= */

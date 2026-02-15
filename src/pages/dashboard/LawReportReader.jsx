@@ -434,27 +434,22 @@ function bulletsFromText(text) {
 }
 
 // Put this in the top Helpers section (NO hooks), outside the component
-function buildDefaultCopyText({ report, title, llrNo }) {
-  const parts = [];
+    function buildDefaultCopyText({ report, title, caseNo }) {
+      const citation = report?.citation || "";
+      const court = report?.court || "";
+      const date = report?.decisionDate || "";
 
-  if (title) parts.push(String(title));
+      const lines = [
+        title,
+        caseNo ? `Case Number: ${caseNo}` : "",
+        citation ? `Citation: ${citation}` : "",
+        court ? `Court: ${court}` : "",
+        date ? `Decision Date: ${date}` : "",
+      ].filter(Boolean);
 
-  const citation = safeTrim(report?.citation);
-  if (citation) parts.push(citation);
+      return lines.join("\n");
+    }
 
-  const court = safeTrim(report?.court);
-  if (court) parts.push(court);
-
-  const date = report?.decisionDate ? formatDate(report.decisionDate) : "";
-  if (date) parts.push(`Decision date: ${date}`);
-
-  const caseNo = safeTrim(report?.caseNumber);
-  if (caseNo) parts.push(`Case No: ${caseNo}`);
-
-  if (llrNo) parts.push(`LLR: ${llrNo}`);
-
-  return parts.filter(Boolean).join("\n");
-}
 
 /** Mild “premium formatting” for chat replies that come as a single blob.
  *  - If the reply already contains markdown lists/headings, leave it.
@@ -1973,7 +1968,15 @@ async function downloadPdfNow() {
   }
 
   const title = report.parties || report.title || "Law Report";
-  const llrNo = report.reportNumber || report.llrNo || report.llrNumber || String(reportId);
+
+  // Prefer case number for display
+  const caseNo =
+    report.caseNumber ||
+    report.caseNo ||
+    report.case_no ||
+    report.CaseNumber ||
+    "";
+
 
   // ---------------- LegalAI Panel (Premium layout) ----------------
 
@@ -2819,30 +2822,17 @@ function parseSectionedSummary(text) {
         <div className="lrr2MetaOneRow">
           {/* Left: primary chips (always visible) */}
           <div className="lrr2MetaPrimary">
-            {llrNo ? (
-              <div className="lrr2MetaTag" data-tip="LLR Number" title="LLR Number">
-                <span className="lrr2MetaIcon">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" strokeWidth="1.6" />
-                    <path d="M8 9h8M8 13h6" stroke="currentColor" strokeWidth="1.6" />
-                  </svg>
-                </span>
-                {llrNo}
-              </div>
-            ) : null}
-
-            {report.court ? (
-              <div className="lrr2MetaTag" data-tip="Court" title="Court">
-                <span className="lrr2MetaIcon">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d="M4 10h16" stroke="currentColor" strokeWidth="1.6" />
-                    <path d="M6 10V6h12v4" stroke="currentColor" strokeWidth="1.6" />
-                    <path d="M6 18h12" stroke="currentColor" strokeWidth="1.6" />
-                  </svg>
-                </span>
-                {report.court}
-              </div>
-            ) : null}
+          {caseNo ? (
+            <div className="lrr2MetaTag" data-tip="Case Number" title="Case Number">
+              <span className="lrr2MetaIcon">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" strokeWidth="1.6" />
+                  <path d="M8 9h8M8 13h10" stroke="currentColor" strokeWidth="1.6" />
+                </svg>
+              </span>
+              {caseNo}
+            </div>
+          ) : null}
 
             {report.decisionDate ? (
               <div className="lrr2MetaTag" data-tip="Decision Date" title="Decision Date">
@@ -2941,7 +2931,7 @@ function parseSectionedSummary(text) {
                 title="Copy case details"
                 aria-label="Copy case details"
                 onClick={() => {
-                  const payload = buildDefaultCopyText({ report, title, llrNo });
+                  const payload = buildDefaultCopyText({ report, title, caseNo });
                   copyText(payload);
                 }}
               >
@@ -2983,7 +2973,7 @@ function parseSectionedSummary(text) {
                     type="button"
                     className="lrr2MenuItem"
                     onClick={() => {
-                      copyText(buildDefaultCopyText({ report, title, llrNo }));
+                      copyText(buildDefaultCopyText({ report, title, caseNo }));
                       setCopyMenuOpen(false);
                     }}
                   >
@@ -3027,18 +3017,19 @@ function parseSectionedSummary(text) {
                     </button>
                   ) : null}
 
-                  {llrNo ? (
-                    <button
-                      type="button"
-                      className="lrr2MenuItem"
-                      onClick={() => {
-                        copyText(String(llrNo));
-                        setCopyMenuOpen(false);
-                      }}
-                    >
-                      Copy LLR number
-                    </button>
-                  ) : null}
+                {caseNo ? (
+                  <button
+                    type="button"
+                    className="lrr2MenuItem"
+                    onClick={() => {
+                      copyText(String(caseNo));
+                      setCopyMenuOpen(false);
+                    }}
+                  >
+                    Copy case number
+                  </button>
+                ) : null}
+
                 </div>
               ) : null}
             </div>
@@ -3046,67 +3037,71 @@ function parseSectionedSummary(text) {
         </div>
 
         {/* ✅ Tabs moved into same container so they align with meta row */}
-        <div className="lrr2SegTabs" role="tablist" aria-label="Reader tabs">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={view === "content"}
-            className={`lrr2SegTab ${view === "content" ? "isActive" : ""}`}
-            onClick={() => {
-              setView("content");
-              setContentOpen(true);
-            }}
-            title="Transcript"
-          >
-            Transcript
-            {isPremium && !hasFullAccess ? <span className="lrr2SegBadge lock">🔒</span> : null}
-          </button>
+          <div className="lrr2SegTabsRow">
+            {/* Left: tabs (scroll if needed) */}
+            <div className="lrr2SegTabs" role="tablist" aria-label="Reader tabs">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "content"}
+                className={`lrr2SegTab ${view === "content" ? "isActive" : ""}`}
+                onClick={() => {
+                  setView("content");
+                  setContentOpen(true);
+                }}
+                title="Transcript"
+              >
+                Transcript
+                {isPremium && !hasFullAccess ? <span className="lrr2SegBadge lock">🔒</span> : null}
+              </button>
 
-          {/* ✅ Download PDF button placed under tabs (after Transcript) */}
-          <button
-            type="button"
-            className={`lrr2SegActionBtn ${pdfBusy ? "isBusy" : ""}`}
-            onClick={downloadPdfNow}
-            disabled={!canDownloadPdf || pdfBusy}
-            title={!canDownloadPdf ? "Subscribe to unlock downloads" : "Download PDF"}
-            aria-label="Download PDF"
-          >
-            {pdfBusy ? "Preparing…" : pdfBtnLabel}
-          </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "ai"}
+                className={`lrr2SegTab ${view === "ai" ? "isActive" : ""} ${aiAllowed ? "" : "isDisabled"}`}
+                onClick={() => {
+                  if (!aiAllowed) return;
+                  setView("ai");
+                  setContentOpen(false);
+                }}
+                title={aiAllowed ? "LegalAI" : "LegalAI (subscribers only)"}
+                disabled={!aiAllowed}
+              >
+                LegalAI <span className="lrr2SegBadge ai">✨</span>
+              </button>
 
-          {/* optional tiny inline error (won’t distort layout) */}
-          {pdfErr ? <span className="lrr2SegActionErr">{pdfErr}</span> : null}
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "split"}
+                className={`lrr2SegTab ${view === "split" ? "isActive" : ""}`}
+                onClick={() => {
+                  setView("split");
+                  setContentOpen(true);
+                }}
+                title="Split view (Transcript + LegalAI)"
+              >
+                Split
+              </button>
+            </div>
 
-          <button
-            type="button"
-            role="tab"
-            aria-selected={view === "ai"}
-            className={`lrr2SegTab ${view === "ai" ? "isActive" : ""} ${aiAllowed ? "" : "isDisabled"}`}
-            onClick={() => {
-              if (!aiAllowed) return;
-              setView("ai");
-              setContentOpen(false);
-            }}
-            title={aiAllowed ? "LegalAI" : "LegalAI (subscribers only)"}
-            disabled={!aiAllowed}
-          >
-            LegalAI <span className="lrr2SegBadge ai">✨</span>
-          </button>
+            {/* Right: actions */}
+            <div className="lrr2SegActions">
+              <button
+                type="button"
+                className={`lrr2SegActionBtn ${pdfBusy ? "isBusy" : ""}`}
+                onClick={downloadPdfNow}
+                disabled={!canDownloadPdf || pdfBusy}
+                title={!canDownloadPdf ? "Subscribe to unlock downloads" : "Download PDF"}
+                aria-label="Download PDF"
+              >
+                {pdfBusy ? "Preparing…" : pdfBtnLabel}
+              </button>
 
-          <button
-            type="button"
-            role="tab"
-            aria-selected={view === "split"}
-            className={`lrr2SegTab ${view === "split" ? "isActive" : ""}`}
-            onClick={() => {
-              setView("split");
-              setContentOpen(true);
-            }}
-            title="Split view (Transcript + LegalAI)"
-          >
-            Split
-          </button>
-        </div>
+              {pdfErr ? <span className="lrr2SegActionErr">{pdfErr}</span> : null}
+            </div>
+          </div>
 
       </div>
 
