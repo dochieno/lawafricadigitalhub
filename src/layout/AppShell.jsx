@@ -56,7 +56,10 @@ export default function AppShell() {
   const adminRef = useRef(null);
   const financeRef = useRef(null);
 
-  // ✅ Fixed-position menu placement (like profile menu)
+  // ✅ Profile menu wrapper (so we can close it without editing UserProfileMenu)
+  const profileWrapRef = useRef(null);
+
+  // ✅ Fixed-position menu placement
   const [menuPos, setMenuPos] = useState({
     approvals: null,
     finance: null,
@@ -70,9 +73,12 @@ export default function AppShell() {
     }
   };
 
-  const scheduleClose = useCallback(() => {
+  // Close a specific menu, but only if that same menu is still open
+  const scheduleCloseFor = useCallback((key) => {
     clearCloseTimer();
-    closeTimerRef.current = setTimeout(() => setOpenDd(null), 180);
+    closeTimerRef.current = setTimeout(() => {
+      setOpenDd((cur) => (cur === key ? null : cur));
+    }, 140);
   }, []);
 
   const computeAndSetMenuPos = useCallback((key) => {
@@ -88,10 +94,11 @@ export default function AppShell() {
     const r = btn.getBoundingClientRect();
     const gap = 10;
 
-    const width = Math.max(240, Math.round(r.width));
-    const maxLeft = window.innerWidth - width - 10;
+    // ✅ Standard dropdown width (premium + consistent)
+    const width = 320;
+    const maxLeft = window.innerWidth - width - 12;
 
-    const left = clamp(Math.round(r.left), 10, Math.max(10, maxLeft));
+    const left = clamp(Math.round(r.left), 12, Math.max(12, maxLeft));
     const top = Math.round(r.bottom + gap);
 
     setMenuPos((p) => ({
@@ -100,12 +107,19 @@ export default function AppShell() {
     }));
   }, []);
 
+  // ✅ Open immediately switches menus (so Admin collapses when moving to Finance/Approvals)
+  // Also closes profile menu (by simulating outside click via state logic)
   const openNow = useCallback(
     (key) => {
       clearCloseTimer();
       setOpenDd(key);
-      // place menu on open (next tick so DOM is stable)
       requestAnimationFrame(() => computeAndSetMenuPos(key));
+
+      // ✅ Collapse profile menu when opening any dropdown
+      // (UserProfileMenu usually closes on outside click)
+      // We trigger a "synthetic outside click" by focusing body.
+      if (document.activeElement) document.activeElement.blur?.();
+      document.body.focus?.();
     },
     [computeAndSetMenuPos]
   );
@@ -124,25 +138,37 @@ export default function AppShell() {
   }
 
   // Close dropdowns on outside click + Escape
+  // Also: close profile menu when clicking outside it (works if UserProfileMenu relies on outside click)
   useEffect(() => {
     function onKeyDown(e) {
-      if (e.key === "Escape") setOpenDd(null);
+      if (e.key === "Escape") {
+        setOpenDd(null);
+        // let profile menu close too (most implementations listen to Escape; but ensure blur)
+        if (document.activeElement) document.activeElement.blur?.();
+      }
     }
 
     function onPointerDown(e) {
       const a = approvalsRef.current;
       const ad = adminRef.current;
       const f = financeRef.current;
+      const p = profileWrapRef.current;
 
       const insideA = a && a.contains(e.target);
       const insideAD = ad && ad.contains(e.target);
       const insideF = f && f.contains(e.target);
 
-      // Also allow clicks inside the floating menus
       const insideFloatingMenu = !!e.target?.closest?.(".dd-menu");
+      const insideProfile = p && p.contains(e.target);
 
+      // If click is not on any top dropdown or its menu -> close dropdown
       if (!insideA && !insideAD && !insideF && !insideFloatingMenu) {
         setOpenDd(null);
+      }
+
+      // If click is not inside profile -> blur to encourage profile menu closing
+      if (!insideProfile) {
+        if (document.activeElement) document.activeElement.blur?.();
       }
     }
 
@@ -157,22 +183,21 @@ export default function AppShell() {
   // Keep menu aligned on scroll/resize while open
   useEffect(() => {
     if (!openDd) return;
-
     const onReflow = () => computeAndSetMenuPos(openDd);
-
     window.addEventListener("resize", onReflow);
-    // capture scrolls from any container
     window.addEventListener("scroll", onReflow, true);
-
     return () => {
       window.removeEventListener("resize", onReflow);
       window.removeEventListener("scroll", onReflow, true);
     };
   }, [openDd, computeAndSetMenuPos]);
 
-  const approvalsOpenFinal = isInApprovals ? true : openDd === "approvals";
-  const financeOpenFinal = isInFinance ? true : openDd === "finance";
-  const adminOpenFinal = isInAdmin ? true : openDd === "admin";
+  // ✅ IMPORTANT: we keep "active section highlights" but do NOT force menu open.
+  // Otherwise menus will stick open whenever you are inside /dashboard/admin/*
+  // This is why you saw "Admin not collapsing".
+  const approvalsOpenFinal = openDd === "approvals";
+  const financeOpenFinal = openDd === "finance";
+  const adminOpenFinal = openDd === "admin";
 
   return (
     <div className="app-shell">
@@ -198,7 +223,7 @@ export default function AppShell() {
             </div>
           </Link>
 
-          {/* Center: Main links (horizontal) */}
+          {/* Center: Main links */}
           <nav className="topnav-links" aria-label="Main navigation">
             <NavLink to="/dashboard" end className={navLinkClass}>
               Home
@@ -242,13 +267,13 @@ export default function AppShell() {
               Security
             </NavLink>
 
-            {/* ================= APPROVALS (hover dropdown) ================= */}
+            {/* ================= APPROVALS ================= */}
             {canSeeApprovals() && (
               <div
                 className="topnav-dd"
                 ref={approvalsRef}
                 onMouseEnter={() => openNow("approvals")}
-                onMouseLeave={scheduleClose}
+                onMouseLeave={() => scheduleCloseFor("approvals")}
               >
                 <button
                   type="button"
@@ -260,7 +285,11 @@ export default function AppShell() {
                   onClick={() =>
                     setOpenDd((cur) => {
                       const next = cur === "approvals" ? null : "approvals";
-                      if (next) requestAnimationFrame(() => computeAndSetMenuPos("approvals"));
+                      if (next) {
+                        requestAnimationFrame(() =>
+                          computeAndSetMenuPos("approvals")
+                        );
+                      }
                       return next;
                     })
                   }
@@ -278,53 +307,55 @@ export default function AppShell() {
                       position: "fixed",
                       top: menuPos.approvals?.top ?? 0,
                       left: menuPos.approvals?.left ?? 0,
-                      minWidth: menuPos.approvals?.width ?? 240,
+                      width: menuPos.approvals?.width ?? 320,
                     }}
                     onMouseEnter={() => openNow("approvals")}
-                    onMouseLeave={scheduleClose}
+                    onMouseLeave={() => scheduleCloseFor("approvals")}
                   >
-                    <NavLink
-                      to="/dashboard/approvals"
-                      className="dd-item"
-                      role="menuitem"
-                      onClick={() => setOpenDd(null)}
-                    >
-                      Dashboard
-                    </NavLink>
-
-                    {meIsInstitutionAdmin && (
+                    <div className="dd-scroll">
                       <NavLink
-                        to="/dashboard/approvals/members"
+                        to="/dashboard/approvals"
                         className="dd-item"
                         role="menuitem"
                         onClick={() => setOpenDd(null)}
                       >
-                        Members
+                        Dashboard
                       </NavLink>
-                    )}
 
-                    {meIsAdminRole && (
-                      <NavLink
-                        to="/dashboard/approvals/subscription-requests"
-                        className="dd-item"
-                        role="menuitem"
-                        onClick={() => setOpenDd(null)}
-                      >
-                        Approval Requests
-                      </NavLink>
-                    )}
+                      {meIsInstitutionAdmin && (
+                        <NavLink
+                          to="/dashboard/approvals/members"
+                          className="dd-item"
+                          role="menuitem"
+                          onClick={() => setOpenDd(null)}
+                        >
+                          Members
+                        </NavLink>
+                      )}
+
+                      {meIsAdminRole && (
+                        <NavLink
+                          to="/dashboard/approvals/subscription-requests"
+                          className="dd-item"
+                          role="menuitem"
+                          onClick={() => setOpenDd(null)}
+                        >
+                          Approval Requests
+                        </NavLink>
+                      )}
+                    </div>
                   </div>
                 ) : null}
               </div>
             )}
 
-            {/* ================= FINANCE (hover dropdown) ================= */}
+            {/* ================= FINANCE ================= */}
             {meIsAdminRole && (
               <div
                 className="topnav-dd"
                 ref={financeRef}
                 onMouseEnter={() => openNow("finance")}
-                onMouseLeave={scheduleClose}
+                onMouseLeave={() => scheduleCloseFor("finance")}
               >
                 <button
                   type="button"
@@ -336,7 +367,11 @@ export default function AppShell() {
                   onClick={() =>
                     setOpenDd((cur) => {
                       const next = cur === "finance" ? null : "finance";
-                      if (next) requestAnimationFrame(() => computeAndSetMenuPos("finance"));
+                      if (next) {
+                        requestAnimationFrame(() =>
+                          computeAndSetMenuPos("finance")
+                        );
+                      }
                       return next;
                     })
                   }
@@ -354,55 +389,57 @@ export default function AppShell() {
                       position: "fixed",
                       top: menuPos.finance?.top ?? 0,
                       left: menuPos.finance?.left ?? 0,
-                      minWidth: menuPos.finance?.width ?? 240,
+                      width: menuPos.finance?.width ?? 320,
                     }}
                     onMouseEnter={() => openNow("finance")}
-                    onMouseLeave={scheduleClose}
+                    onMouseLeave={() => scheduleCloseFor("finance")}
                   >
-                    <NavLink
-                      to="/dashboard/admin/finance/invoices"
-                      className="dd-item"
-                      role="menuitem"
-                      onClick={() => setOpenDd(null)}
-                    >
-                      Invoices
-                    </NavLink>
-                    <NavLink
-                      to="/dashboard/admin/finance/payments"
-                      className="dd-item"
-                      role="menuitem"
-                      onClick={() => setOpenDd(null)}
-                    >
-                      Payments
-                    </NavLink>
-                    <NavLink
-                      to="/dashboard/admin/finance/invoice-settings"
-                      className="dd-item"
-                      role="menuitem"
-                      onClick={() => setOpenDd(null)}
-                    >
-                      Invoice Settings
-                    </NavLink>
-                    <NavLink
-                      to="/dashboard/admin/finance/vat-rates"
-                      className="dd-item"
-                      role="menuitem"
-                      onClick={() => setOpenDd(null)}
-                    >
-                      VAT Setup
-                    </NavLink>
+                    <div className="dd-scroll">
+                      <NavLink
+                        to="/dashboard/admin/finance/invoices"
+                        className="dd-item"
+                        role="menuitem"
+                        onClick={() => setOpenDd(null)}
+                      >
+                        Invoices
+                      </NavLink>
+                      <NavLink
+                        to="/dashboard/admin/finance/payments"
+                        className="dd-item"
+                        role="menuitem"
+                        onClick={() => setOpenDd(null)}
+                      >
+                        Payments
+                      </NavLink>
+                      <NavLink
+                        to="/dashboard/admin/finance/invoice-settings"
+                        className="dd-item"
+                        role="menuitem"
+                        onClick={() => setOpenDd(null)}
+                      >
+                        Invoice Settings
+                      </NavLink>
+                      <NavLink
+                        to="/dashboard/admin/finance/vat-rates"
+                        className="dd-item"
+                        role="menuitem"
+                        onClick={() => setOpenDd(null)}
+                      >
+                        VAT Setup
+                      </NavLink>
+                    </div>
                   </div>
                 ) : null}
               </div>
             )}
 
-            {/* ================= ADMIN (hover dropdown) ================= */}
+            {/* ================= ADMIN ================= */}
             {meIsAdminRole && (
               <div
                 className="topnav-dd"
                 ref={adminRef}
                 onMouseEnter={() => openNow("admin")}
-                onMouseLeave={scheduleClose}
+                onMouseLeave={() => scheduleCloseFor("admin")}
               >
                 <button
                   type="button"
@@ -414,7 +451,11 @@ export default function AppShell() {
                   onClick={() =>
                     setOpenDd((cur) => {
                       const next = cur === "admin" ? null : "admin";
-                      if (next) requestAnimationFrame(() => computeAndSetMenuPos("admin"));
+                      if (next) {
+                        requestAnimationFrame(() =>
+                          computeAndSetMenuPos("admin")
+                        );
+                      }
                       return next;
                     })
                   }
@@ -432,136 +473,138 @@ export default function AppShell() {
                       position: "fixed",
                       top: menuPos.admin?.top ?? 0,
                       left: menuPos.admin?.left ?? 0,
-                      minWidth: menuPos.admin?.width ?? 240,
+                      width: menuPos.admin?.width ?? 320,
                     }}
                     onMouseEnter={() => openNow("admin")}
-                    onMouseLeave={scheduleClose}
+                    onMouseLeave={() => scheduleCloseFor("admin")}
                   >
-                    <NavLink
-                      to="/dashboard/admin/institutions"
-                      className="dd-item"
-                      role="menuitem"
-                      onClick={() => setOpenDd(null)}
-                    >
-                      Institutions
-                    </NavLink>
+                    <div className="dd-scroll">
+                      <NavLink
+                        to="/dashboard/admin/institutions"
+                        className="dd-item"
+                        role="menuitem"
+                        onClick={() => setOpenDd(null)}
+                      >
+                        Institutions
+                      </NavLink>
 
-                    <NavLink
-                      to="/dashboard/admin/content-products"
-                      className="dd-item"
-                      role="menuitem"
-                      onClick={() => setOpenDd(null)}
-                    >
-                      Products
-                    </NavLink>
+                      <NavLink
+                        to="/dashboard/admin/content-products"
+                        className="dd-item"
+                        role="menuitem"
+                        onClick={() => setOpenDd(null)}
+                      >
+                        Products
+                      </NavLink>
 
-                    <NavLink
-                      to="/dashboard/admin/content-product-prices"
-                      className="dd-item"
-                      role="menuitem"
-                      onClick={() => setOpenDd(null)}
-                    >
-                      Product Prices
-                    </NavLink>
+                      <NavLink
+                        to="/dashboard/admin/content-product-prices"
+                        className="dd-item"
+                        role="menuitem"
+                        onClick={() => setOpenDd(null)}
+                      >
+                        Product Prices
+                      </NavLink>
 
-                    <NavLink
-                      to="/dashboard/admin/documents"
-                      className="dd-item"
-                      role="menuitem"
-                      onClick={() => setOpenDd(null)}
-                    >
-                      Books
-                    </NavLink>
+                      <NavLink
+                        to="/dashboard/admin/documents"
+                        className="dd-item"
+                        role="menuitem"
+                        onClick={() => setOpenDd(null)}
+                      >
+                        Books
+                      </NavLink>
 
-                    <NavLink
-                      to="/dashboard/admin/toc-test"
-                      className="dd-item"
-                      role="menuitem"
-                      onClick={() => setOpenDd(null)}
-                    >
-                      Table of Contents (Test)
-                    </NavLink>
+                      <NavLink
+                        to="/dashboard/admin/toc-test"
+                        className="dd-item"
+                        role="menuitem"
+                        onClick={() => setOpenDd(null)}
+                      >
+                        Table of Contents (Test)
+                      </NavLink>
 
-                    <NavLink
-                      to="/dashboard/admin/llr-services"
-                      className="dd-item"
-                      role="menuitem"
-                      onClick={() => setOpenDd(null)}
-                    >
-                      LLR Services
-                    </NavLink>
+                      <NavLink
+                        to="/dashboard/admin/llr-services"
+                        className="dd-item"
+                        role="menuitem"
+                        onClick={() => setOpenDd(null)}
+                      >
+                        LLR Services
+                      </NavLink>
 
-                    <NavLink
-                      to="/dashboard/admin/courts"
-                      className="dd-item"
-                      role="menuitem"
-                      onClick={() => setOpenDd(null)}
-                    >
-                      Courts
-                    </NavLink>
+                      <NavLink
+                        to="/dashboard/admin/courts"
+                        className="dd-item"
+                        role="menuitem"
+                        onClick={() => setOpenDd(null)}
+                      >
+                        Courts
+                      </NavLink>
 
-                    <NavLink
-                      to="/dashboard/admin/llr-services/import"
-                      className="dd-item"
-                      role="menuitem"
-                      onClick={() => setOpenDd(null)}
-                    >
-                      Import Cases
-                    </NavLink>
+                      <NavLink
+                        to="/dashboard/admin/llr-services/import"
+                        className="dd-item"
+                        role="menuitem"
+                        onClick={() => setOpenDd(null)}
+                      >
+                        Import Cases
+                      </NavLink>
 
-                    <NavLink
-                      to="/dashboard/admin/institution-subscriptions"
-                      className="dd-item"
-                      role="menuitem"
-                      onClick={() => setOpenDd(null)}
-                    >
-                      Subscriptions
-                    </NavLink>
+                      <NavLink
+                        to="/dashboard/admin/institution-subscriptions"
+                        className="dd-item"
+                        role="menuitem"
+                        onClick={() => setOpenDd(null)}
+                      >
+                        Subscriptions
+                      </NavLink>
 
-                    <NavLink
-                      to="/dashboard/admin/user-subscriptions"
-                      className="dd-item"
-                      role="menuitem"
-                      onClick={() => setOpenDd(null)}
-                    >
-                      Public Subscriptions
-                    </NavLink>
+                      <NavLink
+                        to="/dashboard/admin/user-subscriptions"
+                        className="dd-item"
+                        role="menuitem"
+                        onClick={() => setOpenDd(null)}
+                      >
+                        Public Subscriptions
+                      </NavLink>
 
-                    <NavLink
-                      to="/dashboard/admin/trials"
-                      className="dd-item"
-                      role="menuitem"
-                      onClick={() => setOpenDd(null)}
-                    >
-                      Trials
-                    </NavLink>
+                      <NavLink
+                        to="/dashboard/admin/trials"
+                        className="dd-item"
+                        role="menuitem"
+                        onClick={() => setOpenDd(null)}
+                      >
+                        Trials
+                      </NavLink>
 
-                    <NavLink
-                      to="/dashboard/admin/institution-bundle-subscriptions"
-                      className="dd-item"
-                      role="menuitem"
-                      onClick={() => setOpenDd(null)}
-                    >
-                      Bundle
-                    </NavLink>
+                      <NavLink
+                        to="/dashboard/admin/institution-bundle-subscriptions"
+                        className="dd-item"
+                        role="menuitem"
+                        onClick={() => setOpenDd(null)}
+                      >
+                        Bundle
+                      </NavLink>
 
-                    <NavLink
-                      to="/dashboard/admin/institution-admins"
-                      className="dd-item"
-                      role="menuitem"
-                      onClick={() => setOpenDd(null)}
-                    >
-                      Institution Admins
-                    </NavLink>
+                      <NavLink
+                        to="/dashboard/admin/institution-admins"
+                        className="dd-item"
+                        role="menuitem"
+                        onClick={() => setOpenDd(null)}
+                      >
+                        Institution Admins
+                      </NavLink>
 
-                    <NavLink
-                      to="/dashboard/admin/users"
-                      className="dd-item"
-                      role="menuitem"
-                      onClick={() => setOpenDd(null)}
-                    >
-                      Users
-                    </NavLink>
+                      <NavLink
+                        to="/dashboard/admin/users"
+                        className="dd-item"
+                        role="menuitem"
+                        onClick={() => setOpenDd(null)}
+                      >
+                        Users
+                      </NavLink>
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -569,7 +612,7 @@ export default function AppShell() {
           </nav>
 
           {/* Right: profile menu */}
-          <div className="topnav-right">
+          <div className="topnav-right" ref={profileWrapRef}>
             {user ? (
               <UserProfileMenu
                 user={{
