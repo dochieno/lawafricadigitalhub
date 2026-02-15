@@ -417,12 +417,6 @@ export default function AdminLLRServices() {
   const [courts, setCourts] = useState([]);
   const [courtsLoading, setCourtsLoading] = useState(false);
   const courtsCacheRef = useRef(new Map()); // countryId -> courts[]
-  const courtsById = useMemo(() => {
-    const m = new Map();
-    for (const c of courts) m.set(toInt(c.id ?? c.Id, 0), c);
-    return m;
-  }, [courts]);
-
   // Content Products
   const [products, setProducts] = useState([]);
   const [productsLoading, setProductsLoading] = useState(false);
@@ -487,27 +481,6 @@ export default function AdminLLRServices() {
   function closeModal() {
     if (busy || attachBusy) return;
     setOpen(false);
-  }
-
-  function getSelectedCourtName(next = form) {
-    const id = toInt(next.courtId, 0);
-    if (!id) return "";
-    const c = courtsById.get(id);
-    return normalizeText(c?.name ?? c?.Name ?? "");
-  }
-
-  function computeCourtDisplay(next = form) {
-    // NOTE: backend now builds Court string including CourtCategory if you did it there,
-    // but for UI preview we mirror the same idea:
-    const courtName = getSelectedCourtName(next) || normalizeText(next.court);
-    const cat = normalizeText(next.courtCategory);
-    const town = normalizeText(next.town);
-
-    let base = courtName;
-
-    if (cat) base = base ? `${base} — ${cat}` : cat;
-    if (base && town) return `${base} at ${town}`;
-    return base || town || "";
   }
 
   function autoTitleDraft(next = form) {
@@ -1133,7 +1106,6 @@ export default function AdminLLRServices() {
     const countryId = toInt(form.countryId, 0);
     const courtId = toInt(form.courtId, 0);
 
-    const courtDisplay = normalizeText(computeCourtDisplay(form)) || null;
 
     return {
       category: 6,
@@ -1152,7 +1124,6 @@ export default function AdminLLRServices() {
       caseType: toInt(form.caseType, 2),
 
       courtId: courtId ? courtId : null,
-      court: courtDisplay,
 
       courtCategory: normalizeText(form.courtCategory) || null,
 
@@ -1707,12 +1678,6 @@ export default function AdminLLRServices() {
                 <div className="admin-field admin-span2">
                   <div className="laRow2">
                     <div className="admin-field" style={{ margin: 0 }}>
-                      <label>Court (auto text)</label>
-                      <input value={computeCourtDisplay(form)} readOnly disabled />
-                      <div className="hint">Preview includes Division + Town.</div>
-                    </div>
-
-                    <div className="admin-field" style={{ margin: 0 }}>
                       <label>Content Product *</label>
 
                       {products.length > 0 ? (
@@ -1990,21 +1955,6 @@ export default function AdminLLRServices() {
                 {/* Legacy fallback UI (only if no courts exist for selected country) */}
                 {!courtsLoading && toInt(form.countryId, 0) && courts.length === 0 && (
                   <>
-                    <div className="admin-field">
-                      <label>Legacy Court Type (fallback)</label>
-                      <select
-                        value={String(form.courtType)}
-                        onChange={(e) => setField("courtType", toInt(e.target.value, 3))}
-                        disabled={busy || attachBusy}
-                      >
-                        {COURT_TYPE_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
                     <div className="admin-field">
                       <label>Legacy Court (optional text)</label>
                       <input

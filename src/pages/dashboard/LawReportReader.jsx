@@ -1128,14 +1128,8 @@ export default function LawReportReader() {
   const [progress, setProgress] = useState(0);
   const progressBarRef = useRef(null);
   const [headerCompact, setHeaderCompact] = useState(false);
-  const [metaMoreOpen, setMetaMoreOpen] = useState(false);
-  const metaMoreRef = useRef(null);
-  const [copyMenuOpen, setCopyMenuOpen] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfErr, setPdfErr] = useState("");
-
-  const copyMenuRef = useRef(null);
-
   const [q, setQ] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchErr, setSearchErr] = useState("");
@@ -1497,31 +1491,6 @@ export default function LawReportReader() {
       document.removeEventListener("pointerdown", onPointerDown);
     };
   }, [settingsOpen]);
-
-  useEffect(() => {
-  function onKeyDown(e) {
-    if (e.key === "Escape") {
-      setMetaMoreOpen(false);
-      setCopyMenuOpen(false);
-    }
-  }
-
-  function onPointerDown(e) {
-    const m = metaMoreRef.current;
-    const c = copyMenuRef.current;
-
-    if (m && !m.contains(e.target)) setMetaMoreOpen(false);
-    if (c && !c.contains(e.target)) setCopyMenuOpen(false);
-  }
-
-  document.addEventListener("keydown", onKeyDown);
-  document.addEventListener("pointerdown", onPointerDown);
-  return () => {
-    document.removeEventListener("keydown", onKeyDown);
-    document.removeEventListener("pointerdown", onPointerDown);
-  };
-}, []);
-
 
   useEffect(() => {
     const term = String(q || "").trim();
@@ -3141,119 +3110,6 @@ function parseSectionedSummary(text) {
     </section>
   </main>
 </div>
-
-      <section className="lrr2Content">
-        {!textHasContent ? (
-          <div className="lrr2Empty">This report has no content yet.</div>
-        ) : view === "ai" ? (
-          aiAllowed ? (
-            <div className="lrr2Panel lrr2Panel--tight">
-              <LegalAiPanel compact={false} />
-            </div>
-          ) : (
-            <AiLockedPanel access={access} onGo={goUrl} />
-          )
-        ) : view === "split" ? (
-          <div className="lrr2Split">
-          <article className="lrr2Article lrr2PanelShell">
-            <div className="lrr2PanelHead">
-              <div className="lrr2PanelHeadLeft">
-                <div className="lrr2PanelTitle">Transcript</div>
-                <div className="lrr2PanelSub">
-                  {isPremium && !hasFullAccess ? "Preview mode • Subscribe to unlock full text" : "Full text available"}
-                </div>
-              </div>
-
-              <div className="lrr2PanelHeadRight">
-                {isPremium ? (
-                  <AccessStatusChip access={access} isPremium={isPremium} isAdmin={isAdmin} hasFullAccess={hasFullAccess} />
-                ) : (
-                  <span className="lrr2PanelPill ok">Free</span>
-                )}
-              </div>
-            </div>
-
-            {/* transcript body */}
-            <div
-              className={[
-                "lrr2Collapse",
-                contentOpen ? "open" : "closed",
-                `lrr2Theme-${readingTheme}`,
-                fsClass,
-                fontClass,
-                preview.gated && preview.reachedLimit ? "isPreviewGated" : "",
-              ].join(" ")}
-            >
-              {preview.renderAsHtml ? (
-                <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: preview.html }} />
-              ) : (
-                <CaseContentWithGateBreak
-                  text={preview.text}
-                  showBreak={showInlineBreak}
-                  access={access}
-                  onGo={goUrl}
-                  onRefresh={refreshAccessNow}
-                />
-              )}
-            </div>
-            {contentOpen && preview.gated && preview.reachedLimit ? <SubscribeGateOverlay access={access} onGo={goUrl} /> : null}
-
-            <SubscriptionGateCard
-              isPremium={isPremium}
-              access={access}
-              isAdmin={isAdmin}
-              isInst={isInst}
-              isPublic={isPublic}
-              hasFullAccess={hasFullAccess}
-              onGo={goUrl}
-              onRefreshAccess={refreshAccessNow}
-            />
-          </article>
-            <aside className="lrr2Aside">
-              {aiAllowed ? <LegalAiPanel compact={true} /> : <AiLockedPanel access={access} onGo={goUrl} />}
-            </aside>
-          </div>
-        ) : (
-          <article className="lrr2Article">
-
-            <div
-              className={[
-                "lrr2Collapse",
-                contentOpen ? "open" : "closed",
-                `lrr2Theme-${readingTheme}`,
-                fsClass,
-                fontClass,
-                preview.gated && preview.reachedLimit ? "isPreviewGated" : "",
-              ].join(" ")}
-            >
-              {preview.renderAsHtml ? (
-                <div className="lrr2Html" dangerouslySetInnerHTML={{ __html: preview.html }} />
-              ) : (
-                <CaseContentWithGateBreak
-                  text={preview.text}
-                  showBreak={showInlineBreak}
-                  access={access}
-                  onGo={goUrl}
-                  onRefresh={refreshAccessNow}
-                />
-              )}
-            </div>
-
-            {contentOpen && preview.gated && preview.reachedLimit ? <SubscribeGateOverlay access={access} onGo={goUrl} /> : null}
-
-            <SubscriptionGateCard
-              isPremium={isPremium}
-              access={access}
-              isAdmin={isAdmin}
-              isInst={isInst}
-              isPublic={isPublic}
-              hasFullAccess={hasFullAccess}
-              onGo={goUrl}
-              onRefreshAccess={refreshAccessNow}
-            />
-          </article>
-        )}
-      </section>
     </div>
   );
 }

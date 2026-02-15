@@ -647,7 +647,6 @@
   }
 }
 
-
 /* Tooltips via data-tip */
 [data-tip] { position: relative; }
 [data-tip]:hover::after,
@@ -1801,6 +1800,36 @@
   background: rgba(15, 23, 42, 0.62);
   border-color: rgba(148, 163, 184, 0.22);
 }
+/* Tabs: single row, no card feel */
+.lrrAiTabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: nowrap;          /* ✅ single row */
+  overflow-x: auto;           /* safe on small widths */
+  padding: 10px 0;
+  margin: 10px 0 0;
+  background: transparent;    /* ✅ remove “card wrap” */
+  border: 0;
+  border-bottom: 1px solid rgba(17,24,39,0.10);
+  border-radius: 0;
+}
+
+.lrrAiTab {
+  white-space: nowrap;
+}
+
+/* Make the grid align items at the top */
+.lrr2BodyGrid {
+  align-items: start;
+}
+
+/* Rail should sit at the top and stay visible */
+.lrr2SideRail {
+  position: sticky;
+  top: 16px; /* or match your header offset if you want */
+  align-self: start;
+}
+
 .lrr2Wrap[data-theme="dark"] .lrrAiSub,
 .lrr2Wrap[data-theme="dark"] .lrrAiHint {
   color: rgba(148, 163, 184, 0.78);
@@ -2513,4 +2542,23 @@
   font-size: 12px;
   color: rgba(185, 28, 28, 0.92);
   white-space: nowrap;
+}
+/* Side rail icon button: normal size (not a giant tile) */
+.lrr2IconBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  min-height: 44px;
+}
+
+.lrr2IconBtn svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+
+.lrr2IconBtn .txt {
+  font-weight: 600;
 }
