@@ -24,6 +24,194 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
+/* ----------------------------
+   Tiny inline icons (no deps)
+----------------------------- */
+function Ic({ children }) {
+  return (
+    <span className="dd-ic" aria-hidden="true">
+      {children}
+    </span>
+  );
+}
+
+function IcGrid() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none">
+      <path
+        d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+function IcUsers() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none">
+      <path
+        d="M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0Z"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path
+        d="M4 20a8 8 0 0 1 16 0"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function IcCheck() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none">
+      <path
+        d="M20 6 9 17l-5-5"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IcReceipt() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none">
+      <path
+        d="M7 3h10v18l-2-1-2 1-2-1-2 1-2-1-2 1V3Z"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path
+        d="M9 7h6M9 11h6M9 15h4"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function IcCard() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none">
+      <path d="M4 7h16v10H4V7Z" stroke="currentColor" strokeWidth="2" />
+      <path d="M4 10h16" stroke="currentColor" strokeWidth="2" />
+      <path d="M7 14h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IcSettings() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none">
+      <path
+        d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path
+        d="M19.4 15a8.6 8.6 0 0 0 .1-6l-2.1-.5a7.3 7.3 0 0 0-1.3-1.3l.5-2.1a8.6 8.6 0 0 0-6-.1l-.5 2.1c-.5.3-1 .7-1.3 1.3l-2.1-.5a8.6 8.6 0 0 0-.1 6l2.1.5c.3.5.7 1 1.3 1.3l-.5 2.1a8.6 8.6 0 0 0 6 .1l.5-2.1c.5-.3 1-.7 1.3-1.3l2.1.5Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IcBook() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none">
+      <path
+        d="M5 4h12a2 2 0 0 1 2 2v14H7a2 2 0 0 0-2 2V4Z"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path d="M7 20h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IcUpload() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none">
+      <path d="M12 3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path
+        d="M7 8l5-5 5 5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path d="M5 21h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IcLink() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none">
+      <path
+        d="M10 13a5 5 0 0 1 0-7l1-1a5 5 0 0 1 7 7l-1 1"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M14 11a5 5 0 0 1 0 7l-1 1a5 5 0 0 1-7-7l1-1"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function IcShield() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none">
+      <path
+        d="M12 2 20 6v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-4Z"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path
+        d="M9 12l2 2 4-5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function MenuHeader({ title, subtitle }) {
+  return (
+    <div className="dd-head" aria-hidden="true">
+      <div className="dd-head-top">
+        <span className="dd-head-dot" />
+        <div className="dd-head-title">{title}</div>
+      </div>
+      {subtitle ? <div className="dd-head-sub">{subtitle}</div> : null}
+    </div>
+  );
+}
+
+function DdItem({ to, label, icon, onClick }) {
+  return (
+    <NavLink to={to} className="dd-item" role="menuitem" onClick={onClick}>
+      {icon ? <Ic>{icon}</Ic> : null}
+      <span className="dd-label">{label}</span>
+    </NavLink>
+  );
+}
+
 export default function AppShell() {
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -56,7 +244,7 @@ export default function AppShell() {
   const adminRef = useRef(null);
   const financeRef = useRef(null);
 
-  // ✅ Profile menu wrapper (so we can close it without editing UserProfileMenu)
+  // ✅ Profile menu wrapper
   const profileWrapRef = useRef(null);
 
   // ✅ Fixed-position menu placement
@@ -73,7 +261,6 @@ export default function AppShell() {
     }
   };
 
-  // Close a specific menu, but only if that same menu is still open
   const scheduleCloseFor = useCallback((key) => {
     clearCloseTimer();
     closeTimerRef.current = setTimeout(() => {
@@ -94,7 +281,6 @@ export default function AppShell() {
     const r = btn.getBoundingClientRect();
     const gap = 10;
 
-    // ✅ Standard dropdown width (premium + consistent)
     const width = 320;
     const maxLeft = window.innerWidth - width - 12;
 
@@ -107,17 +293,13 @@ export default function AppShell() {
     }));
   }, []);
 
-  // ✅ Open immediately switches menus (so Admin collapses when moving to Finance/Approvals)
-  // Also closes profile menu (by simulating outside click via state logic)
   const openNow = useCallback(
     (key) => {
       clearCloseTimer();
       setOpenDd(key);
       requestAnimationFrame(() => computeAndSetMenuPos(key));
 
-      // ✅ Collapse profile menu when opening any dropdown
-      // (UserProfileMenu usually closes on outside click)
-      // We trigger a "synthetic outside click" by focusing body.
+      // collapse profile menu (best-effort)
       if (document.activeElement) document.activeElement.blur?.();
       document.body.focus?.();
     },
@@ -127,23 +309,18 @@ export default function AppShell() {
   function confirmLogout() {
     setShowLogoutConfirm(true);
   }
-
   function cancelLogout() {
     setShowLogoutConfirm(false);
   }
-
   function handleLogout() {
     setShowLogoutConfirm(false);
     logout();
   }
 
-  // Close dropdowns on outside click + Escape
-  // Also: close profile menu when clicking outside it (works if UserProfileMenu relies on outside click)
   useEffect(() => {
     function onKeyDown(e) {
       if (e.key === "Escape") {
         setOpenDd(null);
-        // let profile menu close too (most implementations listen to Escape; but ensure blur)
         if (document.activeElement) document.activeElement.blur?.();
       }
     }
@@ -157,16 +334,13 @@ export default function AppShell() {
       const insideA = a && a.contains(e.target);
       const insideAD = ad && ad.contains(e.target);
       const insideF = f && f.contains(e.target);
-
       const insideFloatingMenu = !!e.target?.closest?.(".dd-menu");
       const insideProfile = p && p.contains(e.target);
 
-      // If click is not on any top dropdown or its menu -> close dropdown
       if (!insideA && !insideAD && !insideF && !insideFloatingMenu) {
         setOpenDd(null);
       }
 
-      // If click is not inside profile -> blur to encourage profile menu closing
       if (!insideProfile) {
         if (document.activeElement) document.activeElement.blur?.();
       }
@@ -180,7 +354,6 @@ export default function AppShell() {
     };
   }, []);
 
-  // Keep menu aligned on scroll/resize while open
   useEffect(() => {
     if (!openDd) return;
     const onReflow = () => computeAndSetMenuPos(openDd);
@@ -192,24 +365,15 @@ export default function AppShell() {
     };
   }, [openDd, computeAndSetMenuPos]);
 
-  // ✅ IMPORTANT: we keep "active section highlights" but do NOT force menu open.
-  // Otherwise menus will stick open whenever you are inside /dashboard/admin/*
-  // This is why you saw "Admin not collapsing".
   const approvalsOpenFinal = openDd === "approvals";
   const financeOpenFinal = openDd === "finance";
   const adminOpenFinal = openDd === "admin";
 
   return (
     <div className="app-shell">
-      {/* ================= TOP NAV ================= */}
       <header className="topnav">
         <div className="topnav-inner">
-          {/* Left: Brand */}
-          <Link
-            to="/dashboard"
-            className="topnav-brand"
-            aria-label="LawAfrica Dashboard"
-          >
+          <Link to="/dashboard" className="topnav-brand" aria-label="LawAfrica Dashboard">
             <img
               src="/logo.png"
               alt="LawAfrica"
@@ -223,49 +387,27 @@ export default function AppShell() {
             </div>
           </Link>
 
-          {/* Center: Main links */}
           <nav className="topnav-links" aria-label="Main navigation">
-            <NavLink to="/dashboard" end className={navLinkClass}>
-              Home
-            </NavLink>
+            <NavLink to="/dashboard" end className={navLinkClass}>Home</NavLink>
+            <NavLink to="/dashboard/explore" className={navLinkClass}>Explore</NavLink>
+            <NavLink to="/dashboard/library" className={navLinkClass}>Library</NavLink>
+            <NavLink to="/dashboard/law-reports" className={navLinkClass}>Law Reports</NavLink>
+            <NavLink to="/dashboard/trials" className={navLinkClass}>Trials</NavLink>
 
-            <NavLink to="/dashboard/explore" className={navLinkClass}>
-              Explore
-            </NavLink>
-
-            <NavLink to="/dashboard/library" className={navLinkClass}>
-              Library
-            </NavLink>
-
-            <NavLink to="/dashboard/law-reports" className={navLinkClass}>
-              Law Reports
-            </NavLink>
-
-            <NavLink to="/dashboard/trials" className={navLinkClass}>
-              Trials
-            </NavLink>
-
-            <NavLink
-              to="/dashboard/law-reports/subscribe"
-              className={navLinkClass}
-            >
+            <NavLink to="/dashboard/law-reports/subscribe" className={navLinkClass}>
               Subscriptions
             </NavLink>
 
             {import.meta.env.DEV && (
               <NavLink
                 to="/dashboard/content-blocks"
-                className={({ isActive }) =>
-                  `topnav-link dev ${isActive ? "active" : ""}`
-                }
+                className={({ isActive }) => `topnav-link dev ${isActive ? "active" : ""}`}
               >
                 🧪 Content Blocks Tester
               </NavLink>
             )}
 
-            <NavLink to="/dashboard/security" className={navLinkClass}>
-              Security
-            </NavLink>
+            <NavLink to="/dashboard/security" className={navLinkClass}>Security</NavLink>
 
             {/* ================= APPROVALS ================= */}
             {canSeeApprovals() && (
@@ -277,19 +419,13 @@ export default function AppShell() {
               >
                 <button
                   type="button"
-                  className={`topnav-link dd-toggle ${
-                    isInApprovals ? "active" : ""
-                  }`}
+                  className={`topnav-link dd-toggle ${isInApprovals ? "active" : ""}`}
                   aria-expanded={approvalsOpenFinal}
                   aria-haspopup="menu"
                   onClick={() =>
                     setOpenDd((cur) => {
                       const next = cur === "approvals" ? null : "approvals";
-                      if (next) {
-                        requestAnimationFrame(() =>
-                          computeAndSetMenuPos("approvals")
-                        );
-                      }
+                      if (next) requestAnimationFrame(() => computeAndSetMenuPos("approvals"));
                       return next;
                     })
                   }
@@ -308,40 +444,24 @@ export default function AppShell() {
                       top: menuPos.approvals?.top ?? 0,
                       left: menuPos.approvals?.left ?? 0,
                       width: menuPos.approvals?.width ?? 320,
+                      ["--arrow-left"]: "22px",
                     }}
                     onMouseEnter={() => openNow("approvals")}
                     onMouseLeave={() => scheduleCloseFor("approvals")}
                   >
+                    <MenuHeader title="Approvals" subtitle="Review and manage approvals" />
                     <div className="dd-scroll">
-                      <NavLink
-                        to="/dashboard/approvals"
-                        className="dd-item"
-                        role="menuitem"
-                        onClick={() => setOpenDd(null)}
-                      >
-                        Dashboard
-                      </NavLink>
-
+                      <DdItem to="/dashboard/approvals" label="Dashboard" icon={<IcGrid />} onClick={() => setOpenDd(null)} />
                       {meIsInstitutionAdmin && (
-                        <NavLink
-                          to="/dashboard/approvals/members"
-                          className="dd-item"
-                          role="menuitem"
-                          onClick={() => setOpenDd(null)}
-                        >
-                          Members
-                        </NavLink>
+                        <DdItem to="/dashboard/approvals/members" label="Members" icon={<IcUsers />} onClick={() => setOpenDd(null)} />
                       )}
-
                       {meIsAdminRole && (
-                        <NavLink
+                        <DdItem
                           to="/dashboard/approvals/subscription-requests"
-                          className="dd-item"
-                          role="menuitem"
+                          label="Approval Requests"
+                          icon={<IcCheck />}
                           onClick={() => setOpenDd(null)}
-                        >
-                          Approval Requests
-                        </NavLink>
+                        />
                       )}
                     </div>
                   </div>
@@ -359,19 +479,13 @@ export default function AppShell() {
               >
                 <button
                   type="button"
-                  className={`topnav-link dd-toggle ${
-                    isInFinance ? "active" : ""
-                  }`}
+                  className={`topnav-link dd-toggle ${isInFinance ? "active" : ""}`}
                   aria-expanded={financeOpenFinal}
                   aria-haspopup="menu"
                   onClick={() =>
                     setOpenDd((cur) => {
                       const next = cur === "finance" ? null : "finance";
-                      if (next) {
-                        requestAnimationFrame(() =>
-                          computeAndSetMenuPos("finance")
-                        );
-                      }
+                      if (next) requestAnimationFrame(() => computeAndSetMenuPos("finance"));
                       return next;
                     })
                   }
@@ -390,43 +504,17 @@ export default function AppShell() {
                       top: menuPos.finance?.top ?? 0,
                       left: menuPos.finance?.left ?? 0,
                       width: menuPos.finance?.width ?? 320,
+                      ["--arrow-left"]: "22px",
                     }}
                     onMouseEnter={() => openNow("finance")}
                     onMouseLeave={() => scheduleCloseFor("finance")}
                   >
+                    <MenuHeader title="Finance" subtitle="Invoices, payments and tax setup" />
                     <div className="dd-scroll">
-                      <NavLink
-                        to="/dashboard/admin/finance/invoices"
-                        className="dd-item"
-                        role="menuitem"
-                        onClick={() => setOpenDd(null)}
-                      >
-                        Invoices
-                      </NavLink>
-                      <NavLink
-                        to="/dashboard/admin/finance/payments"
-                        className="dd-item"
-                        role="menuitem"
-                        onClick={() => setOpenDd(null)}
-                      >
-                        Payments
-                      </NavLink>
-                      <NavLink
-                        to="/dashboard/admin/finance/invoice-settings"
-                        className="dd-item"
-                        role="menuitem"
-                        onClick={() => setOpenDd(null)}
-                      >
-                        Invoice Settings
-                      </NavLink>
-                      <NavLink
-                        to="/dashboard/admin/finance/vat-rates"
-                        className="dd-item"
-                        role="menuitem"
-                        onClick={() => setOpenDd(null)}
-                      >
-                        VAT Setup
-                      </NavLink>
+                      <DdItem to="/dashboard/admin/finance/invoices" label="Invoices" icon={<IcReceipt />} onClick={() => setOpenDd(null)} />
+                      <DdItem to="/dashboard/admin/finance/payments" label="Payments" icon={<IcCard />} onClick={() => setOpenDd(null)} />
+                      <DdItem to="/dashboard/admin/finance/invoice-settings" label="Invoice Settings" icon={<IcSettings />} onClick={() => setOpenDd(null)} />
+                      <DdItem to="/dashboard/admin/finance/vat-rates" label="VAT Setup" icon={<IcSettings />} onClick={() => setOpenDd(null)} />
                     </div>
                   </div>
                 ) : null}
@@ -443,19 +531,13 @@ export default function AppShell() {
               >
                 <button
                   type="button"
-                  className={`topnav-link dd-toggle ${
-                    isInAdmin ? "active" : ""
-                  }`}
+                  className={`topnav-link dd-toggle ${isInAdmin ? "active" : ""}`}
                   aria-expanded={adminOpenFinal}
                   aria-haspopup="menu"
                   onClick={() =>
                     setOpenDd((cur) => {
                       const next = cur === "admin" ? null : "admin";
-                      if (next) {
-                        requestAnimationFrame(() =>
-                          computeAndSetMenuPos("admin")
-                        );
-                      }
+                      if (next) requestAnimationFrame(() => computeAndSetMenuPos("admin"));
                       return next;
                     })
                   }
@@ -474,136 +556,27 @@ export default function AppShell() {
                       top: menuPos.admin?.top ?? 0,
                       left: menuPos.admin?.left ?? 0,
                       width: menuPos.admin?.width ?? 320,
+                      ["--arrow-left"]: "22px",
                     }}
                     onMouseEnter={() => openNow("admin")}
                     onMouseLeave={() => scheduleCloseFor("admin")}
                   >
+                    <MenuHeader title="Admin" subtitle="Manage platform configuration" />
                     <div className="dd-scroll">
-                      <NavLink
-                        to="/dashboard/admin/institutions"
-                        className="dd-item"
-                        role="menuitem"
-                        onClick={() => setOpenDd(null)}
-                      >
-                        Institutions
-                      </NavLink>
-
-                      <NavLink
-                        to="/dashboard/admin/content-products"
-                        className="dd-item"
-                        role="menuitem"
-                        onClick={() => setOpenDd(null)}
-                      >
-                        Products
-                      </NavLink>
-
-                      <NavLink
-                        to="/dashboard/admin/content-product-prices"
-                        className="dd-item"
-                        role="menuitem"
-                        onClick={() => setOpenDd(null)}
-                      >
-                        Product Prices
-                      </NavLink>
-
-                      <NavLink
-                        to="/dashboard/admin/documents"
-                        className="dd-item"
-                        role="menuitem"
-                        onClick={() => setOpenDd(null)}
-                      >
-                        Books
-                      </NavLink>
-
-                      <NavLink
-                        to="/dashboard/admin/toc-test"
-                        className="dd-item"
-                        role="menuitem"
-                        onClick={() => setOpenDd(null)}
-                      >
-                        Table of Contents (Test)
-                      </NavLink>
-
-                      <NavLink
-                        to="/dashboard/admin/llr-services"
-                        className="dd-item"
-                        role="menuitem"
-                        onClick={() => setOpenDd(null)}
-                      >
-                        LLR Services
-                      </NavLink>
-
-                      <NavLink
-                        to="/dashboard/admin/courts"
-                        className="dd-item"
-                        role="menuitem"
-                        onClick={() => setOpenDd(null)}
-                      >
-                        Courts
-                      </NavLink>
-
-                      <NavLink
-                        to="/dashboard/admin/llr-services/import"
-                        className="dd-item"
-                        role="menuitem"
-                        onClick={() => setOpenDd(null)}
-                      >
-                        Import Cases
-                      </NavLink>
-
-                      <NavLink
-                        to="/dashboard/admin/institution-subscriptions"
-                        className="dd-item"
-                        role="menuitem"
-                        onClick={() => setOpenDd(null)}
-                      >
-                        Subscriptions
-                      </NavLink>
-
-                      <NavLink
-                        to="/dashboard/admin/user-subscriptions"
-                        className="dd-item"
-                        role="menuitem"
-                        onClick={() => setOpenDd(null)}
-                      >
-                        Public Subscriptions
-                      </NavLink>
-
-                      <NavLink
-                        to="/dashboard/admin/trials"
-                        className="dd-item"
-                        role="menuitem"
-                        onClick={() => setOpenDd(null)}
-                      >
-                        Trials
-                      </NavLink>
-
-                      <NavLink
-                        to="/dashboard/admin/institution-bundle-subscriptions"
-                        className="dd-item"
-                        role="menuitem"
-                        onClick={() => setOpenDd(null)}
-                      >
-                        Bundle
-                      </NavLink>
-
-                      <NavLink
-                        to="/dashboard/admin/institution-admins"
-                        className="dd-item"
-                        role="menuitem"
-                        onClick={() => setOpenDd(null)}
-                      >
-                        Institution Admins
-                      </NavLink>
-
-                      <NavLink
-                        to="/dashboard/admin/users"
-                        className="dd-item"
-                        role="menuitem"
-                        onClick={() => setOpenDd(null)}
-                      >
-                        Users
-                      </NavLink>
+                      <DdItem to="/dashboard/admin/institutions" label="Institutions" icon={<IcUsers />} onClick={() => setOpenDd(null)} />
+                      <DdItem to="/dashboard/admin/content-products" label="Products" icon={<IcGrid />} onClick={() => setOpenDd(null)} />
+                      <DdItem to="/dashboard/admin/content-product-prices" label="Product Prices" icon={<IcReceipt />} onClick={() => setOpenDd(null)} />
+                      <DdItem to="/dashboard/admin/documents" label="Books" icon={<IcBook />} onClick={() => setOpenDd(null)} />
+                      <DdItem to="/dashboard/admin/toc-test" label="Table of Contents (Test)" icon={<IcLink />} onClick={() => setOpenDd(null)} />
+                      <DdItem to="/dashboard/admin/llr-services" label="LLR Services" icon={<IcSettings />} onClick={() => setOpenDd(null)} />
+                      <DdItem to="/dashboard/admin/courts" label="Courts" icon={<IcGrid />} onClick={() => setOpenDd(null)} />
+                      <DdItem to="/dashboard/admin/llr-services/import" label="Import Cases" icon={<IcUpload />} onClick={() => setOpenDd(null)} />
+                      <DdItem to="/dashboard/admin/institution-subscriptions" label="Subscriptions" icon={<IcShield />} onClick={() => setOpenDd(null)} />
+                      <DdItem to="/dashboard/admin/user-subscriptions" label="Public Subscriptions" icon={<IcUsers />} onClick={() => setOpenDd(null)} />
+                      <DdItem to="/dashboard/admin/trials" label="Trials" icon={<IcCheck />} onClick={() => setOpenDd(null)} />
+                      <DdItem to="/dashboard/admin/institution-bundle-subscriptions" label="Bundle" icon={<IcLink />} onClick={() => setOpenDd(null)} />
+                      <DdItem to="/dashboard/admin/institution-admins" label="Institution Admins" icon={<IcUsers />} onClick={() => setOpenDd(null)} />
+                      <DdItem to="/dashboard/admin/users" label="Users" icon={<IcUsers />} onClick={() => setOpenDd(null)} />
                     </div>
                   </div>
                 ) : null}
@@ -611,7 +584,6 @@ export default function AppShell() {
             )}
           </nav>
 
-          {/* Right: profile menu */}
           <div className="topnav-right" ref={profileWrapRef}>
             {user ? (
               <UserProfileMenu
@@ -629,7 +601,6 @@ export default function AppShell() {
         </div>
       </header>
 
-      {/* ================= MAIN CONTENT ================= */}
       <main className="app-main">
         <Outlet />
       </main>
