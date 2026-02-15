@@ -3,7 +3,7 @@ import { Outlet, NavLink, useLocation, Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import UserProfileMenu from "../components/UserProfileMenu";
 import { canSeeApprovals, isAdminRole, isInstitutionAdminWithInstitution } from "../auth/auth";
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import "../styles/appshell.css";
 import "../styles/lawAfricaLanding.css";
 import "../styles/lawAfricaBrand.css";
@@ -40,18 +40,30 @@ export default function AppShell() {
     [location.pathname]
   );
 
-  // Dropdown state (route stays source of truth)
-  const [approvalsOpen, setApprovalsOpen] = useState(false);
-  const [adminOpen, setAdminOpen] = useState(false);
-  const [financeOpen, setFinanceOpen] = useState(false);
-
-  const approvalsOpenFinal = isInApprovals ? true : approvalsOpen;
-  const adminOpenFinal = isInAdmin ? true : adminOpen;
-  const financeOpenFinal = isInFinance ? true : financeOpen;
+  // ✅ Single dropdown controller
+  const [openDd, setOpenDd] = useState(null); // "approvals" | "finance" | "admin" | null
+  const closeTimerRef = useRef(null);
 
   const approvalsRef = useRef(null);
   const adminRef = useRef(null);
   const financeRef = useRef(null);
+
+  const clearCloseTimer = () => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  };
+
+  const scheduleClose = useCallback(() => {
+    clearCloseTimer();
+    closeTimerRef.current = setTimeout(() => setOpenDd(null), 140); // small delay prevents flicker
+  }, []);
+
+  const openNow = useCallback((key) => {
+    clearCloseTimer();
+    setOpenDd(key);
+  }, []);
 
   function confirmLogout() {
     setShowLogoutConfirm(true);
@@ -69,11 +81,7 @@ export default function AppShell() {
   // Close dropdowns on outside click + Escape
   useEffect(() => {
     function onKeyDown(e) {
-      if (e.key === "Escape") {
-        setApprovalsOpen(false);
-        setAdminOpen(false);
-        setFinanceOpen(false);
-      }
+      if (e.key === "Escape") setOpenDd(null);
     }
 
     function onPointerDown(e) {
@@ -81,9 +89,11 @@ export default function AppShell() {
       const ad = adminRef.current;
       const f = financeRef.current;
 
-      if (a && !a.contains(e.target)) setApprovalsOpen(false);
-      if (ad && !ad.contains(e.target)) setAdminOpen(false);
-      if (f && !f.contains(e.target)) setFinanceOpen(false);
+      const insideA = a && a.contains(e.target);
+      const insideAD = ad && ad.contains(e.target);
+      const insideF = f && f.contains(e.target);
+
+      if (!insideA && !insideAD && !insideF) setOpenDd(null);
     }
 
     document.addEventListener("keydown", onKeyDown);
@@ -93,6 +103,10 @@ export default function AppShell() {
       document.removeEventListener("pointerdown", onPointerDown);
     };
   }, []);
+
+  const approvalsOpenFinal = isInApprovals ? true : openDd === "approvals";
+  const financeOpenFinal = isInFinance ? true : openDd === "finance";
+  const adminOpenFinal = isInAdmin ? true : openDd === "admin";
 
   return (
     <div className="app-shell">
@@ -141,7 +155,10 @@ export default function AppShell() {
             </NavLink>
 
             {import.meta.env.DEV && (
-              <NavLink to="/dashboard/content-blocks" className={({ isActive }) => `topnav-link dev ${isActive ? "active" : ""}`}>
+              <NavLink
+                to="/dashboard/content-blocks"
+                className={({ isActive }) => `topnav-link dev ${isActive ? "active" : ""}`}
+              >
                 🧪 Content Blocks Tester
               </NavLink>
             )}
@@ -150,34 +167,56 @@ export default function AppShell() {
               Security
             </NavLink>
 
-            {/* ================= APPROVALS (dropdown) ================= */}
+            {/* ================= APPROVALS (hover dropdown) ================= */}
             {canSeeApprovals() && (
-              <div className="topnav-dd" ref={approvalsRef}>
+              <div
+                className="topnav-dd"
+                ref={approvalsRef}
+                onMouseEnter={() => openNow("approvals")}
+                onMouseLeave={scheduleClose}
+              >
                 <button
                   type="button"
                   className={`topnav-link dd-toggle ${isInApprovals ? "active" : ""}`}
-                  onClick={() => setApprovalsOpen((v) => !v)}
                   aria-expanded={approvalsOpenFinal}
                   aria-haspopup="menu"
+                  onFocus={() => openNow("approvals")}
+                  onBlur={scheduleClose}
                 >
                   <Chevron open={approvalsOpenFinal} />
                   Approvals
                 </button>
 
                 {approvalsOpenFinal ? (
-                  <div className="dd-menu" role="menu" aria-label="Approvals menu">
-                    <NavLink to="/dashboard/approvals" className="dd-item" role="menuitem">
+                  <div
+                    className="dd-menu"
+                    role="menu"
+                    aria-label="Approvals menu"
+                    onMouseEnter={() => openNow("approvals")}
+                    onMouseLeave={scheduleClose}
+                  >
+                    <NavLink to="/dashboard/approvals" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
                       Dashboard
                     </NavLink>
 
                     {meIsInstitutionAdmin && (
-                      <NavLink to="/dashboard/approvals/members" className="dd-item" role="menuitem">
+                      <NavLink
+                        to="/dashboard/approvals/members"
+                        className="dd-item"
+                        role="menuitem"
+                        onClick={() => setOpenDd(null)}
+                      >
                         Members
                       </NavLink>
                     )}
 
                     {meIsAdminRole && (
-                      <NavLink to="/dashboard/approvals/subscription-requests" className="dd-item" role="menuitem">
+                      <NavLink
+                        to="/dashboard/approvals/subscription-requests"
+                        className="dd-item"
+                        role="menuitem"
+                        onClick={() => setOpenDd(null)}
+                      >
                         Approval Requests
                       </NavLink>
                     )}
@@ -186,32 +225,44 @@ export default function AppShell() {
               </div>
             )}
 
-            {/* ================= FINANCE (dropdown, Admin-only) ================= */}
+            {/* ================= FINANCE (hover dropdown) ================= */}
             {meIsAdminRole && (
-              <div className="topnav-dd" ref={financeRef}>
+              <div
+                className="topnav-dd"
+                ref={financeRef}
+                onMouseEnter={() => openNow("finance")}
+                onMouseLeave={scheduleClose}
+              >
                 <button
                   type="button"
                   className={`topnav-link dd-toggle ${isInFinance ? "active" : ""}`}
-                  onClick={() => setFinanceOpen((v) => !v)}
                   aria-expanded={financeOpenFinal}
                   aria-haspopup="menu"
+                  onFocus={() => openNow("finance")}
+                  onBlur={scheduleClose}
                 >
                   <Chevron open={financeOpenFinal} />
                   Finance
                 </button>
 
                 {financeOpenFinal ? (
-                  <div className="dd-menu" role="menu" aria-label="Finance menu">
-                    <NavLink to="/dashboard/admin/finance/invoices" className="dd-item" role="menuitem">
+                  <div
+                    className="dd-menu"
+                    role="menu"
+                    aria-label="Finance menu"
+                    onMouseEnter={() => openNow("finance")}
+                    onMouseLeave={scheduleClose}
+                  >
+                    <NavLink to="/dashboard/admin/finance/invoices" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
                       Invoices
                     </NavLink>
-                    <NavLink to="/dashboard/admin/finance/payments" className="dd-item" role="menuitem">
+                    <NavLink to="/dashboard/admin/finance/payments" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
                       Payments
                     </NavLink>
-                    <NavLink to="/dashboard/admin/finance/invoice-settings" className="dd-item" role="menuitem">
+                    <NavLink to="/dashboard/admin/finance/invoice-settings" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
                       Invoice Settings
                     </NavLink>
-                    <NavLink to="/dashboard/admin/finance/vat-rates" className="dd-item" role="menuitem">
+                    <NavLink to="/dashboard/admin/finance/vat-rates" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
                       VAT Setup
                     </NavLink>
                   </div>
@@ -219,75 +270,87 @@ export default function AppShell() {
               </div>
             )}
 
-            {/* ================= ADMIN (dropdown) ================= */}
+            {/* ================= ADMIN (hover dropdown) ================= */}
             {meIsAdminRole && (
-              <div className="topnav-dd" ref={adminRef}>
+              <div
+                className="topnav-dd"
+                ref={adminRef}
+                onMouseEnter={() => openNow("admin")}
+                onMouseLeave={scheduleClose}
+              >
                 <button
                   type="button"
                   className={`topnav-link dd-toggle ${isInAdmin ? "active" : ""}`}
-                  onClick={() => setAdminOpen((v) => !v)}
                   aria-expanded={adminOpenFinal}
                   aria-haspopup="menu"
+                  onFocus={() => openNow("admin")}
+                  onBlur={scheduleClose}
                 >
                   <Chevron open={adminOpenFinal} />
                   Admin
                 </button>
 
                 {adminOpenFinal ? (
-                  <div className="dd-menu" role="menu" aria-label="Admin menu">
-                    <NavLink to="/dashboard/admin/institutions" className="dd-item" role="menuitem">
+                  <div
+                    className="dd-menu"
+                    role="menu"
+                    aria-label="Admin menu"
+                    onMouseEnter={() => openNow("admin")}
+                    onMouseLeave={scheduleClose}
+                  >
+                    <NavLink to="/dashboard/admin/institutions" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
                       Institutions
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/content-products" className="dd-item" role="menuitem">
+                    <NavLink to="/dashboard/admin/content-products" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
                       Products
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/content-product-prices" className="dd-item" role="menuitem">
+                    <NavLink to="/dashboard/admin/content-product-prices" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
                       Product Prices
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/documents" className="dd-item" role="menuitem">
+                    <NavLink to="/dashboard/admin/documents" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
                       Books
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/toc-test" className="dd-item" role="menuitem">
+                    <NavLink to="/dashboard/admin/toc-test" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
                       Table of Contents (Test)
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/llr-services" className="dd-item" role="menuitem">
+                    <NavLink to="/dashboard/admin/llr-services" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
                       LLR Services
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/courts" className="dd-item" role="menuitem">
+                    <NavLink to="/dashboard/admin/courts" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
                       Courts
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/llr-services/import" className="dd-item" role="menuitem">
+                    <NavLink to="/dashboard/admin/llr-services/import" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
                       Import Cases
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/institution-subscriptions" className="dd-item" role="menuitem">
+                    <NavLink to="/dashboard/admin/institution-subscriptions" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
                       Subscriptions
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/user-subscriptions" className="dd-item" role="menuitem">
+                    <NavLink to="/dashboard/admin/user-subscriptions" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
                       Public Subscriptions
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/trials" className="dd-item" role="menuitem">
+                    <NavLink to="/dashboard/admin/trials" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
                       Trials
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/institution-bundle-subscriptions" className="dd-item" role="menuitem">
+                    <NavLink to="/dashboard/admin/institution-bundle-subscriptions" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
                       Bundle
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/institution-admins" className="dd-item" role="menuitem">
+                    <NavLink to="/dashboard/admin/institution-admins" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
                       Institution Admins
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/users" className="dd-item" role="menuitem">
+                    <NavLink to="/dashboard/admin/users" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
                       Users
                     </NavLink>
                   </div>
@@ -296,7 +359,7 @@ export default function AppShell() {
             )}
           </nav>
 
-          {/* Right: profile menu (logout lives inside it) */}
+          {/* Right: profile menu */}
           <div className="topnav-right">
             {user ? (
               <UserProfileMenu
@@ -319,7 +382,6 @@ export default function AppShell() {
         <Outlet />
       </main>
 
-      {/* Logout confirm */}
       {showLogoutConfirm && (
         <div className="modal-overlay">
           <div className="modal">
