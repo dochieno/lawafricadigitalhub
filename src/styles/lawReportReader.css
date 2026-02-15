@@ -2562,3 +2562,16 @@
 .lrr2IconBtn .txt {
   font-weight: 600;
 }
+/* Rail tabs: make each tab stretch full width */
+.lrr2SegTabs--rail{
+  align-items: stretch;     /* key */
+}
+
+.lrr2SegTabs--rail .lrr2SegTab{
+  width: 100%;              /* key */
+  justify-content: flex-start;
+}
+.lrr2SideCard{
+  height: calc(100vh - 120px); /* tune based on header */
+  overflow: auto;
+}
