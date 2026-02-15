@@ -1,187 +1,210 @@
-.app-container {
-  display: flex;
+/* src/styles/appshell.css */
+
+.app-shell{
   min-height: 100vh;
   background: var(--la-bg);
   font-family: var(--font-main);
-}
-
-.sidebar {
-  width: 230px;
-  background: var(--sidebar-bg);
-  color: var(--sidebar-text);
-  padding: 20px;
-  display: flex;
+  display:flex;
   flex-direction: column;
 }
 
-.logo {
-  margin: 0 0 24px 0;
-  font-size: 20px;
-  color: var(--la-white);
+/* ================= TOP NAV ================= */
+
+.topnav{
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: #0b1220; /* premium dark */
+  border-bottom: 1px solid rgba(255,255,255,0.08);
 }
 
-.logo span {
-  color: var(--la-red);
+.topnav-inner{
+  height: 64px;
+  display:flex;
+  align-items:center;
+  gap: 16px;
+  padding: 0 18px;
 }
 
-.nav {
-  display: flex;
-  flex-direction: column;
+/* Brand */
+.topnav-brand{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  text-decoration:none;
+  color:#fff;
+  user-select:none;
+}
+
+.topnav-logo{
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  object-fit: contain;
+}
+
+.topnav-wordmark{
+  font-weight: 750;
+  letter-spacing: .2px;
+  font-size: 16px;
+  opacity: .98;
+}
+
+/* Center links: scrollable if too many */
+.topnav-links{
+  display:flex;
+  align-items:center;
   gap: 8px;
-  flex-grow: 1;
+  flex: 1;
+  min-width: 0;
+
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+
+  padding: 6px 2px;
 }
 
-.nav-link {
-  text-decoration: none;
-  color: var(--sidebar-text);
+.topnav-links::-webkit-scrollbar{ height: 6px; }
+.topnav-links::-webkit-scrollbar-thumb{ border-radius: 999px; }
+
+.topnav-link{
+  display:inline-flex;
+  align-items:center;
+  gap: 8px;
+
+  text-decoration:none;
+  color: rgba(255,255,255,0.88);
+
   padding: 10px 12px;
-  border-radius: 6px;
-  transition: background 0.2s;
+  border-radius: 12px;
+
+  transition: background .15s ease, color .15s ease;
+  border: 1px solid transparent;
 }
 
-.nav-link:hover {
-  background: rgba(255, 255, 255, 0.1);
+.topnav-link:hover{
+  background: rgba(255,255,255,0.06);
 }
 
-.nav-link.active {
-  background: var(--la-red);
-  color: var(--la-white);
+.topnav-link.active{
+  background: linear-gradient(90deg, rgba(138,0,0,0.90), rgba(138,0,0,0.45));
+  border-color: rgba(255,255,255,0.08);
+  color:#fff;
 }
 
-.logout-btn {
-  background: var(--la-red);
-  color: var(--la-white);
-  border: none;
-  padding: 10px;
-  border-radius: 6px;
+.topnav-link.dev{
+  opacity: .95;
+}
+
+/* Right side */
+.topnav-right{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+
+/* Dropdown groups */
+.topnav-dd{
+  position: relative;
+  display:inline-flex;
+  align-items:center;
+}
+
+.dd-toggle{
+  background: transparent;
+  border: 0;
   cursor: pointer;
 }
 
-.logout-btn:hover {
-  background: var(--la-red-hover);
-}
-.content-topbar {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 16px;
+.nav-chevron{
+  display:inline-block;
+  transition: transform 140ms ease;
+  opacity: .9;
 }
 
-.content {
-  flex-grow: 1;
-  padding: 24px;
+.nav-chevron.open{
+  transform: rotate(90deg);
+}
+
+.dd-menu{
+  position:absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  min-width: 230px;
+  background: #0f172a;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 14px;
+  box-shadow: 0 18px 55px rgba(0,0,0,0.45);
+  padding: 8px;
+}
+
+.dd-item{
+  display:block;
+  text-decoration:none;
+  color: rgba(255,255,255,0.90);
+  padding: 10px 10px;
+  border-radius: 10px;
+  transition: background .12s ease;
+}
+
+.dd-item:hover{
+  background: rgba(255,255,255,0.06);
+}
+
+.dd-item.active{
+  background: rgba(138,0,0,0.35);
+  color:#fff;
+}
+
+/* ================= MAIN CONTENT ================= */
+
+.app-main{
+  flex: 1;
+  padding: 18px; /* reduced a bit because we gained width */
   background: var(--la-bg);
   color: var(--la-dark);
 }
-/* -------------------------------- */
-/* SIDEBAR LAYOUT */
-/* -------------------------------- */
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
+
+/* On large screens, give more breathing room without wasting width */
+@media (min-width: 1100px){
+  .app-main{
+    padding: 22px 26px;
+  }
 }
 
-/* Wrap logo + nav */
-.sidebar-top {
-  display: flex;
-  flex-direction: column;
-}
-
-/* -------------------------------- */
-/* LOGOUT BUTTON */
-/* -------------------------------- */
-.sidebar-bottom {
-  padding: 20px;
-}
-
-.logout-btn {
-  width: 100%;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  color: #fff;
-  padding: 10px 14px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background 0.15s ease, border 0.15s ease;
-  margin-top: auto;
-  margin-bottom: 300px;
-}
-
-.logout-btn:hover {
-  background: rgba(161, 24, 30, 0.9);
-  border-color: rgba(161, 24, 30, 1);
-}
-/* ================= TOP BAR ================= */
-
-.content-topbar {
-  height: 64px;
-  padding: 0 32px;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  background: #fff;
-  border-bottom: 1px solid #eee;
-}
-
-.topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-/* Logout button (top-right) */
-.topbar-logout-btn {
-  background: transparent;
-  border: 2px solid #8b0000;
-  color: #8b0000;
-  font-weight: 600;
-  padding: 6px 14px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.topbar-logout-btn:hover {
-  background: #8b0000;
-  color: #fff;
-}
 /* ================= LOGOUT CONFIRM MODAL ================= */
 
-.modal-overlay {
+.modal-overlay{
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background: rgba(0,0,0,0.45);
+  display:flex;
+  align-items:center;
+  justify-content:center;
   z-index: 999;
 }
 
-.modal {
+.modal{
   background: #fff;
   padding: 28px;
   border-radius: 10px;
   width: 100%;
   max-width: 380px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.2);
 }
 
-.modal h3 {
-  margin-bottom: 8px;
-}
+.modal h3{ margin-bottom: 8px; }
+.modal p{ color:#555; margin-bottom: 24px; }
 
-.modal p {
-  color: #555;
-  margin-bottom: 24px;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
+.modal-actions{
+  display:flex;
+  justify-content:flex-end;
   gap: 12px;
 }
 
-.modal-btn {
+.modal-btn{
   padding: 8px 16px;
   border-radius: 6px;
   font-weight: 600;
@@ -189,74 +212,8 @@
   border: none;
 }
 
-.modal-btn.secondary {
-  background: #eee;
-  color: #333;
-}
+.modal-btn.secondary{ background:#eee; color:#333; }
+.modal-btn.secondary:hover{ background:#ddd; }
 
-.modal-btn.secondary:hover {
-  background: #ddd;
-}
-
-.modal-btn.danger {
-  background: #8b0000;
-  color: #fff;
-}
-
-.modal-btn.danger:hover {
-  background: #a40000;
-}
-/* ===== Collapsible Sidebar Groups (UPDATED) ===== */
-.nav-group-wrap {
-  margin-top: 2px;
-}
-
-/* Toggle uses nav-link styling; we only normalize it as a button */
-.nav-group-toggle {
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  width: 100%;
-
-  display: flex;
-  align-items: center;
-  gap: 10px;
-
-  /* IMPORTANT: remove any custom padding here so .nav-link controls it */
-  padding: 0;
-}
-
-/* If your .nav-link has hover/active styles, this keeps it consistent */
-.nav-group-toggle:hover {
-  /* let .nav-link:hover win, unless it doesn't exist */
-}
-
-.nav-chevron {
-  display: inline-block;
-  transition: transform 140ms ease;
-  opacity: 0.85;
-}
-
-.nav-chevron.open {
-  transform: rotate(90deg);
-}
-
-/* Children stack vertically and are slightly indented */
-.nav-group {
-  margin-top: 4px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-/* Controlled indentation for children (NOT the group itself) */
-.nav-child {
-  padding-left: 34px; /* tweak: 28-40 depending on your sidebar */
-}
-
-/* Ensure children never wrap into columns */
-.nav-group .nav-link {
-  width: 100%;
-  display: block;
-}
-
+.modal-btn.danger{ background:#8b0000; color:#fff; }
+.modal-btn.danger:hover{ background:#a40000; }
