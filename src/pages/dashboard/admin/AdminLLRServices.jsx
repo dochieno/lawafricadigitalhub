@@ -344,6 +344,18 @@ function Icon({ name }) {
           <path d="M12 3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
         </svg>
       );
+    case "info":
+      return (
+        <svg {...common}>
+          <path
+            d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z"
+            stroke="currentColor"
+            strokeWidth="2"
+          />
+          <path d="M12 10v7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M12 7h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
     default:
       return null;
   }
@@ -361,6 +373,25 @@ function IconButton({ title, onClick, disabled, tone = "neutral", children }) {
     >
       {children}
     </button>
+  );
+}
+
+/* =========================
+   Tooltip mini helper
+========================= */
+function LabelWithTip({ text, tip }) {
+  return (
+    <span className="laLabelWrap">
+      <span>{text}</span>
+      {!!tip && (
+        <span className="laTip" tabIndex={0} aria-label={tip}>
+          <Icon name="info" />
+          <span className="laTipBubble" role="tooltip">
+            {tip}
+          </span>
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -417,6 +448,7 @@ export default function AdminLLRServices() {
   const [courts, setCourts] = useState([]);
   const [courtsLoading, setCourtsLoading] = useState(false);
   const courtsCacheRef = useRef(new Map()); // countryId -> courts[]
+
   // Content Products
   const [products, setProducts] = useState([]);
   const [productsLoading, setProductsLoading] = useState(false);
@@ -434,7 +466,7 @@ export default function AdminLLRServices() {
   // search + filters + sort
   const [q, setQ] = useState("");
   const [countryFilter, setCountryFilter] = useState(""); // string id
-  const [sortKey, setSortKey] = useState("updated"); // title|country|reportNumber|year|decision|caseType|date|updated
+  const [sortKey, setSortKey] = useState("updated"); // title|country|year|decision|caseType|date|updated
   const [sortDir, setSortDir] = useState("desc"); // asc|desc
 
   const [error, setError] = useState("");
@@ -757,15 +789,17 @@ export default function AdminLLRServices() {
     try {
       const res = await api.get(`/law-reports/${id}/attachment/download`, {
         responseType: "blob",
-        // keep any headers (Content-Disposition etc.)
-        validateStatus: (s) => s >= 200 && s < 400, // let 403 throw via catch below if axios treats it as error; some clients won't
+        validateStatus: (s) => s >= 200 && s < 400,
       });
 
       const cd = res?.headers?.["content-disposition"] || res?.headers?.["Content-Disposition"];
       const filenameFromHeader = tryGetFilenameFromContentDisposition(cd);
       const filename = filenameFromHeader || suggestedName || `law-report-${id}-attachment`;
 
-      const blob = res.data instanceof Blob ? res.data : new Blob([res.data || ""], { type: res?.headers?.["content-type"] || "application/octet-stream" });
+      const blob =
+        res.data instanceof Blob
+          ? res.data
+          : new Blob([res.data || ""], { type: res?.headers?.["content-type"] || "application/octet-stream" });
       const url = window.URL.createObjectURL(blob);
 
       const a = document.createElement("a");
@@ -779,7 +813,6 @@ export default function AdminLLRServices() {
 
       setInfo("Attachment downloaded.");
     } catch (e) {
-      // If 403 with JSON body, show server message
       const msg = getApiErrorMessage(e, "Download failed.");
       setError(msg);
     } finally {
@@ -793,7 +826,6 @@ export default function AdminLLRServices() {
     if (!id) return setError("Save the report first, then upload an attachment.");
     if (!file) return setError("Select a file to upload (PDF/DOC/DOCX).");
 
-    // quick client validation (server validates too)
     const name = String(file?.name || "").toLowerCase();
     const okExt = name.endsWith(".pdf") || name.endsWith(".doc") || name.endsWith(".docx");
     if (!okExt) return setError("Only PDF/DOC/DOCX attachments are allowed.");
@@ -804,7 +836,6 @@ export default function AdminLLRServices() {
 
     try {
       const fd = new FormData();
-      // server supports File or file; recommended "File"
       fd.append("File", file);
 
       const res = await api.post(`/law-reports/${id}/attachment`, fd, {
@@ -821,7 +852,6 @@ export default function AdminLLRServices() {
 
       setForm((p) => ({ ...p, attachmentSelected: null }));
       setInfo("Attachment uploaded.");
-      // refresh list so row chips/actions reflect latest (if your admin list dto includes HasAttachment)
       await fetchList();
     } catch (e) {
       setError(getApiErrorMessage(e, "Attachment upload failed."));
@@ -837,13 +867,6 @@ export default function AdminLLRServices() {
       await fetchList();
     })();
   }, []);
-
-  const productNameById = useMemo(() => {
-    const m = new Map();
-    for (const p of products) m.set(p.id, p.name);
-    return m;
-  }, [products]);
-
   // Filters + Search
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -880,7 +903,9 @@ export default function AdminLLRServices() {
       const hasAttachment = !!pick(r, ["hasAttachment", "HasAttachment"], false);
       const attachmentName = String(pick(r, ["attachmentOriginalName", "AttachmentOriginalName"], "")).toLowerCase();
 
-      const meta = `${year} ${citation} ${courtName} ${courtCode} ${legacyCourt} ${courtTypeLabel} ${div} ${town} ${caseNo} ${judges} ${countryName} ${serviceLabel} ${hasAttachment ? "attachment" : ""} ${attachmentName}`;
+      const meta = `${year} ${citation} ${courtName} ${courtCode} ${legacyCourt} ${courtTypeLabel} ${div} ${town} ${caseNo} ${judges} ${countryName} ${serviceLabel} ${
+        hasAttachment ? "attachment" : ""
+      } ${attachmentName}`;
       return title.includes(s) || meta.includes(s);
     });
   }, [rows, q, countryFilter, countryMap]);
@@ -908,7 +933,8 @@ export default function AdminLLRServices() {
           return sortValue(label);
         }
         case "caseType": {
-          const raw = pick(r, ["caseTypeLabel", "CaseTypeLabel"], null) ?? pick(r, ["caseType", "CaseType"], null);
+          const raw =
+            pick(r, ["caseTypeLabel", "CaseTypeLabel"], null) ?? pick(r, ["caseType", "CaseType"], null);
           const label = normalizeText(raw) || labelFrom(CASETYPE_OPTIONS, raw);
           return sortValue(label);
         }
@@ -1010,7 +1036,6 @@ export default function AdminLLRServices() {
 
       setEditing(d);
 
-      // ✅ capture attachment meta for modal UI
       setAttachmentMeta({
         hasAttachment: !!pick(d, ["hasAttachment", "HasAttachment"], false),
         fileType: normalizeText(pick(d, ["attachmentFileType", "AttachmentFileType"], "")),
@@ -1035,14 +1060,10 @@ export default function AdminLLRServices() {
       const contentHtml = safeDefaultHtml(pick(d, ["contentText", "ContentText"], "") ?? "<p></p>");
 
       const courtId =
-        pick(d, ["courtId", "CourtId"], null) ??
-        pick(d, ["courtRefId", "CourtRefId"], null) ??
-        null;
+        pick(d, ["courtId", "CourtId"], null) ?? pick(d, ["courtRefId", "CourtRefId"], null) ?? null;
 
       const pid =
-        pick(d, ["contentProductId", "ContentProductId"], null) ??
-        pick(d, ["productId", "ProductId"], null) ??
-        null;
+        pick(d, ["contentProductId", "ContentProductId"], null) ?? pick(d, ["productId", "ProductId"], null) ?? null;
 
       originalProductIdRef.current = pid ? toInt(pid, 0) : null;
       originalContentRef.current = contentHtml;
@@ -1106,7 +1127,6 @@ export default function AdminLLRServices() {
     const countryId = toInt(form.countryId, 0);
     const courtId = toInt(form.courtId, 0);
 
-
     return {
       category: 6,
       title: normalizeText(form.title) || null,
@@ -1144,7 +1164,6 @@ export default function AdminLLRServices() {
     if (!toInt(form.countryId, 0)) return "Country is required (select a country first).";
     if (!toInt(form.service, 0)) return "Service is required.";
     if (!normalizeText(form.parties)) return "Parties is required (e.g. A v B).";
-    // Always require decision date (used for citation year + consistency)
     if (!normalizeText(form.decisionDate)) return "Decision Date is required.";
 
     const year = toInt(form.year, 0);
@@ -1295,7 +1314,7 @@ export default function AdminLLRServices() {
         .admin-llrservices .admin-modal { border-radius: 18px; border: 1px solid rgba(17,24,39,0.10); box-shadow: 0 24px 70px rgba(0,0,0,0.16); }
         .admin-llrservices .admin-modal-head { background: linear-gradient(180deg, rgba(107,35,59,0.10), rgba(255,255,255,0)); border-bottom: 1px solid rgba(17,24,39,0.08); }
         .admin-llrservices .admin-modal-title { letter-spacing: -0.2px; }
-        .admin-llrservices .admin-field > label { font-weight: 600; color: rgba(17,24,39,0.82); }
+        .admin-llrservices .admin-field > label { font-weight: 600; color: rgba(17,24,39,0.82); display:flex; align-items:center; gap: 8px; }
         .admin-llrservices input, .admin-llrservices select, .admin-llrservices textarea {
           border: 1px solid rgba(17,24,39,0.12);
           border-radius: 12px;
@@ -1313,6 +1332,10 @@ export default function AdminLLRServices() {
         /* 2-col row helper */
         .admin-llrservices .laRow2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
         @media (max-width: 900px) { .admin-llrservices .laRow2 { grid-template-columns: 1fr; } }
+
+        /* 2-col row helper with asymmetric widths (nice for Country/Town, Product/Service etc) */
+        .admin-llrservices .laRow2a { display:grid; grid-template-columns: 1.05fr 0.95fr; gap: 14px; }
+        @media (max-width: 900px) { .admin-llrservices .laRow2a { grid-template-columns: 1fr; } }
 
         /* Scroll fix */
         .admin-llrservices .laSurfaceCard { display:flex; flex-direction:column; min-height: 0; }
@@ -1360,13 +1383,54 @@ export default function AdminLLRServices() {
           border: 1px dashed rgba(17,24,39,0.18);
           background: rgba(255,255,255,0.9);
         }
+
+        /* Tooltip */
+        .admin-llrservices .laLabelWrap { display:inline-flex; align-items:center; gap: 8px; }
+        .admin-llrservices .laTip { position: relative; display:inline-flex; align-items:center; justify-content:center; width: 18px; height: 18px; border-radius: 999px; color: rgba(17,24,39,0.55); cursor: help; }
+        .admin-llrservices .laTip:hover { color: rgba(107,35,59,0.9); }
+        .admin-llrservices .laTip svg { width: 16px; height: 16px; }
+        .admin-llrservices .laTipBubble {
+          position: absolute;
+          left: 50%;
+          bottom: calc(100% + 10px);
+          transform: translateX(-50%);
+          width: min(320px, 72vw);
+          background: rgba(17,24,39,0.96);
+          color: rgba(255,255,255,0.95);
+          padding: 10px 12px;
+          border-radius: 12px;
+          box-shadow: 0 18px 50px rgba(0,0,0,0.22);
+          font-size: 12px;
+          line-height: 1.35;
+          opacity: 0;
+          visibility: hidden;
+          pointer-events: none;
+          z-index: 50;
+        }
+        .admin-llrservices .laTipBubble:after{
+          content:"";
+          position:absolute;
+          left: 50%;
+          top: 100%;
+          transform: translateX(-50%);
+          border: 8px solid transparent;
+          border-top-color: rgba(17,24,39,0.96);
+        }
+        .admin-llrservices .laTip:hover .laTipBubble,
+        .admin-llrservices .laTip:focus .laTipBubble {
+          opacity: 1;
+          visibility: visible;
+        }
+
+        /* Reduce the old hint noise (keep spacing clean) */
+        .admin-llrservices .hint { display:none; }
       `}</style>
 
       <div className="admin-header">
         <div>
           <h1 className="admin-title">Admin · LLR Services (Reports)</h1>
           <p className="admin-subtitle">
-            Added <span className="laEm">Court Division</span> (maps to <span className="laEm">CourtCategory</span>). Town is selected via dropdown.
+            Court Division maps to <span className="laEm">CourtCategory</span>. Town is selected via dropdown.
           </p>
         </div>
 
@@ -1560,9 +1624,11 @@ export default function AdminLLRServices() {
                             </span>
                           )}
 
-                          {/* ✅ Attachment chip (optional) */}
                           {hasAttachment ? (
-                            <span className="chip laChipSoft" title={attachName ? `Attachment: ${attachName}` : "Attachment available"}>
+                            <span
+                              className="chip laChipSoft"
+                              title={attachName ? `Attachment: ${attachName}` : "Attachment available"}
+                            >
                               <span className="chipKey" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                                 <Icon name="paperclip" />
                                 Attachment:
@@ -1608,7 +1674,6 @@ export default function AdminLLRServices() {
                           <Icon name="edit" />
                         </IconButton>
 
-                        {/* ✅ quick download (if attachment exists) */}
                         <IconButton
                           title={hasAttachment ? "Download attachment" : "No attachment"}
                           onClick={() => hasAttachment && downloadAttachment(id, attachName)}
@@ -1649,7 +1714,7 @@ export default function AdminLLRServices() {
                 <h3 className="admin-modal-title">
                   {editing ? `Edit Report #${pick(editing, ["id", "Id"], "")}` : "Create Law Report"}
                 </h3>
-                <div className="admin-modal-subtitle">Court Division maps to CourtCategory (optional).</div>
+                <div className="admin-modal-subtitle">Tooltips replace long field explanations.</div>
               </div>
 
               <button className="admin-btn" onClick={closeModal} disabled={busy || attachBusy}>
@@ -1661,24 +1726,33 @@ export default function AdminLLRServices() {
               <div className="admin-grid">
                 {/* Parties */}
                 <div className="admin-field admin-span2">
-                  <label>Parties *</label>
+                  <label>
+                    <LabelWithTip
+                      text="Parties *"
+                      tip="Required. Title is auto-generated as: Parties + Citation."
+                    />
+                  </label>
                   <input
                     value={form.parties}
                     onChange={(e) => setField("parties", e.target.value)}
                     placeholder="e.g. A v B"
                     disabled={busy || attachBusy}
                   />
-                  <div className="hint">Title is generated automatically as: Parties + Citation.</div>
                 </div>
 
                 {/* Hidden Title (kept for payload) */}
                 <input type="hidden" value={form.title} readOnly />
 
-                {/* Court (auto text) + Content Product on SAME ROW */}
+                {/* ✅ Content Product + Service on SAME ROW */}
                 <div className="admin-field admin-span2">
-                  <div className="laRow2">
+                  <div className="laRow2a">
                     <div className="admin-field" style={{ margin: 0 }}>
-                      <label>Content Product *</label>
+                      <label>
+                        <LabelWithTip
+                          text="Content Product *"
+                          tip="Where this report belongs (used for subscriptions / packaging)."
+                        />
+                      </label>
 
                       {products.length > 0 ? (
                         <select
@@ -1705,33 +1779,276 @@ export default function AdminLLRServices() {
                           disabled={busy || productsLoading || attachBusy}
                         />
                       )}
+                    </div>
 
-                      <div className="hint">
-                        {toInt(form.contentProductId, 0) && productNameById.get(toInt(form.contentProductId, 0)) ? (
-                          <>
-                            Selected: <span className="laEm">{productNameById.get(toInt(form.contentProductId, 0))}</span>
-                          </>
-                        ) : (
-                          <>{productsLoading ? "Loading products…" : "Pick the product where this report belongs."}</>
-                        )}
-                      </div>
+                    <div className="admin-field" style={{ margin: 0 }}>
+                      <label>
+                        <LabelWithTip
+                          text="Service *"
+                          tip="Legacy/branding grouping (LLR / ULR / TLR etc)."
+                        />
+                      </label>
+                      <select
+                        value={String(form.service)}
+                        onChange={(e) => setField("service", toInt(e.target.value, 1))}
+                        disabled={busy || attachBusy}
+                      >
+                        {SERVICE_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 </div>
 
-                {/* ✅ Attachments (optional) */}
+                {/* ✅ Country + Town on SAME ROW */}
                 <div className="admin-field admin-span2">
-                  <label style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                      <Icon name="paperclip" />
-                      Attachment (optional)
-                    </span>
+                  <div className="laRow2a">
+                    <div className="admin-field" style={{ margin: 0 }}>
+                      <label>
+                        <LabelWithTip
+                          text="Country *"
+                          tip="Select country first to load Courts and Towns."
+                        />
+                      </label>
+
+                      {countries.length > 0 ? (
+                        <select
+                          value={String(form.countryId || "")}
+                          onChange={(e) => handleCountryChange(e.target.value)}
+                          disabled={busy || attachBusy}
+                        >
+                          <option value="">Select country…</option>
+                          {countries.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="number"
+                          min="1"
+                          value={form.countryId}
+                          onChange={(e) => handleCountryChange(e.target.value)}
+                          placeholder="CountryId"
+                          disabled={busy || attachBusy}
+                        />
+                      )}
+                    </div>
+
+                    <div className="admin-field" style={{ margin: 0 }}>
+                      <label>
+                        <LabelWithTip
+                          text="Town"
+                          tip="Town name is stored for display; Town code/postcode is stored internally."
+                        />
+                      </label>
+                      <select
+                        value={String(form.postCode || "")}
+                        onChange={(e) => handleTownSelect(e.target.value)}
+                        disabled={busy || attachBusy || !toInt(form.countryId, 0)}
+                      >
+                        {!toInt(form.countryId, 0) ? (
+                          <option value="">Select country first…</option>
+                        ) : (
+                          <option value="">{townsLoading ? "Loading towns…" : "Select town…"}</option>
+                        )}
+
+                        {towns.map((t) => (
+                          <option key={`${t.postCode || t.name}`} value={t.postCode || ""}>
+                            {t.name || "—"}
+                            {t.postCode ? ` (${t.postCode})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="admin-field">
+                  <label>
+                    <LabelWithTip text="Year *" tip="Must be between 1900 and 2100." />
+                  </label>
+                  <input
+                    type="number"
+                    min="1900"
+                    max="2100"
+                    value={form.year}
+                    onChange={(e) => setField("year", e.target.value)}
+                    placeholder="e.g. 2020"
+                    disabled={busy || attachBusy}
+                  />
+                </div>
+
+                <div className="admin-field">
+                  <label>
+                    <LabelWithTip text="Case No." tip="Optional. Example: Petition 12 of 2020." />
+                  </label>
+                  <input
+                    value={form.caseNumber}
+                    onChange={(e) => setField("caseNumber", e.target.value)}
+                    placeholder="e.g. Petition 12 of 2020"
+                    disabled={busy || attachBusy}
+                  />
+                </div>
+
+                <div className="admin-field">
+                  <label>
+                    <LabelWithTip text="Citation" tip="Optional but preferred (used in title and search)." />
+                  </label>
+                  <input
+                    value={form.citation}
+                    onChange={(e) => setField("citation", e.target.value)}
+                    placeholder="Optional"
+                    disabled={busy || attachBusy}
+                  />
+                </div>
+
+                {/* Court */}
+                <div className="admin-field">
+                  <label>
+                    <LabelWithTip text="Court *" tip="Courts are loaded per Country. If none exist, legacy fallback appears." />
+                  </label>
+                  <select
+                    value={String(form.courtId || "")}
+                    onChange={(e) => setField("courtId", e.target.value)}
+                    disabled={busy || attachBusy || !toInt(form.countryId, 0)}
+                  >
+                    {!toInt(form.countryId, 0) ? (
+                      <option value="">Select country first…</option>
+                    ) : (
+                      <option value="">
+                        {courtsLoading
+                          ? "Loading courts…"
+                          : courts.length
+                          ? "Select court…"
+                          : "No courts found (create courts first)"}
+                      </option>
+                    )}
+
+                    {courts.map((c) => (
+                      <option key={c.id} value={String(c.id)}>
+                        {c.name}
+                        {c.code ? ` (${c.code})` : ""}
+                        {c.isActive ? "" : " — Inactive"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Court Division + Decision Date */}
+                <div className="admin-field">
+                  <label>
+                    <LabelWithTip text="Court Division" tip='Optional. Saved as "CourtCategory" (e.g., Industrial, Environmental).' />
+                  </label>
+                  <input
+                    value={form.courtCategory}
+                    onChange={(e) => setField("courtCategory", e.target.value)}
+                    placeholder='e.g. "Industrial" (optional)'
+                    disabled={busy || attachBusy}
+                  />
+                </div>
+
+                <div className="admin-field admin-span2">
+                  <label>
+                    <LabelWithTip text="Decision Date *" tip="Required. Used for consistency and citations." />
+                  </label>
+                  <input
+                    type="date"
+                    value={form.decisionDate}
+                    onChange={(e) => setField("decisionDate", e.target.value)}
+                    disabled={busy || attachBusy}
+                    style={{ maxWidth: 260 }}
+                  />
+                </div>
+
+                {/* Hidden Town Text field (kept for payload, but not editable) */}
+                <input type="hidden" value={form.town} readOnly />
+
+                {/* Legacy fallback UI (only if no courts exist for selected country) */}
+                {!courtsLoading && toInt(form.countryId, 0) && courts.length === 0 && (
+                  <div className="admin-field admin-span2">
+                    <label>
+                      <LabelWithTip text="Legacy Court (optional text)" tip="Only used when there are no Court records for this country." />
+                    </label>
+                    <input
+                      value={form.court}
+                      onChange={(e) => setField("court", e.target.value)}
+                      placeholder="Optional display text (legacy)"
+                      disabled={busy || attachBusy}
+                    />
+                  </div>
+                )}
+
+                {/* ✅ Case Type + Decision Type on SAME ROW */}
+                <div className="admin-field admin-span2">
+                  <div className="laRow2">
+                    <div className="admin-field" style={{ margin: 0 }}>
+                      <label>
+                        <LabelWithTip text="Case Type *" tip="Criminal / Civil / etc." />
+                      </label>
+                      <select
+                        value={String(form.caseType)}
+                        onChange={(e) => setField("caseType", toInt(e.target.value, 2))}
+                        disabled={busy || attachBusy}
+                      >
+                        {CASETYPE_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="admin-field" style={{ margin: 0 }}>
+                      <label>
+                        <LabelWithTip text="Decision Type *" tip="Judgment / Ruling / Order / etc." />
+                      </label>
+                      <select
+                        value={String(form.decisionType)}
+                        onChange={(e) => setField("decisionType", toInt(e.target.value, 1))}
+                        disabled={busy || attachBusy}
+                      >
+                        {DECISION_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Judges */}
+                <div className="admin-field admin-span2">
+                  <label>
+                    <LabelWithTip text="Judges" tip="Optional. Separate by newline or semicolon." />
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={form.judges}
+                    onChange={(e) => setField("judges", e.target.value)}
+                    placeholder="Separate by newline or semicolon"
+                    disabled={busy || attachBusy}
+                  />
+                </div>
+
+                {/* ✅ Attachment card moved here (just before content formatter, after judges) */}
+                <div className="admin-field admin-span2">
+                  <label>
+                    <LabelWithTip
+                      text="Attachment (optional)"
+                      tip="Upload PDF/DOC/DOCX. Downloading requires authorization (subscribed users)."
+                    />
                   </label>
 
                   <div className="laAttachBox">
                     {!pick(editing, ["id", "Id"], null) ? (
-                      <div className="hint">
-                        Save/Create the report first, then you can upload an attachment (PDF/DOC/DOCX).
+                      <div style={{ color: "rgba(17,24,39,0.65)", fontSize: 13 }}>
+                        Save/Create the report first, then upload an attachment.
                       </div>
                     ) : (
                       <div className="laAttachRow">
@@ -1767,7 +2084,7 @@ export default function AdminLLRServices() {
                           className="admin-btn laPillBtn"
                           disabled={busy || attachBusy || !attachmentMeta.hasAttachment}
                           onClick={() => downloadAttachment(pick(editing, ["id", "Id"], null), attachmentMeta.originalName)}
-                          title="Download attachment (authorized users)"
+                          title="Download attachment"
                         >
                           <Icon name="download" />
                           Download
@@ -1785,233 +2102,18 @@ export default function AdminLLRServices() {
                         </button>
                       </div>
                     )}
-
-                    <div className="hint" style={{ marginTop: 8 }}>
-                      Policy: PDF may be downloadable for preview users (unless hard-blocked). DOC/DOCX may require FullAccess.
-                    </div>
                   </div>
-                </div>
-
-                <div className="admin-field">
-                  <label>Country *</label>
-
-                  {countries.length > 0 ? (
-                    <select
-                      value={String(form.countryId || "")}
-                      onChange={(e) => handleCountryChange(e.target.value)}
-                      disabled={busy || attachBusy}
-                    >
-                      <option value="">Select country…</option>
-                      {countries.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <>
-                      <input
-                        type="number"
-                        min="1"
-                        value={form.countryId}
-                        onChange={(e) => handleCountryChange(e.target.value)}
-                        placeholder="CountryId"
-                        disabled={busy || attachBusy}
-                      />
-                      <div className="hint">Tip: ensure GET /api/country is accessible.</div>
-                    </>
-                  )}
-                </div>
-
-                <div className="admin-field">
-                  <label>Service *</label>
-                  <select
-                    value={String(form.service)}
-                    onChange={(e) => setField("service", toInt(e.target.value, 1))}
-                    disabled={busy || attachBusy}
-                  >
-                    {SERVICE_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="admin-field">
-                  <label>Year *</label>
-                  <input
-                    type="number"
-                    min="1900"
-                    max="2100"
-                    value={form.year}
-                    onChange={(e) => setField("year", e.target.value)}
-                    placeholder="e.g. 2020"
-                    disabled={busy || attachBusy}
-                  />
-                </div>
-
-                <div className="admin-field">
-                  <label>Case No.</label>
-                  <input
-                    value={form.caseNumber}
-                    onChange={(e) => setField("caseNumber", e.target.value)}
-                    placeholder="e.g. Petition 12 of 2020"
-                    disabled={busy || attachBusy}
-                  />
-                </div>
-
-                <div className="admin-field">
-                  <label>Citation</label>
-                  <input
-                    value={form.citation}
-                    onChange={(e) => setField("citation", e.target.value)}
-                    placeholder="Optional (preferred if available)"
-                    disabled={busy || attachBusy}
-                  />
-                </div>
-
-                {/* Court + Town + Court Division */}
-                <div className="admin-field">
-                  <label>Court *</label>
-                  <select
-                    value={String(form.courtId || "")}
-                    onChange={(e) => setField("courtId", e.target.value)}
-                    disabled={busy || attachBusy || !toInt(form.countryId, 0)}
-                  >
-                    {!toInt(form.countryId, 0) ? (
-                      <option value="">Select country first…</option>
-                    ) : (
-                      <option value="">
-                        {courtsLoading ? "Loading courts…" : courts.length ? "Select court…" : "No courts found (create courts first)"}
-                      </option>
-                    )}
-
-                    {courts.map((c) => (
-                      <option key={c.id} value={String(c.id)}>
-                        {c.name}
-                        {c.code ? ` (${c.code})` : ""}
-                        {c.isActive ? "" : " — Inactive"}
-                      </option>
-                    ))}
-                  </select>
-
-                  <div className="hint">Courts are loaded per Country.</div>
-                </div>
-
-                {/* ✅ Town dropdown (label Town, not Postcode) */}
-                <div className="admin-field">
-                  <label>Town</label>
-                  <select
-                    value={String(form.postCode || "")}
-                    onChange={(e) => handleTownSelect(e.target.value)}
-                    disabled={busy || attachBusy || !toInt(form.countryId, 0)}
-                  >
-                    {!toInt(form.countryId, 0) ? (
-                      <option value="">Select country first…</option>
-                    ) : (
-                      <option value="">{townsLoading ? "Loading towns…" : "Select town…"}</option>
-                    )}
-
-                    {towns.map((t) => (
-                      <option key={`${t.postCode || t.name}`} value={t.postCode || ""}>
-                        {t.name || "—"}
-                        {t.postCode ? ` (${t.postCode})` : ""}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="hint">Town name is stored for display; Town code is stored internally.</div>
-                </div>
-
-                {/* ✅ Replace Town(Text) with Court Division + Decision Date */}
-                <div className="admin-field admin-span2">
-                  <div className="laRow2">
-                    <div className="admin-field" style={{ margin: 0 }}>
-                      <label>Court Division</label>
-                      <input
-                        value={form.courtCategory}
-                        onChange={(e) => setField("courtCategory", e.target.value)}
-                        placeholder='e.g. "Environmental Court", "Industrial" (optional)'
-                        disabled={busy || attachBusy}
-                      />
-                      <div className="hint">Saved to backend as CourtCategory (nullable).</div>
-                    </div>
-
-                    <div className="admin-field" style={{ margin: 0 }}>
-                      <label>Decision Date</label>
-                      <input
-                        type="date"
-                        value={form.decisionDate}
-                        onChange={(e) => setField("decisionDate", e.target.value)}
-                        disabled={busy || attachBusy}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Hidden Town Text field (kept for payload, but not editable) */}
-                <input type="hidden" value={form.town} readOnly />
-
-                {/* Legacy fallback UI (only if no courts exist for selected country) */}
-                {!courtsLoading && toInt(form.countryId, 0) && courts.length === 0 && (
-                  <>
-                    <div className="admin-field">
-                      <label>Legacy Court (optional text)</label>
-                      <input
-                        value={form.court}
-                        onChange={(e) => setField("court", e.target.value)}
-                        placeholder="Optional display text (legacy)"
-                        disabled={busy || attachBusy}
-                      />
-                    </div>
-                  </>
-                )}
-
-                <div className="admin-field">
-                  <label>Decision Type *</label>
-                  <select
-                    value={String(form.decisionType)}
-                    onChange={(e) => setField("decisionType", toInt(e.target.value, 1))}
-                    disabled={busy || attachBusy}
-                  >
-                    {DECISION_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="admin-field">
-                  <label>Case Type *</label>
-                  <select
-                    value={String(form.caseType)}
-                    onChange={(e) => setField("caseType", toInt(e.target.value, 2))}
-                    disabled={busy || attachBusy}
-                  >
-                    {CASETYPE_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="admin-field admin-span2">
-                  <label>Judges</label>
-                  <textarea
-                    rows={2}
-                    value={form.judges}
-                    onChange={(e) => setField("judges", e.target.value)}
-                    placeholder="Separate by newline or semicolon"
-                    disabled={busy || attachBusy}
-                  />
                 </div>
 
                 {/* TipTap */}
                 <div className="admin-field admin-span2">
                   <div className="editorLabelRow">
-                    <label>Formatted Report Content {editing?.id ? "" : "*"}</label>
+                    <label>
+                      <LabelWithTip
+                        text={`Formatted Report Content ${editing?.id ? "" : "*"}`}
+                        tip="Paste from Word is supported. This HTML is saved with the report."
+                      />
+                    </label>
 
                     <div className="miniActions">
                       {!!pick(editing, ["id", "Id"], null) && (
@@ -2043,8 +2145,6 @@ export default function AdminLLRServices() {
                     onChange={(html) => setField("contentText", html)}
                     disabled={busy || attachBusy}
                   />
-
-                  <div className="hint">Paste from Word is supported. This content is saved together with the report.</div>
                 </div>
               </div>
             </div>
