@@ -297,6 +297,82 @@ function decodeHtmlEntities(text) {
   }
 }
 
+// ---------------- PDF download helpers (NO hooks) ----------------
+
+function formatBytes(bytes) {
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n <= 0) return "";
+  if (n < 1024) return `${n} B`;
+  const kb = n / 1024;
+  if (kb < 1024) return `${kb.toFixed(1)} KB`;
+  const mb = kb / 1024;
+  return `${mb.toFixed(1)} MB`;
+}
+
+function pickPdfMeta(report) {
+  // Try common fields you might already have (safe fallbacks)
+  const url =
+    report?.pdfUrl ||
+    report?.PdfUrl ||
+    report?.downloadUrl ||
+    report?.DownloadUrl ||
+    report?.fileUrl ||
+    report?.FileUrl ||
+    report?.pdf_file_url ||
+    "";
+
+  const sizeBytes =
+    report?.pdfSizeBytes ||
+    report?.PdfSizeBytes ||
+    report?.fileSizeBytes ||
+    report?.FileSizeBytes ||
+    report?.pdfSize ||
+    report?.PdfSize ||
+    report?.fileSize ||
+    report?.FileSize ||
+    null;
+
+  const filename =
+    report?.pdfFileName ||
+    report?.PdfFileName ||
+    report?.fileName ||
+    report?.FileName ||
+    "";
+
+  return {
+    url: String(url || "").trim(),
+    sizeBytes: sizeBytes == null ? null : Number(sizeBytes),
+    filename: String(filename || "").trim(),
+  };
+}
+
+function guessPdfFilename({ report, reportId, title }) {
+  const base =
+    pickPdfMeta(report).filename ||
+    `LawAfrica_LawReport_${reportId || ""}`.trim();
+
+  // Clean title (optional)
+  const cleanTitle = String(title || "")
+    .replace(/[^\w\s-]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 90);
+
+  const name = cleanTitle ? `${base}_${cleanTitle}` : base;
+  return `${name}.pdf`.replace(/\.pdf\.pdf$/i, ".pdf");
+}
+
+function saveBlobToDisk(blob, filename) {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || "document.pdf";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+}
+
 function formatDate(d) {
   if (!d) return "";
   const dt = new Date(d);
@@ -1038,6 +1114,9 @@ export default function LawReportReader() {
   const [metaMoreOpen, setMetaMoreOpen] = useState(false);
   const metaMoreRef = useRef(null);
   const [copyMenuOpen, setCopyMenuOpen] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfErr, setPdfErr] = useState("");
+
   const copyMenuRef = useRef(null);
 
   const [q, setQ] = useState("");
@@ -1098,6 +1177,23 @@ export default function LawReportReader() {
 
   const hasFullAccess = useMemo(() => (isAdmin ? true : getHasFullAccess(access)), [access, isAdmin]);
   const aiAllowed = useMemo(() => getIsAiAllowed(isPremium, access, isAdmin), [isPremium, access, isAdmin]);
+    const canDownloadPdf = useMemo(() => {
+    // Only enable if the user has access to the case
+    // - Admin: yes
+    // - Free report: yes
+    // - Premium: only if hasFullAccess
+    if (isAdmin) return true;
+    if (!isPremium) return true;
+    return !!hasFullAccess;
+  }, [isAdmin, isPremium, hasFullAccess]);
+
+  const pdfMeta = useMemo(() => pickPdfMeta(report), [report]);
+
+  const pdfBtnLabel = useMemo(() => {
+    const sizeTxt = formatBytes(pdfMeta?.sizeBytes);
+    return sizeTxt ? `Download PDF (${sizeTxt})` : "Download PDF";
+  }, [pdfMeta]);
+
 
   const fsClass = useMemo(() => {
     const n = Math.round(fontScale * 100);
@@ -1498,6 +1594,64 @@ export default function LawReportReader() {
       console.warn("[LawReportReader] refresh access failed", e);
     } finally {
       setAccessLoading(false);
+    }
+  }
+
+    async function downloadPdfNow() {
+    if (!report) return;
+    if (!canDownloadPdf) return;
+
+    setPdfErr("");
+
+    // You can support BOTH:
+    // 1) Direct URL (pdfUrl / downloadUrl) if backend gives it
+    // 2) Blob endpoint fallback (recommended)
+    const filename = guessPdfFilename({ report, reportId, title: report?.parties || report?.title || "" });
+
+    try {
+      setPdfBusy(true);
+
+      // If you have a direct URL already (and it is same-origin or supports CORS),
+      // you can just open it. BUT: you asked "saves the file", so we prefer blob.
+      // We'll still use URL if it exists and looks like an API path we can fetch as blob.
+      const directUrl = pdfMeta?.url;
+
+      // --- OPTION A: If your API exposes a download endpoint for law reports (BEST DEFAULT) ---
+      // Adjust this endpoint if yours is different:
+      // - /law-reports/{id}/pdf
+      // - /law-reports/{id}/download
+      // - /legal-documents/{legalDocumentId}/pdf
+      //
+      // This will save immediately using blob.
+      let endpoint = "";
+
+      if (report?.legalDocumentId) {
+        // Prefer legal-documents route if you already standardize downloads there
+        endpoint = `/legal-documents/${report.legalDocumentId}/pdf`;
+      } else {
+        endpoint = `/law-reports/${reportId}/pdf`;
+      }
+
+      // If your backend already provides a direct URL, you can try that as endpoint too
+      // (especially if it is an API path like "/storage/xxx.pdf" or "/law-reports/..")
+      const tryUrlFirst =
+        directUrl &&
+        (directUrl.startsWith("/") || directUrl.includes(window.location.origin));
+
+      const fetchUrl = tryUrlFirst ? directUrl : endpoint;
+
+      const res = await api.get(fetchUrl, { responseType: "blob" });
+
+      // Axios blob
+      const blob = res?.data;
+      if (!blob) throw new Error("No file returned.");
+
+      saveBlobToDisk(blob, filename);
+    } catch (e) {
+      console.warn("[LawReportReader] downloadPdfNow failed", e);
+      setPdfErr(getApiErrorMessage(e, "Failed to download PDF."));
+    } finally {
+      setPdfBusy(false);
     }
   }
 
@@ -2771,6 +2925,28 @@ function parseSectionedSummary(text) {
 
           {/* Right: actions */}
           <div className="lrr2MetaActions">
+            {/* ✅ Download PDF */}
+            <button
+              type="button"
+              className={`lrr2DownloadBtn ${pdfBusy ? "isBusy" : ""}`}
+              onClick={downloadPdfNow}
+              disabled={!canDownloadPdf || pdfBusy}
+              title={
+                !canDownloadPdf
+                  ? "Subscribe to unlock downloads"
+                  : "Download PDF"
+              }
+              aria-disabled={!canDownloadPdf || pdfBusy}
+            >
+              {pdfBusy ? "Preparing…" : pdfBtnLabel}
+            </button>
+
+            {pdfErr ? (
+              <div className="lrr2DownloadErr">
+                {pdfErr}
+              </div>
+            ) : null}
+
             {/* ✅ Copy now copies useful info by default; dropdown is options */}
             <div className="lrr2Menu lrr2CopyCombo" ref={copyMenuRef}>
               {/* Main copy action */}
@@ -2882,6 +3058,7 @@ function parseSectionedSummary(text) {
               ) : null}
             </div>
           </div>
+
         </div>
 
         {/* ✅ Tabs moved into same container so they align with meta row */}

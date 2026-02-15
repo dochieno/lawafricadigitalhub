@@ -150,6 +150,37 @@ function sortValue(v) {
   return typeof v === "string" ? v.toLowerCase() : String(v).toLowerCase();
 }
 
+function formatBytes(bytes) {
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n <= 0) return "—";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  let val = n;
+  while (val >= 1024 && i < units.length - 1) {
+    val /= 1024;
+    i++;
+  }
+  const dp = i === 0 ? 0 : i === 1 ? 0 : 1;
+  return `${val.toFixed(dp)} ${units[i]}`;
+}
+
+function tryGetFilenameFromContentDisposition(cd) {
+  const s = String(cd || "");
+  if (!s) return "";
+  // filename*=UTF-8''... OR filename="..."
+  const m1 = s.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
+  if (m1?.[1]) {
+    try {
+      return decodeURIComponent(m1[1].trim().replace(/^"(.*)"$/, "$1"));
+    } catch {
+      return m1[1].trim().replace(/^"(.*)"$/, "$1");
+    }
+  }
+  const m2 = s.match(/filename\s*=\s*([^;]+)/i);
+  if (m2?.[1]) return m2[1].trim().replace(/^"(.*)"$/, "$1");
+  return "";
+}
+
 /* =========================
    Options
 ========================= */
@@ -285,6 +316,34 @@ function Icon({ name }) {
           <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
+    case "paperclip":
+      return (
+        <svg {...common}>
+          <path
+            d="M21.44 11.05l-8.49 8.49a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.19 9.19a2 2 0 0 1-2.83-2.83l8.49-8.49"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    case "download":
+      return (
+        <svg {...common}>
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M7 10l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M12 15V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
+    case "upload":
+      return (
+        <svg {...common}>
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M17 8l-5-5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M12 3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
     default:
       return null;
   }
@@ -342,6 +401,9 @@ const emptyForm = {
   decisionDate: "",
 
   contentText: "<p></p>",
+
+  // ✅ Attachment UI (optional, not part of upsert dto)
+  attachmentSelected: null, // File
 };
 
 export default function AdminLLRServices() {
@@ -391,6 +453,15 @@ export default function AdminLLRServices() {
   const originalContentRef = useRef("<p></p>");
   const originalProductIdRef = useRef(null);
 
+  // ✅ Attachment meta (comes from DTO on GET /law-reports/{id})
+  const [attachmentMeta, setAttachmentMeta] = useState({
+    hasAttachment: false,
+    fileType: "",
+    fileSizeBytes: null,
+    originalName: "",
+  });
+  const [attachBusy, setAttachBusy] = useState(false);
+
   function setField(k, v) {
     setForm((p) => ({ ...p, [k]: v }));
   }
@@ -403,10 +474,18 @@ export default function AdminLLRServices() {
     setCourts([]);
     originalContentRef.current = "<p></p>";
     originalProductIdRef.current = null;
+
+    setAttachmentMeta({
+      hasAttachment: false,
+      fileType: "",
+      fileSizeBytes: null,
+      originalName: "",
+    });
+    setAttachBusy(false);
   }
 
   function closeModal() {
-    if (busy) return;
+    if (busy || attachBusy) return;
     setOpen(false);
   }
 
@@ -431,27 +510,25 @@ export default function AdminLLRServices() {
     return base || town || "";
   }
 
-function autoTitleDraft(next = form) {
-  const parties = normalizeText(next.parties);
-  const citation = normalizeText(next.citation);
+  function autoTitleDraft(next = form) {
+    const parties = normalizeText(next.parties);
+    const citation = normalizeText(next.citation);
 
-  // ✅ Title format: "Parties [space] Citation"
-  // Example: "Chemical Partners Kenya Limited v Commissioner ... [2026] KECA 201 (KLR)"
-  const bits = [parties, citation].filter(Boolean);
-  return bits.join(" ").trim();
-}
-
+    // ✅ Title format: "Parties [space] Citation"
+    const bits = [parties, citation].filter(Boolean);
+    return bits.join(" ").trim();
+  }
 
   // Title hidden and always kept in sync
-    useEffect(() => {
-      if (!open) return;
+  useEffect(() => {
+    if (!open) return;
 
-      const nextTitle = autoTitleDraft(form);
-      if (nextTitle && nextTitle !== form.title) {
-        setForm((p) => ({ ...p, title: nextTitle }));
-      }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, form.parties, form.citation]);
+    const nextTitle = autoTitleDraft(form);
+    if (nextTitle && nextTitle !== form.title) {
+      setForm((p) => ({ ...p, title: nextTitle }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, form.parties, form.citation]);
 
   async function fetchCountries() {
     try {
@@ -695,6 +772,91 @@ function autoTitleDraft(next = form) {
     await api.delete(`/content-products/${pid}/documents/${mapId}`);
   }
 
+  // ✅ Attachment: download (authorized users). In admin screen we allow it too.
+  async function downloadAttachment(reportId, suggestedName = "") {
+    const id = toInt(reportId, 0);
+    if (!id) return;
+
+    setBusy(true);
+    setError("");
+    setInfo("");
+
+    try {
+      const res = await api.get(`/law-reports/${id}/attachment/download`, {
+        responseType: "blob",
+        // keep any headers (Content-Disposition etc.)
+        validateStatus: (s) => s >= 200 && s < 400, // let 403 throw via catch below if axios treats it as error; some clients won't
+      });
+
+      const cd = res?.headers?.["content-disposition"] || res?.headers?.["Content-Disposition"];
+      const filenameFromHeader = tryGetFilenameFromContentDisposition(cd);
+      const filename = filenameFromHeader || suggestedName || `law-report-${id}-attachment`;
+
+      const blob = res.data instanceof Blob ? res.data : new Blob([res.data || ""], { type: res?.headers?.["content-type"] || "application/octet-stream" });
+      const url = window.URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      window.URL.revokeObjectURL(url);
+
+      setInfo("Attachment downloaded.");
+    } catch (e) {
+      // If 403 with JSON body, show server message
+      const msg = getApiErrorMessage(e, "Download failed.");
+      setError(msg);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // ✅ Attachment: upload (Admin only) - optional
+  async function uploadAttachment(reportId, file) {
+    const id = toInt(reportId, 0);
+    if (!id) return setError("Save the report first, then upload an attachment.");
+    if (!file) return setError("Select a file to upload (PDF/DOC/DOCX).");
+
+    // quick client validation (server validates too)
+    const name = String(file?.name || "").toLowerCase();
+    const okExt = name.endsWith(".pdf") || name.endsWith(".doc") || name.endsWith(".docx");
+    if (!okExt) return setError("Only PDF/DOC/DOCX attachments are allowed.");
+
+    setAttachBusy(true);
+    setError("");
+    setInfo("");
+
+    try {
+      const fd = new FormData();
+      // server supports File or file; recommended "File"
+      fd.append("File", file);
+
+      const res = await api.post(`/law-reports/${id}/attachment`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      const d = res?.data ?? {};
+      setAttachmentMeta({
+        hasAttachment: !!(d?.hasAttachment ?? true),
+        fileType: normalizeText(d?.attachmentFileType ?? attachmentMeta.fileType),
+        fileSizeBytes: d?.attachmentFileSizeBytes ?? attachmentMeta.fileSizeBytes,
+        originalName: normalizeText(d?.attachmentOriginalName ?? file?.name ?? attachmentMeta.originalName),
+      });
+
+      setForm((p) => ({ ...p, attachmentSelected: null }));
+      setInfo("Attachment uploaded.");
+      // refresh list so row chips/actions reflect latest (if your admin list dto includes HasAttachment)
+      await fetchList();
+    } catch (e) {
+      setError(getApiErrorMessage(e, "Attachment upload failed."));
+    } finally {
+      setAttachBusy(false);
+    }
+  }
+
   useEffect(() => {
     (async () => {
       await fetchCountries();
@@ -742,7 +904,10 @@ function autoTitleDraft(next = form) {
           SERVICE_OPTIONS.find((x) => x.value === enumToInt(serviceVal, SERVICE_OPTIONS, 0))?.label ||
           "").toLowerCase();
 
-      const meta = `${year} ${citation} ${courtName} ${courtCode} ${legacyCourt} ${courtTypeLabel} ${div} ${town} ${caseNo} ${judges} ${countryName} ${serviceLabel}`;
+      const hasAttachment = !!pick(r, ["hasAttachment", "HasAttachment"], false);
+      const attachmentName = String(pick(r, ["attachmentOriginalName", "AttachmentOriginalName"], "")).toLowerCase();
+
+      const meta = `${year} ${citation} ${courtName} ${courtCode} ${legacyCourt} ${courtTypeLabel} ${div} ${town} ${caseNo} ${judges} ${countryName} ${serviceLabel} ${hasAttachment ? "attachment" : ""} ${attachmentName}`;
       return title.includes(s) || meta.includes(s);
     });
   }, [rows, q, countryFilter, countryMap]);
@@ -763,7 +928,9 @@ function autoTitleDraft(next = form) {
         case "year":
           return toInt(pick(r, ["year", "Year"], 0), 0);
         case "decision": {
-          const raw = pick(r, ["decisionTypeLabel", "DecisionTypeLabel"], null) ?? pick(r, ["decisionType", "DecisionType"], null);
+          const raw =
+            pick(r, ["decisionTypeLabel", "DecisionTypeLabel"], null) ??
+            pick(r, ["decisionType", "DecisionType"], null);
           const label = normalizeText(raw) || labelFrom(DECISION_OPTIONS, raw);
           return sortValue(label);
         }
@@ -850,6 +1017,7 @@ function autoTitleDraft(next = form) {
       title: "",
       contentProductId: defaultPid ? String(defaultPid) : "",
       courtCategory: "",
+      attachmentSelected: null,
     }));
 
     setOpen(true);
@@ -868,6 +1036,14 @@ function autoTitleDraft(next = form) {
       const d = res.data;
 
       setEditing(d);
+
+      // ✅ capture attachment meta for modal UI
+      setAttachmentMeta({
+        hasAttachment: !!pick(d, ["hasAttachment", "HasAttachment"], false),
+        fileType: normalizeText(pick(d, ["attachmentFileType", "AttachmentFileType"], "")),
+        fileSizeBytes: pick(d, ["attachmentFileSizeBytes", "AttachmentFileSizeBytes"], null),
+        originalName: normalizeText(pick(d, ["attachmentOriginalName", "AttachmentOriginalName"], "")),
+      });
 
       const decisionVal = enumToInt(pick(d, ["decisionType", "DecisionType"], 1), DECISION_OPTIONS, 1);
       const caseVal = enumToInt(pick(d, ["caseType", "CaseType"], 2), CASETYPE_OPTIONS, 2);
@@ -931,6 +1107,8 @@ function autoTitleDraft(next = form) {
         decisionDate: dateInputFromIso(pick(d, ["decisionDate", "DecisionDate"], "")),
 
         contentText: contentHtml,
+
+        attachmentSelected: null,
       };
 
       const pc2 = normalizeText(nextForm.postCode);
@@ -950,51 +1128,53 @@ function autoTitleDraft(next = form) {
     }
   }
 
-function buildPayload() {
-  const pid = toInt(form.contentProductId, 0);
-  const countryId = toInt(form.countryId, 0);
-  const courtId = toInt(form.courtId, 0);
+  function buildPayload() {
+    const pid = toInt(form.contentProductId, 0);
+    const countryId = toInt(form.countryId, 0);
+    const courtId = toInt(form.courtId, 0);
 
-  const courtDisplay = normalizeText(computeCourtDisplay(form)) || null;
+    const courtDisplay = normalizeText(computeCourtDisplay(form)) || null;
 
-  return {
-    category: 6,
-    title: normalizeText(form.title) || null,
+    return {
+      category: 6,
+      title: normalizeText(form.title) || null,
 
-    contentProductId: pid ? pid : null,
+      contentProductId: pid ? pid : null,
 
-    countryId,
-    service: toInt(form.service, 1),
+      countryId,
+      service: toInt(form.service, 1),
 
-    citation: normalizeText(form.citation) || null,
-    year: toInt(form.year, new Date().getUTCFullYear()),
-    caseNumber: normalizeText(form.caseNumber) || null,
+      citation: normalizeText(form.citation) || null,
+      year: toInt(form.year, new Date().getUTCFullYear()),
+      caseNumber: normalizeText(form.caseNumber) || null,
 
-    decisionType: toInt(form.decisionType, 1),
-    caseType: toInt(form.caseType, 2),
+      decisionType: toInt(form.decisionType, 1),
+      caseType: toInt(form.caseType, 2),
 
-    courtId: courtId ? courtId : null,
-    court: courtDisplay,
+      courtId: courtId ? courtId : null,
+      court: courtDisplay,
 
-    courtCategory: normalizeText(form.courtCategory) || null,
+      courtCategory: normalizeText(form.courtCategory) || null,
 
-    courtType: toInt(form.courtType, 3),
+      courtType: toInt(form.courtType, 3),
 
-    postCode: normalizeText(form.postCode) || null,
-    town: normalizeText(form.town) || null,
+      postCode: normalizeText(form.postCode) || null,
+      town: normalizeText(form.town) || null,
 
-    parties: normalizeText(form.parties) || null,
-    judges: normalizeText(form.judges) || null,
-    decisionDate: isoOrNullFromDateInput(form.decisionDate),
+      parties: normalizeText(form.parties) || null,
+      judges: normalizeText(form.judges) || null,
+      decisionDate: isoOrNullFromDateInput(form.decisionDate),
 
-    contentText: safeDefaultHtml(form.contentText),
-  };
-}
+      contentText: safeDefaultHtml(form.contentText),
+    };
+  }
 
   function validate() {
     if (!toInt(form.countryId, 0)) return "Country is required (select a country first).";
     if (!toInt(form.service, 0)) return "Service is required.";
     if (!normalizeText(form.parties)) return "Parties is required (e.g. A v B).";
+    // Always require decision date (used for citation year + consistency)
+    if (!normalizeText(form.decisionDate)) return "Decision Date is required.";
 
     const year = toInt(form.year, 0);
     if (!year || year < 1900 || year > 2100) return "Year must be between 1900 and 2100.";
@@ -1010,7 +1190,6 @@ function buildPayload() {
     if (!editing?.id && htmlLooksEmpty(form.contentText)) return "Report content is required on Create (paste the case).";
     return "";
   }
-
 
   async function save() {
     const msg = validate();
@@ -1186,6 +1365,30 @@ function buildPayload() {
         .admin-llrservices .laSelect { min-width: 190px; }
         .admin-llrservices .laMini { min-width: 160px; }
         .admin-llrservices .laClearBtn { border-radius: 999px; }
+
+        /* Attachments UI */
+        .admin-llrservices .laAttachBox {
+          border: 1px solid rgba(17,24,39,0.10);
+          border-radius: 14px;
+          padding: 12px;
+          background: rgba(255,255,255,0.7);
+        }
+        .admin-llrservices .laAttachRow { display:flex; gap: 10px; align-items:center; flex-wrap: wrap; }
+        .admin-llrservices .laAttachMeta { display:flex; flex-direction:column; gap: 2px; min-width: 240px; }
+        .admin-llrservices .laAttachName { font-weight: 700; color: rgba(17,24,39,0.86); }
+        .admin-llrservices .laAttachSub { color: rgba(17,24,39,0.6); font-size: 12px; }
+        .admin-llrservices .laPillBtn {
+          border-radius: 999px;
+          padding: 8px 12px;
+          display:inline-flex; align-items:center; gap: 8px;
+        }
+        .admin-llrservices .laPillBtn svg { width: 16px; height: 16px; }
+        .admin-llrservices .laFileInput {
+          padding: 8px;
+          border-radius: 12px;
+          border: 1px dashed rgba(17,24,39,0.18);
+          background: rgba(255,255,255,0.9);
+        }
       `}</style>
 
       <div className="admin-header">
@@ -1218,7 +1421,7 @@ function buildPayload() {
               </span>
               <input
                 className="admin-search admin-search-wide laSearch"
-                placeholder="Search by title, year, country, citation, court, division, town..."
+                placeholder="Search by title, year, country, citation, court, division, town... (and attachment name)"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
@@ -1344,8 +1547,10 @@ function buildPayload() {
                 const year = pick(r, ["year", "Year"], null);
                 const decisionDate = pick(r, ["decisionDate", "DecisionDate"], null);
 
-                // ✅ we hide "Town (Text)" chip and instead show Town together with Court Division inside Court chip
                 const courtLabel = courtTownDivisionDisplay(r);
+
+                const hasAttachment = !!pick(r, ["hasAttachment", "HasAttachment"], false);
+                const attachName = normalizeText(pick(r, ["attachmentOriginalName", "AttachmentOriginalName"], ""));
 
                 return (
                   <tr key={id ?? idx} className={`laRow ${idx % 2 === 1 ? "row-zebra" : ""} row-hover`}>
@@ -1383,6 +1588,25 @@ function buildPayload() {
                               Case No.: —
                             </span>
                           )}
+
+                          {/* ✅ Attachment chip (optional) */}
+                          {hasAttachment ? (
+                            <span className="chip laChipSoft" title={attachName ? `Attachment: ${attachName}` : "Attachment available"}>
+                              <span className="chipKey" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                <Icon name="paperclip" />
+                                Attachment:
+                              </span>
+                              &nbsp;{attachName || "Available"}
+                            </span>
+                          ) : (
+                            <span className="chip muted laChipSoft" title="No attachment">
+                              <span className="chipKey" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                <Icon name="paperclip" />
+                                Attachment:
+                              </span>
+                              &nbsp;—
+                            </span>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -1411,6 +1635,16 @@ function buildPayload() {
                       <div className="actionsRow laActions">
                         <IconButton title="Edit report details + formatted content" onClick={() => openEdit(r)} disabled={busy}>
                           <Icon name="edit" />
+                        </IconButton>
+
+                        {/* ✅ quick download (if attachment exists) */}
+                        <IconButton
+                          title={hasAttachment ? "Download attachment" : "No attachment"}
+                          onClick={() => hasAttachment && downloadAttachment(id, attachName)}
+                          disabled={busy || !hasAttachment}
+                          tone={hasAttachment ? "primary" : "neutral"}
+                        >
+                          <Icon name="download" />
                         </IconButton>
 
                         <IconButton
@@ -1447,7 +1681,7 @@ function buildPayload() {
                 <div className="admin-modal-subtitle">Court Division maps to CourtCategory (optional).</div>
               </div>
 
-              <button className="admin-btn" onClick={closeModal} disabled={busy}>
+              <button className="admin-btn" onClick={closeModal} disabled={busy || attachBusy}>
                 Close
               </button>
             </div>
@@ -1461,7 +1695,7 @@ function buildPayload() {
                     value={form.parties}
                     onChange={(e) => setField("parties", e.target.value)}
                     placeholder="e.g. A v B"
-                    disabled={busy}
+                    disabled={busy || attachBusy}
                   />
                   <div className="hint">Title is generated automatically as: Parties + Citation.</div>
                 </div>
@@ -1486,7 +1720,7 @@ function buildPayload() {
                           className="adminSelect"
                           value={String(form.contentProductId || "")}
                           onChange={(e) => setField("contentProductId", e.target.value)}
-                          disabled={busy}
+                          disabled={busy || attachBusy}
                         >
                           <option value="">Select product…</option>
                           {products.map((p) => (
@@ -1503,7 +1737,7 @@ function buildPayload() {
                           value={String(form.contentProductId || "")}
                           onChange={(e) => setField("contentProductId", e.target.value)}
                           placeholder={productsLoading ? "Loading products…" : "ContentProductId"}
-                          disabled={busy || productsLoading}
+                          disabled={busy || productsLoading || attachBusy}
                         />
                       )}
 
@@ -1520,11 +1754,88 @@ function buildPayload() {
                   </div>
                 </div>
 
+                {/* ✅ Attachments (optional) */}
+                <div className="admin-field admin-span2">
+                  <label style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                      <Icon name="paperclip" />
+                      Attachment (optional)
+                    </span>
+                  </label>
+
+                  <div className="laAttachBox">
+                    {!pick(editing, ["id", "Id"], null) ? (
+                      <div className="hint">
+                        Save/Create the report first, then you can upload an attachment (PDF/DOC/DOCX).
+                      </div>
+                    ) : (
+                      <div className="laAttachRow">
+                        <div className="laAttachMeta">
+                          <div className="laAttachName">
+                            {attachmentMeta.hasAttachment ? attachmentMeta.originalName || "Attachment available" : "No attachment"}
+                          </div>
+                          <div className="laAttachSub">
+                            {attachmentMeta.hasAttachment ? (
+                              <>
+                                {attachmentMeta.fileType ? attachmentMeta.fileType.toUpperCase() : "FILE"}{" "}
+                                {attachmentMeta.fileSizeBytes ? `• ${formatBytes(attachmentMeta.fileSizeBytes)}` : ""}
+                              </>
+                            ) : (
+                              <>Upload a PDF/DOC/DOCX.</>
+                            )}
+                          </div>
+                        </div>
+
+                        <input
+                          className="laFileInput"
+                          type="file"
+                          accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                          disabled={busy || attachBusy}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0] || null;
+                            setForm((p) => ({ ...p, attachmentSelected: f }));
+                          }}
+                        />
+
+                        <button
+                          type="button"
+                          className="admin-btn laPillBtn"
+                          disabled={busy || attachBusy || !attachmentMeta.hasAttachment}
+                          onClick={() => downloadAttachment(pick(editing, ["id", "Id"], null), attachmentMeta.originalName)}
+                          title="Download attachment (authorized users)"
+                        >
+                          <Icon name="download" />
+                          Download
+                        </button>
+
+                        <button
+                          type="button"
+                          className="admin-btn primary laPillBtn"
+                          disabled={busy || attachBusy || !form.attachmentSelected}
+                          onClick={() => uploadAttachment(pick(editing, ["id", "Id"], null), form.attachmentSelected)}
+                          title={attachmentMeta.hasAttachment ? "Replace attachment" : "Upload attachment"}
+                        >
+                          <Icon name="upload" />
+                          {attachBusy ? "Uploading…" : attachmentMeta.hasAttachment ? "Replace" : "Upload"}
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="hint" style={{ marginTop: 8 }}>
+                      Policy: PDF may be downloadable for preview users (unless hard-blocked). DOC/DOCX may require FullAccess.
+                    </div>
+                  </div>
+                </div>
+
                 <div className="admin-field">
                   <label>Country *</label>
 
                   {countries.length > 0 ? (
-                    <select value={String(form.countryId || "")} onChange={(e) => handleCountryChange(e.target.value)} disabled={busy}>
+                    <select
+                      value={String(form.countryId || "")}
+                      onChange={(e) => handleCountryChange(e.target.value)}
+                      disabled={busy || attachBusy}
+                    >
                       <option value="">Select country…</option>
                       {countries.map((c) => (
                         <option key={c.id} value={c.id}>
@@ -1540,7 +1851,7 @@ function buildPayload() {
                         value={form.countryId}
                         onChange={(e) => handleCountryChange(e.target.value)}
                         placeholder="CountryId"
-                        disabled={busy}
+                        disabled={busy || attachBusy}
                       />
                       <div className="hint">Tip: ensure GET /api/country is accessible.</div>
                     </>
@@ -1549,7 +1860,11 @@ function buildPayload() {
 
                 <div className="admin-field">
                   <label>Service *</label>
-                  <select value={String(form.service)} onChange={(e) => setField("service", toInt(e.target.value, 1))} disabled={busy}>
+                  <select
+                    value={String(form.service)}
+                    onChange={(e) => setField("service", toInt(e.target.value, 1))}
+                    disabled={busy || attachBusy}
+                  >
                     {SERVICE_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
@@ -1567,7 +1882,7 @@ function buildPayload() {
                     value={form.year}
                     onChange={(e) => setField("year", e.target.value)}
                     placeholder="e.g. 2020"
-                    disabled={busy}
+                    disabled={busy || attachBusy}
                   />
                 </div>
 
@@ -1577,7 +1892,7 @@ function buildPayload() {
                     value={form.caseNumber}
                     onChange={(e) => setField("caseNumber", e.target.value)}
                     placeholder="e.g. Petition 12 of 2020"
-                    disabled={busy}
+                    disabled={busy || attachBusy}
                   />
                 </div>
 
@@ -1587,7 +1902,7 @@ function buildPayload() {
                     value={form.citation}
                     onChange={(e) => setField("citation", e.target.value)}
                     placeholder="Optional (preferred if available)"
-                    disabled={busy}
+                    disabled={busy || attachBusy}
                   />
                 </div>
 
@@ -1597,7 +1912,7 @@ function buildPayload() {
                   <select
                     value={String(form.courtId || "")}
                     onChange={(e) => setField("courtId", e.target.value)}
-                    disabled={busy || !toInt(form.countryId, 0)}
+                    disabled={busy || attachBusy || !toInt(form.countryId, 0)}
                   >
                     {!toInt(form.countryId, 0) ? (
                       <option value="">Select country first…</option>
@@ -1625,7 +1940,7 @@ function buildPayload() {
                   <select
                     value={String(form.postCode || "")}
                     onChange={(e) => handleTownSelect(e.target.value)}
-                    disabled={busy || !toInt(form.countryId, 0)}
+                    disabled={busy || attachBusy || !toInt(form.countryId, 0)}
                   >
                     {!toInt(form.countryId, 0) ? (
                       <option value="">Select country first…</option>
@@ -1652,7 +1967,7 @@ function buildPayload() {
                         value={form.courtCategory}
                         onChange={(e) => setField("courtCategory", e.target.value)}
                         placeholder='e.g. "Environmental Court", "Industrial" (optional)'
-                        disabled={busy}
+                        disabled={busy || attachBusy}
                       />
                       <div className="hint">Saved to backend as CourtCategory (nullable).</div>
                     </div>
@@ -1663,7 +1978,7 @@ function buildPayload() {
                         type="date"
                         value={form.decisionDate}
                         onChange={(e) => setField("decisionDate", e.target.value)}
-                        disabled={busy}
+                        disabled={busy || attachBusy}
                       />
                     </div>
                   </div>
@@ -1677,7 +1992,11 @@ function buildPayload() {
                   <>
                     <div className="admin-field">
                       <label>Legacy Court Type (fallback)</label>
-                      <select value={String(form.courtType)} onChange={(e) => setField("courtType", toInt(e.target.value, 3))} disabled={busy}>
+                      <select
+                        value={String(form.courtType)}
+                        onChange={(e) => setField("courtType", toInt(e.target.value, 3))}
+                        disabled={busy || attachBusy}
+                      >
                         {COURT_TYPE_OPTIONS.map((o) => (
                           <option key={o.value} value={o.value}>
                             {o.label}
@@ -1692,7 +2011,7 @@ function buildPayload() {
                         value={form.court}
                         onChange={(e) => setField("court", e.target.value)}
                         placeholder="Optional display text (legacy)"
-                        disabled={busy}
+                        disabled={busy || attachBusy}
                       />
                     </div>
                   </>
@@ -1700,7 +2019,11 @@ function buildPayload() {
 
                 <div className="admin-field">
                   <label>Decision Type *</label>
-                  <select value={String(form.decisionType)} onChange={(e) => setField("decisionType", toInt(e.target.value, 1))} disabled={busy}>
+                  <select
+                    value={String(form.decisionType)}
+                    onChange={(e) => setField("decisionType", toInt(e.target.value, 1))}
+                    disabled={busy || attachBusy}
+                  >
                     {DECISION_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
@@ -1711,7 +2034,11 @@ function buildPayload() {
 
                 <div className="admin-field">
                   <label>Case Type *</label>
-                  <select value={String(form.caseType)} onChange={(e) => setField("caseType", toInt(e.target.value, 2))} disabled={busy}>
+                  <select
+                    value={String(form.caseType)}
+                    onChange={(e) => setField("caseType", toInt(e.target.value, 2))}
+                    disabled={busy || attachBusy}
+                  >
                     {CASETYPE_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
@@ -1727,7 +2054,7 @@ function buildPayload() {
                     value={form.judges}
                     onChange={(e) => setField("judges", e.target.value)}
                     placeholder="Separate by newline or semicolon"
-                    disabled={busy}
+                    disabled={busy || attachBusy}
                   />
                 </div>
 
@@ -1741,7 +2068,7 @@ function buildPayload() {
                         <button
                           type="button"
                           className="miniBtn"
-                          disabled={busy}
+                          disabled={busy || attachBusy}
                           onClick={() => openContent(editing)}
                           title="Open the full-page editor (optional)"
                         >
@@ -1749,13 +2076,23 @@ function buildPayload() {
                         </button>
                       )}
 
-                      <button type="button" className="miniBtn" disabled={busy} onClick={() => setField("contentText", "<p></p>")} title="Clear content">
+                      <button
+                        type="button"
+                        className="miniBtn"
+                        disabled={busy || attachBusy}
+                        onClick={() => setField("contentText", "<p></p>")}
+                        title="Clear content"
+                      >
                         Clear
                       </button>
                     </div>
                   </div>
 
-                  <ReportTiptapEditor value={safeDefaultHtml(form.contentText)} onChange={(html) => setField("contentText", html)} disabled={busy} />
+                  <ReportTiptapEditor
+                    value={safeDefaultHtml(form.contentText)}
+                    onChange={(html) => setField("contentText", html)}
+                    disabled={busy || attachBusy}
+                  />
 
                   <div className="hint">Paste from Word is supported. This content is saved together with the report.</div>
                 </div>
@@ -1763,11 +2100,11 @@ function buildPayload() {
             </div>
 
             <div className="admin-modal-foot">
-              <button className="admin-btn" onClick={closeModal} disabled={busy}>
+              <button className="admin-btn" onClick={closeModal} disabled={busy || attachBusy}>
                 Cancel
               </button>
 
-              <button className="admin-btn primary" onClick={save} disabled={busy}>
+              <button className="admin-btn primary" onClick={save} disabled={busy || attachBusy}>
                 {busy ? "Saving…" : editing ? "Save changes" : "Create"}
               </button>
             </div>
