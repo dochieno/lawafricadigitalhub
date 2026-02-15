@@ -373,6 +373,27 @@ function saveBlobToDisk(blob, filename) {
   setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 }
 
+function getFilenameFromContentDisposition(cd) {
+  const raw = String(cd || "");
+  if (!raw) return "";
+
+  // RFC 5987: filename*=UTF-8''....
+  const m5987 = raw.match(/filename\*\s*=\s*([^']*)''([^;]+)/i);
+  if (m5987?.[2]) {
+    try {
+      return decodeURIComponent(m5987[2].trim().replace(/^"|"$/g, ""));
+    } catch {
+      return m5987[2].trim().replace(/^"|"$/g, "");
+    }
+  }
+
+  // Basic: filename="..."
+  const m = raw.match(/filename\s*=\s*("?)([^";]+)\1/i);
+  if (m?.[2]) return m[2].trim();
+
+  return "";
+}
+
 function formatDate(d) {
   if (!d) return "";
   const dt = new Date(d);
@@ -1071,6 +1092,7 @@ function AiLockedPanel({ access, onGo }) {
   );
 }
 
+
 /* =========================================================
    Page
 ========================================================= */
@@ -1597,63 +1619,47 @@ export default function LawReportReader() {
     }
   }
 
-    async function downloadPdfNow() {
-    if (!report) return;
-    if (!canDownloadPdf) return;
+async function downloadPdfNow() {
+  if (!reportId) return;
+  if (!canDownloadPdf) return;
 
-    setPdfErr("");
+  setPdfErr("");
 
-    // You can support BOTH:
-    // 1) Direct URL (pdfUrl / downloadUrl) if backend gives it
-    // 2) Blob endpoint fallback (recommended)
-    const filename = guessPdfFilename({ report, reportId, title: report?.parties || report?.title || "" });
+  const fallbackName = guessPdfFilename({
+    report,
+    reportId,
+    title: report?.parties || report?.title || "",
+  });
 
-    try {
-      setPdfBusy(true);
+  try {
+    setPdfBusy(true);
 
-      // If you have a direct URL already (and it is same-origin or supports CORS),
-      // you can just open it. BUT: you asked "saves the file", so we prefer blob.
-      // We'll still use URL if it exists and looks like an API path we can fetch as blob.
-      const directUrl = pdfMeta?.url;
+    // ✅ EXACT endpoint used by AdminLLRServices
+    const url = `/law-reports/${reportId}/attachment/download`;
 
-      // --- OPTION A: If your API exposes a download endpoint for law reports (BEST DEFAULT) ---
-      // Adjust this endpoint if yours is different:
-      // - /law-reports/{id}/pdf
-      // - /law-reports/{id}/download
-      // - /legal-documents/{legalDocumentId}/pdf
-      //
-      // This will save immediately using blob.
-      let endpoint = "";
+    const res = await api.get(url, { responseType: "blob" });
 
-      if (report?.legalDocumentId) {
-        // Prefer legal-documents route if you already standardize downloads there
-        endpoint = `/legal-documents/${report.legalDocumentId}/pdf`;
-      } else {
-        endpoint = `/law-reports/${reportId}/pdf`;
-      }
+    const blob = res?.data;
+    if (!blob) throw new Error("No file returned.");
 
-      // If your backend already provides a direct URL, you can try that as endpoint too
-      // (especially if it is an API path like "/storage/xxx.pdf" or "/law-reports/..")
-      const tryUrlFirst =
-        directUrl &&
-        (directUrl.startsWith("/") || directUrl.includes(window.location.origin));
+    // ✅ Filename from Content-Disposition (fallback to guess)
+    const cd =
+      res?.headers?.["content-disposition"] ||
+      res?.headers?.["Content-Disposition"] ||
+      "";
 
-      const fetchUrl = tryUrlFirst ? directUrl : endpoint;
+    const serverName = getFilenameFromContentDisposition(cd);
+    const filename = serverName || fallbackName;
 
-      const res = await api.get(fetchUrl, { responseType: "blob" });
-
-      // Axios blob
-      const blob = res?.data;
-      if (!blob) throw new Error("No file returned.");
-
-      saveBlobToDisk(blob, filename);
-    } catch (e) {
-      console.warn("[LawReportReader] downloadPdfNow failed", e);
-      setPdfErr(getApiErrorMessage(e, "Failed to download PDF."));
-    } finally {
-      setPdfBusy(false);
-    }
+    saveBlobToDisk(blob, filename);
+  } catch (e) {
+    // ✅ Show server error message (403/500/405 etc.)
+    setPdfErr(getApiErrorMessage(e, "Failed to download PDF."));
+  } finally {
+    setPdfBusy(false);
   }
+}
+
 
   function goUrl(url) {
     if (!url) return;
@@ -2925,30 +2931,9 @@ function parseSectionedSummary(text) {
 
           {/* Right: actions */}
           <div className="lrr2MetaActions">
-            {/* ✅ Download PDF */}
-            <button
-              type="button"
-              className={`lrr2DownloadBtn ${pdfBusy ? "isBusy" : ""}`}
-              onClick={downloadPdfNow}
-              disabled={!canDownloadPdf || pdfBusy}
-              title={
-                !canDownloadPdf
-                  ? "Subscribe to unlock downloads"
-                  : "Download PDF"
-              }
-              aria-disabled={!canDownloadPdf || pdfBusy}
-            >
-              {pdfBusy ? "Preparing…" : pdfBtnLabel}
-            </button>
-
-            {pdfErr ? (
-              <div className="lrr2DownloadErr">
-                {pdfErr}
-              </div>
-            ) : null}
-
             {/* ✅ Copy now copies useful info by default; dropdown is options */}
-            <div className="lrr2Menu lrr2CopyCombo" ref={copyMenuRef}>
+
+                       <div className="lrr2Menu lrr2CopyCombo" ref={copyMenuRef}>
               {/* Main copy action */}
               <button
                 type="button"
@@ -3058,7 +3043,6 @@ function parseSectionedSummary(text) {
               ) : null}
             </div>
           </div>
-
         </div>
 
         {/* ✅ Tabs moved into same container so they align with meta row */}
@@ -3077,6 +3061,21 @@ function parseSectionedSummary(text) {
             Transcript
             {isPremium && !hasFullAccess ? <span className="lrr2SegBadge lock">🔒</span> : null}
           </button>
+
+          {/* ✅ Download PDF button placed under tabs (after Transcript) */}
+          <button
+            type="button"
+            className={`lrr2SegActionBtn ${pdfBusy ? "isBusy" : ""}`}
+            onClick={downloadPdfNow}
+            disabled={!canDownloadPdf || pdfBusy}
+            title={!canDownloadPdf ? "Subscribe to unlock downloads" : "Download PDF"}
+            aria-label="Download PDF"
+          >
+            {pdfBusy ? "Preparing…" : pdfBtnLabel}
+          </button>
+
+          {/* optional tiny inline error (won’t distort layout) */}
+          {pdfErr ? <span className="lrr2SegActionErr">{pdfErr}</span> : null}
 
           <button
             type="button"
@@ -3108,6 +3107,7 @@ function parseSectionedSummary(text) {
             Split
           </button>
         </div>
+
       </div>
 
       <section className="lrr2Content">
