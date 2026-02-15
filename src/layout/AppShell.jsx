@@ -20,6 +20,10 @@ function navLinkClass({ isActive }) {
   return `topnav-link ${isActive ? "active" : ""}`;
 }
 
+function clamp(n, min, max) {
+  return Math.max(min, Math.min(max, n));
+}
+
 export default function AppShell() {
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -52,6 +56,13 @@ export default function AppShell() {
   const adminRef = useRef(null);
   const financeRef = useRef(null);
 
+  // ✅ Fixed-position menu placement (like profile menu)
+  const [menuPos, setMenuPos] = useState({
+    approvals: null,
+    finance: null,
+    admin: null,
+  });
+
   const clearCloseTimer = () => {
     if (closeTimerRef.current) {
       clearTimeout(closeTimerRef.current);
@@ -61,13 +72,43 @@ export default function AppShell() {
 
   const scheduleClose = useCallback(() => {
     clearCloseTimer();
-    closeTimerRef.current = setTimeout(() => setOpenDd(null), 180); // slightly longer = less “vanish”
+    closeTimerRef.current = setTimeout(() => setOpenDd(null), 180);
   }, []);
 
-  const openNow = useCallback((key) => {
-    clearCloseTimer();
-    setOpenDd(key);
+  const computeAndSetMenuPos = useCallback((key) => {
+    const map = {
+      approvals: approvalsRef.current,
+      finance: financeRef.current,
+      admin: adminRef.current,
+    };
+    const wrap = map[key];
+    const btn = wrap?.querySelector?.("button.dd-toggle");
+    if (!btn) return;
+
+    const r = btn.getBoundingClientRect();
+    const gap = 10;
+
+    const width = Math.max(240, Math.round(r.width));
+    const maxLeft = window.innerWidth - width - 10;
+
+    const left = clamp(Math.round(r.left), 10, Math.max(10, maxLeft));
+    const top = Math.round(r.bottom + gap);
+
+    setMenuPos((p) => ({
+      ...p,
+      [key]: { top, left, width },
+    }));
   }, []);
+
+  const openNow = useCallback(
+    (key) => {
+      clearCloseTimer();
+      setOpenDd(key);
+      // place menu on open (next tick so DOM is stable)
+      requestAnimationFrame(() => computeAndSetMenuPos(key));
+    },
+    [computeAndSetMenuPos]
+  );
 
   function confirmLogout() {
     setShowLogoutConfirm(true);
@@ -97,7 +138,12 @@ export default function AppShell() {
       const insideAD = ad && ad.contains(e.target);
       const insideF = f && f.contains(e.target);
 
-      if (!insideA && !insideAD && !insideF) setOpenDd(null);
+      // Also allow clicks inside the floating menus
+      const insideFloatingMenu = !!e.target?.closest?.(".dd-menu");
+
+      if (!insideA && !insideAD && !insideF && !insideFloatingMenu) {
+        setOpenDd(null);
+      }
     }
 
     document.addEventListener("keydown", onKeyDown);
@@ -108,8 +154,22 @@ export default function AppShell() {
     };
   }, []);
 
-  // “Active” state should keep dropdown highlighted when on that section,
-  // but still allow hover-open when elsewhere.
+  // Keep menu aligned on scroll/resize while open
+  useEffect(() => {
+    if (!openDd) return;
+
+    const onReflow = () => computeAndSetMenuPos(openDd);
+
+    window.addEventListener("resize", onReflow);
+    // capture scrolls from any container
+    window.addEventListener("scroll", onReflow, true);
+
+    return () => {
+      window.removeEventListener("resize", onReflow);
+      window.removeEventListener("scroll", onReflow, true);
+    };
+  }, [openDd, computeAndSetMenuPos]);
+
   const approvalsOpenFinal = isInApprovals ? true : openDd === "approvals";
   const financeOpenFinal = isInFinance ? true : openDd === "finance";
   const adminOpenFinal = isInAdmin ? true : openDd === "admin";
@@ -198,7 +258,11 @@ export default function AppShell() {
                   aria-expanded={approvalsOpenFinal}
                   aria-haspopup="menu"
                   onClick={() =>
-                    setOpenDd((cur) => (cur === "approvals" ? null : "approvals"))
+                    setOpenDd((cur) => {
+                      const next = cur === "approvals" ? null : "approvals";
+                      if (next) requestAnimationFrame(() => computeAndSetMenuPos("approvals"));
+                      return next;
+                    })
                   }
                 >
                   <Chevron open={approvalsOpenFinal} />
@@ -210,6 +274,12 @@ export default function AppShell() {
                     className="dd-menu"
                     role="menu"
                     aria-label="Approvals menu"
+                    style={{
+                      position: "fixed",
+                      top: menuPos.approvals?.top ?? 0,
+                      left: menuPos.approvals?.left ?? 0,
+                      minWidth: menuPos.approvals?.width ?? 240,
+                    }}
                     onMouseEnter={() => openNow("approvals")}
                     onMouseLeave={scheduleClose}
                   >
@@ -264,7 +334,11 @@ export default function AppShell() {
                   aria-expanded={financeOpenFinal}
                   aria-haspopup="menu"
                   onClick={() =>
-                    setOpenDd((cur) => (cur === "finance" ? null : "finance"))
+                    setOpenDd((cur) => {
+                      const next = cur === "finance" ? null : "finance";
+                      if (next) requestAnimationFrame(() => computeAndSetMenuPos("finance"));
+                      return next;
+                    })
                   }
                 >
                   <Chevron open={financeOpenFinal} />
@@ -276,6 +350,12 @@ export default function AppShell() {
                     className="dd-menu"
                     role="menu"
                     aria-label="Finance menu"
+                    style={{
+                      position: "fixed",
+                      top: menuPos.finance?.top ?? 0,
+                      left: menuPos.finance?.left ?? 0,
+                      minWidth: menuPos.finance?.width ?? 240,
+                    }}
                     onMouseEnter={() => openNow("finance")}
                     onMouseLeave={scheduleClose}
                   >
@@ -332,7 +412,11 @@ export default function AppShell() {
                   aria-expanded={adminOpenFinal}
                   aria-haspopup="menu"
                   onClick={() =>
-                    setOpenDd((cur) => (cur === "admin" ? null : "admin"))
+                    setOpenDd((cur) => {
+                      const next = cur === "admin" ? null : "admin";
+                      if (next) requestAnimationFrame(() => computeAndSetMenuPos("admin"));
+                      return next;
+                    })
                   }
                 >
                   <Chevron open={adminOpenFinal} />
@@ -344,6 +428,12 @@ export default function AppShell() {
                     className="dd-menu"
                     role="menu"
                     aria-label="Admin menu"
+                    style={{
+                      position: "fixed",
+                      top: menuPos.admin?.top ?? 0,
+                      left: menuPos.admin?.left ?? 0,
+                      minWidth: menuPos.admin?.width ?? 240,
+                    }}
                     onMouseEnter={() => openNow("admin")}
                     onMouseLeave={scheduleClose}
                   >

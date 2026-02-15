@@ -10,11 +10,6 @@
 
 /* =========================================================
    TOP NAV (PREMIUM BRAND GRADIENT)
-   Requested: rgb(123,117,117) and rgb(134,20,31)
-
-   Dropdown Fixes:
-   - Ensure NO clipping: overflow: visible everywhere relevant
-   - Strong layering: z-index + isolated stacking context
 ========================================================= */
 
 .topnav {
@@ -22,7 +17,6 @@
   top: 0;
   z-index: 80;
 
-  /* ✅ Premium brand gradient */
   background: linear-gradient(
     90deg,
     rgb(123, 117, 117) 0%,
@@ -32,10 +26,8 @@
 
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 
-  /* ✅ critical: never clip dropdowns */
+  /* ok to keep visible, but dropdown is fixed now anyway */
   overflow: visible;
-
-  /* ✅ keeps dropdown z-index behavior consistent even if other css adds transforms elsewhere */
   isolation: isolate;
 }
 
@@ -48,8 +40,7 @@
 
   position: relative;
   z-index: 2;
-
-  overflow: visible; /* ✅ no clipping */
+  overflow: visible;
 }
 
 /* Brand */
@@ -89,7 +80,7 @@
   min-width: 0;
 
   overflow-x: auto;
-  overflow-y: visible; /* ✅ allow dropdowns */
+  overflow-y: visible;
   white-space: nowrap;
   -webkit-overflow-scrolling: touch;
 
@@ -112,16 +103,13 @@
   gap: 8px;
 
   text-decoration: none;
-
-  /* ✅ on dark gradient -> light text */
   color: rgba(255, 255, 255, 0.88);
 
   padding: 10px 12px;
   border-radius: 12px;
 
   transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease,
-    border-color 0.15s ease, transform 0.15s ease;
-
+    border-color 0.15s ease;
   border: 1px solid transparent;
 }
 
@@ -129,7 +117,7 @@
   background: rgba(255, 255, 255, 0.10);
 }
 
-/* ✅ Active tab: premium bright chip on gradient */
+/* Active tab */
 .topnav-link.active {
   background: rgba(255, 255, 255, 0.16);
   border-color: rgba(255, 255, 255, 0.18);
@@ -153,8 +141,6 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-
-  /* ✅ avoid weird stacking from parents */
   z-index: 5;
 }
 
@@ -175,14 +161,10 @@
   transform: rotate(90deg);
 }
 
-/* ✅ Premium floating menu */
+/* ✅ Premium floating menu
+   NOW position is FIXED via inline style in JSX
+*/
 .dd-menu {
-  position: absolute;
-  top: calc(100% + 10px);
-  left: 0;
-  min-width: 240px;
-
-  /* ✅ readable on top of gradient */
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(10px);
 
@@ -191,9 +173,7 @@
   box-shadow: 0 18px 55px rgba(2, 6, 23, 0.22);
   padding: 8px;
 
-  /* ✅ MUST be above everything */
-  z-index: 9999;
-
+  z-index: 99999;
   transform-origin: top left;
   animation: ddPop 140ms ease-out;
 }
