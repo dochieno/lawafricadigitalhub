@@ -1,81 +1,95 @@
 /* src/styles/appshell.css */
 
-.app-shell{
+.app-shell {
   min-height: 100vh;
   background: var(--la-bg);
   font-family: var(--font-main);
-  display:flex;
+  display: flex;
   flex-direction: column;
 }
 
 /* =========================================================
-   TOP NAV (LIGHT / GREY-WHITE BRAND) + PREMIUM DROPDOWNS
-   Fixes:
-   - Dropdowns showing (no clipping): overflow-y: visible
-   - Better layering: z-index stacking + menu z-index
-   - Active tab: NOT white; red gradient + white text
+   TOP NAV (PREMIUM BRAND GRADIENT)
+   Requested: rgb(123,117,117) and rgb(134,20,31)
+
+   Dropdown Fixes:
+   - Ensure NO clipping: overflow: visible everywhere relevant
+   - Strong layering: z-index + isolated stacking context
 ========================================================= */
 
-.topnav{
+.topnav {
   position: sticky;
   top: 0;
   z-index: 80;
 
-  /* light premium band */
-  background: linear-gradient(90deg, #ffffff 0%, #f3f4f6 55%, #ffffff 100%);
-  border-bottom: 1px solid rgba(15,23,42,0.08);
+  /* ✅ Premium brand gradient */
+  background: linear-gradient(
+    90deg,
+    rgb(123, 117, 117) 0%,
+    rgb(134, 20, 31) 65%,
+    rgb(134, 20, 31) 100%
+  );
+
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+
+  /* ✅ critical: never clip dropdowns */
+  overflow: visible;
+
+  /* ✅ keeps dropdown z-index behavior consistent even if other css adds transforms elsewhere */
+  isolation: isolate;
 }
 
-.topnav-inner{
+.topnav-inner {
   height: 64px;
-  display:flex;
-  align-items:center;
+  display: flex;
+  align-items: center;
   gap: 16px;
   padding: 0 18px;
 
   position: relative;
   z-index: 2;
+
+  overflow: visible; /* ✅ no clipping */
 }
 
 /* Brand */
-.topnav-brand{
-  display:flex;
-  align-items:center;
+.topnav-brand {
+  display: flex;
+  align-items: center;
   gap: 10px;
-  text-decoration:none;
-  color: #0f172a;
-  user-select:none;
+  text-decoration: none;
+  user-select: none;
 }
 
-.topnav-logo{
+.topnav-logo {
   width: 34px;
   height: 34px;
   border-radius: 10px;
   object-fit: contain;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.08);
 }
 
-.topnav-wordmark{
+.topnav-wordmark {
   font-weight: 800;
-  letter-spacing: .2px;
+  letter-spacing: 0.2px;
   font-size: 16px;
-  color: #0f172a;
+  color: rgba(255, 255, 255, 0.95);
 }
 
-.topnav-wordmark .la-a{
-  color: #a1181e;
+.topnav-wordmark .la-a {
+  color: rgba(255, 255, 255, 0.98);
 }
 
 /* Center links (scrollable) */
-.topnav-links{
-  display:flex;
-  align-items:center;
+.topnav-links {
+  display: flex;
+  align-items: center;
   gap: 8px;
   flex: 1;
   min-width: 0;
 
   overflow-x: auto;
-  overflow-y: visible;         /* ✅ allow dropdowns to render */
+  overflow-y: visible; /* ✅ allow dropdowns */
   white-space: nowrap;
   -webkit-overflow-scrolling: touch;
 
@@ -84,162 +98,187 @@
   z-index: 1;
 }
 
-.topnav-links::-webkit-scrollbar{ height: 6px; }
-.topnav-links::-webkit-scrollbar-thumb{ border-radius: 999px; }
+.topnav-links::-webkit-scrollbar {
+  height: 6px;
+}
+.topnav-links::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+}
 
 /* Base link style */
-.topnav-link{
-  display:inline-flex;
-  align-items:center;
+.topnav-link {
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
 
-  text-decoration:none;
-  color: rgba(15,23,42,0.78);
+  text-decoration: none;
+
+  /* ✅ on dark gradient -> light text */
+  color: rgba(255, 255, 255, 0.88);
 
   padding: 10px 12px;
   border-radius: 12px;
 
-  transition: background .15s ease, color .15s ease, box-shadow .15s ease, border-color .15s ease;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease,
+    border-color 0.15s ease, transform 0.15s ease;
+
   border: 1px solid transparent;
 }
 
-.topnav-link:hover{
-  background: rgba(15,23,42,0.04);
+.topnav-link:hover {
+  background: rgba(255, 255, 255, 0.10);
 }
 
-/* ✅ Active tab: red gradient + white text (not white) */
-.topnav-link.active{
-  background: linear-gradient(135deg,
-    rgba(161,24,30,0.95) 0%,
-    rgba(209,31,42,0.78) 45%,
-    rgba(161,24,30,0.58) 100%
-  );
-  border-color: rgba(161,24,30,0.22);
-  color:#fff;
-  box-shadow: 0 10px 24px rgba(161,24,30,0.18);
+/* ✅ Active tab: premium bright chip on gradient */
+.topnav-link.active {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
 }
 
-.topnav-link.dev{ opacity: .95; }
+.topnav-link.dev {
+  opacity: 0.95;
+}
 
 /* Right side */
-.topnav-right{
-  display:flex;
-  align-items:center;
+.topnav-right {
+  display: flex;
+  align-items: center;
   gap: 10px;
 }
 
 /* Dropdown wrapper */
-.topnav-dd{
+.topnav-dd {
   position: relative;
-  display:inline-flex;
-  align-items:center;
+  display: inline-flex;
+  align-items: center;
+
+  /* ✅ avoid weird stacking from parents */
+  z-index: 5;
 }
 
 /* Toggle must look like other links */
-.dd-toggle{
+.dd-toggle {
   background: transparent;
   border: 0;
   cursor: pointer;
 }
 
-.nav-chevron{
-  display:inline-block;
+.nav-chevron {
+  display: inline-block;
   transition: transform 140ms ease;
-  opacity: .7;
+  opacity: 0.85;
 }
 
-.nav-chevron.open{
+.nav-chevron.open {
   transform: rotate(90deg);
 }
 
-/* ✅ Premium floating menu (seamless, not sticky) */
-.dd-menu{
-  position:absolute;
+/* ✅ Premium floating menu */
+.dd-menu {
+  position: absolute;
   top: calc(100% + 10px);
   left: 0;
   min-width: 240px;
 
-  background: rgba(255,255,255,0.92);
+  /* ✅ readable on top of gradient */
+  background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(10px);
 
-  border: 1px solid rgba(15,23,42,0.10);
+  border: 1px solid rgba(15, 23, 42, 0.10);
   border-radius: 14px;
-  box-shadow: 0 18px 55px rgba(2,6,23,0.18);
+  box-shadow: 0 18px 55px rgba(2, 6, 23, 0.22);
   padding: 8px;
 
-  z-index: 9999;              /* ✅ floats above everything */
+  /* ✅ MUST be above everything */
+  z-index: 9999;
+
   transform-origin: top left;
   animation: ddPop 140ms ease-out;
 }
 
 @keyframes ddPop {
-  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
-.dd-item{
-  display:block;
-  text-decoration:none;
-  color: rgba(15,23,42,0.84);
+.dd-item {
+  display: block;
+  text-decoration: none;
+  color: rgba(15, 23, 42, 0.88);
 
   padding: 10px 10px;
   border-radius: 10px;
-  transition: background .12s ease, color .12s ease;
+  transition: background 0.12s ease, color 0.12s ease;
 }
 
-.dd-item:hover{
-  background: rgba(15,23,42,0.05);
+.dd-item:hover {
+  background: rgba(15, 23, 42, 0.05);
 }
 
-.dd-item.active{
-  background: rgba(161,24,30,0.10);
-  color: #7a0f14;
+.dd-item.active {
+  background: rgba(134, 20, 31, 0.12);
+  color: rgb(134, 20, 31);
 }
 
 /* ================= MAIN CONTENT ================= */
 
-.app-main{
+.app-main {
   flex: 1;
   padding: 18px;
   background: var(--la-bg);
   color: var(--la-dark);
 }
 
-@media (min-width: 1100px){
-  .app-main{ padding: 22px 26px; }
+@media (min-width: 1100px) {
+  .app-main {
+    padding: 22px 26px;
+  }
 }
 
 /* ================= LOGOUT CONFIRM MODAL ================= */
 
-.modal-overlay{
+.modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.45);
-  display:flex;
-  align-items:center;
-  justify-content:center;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   z-index: 999;
 }
 
-.modal{
+.modal {
   background: #fff;
   padding: 28px;
   border-radius: 10px;
   width: 100%;
   max-width: 380px;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
 }
 
-.modal h3{ margin-bottom: 8px; }
-.modal p{ color:#555; margin-bottom: 24px; }
+.modal h3 {
+  margin-bottom: 8px;
+}
+.modal p {
+  color: #555;
+  margin-bottom: 24px;
+}
 
-.modal-actions{
-  display:flex;
-  justify-content:flex-end;
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
   gap: 12px;
 }
 
-.modal-btn{
+.modal-btn {
   padding: 8px 16px;
   border-radius: 6px;
   font-weight: 600;
@@ -247,8 +286,18 @@
   border: none;
 }
 
-.modal-btn.secondary{ background:#eee; color:#333; }
-.modal-btn.secondary:hover{ background:#ddd; }
+.modal-btn.secondary {
+  background: #eee;
+  color: #333;
+}
+.modal-btn.secondary:hover {
+  background: #ddd;
+}
 
-.modal-btn.danger{ background:#8b0000; color:#fff; }
-.modal-btn.danger:hover{ background:#a40000; }
+.modal-btn.danger {
+  background: #8b0000;
+  color: #fff;
+}
+.modal-btn.danger:hover {
+  background: #a40000;
+}

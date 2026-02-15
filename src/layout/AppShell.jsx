@@ -2,7 +2,11 @@
 import { Outlet, NavLink, useLocation, Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import UserProfileMenu from "../components/UserProfileMenu";
-import { canSeeApprovals, isAdminRole, isInstitutionAdminWithInstitution } from "../auth/auth";
+import {
+  canSeeApprovals,
+  isAdminRole,
+  isInstitutionAdminWithInstitution,
+} from "../auth/auth";
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import "../styles/appshell.css";
 import "../styles/lawAfricaLanding.css";
@@ -57,7 +61,7 @@ export default function AppShell() {
 
   const scheduleClose = useCallback(() => {
     clearCloseTimer();
-    closeTimerRef.current = setTimeout(() => setOpenDd(null), 140); // small delay prevents flicker
+    closeTimerRef.current = setTimeout(() => setOpenDd(null), 180); // slightly longer = less “vanish”
   }, []);
 
   const openNow = useCallback((key) => {
@@ -104,6 +108,8 @@ export default function AppShell() {
     };
   }, []);
 
+  // “Active” state should keep dropdown highlighted when on that section,
+  // but still allow hover-open when elsewhere.
   const approvalsOpenFinal = isInApprovals ? true : openDd === "approvals";
   const financeOpenFinal = isInFinance ? true : openDd === "finance";
   const adminOpenFinal = isInAdmin ? true : openDd === "admin";
@@ -114,7 +120,11 @@ export default function AppShell() {
       <header className="topnav">
         <div className="topnav-inner">
           {/* Left: Brand */}
-          <Link to="/dashboard" className="topnav-brand" aria-label="LawAfrica Dashboard">
+          <Link
+            to="/dashboard"
+            className="topnav-brand"
+            aria-label="LawAfrica Dashboard"
+          >
             <img
               src="/logo.png"
               alt="LawAfrica"
@@ -150,14 +160,19 @@ export default function AppShell() {
               Trials
             </NavLink>
 
-            <NavLink to="/dashboard/law-reports/subscribe" className={navLinkClass}>
+            <NavLink
+              to="/dashboard/law-reports/subscribe"
+              className={navLinkClass}
+            >
               Subscriptions
             </NavLink>
 
             {import.meta.env.DEV && (
               <NavLink
                 to="/dashboard/content-blocks"
-                className={({ isActive }) => `topnav-link dev ${isActive ? "active" : ""}`}
+                className={({ isActive }) =>
+                  `topnav-link dev ${isActive ? "active" : ""}`
+                }
               >
                 🧪 Content Blocks Tester
               </NavLink>
@@ -177,11 +192,14 @@ export default function AppShell() {
               >
                 <button
                   type="button"
-                  className={`topnav-link dd-toggle ${isInApprovals ? "active" : ""}`}
+                  className={`topnav-link dd-toggle ${
+                    isInApprovals ? "active" : ""
+                  }`}
                   aria-expanded={approvalsOpenFinal}
                   aria-haspopup="menu"
-                  onFocus={() => openNow("approvals")}
-                  onBlur={scheduleClose}
+                  onClick={() =>
+                    setOpenDd((cur) => (cur === "approvals" ? null : "approvals"))
+                  }
                 >
                   <Chevron open={approvalsOpenFinal} />
                   Approvals
@@ -195,7 +213,12 @@ export default function AppShell() {
                     onMouseEnter={() => openNow("approvals")}
                     onMouseLeave={scheduleClose}
                   >
-                    <NavLink to="/dashboard/approvals" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
+                    <NavLink
+                      to="/dashboard/approvals"
+                      className="dd-item"
+                      role="menuitem"
+                      onClick={() => setOpenDd(null)}
+                    >
                       Dashboard
                     </NavLink>
 
@@ -235,11 +258,14 @@ export default function AppShell() {
               >
                 <button
                   type="button"
-                  className={`topnav-link dd-toggle ${isInFinance ? "active" : ""}`}
+                  className={`topnav-link dd-toggle ${
+                    isInFinance ? "active" : ""
+                  }`}
                   aria-expanded={financeOpenFinal}
                   aria-haspopup="menu"
-                  onFocus={() => openNow("finance")}
-                  onBlur={scheduleClose}
+                  onClick={() =>
+                    setOpenDd((cur) => (cur === "finance" ? null : "finance"))
+                  }
                 >
                   <Chevron open={financeOpenFinal} />
                   Finance
@@ -253,16 +279,36 @@ export default function AppShell() {
                     onMouseEnter={() => openNow("finance")}
                     onMouseLeave={scheduleClose}
                   >
-                    <NavLink to="/dashboard/admin/finance/invoices" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
+                    <NavLink
+                      to="/dashboard/admin/finance/invoices"
+                      className="dd-item"
+                      role="menuitem"
+                      onClick={() => setOpenDd(null)}
+                    >
                       Invoices
                     </NavLink>
-                    <NavLink to="/dashboard/admin/finance/payments" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
+                    <NavLink
+                      to="/dashboard/admin/finance/payments"
+                      className="dd-item"
+                      role="menuitem"
+                      onClick={() => setOpenDd(null)}
+                    >
                       Payments
                     </NavLink>
-                    <NavLink to="/dashboard/admin/finance/invoice-settings" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
+                    <NavLink
+                      to="/dashboard/admin/finance/invoice-settings"
+                      className="dd-item"
+                      role="menuitem"
+                      onClick={() => setOpenDd(null)}
+                    >
                       Invoice Settings
                     </NavLink>
-                    <NavLink to="/dashboard/admin/finance/vat-rates" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
+                    <NavLink
+                      to="/dashboard/admin/finance/vat-rates"
+                      className="dd-item"
+                      role="menuitem"
+                      onClick={() => setOpenDd(null)}
+                    >
                       VAT Setup
                     </NavLink>
                   </div>
@@ -280,11 +326,14 @@ export default function AppShell() {
               >
                 <button
                   type="button"
-                  className={`topnav-link dd-toggle ${isInAdmin ? "active" : ""}`}
+                  className={`topnav-link dd-toggle ${
+                    isInAdmin ? "active" : ""
+                  }`}
                   aria-expanded={adminOpenFinal}
                   aria-haspopup="menu"
-                  onFocus={() => openNow("admin")}
-                  onBlur={scheduleClose}
+                  onClick={() =>
+                    setOpenDd((cur) => (cur === "admin" ? null : "admin"))
+                  }
                 >
                   <Chevron open={adminOpenFinal} />
                   Admin
@@ -298,59 +347,129 @@ export default function AppShell() {
                     onMouseEnter={() => openNow("admin")}
                     onMouseLeave={scheduleClose}
                   >
-                    <NavLink to="/dashboard/admin/institutions" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
+                    <NavLink
+                      to="/dashboard/admin/institutions"
+                      className="dd-item"
+                      role="menuitem"
+                      onClick={() => setOpenDd(null)}
+                    >
                       Institutions
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/content-products" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
+                    <NavLink
+                      to="/dashboard/admin/content-products"
+                      className="dd-item"
+                      role="menuitem"
+                      onClick={() => setOpenDd(null)}
+                    >
                       Products
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/content-product-prices" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
+                    <NavLink
+                      to="/dashboard/admin/content-product-prices"
+                      className="dd-item"
+                      role="menuitem"
+                      onClick={() => setOpenDd(null)}
+                    >
                       Product Prices
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/documents" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
+                    <NavLink
+                      to="/dashboard/admin/documents"
+                      className="dd-item"
+                      role="menuitem"
+                      onClick={() => setOpenDd(null)}
+                    >
                       Books
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/toc-test" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
+                    <NavLink
+                      to="/dashboard/admin/toc-test"
+                      className="dd-item"
+                      role="menuitem"
+                      onClick={() => setOpenDd(null)}
+                    >
                       Table of Contents (Test)
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/llr-services" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
+                    <NavLink
+                      to="/dashboard/admin/llr-services"
+                      className="dd-item"
+                      role="menuitem"
+                      onClick={() => setOpenDd(null)}
+                    >
                       LLR Services
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/courts" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
+                    <NavLink
+                      to="/dashboard/admin/courts"
+                      className="dd-item"
+                      role="menuitem"
+                      onClick={() => setOpenDd(null)}
+                    >
                       Courts
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/llr-services/import" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
+                    <NavLink
+                      to="/dashboard/admin/llr-services/import"
+                      className="dd-item"
+                      role="menuitem"
+                      onClick={() => setOpenDd(null)}
+                    >
                       Import Cases
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/institution-subscriptions" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
+                    <NavLink
+                      to="/dashboard/admin/institution-subscriptions"
+                      className="dd-item"
+                      role="menuitem"
+                      onClick={() => setOpenDd(null)}
+                    >
                       Subscriptions
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/user-subscriptions" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
+                    <NavLink
+                      to="/dashboard/admin/user-subscriptions"
+                      className="dd-item"
+                      role="menuitem"
+                      onClick={() => setOpenDd(null)}
+                    >
                       Public Subscriptions
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/trials" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
+                    <NavLink
+                      to="/dashboard/admin/trials"
+                      className="dd-item"
+                      role="menuitem"
+                      onClick={() => setOpenDd(null)}
+                    >
                       Trials
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/institution-bundle-subscriptions" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
+                    <NavLink
+                      to="/dashboard/admin/institution-bundle-subscriptions"
+                      className="dd-item"
+                      role="menuitem"
+                      onClick={() => setOpenDd(null)}
+                    >
                       Bundle
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/institution-admins" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
+                    <NavLink
+                      to="/dashboard/admin/institution-admins"
+                      className="dd-item"
+                      role="menuitem"
+                      onClick={() => setOpenDd(null)}
+                    >
                       Institution Admins
                     </NavLink>
 
-                    <NavLink to="/dashboard/admin/users" className="dd-item" role="menuitem" onClick={() => setOpenDd(null)}>
+                    <NavLink
+                      to="/dashboard/admin/users"
+                      className="dd-item"
+                      role="menuitem"
+                      onClick={() => setOpenDd(null)}
+                    >
                       Users
                     </NavLink>
                   </div>
