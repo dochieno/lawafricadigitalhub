@@ -995,7 +995,6 @@ function buildPayload() {
     if (!toInt(form.countryId, 0)) return "Country is required (select a country first).";
     if (!toInt(form.service, 0)) return "Service is required.";
     if (!normalizeText(form.parties)) return "Parties is required (e.g. A v B).";
-    if (!normalizeText(form.citation)) return "Citation is required (e.g. [2026] KECA 201 (KLR)).";
 
     const year = toInt(form.year, 0);
     if (!year || year < 1900 || year > 2100) return "Year must be between 1900 and 2100.";
