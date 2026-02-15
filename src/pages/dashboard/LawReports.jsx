@@ -1,14 +1,4 @@
-// =======================================================
-// FILE: src/pages/dashboard/LawReports.jsx
-// Purpose: Law Reports list + filters (CourtType enum + CourtId FK)
-// Notes:
-// - Uses PUBLIC endpoint in your controller:
-//   GET /api/law-reports/courts?countryId=1&q=...
-// - Fixes courtsLoaded "stuck loading" by using finally.
-// - Adds optional search-as-you-type for courts dropdown (q param).
-// - Keeps your server/client fallback mode behavior unchanged.
-// =======================================================
-
+// src/pages/dashboard/LawReports.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../api/client";
@@ -31,141 +21,58 @@ import "../../styles/lawReports.css";
 function IcArrowLeft(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <path
-        d="M14.5 6.5L9 12l5.5 5.5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M14.5 6.5L9 12l5.5 5.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
-
 function IcCase(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <path
-        d="M8 7.5V6.2A2.2 2.2 0 0 1 10.2 4h3.6A2.2 2.2 0 0 1 16 6.2v1.3"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-      <path
-        d="M6.5 7.5h11A2.5 2.5 0 0 1 20 10v8.5A2.5 2.5 0 0 1 17.5 21h-11A2.5 2.5 0 0 1 4 18.5V10A2.5 2.5 0 0 1 6.5 7.5Z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
-      <path
-        d="M9.2 12.2h5.6M9.2 15.3h4.2"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
+      <path d="M8 7.5V6.2A2.2 2.2 0 0 1 10.2 4h3.6A2.2 2.2 0 0 1 16 6.2v1.3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M6.5 7.5h11A2.5 2.5 0 0 1 20 10v8.5A2.5 2.5 0 0 1 17.5 21h-11A2.5 2.5 0 0 1 4 18.5V10A2.5 2.5 0 0 1 6.5 7.5Z" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M9.2 12.2h5.6M9.2 15.3h4.2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
-
 function IcArrowRight(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <path
-        d="M9.5 6.5L15 12l-5.5 5.5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M9.5 6.5L15 12l-5.5 5.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
-
 function IcCalendar(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <path
-        d="M7 3v3M17 3v3"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-      <path
-        d="M4.5 9h15"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-      <path
-        d="M6.5 6h11A2.5 2.5 0 0 1 20 8.5v11A2.5 2.5 0 0 1 17.5 22h-11A2.5 2.5 0 0 1 4 19.5v-11A2.5 2.5 0 0 1 6.5 6Z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
+      <path d="M7 3v3M17 3v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M4.5 9h15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M6.5 6h11A2.5 2.5 0 0 1 20 8.5v11A2.5 2.5 0 0 1 17.5 22h-11A2.5 2.5 0 0 1 4 19.5v-11A2.5 2.5 0 0 1 6.5 6Z" stroke="currentColor" strokeWidth="1.8" />
     </svg>
   );
 }
-
 function IcGavel(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <path
-        d="M14.5 6.5l3 3M13 8l3-3 3 3-3 3-3-3Z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M3 21l7-7"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-      <path
-        d="M9 15l3 3"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-      <path
-        d="M10.5 13.5l5.5-5.5"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
+      <path d="M14.5 6.5l3 3M13 8l3-3 3 3-3 3-3-3Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M3 21l7-7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M9 15l3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M10.5 13.5l5.5-5.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
-
 function IcPin(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <path
-        d="M12 22s7-6.2 7-12a7 7 0 10-14 0c0 5.8 7 12 7 12z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
-      <path
-        d="M12 13.2a3.2 3.2 0 110-6.4 3.2 3.2 0 010 6.4z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
+      <path d="M12 22s7-6.2 7-12a7 7 0 10-14 0c0 5.8 7 12 7 12z" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M12 13.2a3.2 3.2 0 110-6.4 3.2 3.2 0 010 6.4z" stroke="currentColor" strokeWidth="1.8" />
     </svg>
   );
 }
-
 function IcUser(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
-      <path
-        d="M12 12a4.2 4.2 0 1 0-4.2-4.2A4.2 4.2 0 0 0 12 12Z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
-      <path
-        d="M4.5 21a7.5 7.5 0 0 1 15 0"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
+      <path d="M12 12a4.2 4.2 0 1 0-4.2-4.2A4.2 4.2 0 0 0 12 12Z" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M4.5 21a7.5 7.5 0 0 1 15 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
@@ -177,14 +84,12 @@ function isInstitutionUser() {
   const c = getAuthClaims();
   return !!(c?.institutionId && c.institutionId > 0);
 }
-
 function isPublicUser() {
   const c = getAuthClaims();
   const userType = c?.payload?.userType || c?.payload?.UserType || null;
   const inst = c?.institutionId;
   return String(userType).toLowerCase() === "public" && (!inst || inst <= 0);
 }
-
 function getUserCountryIdFallback() {
   const c = getAuthClaims();
   const raw =
@@ -198,35 +103,18 @@ function getUserCountryIdFallback() {
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : 1;
 }
-
 function parseSearchResponse(payload) {
   if (Array.isArray(payload)) return { items: payload, total: payload.length };
-
   const items = payload?.items ?? payload?.data ?? payload?.results ?? [];
-  const total =
-    payload?.total ?? payload?.count ?? (Array.isArray(items) ? items.length : 0);
-
-  return {
-    items: Array.isArray(items) ? items : [],
-    total: Number(total) || 0,
-  };
+  const total = payload?.total ?? payload?.count ?? (Array.isArray(items) ? items.length : 0);
+  return { items: Array.isArray(items) ? items : [], total: Number(total) || 0 };
 }
-
 function stripHtmlToText(html) {
   const s = String(html || "");
   if (!s) return "";
-
-  const noScripts = s
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ");
-
-  const withBreaks = noScripts
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>\s*/gi, "\n\n")
-    .replace(/<\/div>\s*/gi, "\n");
-
+  const noScripts = s.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ");
+  const withBreaks = noScripts.replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>\s*/gi, "\n\n").replace(/<\/div>\s*/gi, "\n");
   const noTags = withBreaks.replace(/<\/?[^>]+>/g, " ");
-
   return noTags
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
@@ -237,16 +125,11 @@ function stripHtmlToText(html) {
     .replace(/\s+/g, " ")
     .trim();
 }
-
 function cleanPreview(text) {
-  const t = stripHtmlToText(text)
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .trim();
+  const t = stripHtmlToText(text).replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
   if (!t) return "";
   return t.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
 }
-
 function truncateText(text, max = 100) {
   const s = String(text || "").replace(/\s+/g, " ").trim();
   if (!s) return "";
@@ -254,7 +137,6 @@ function truncateText(text, max = 100) {
   return s.slice(0, max - 1).trimEnd() + "…";
 }
 
-// Fallback decision labels (used only if /law-reports/decision-types doesn't exist yet)
 const FALLBACK_DECISIONS = [
   "Judgment",
   "Ruling",
@@ -266,7 +148,6 @@ const FALLBACK_DECISIONS = [
   "Interpretation of Amended Order",
 ];
 
-// CourtType enum labels (backend CourtTypeLabel)
 const COURT_TYPE_OPTIONS = [
   { value: "", label: "All" },
   { value: "1", label: "Supreme Court" },
@@ -286,14 +167,8 @@ function normalizeCourtRow(row) {
   const name = row?.name ?? row?.label ?? row?.courtName ?? "";
   const code = row?.code ?? row?.courtCode ?? "";
   if (!id) return null;
-
   const label = code ? `${name} (${code})` : name;
-  return {
-    value: String(id),
-    label: String(label || "").trim(),
-    name: String(name || ""),
-    code: String(code || ""),
-  };
+  return { value: String(id), label: String(label || "").trim(), name: String(name || ""), code: String(code || "") };
 }
 
 export default function LawReports() {
@@ -320,22 +195,24 @@ export default function LawReports() {
   const [availabilityMap, setAvailabilityMap] = useState({});
   const [availabilityLoadingIds, setAvailabilityLoadingIds] = useState(new Set());
 
-  // Options from DB distinct endpoints
-  const [caseTypeOptions, setCaseTypeOptions] = useState([]); // [{value,label,count}]
-  const [decisionOptions, setDecisionOptions] = useState([]); // [{value,label,count}]
+  // ✅ Options from DB distinct endpoints
+  const [caseTypeOptions, setCaseTypeOptions] = useState([]);
+  const [decisionOptions, setDecisionOptions] = useState([]);
 
-  // Courts (FK) options
-  const [countryId] = useState(() => getUserCountryIdFallback());
-  const [courts, setCourts] = useState([]); // [{value,label,name,code}]
+  // ✅ Countries
+  const [countries, setCountries] = useState([]);
+  const [countriesLoaded, setCountriesLoaded] = useState(false);
+
+  // ✅ Country selection (fallback from claims, but user can change)
+  const [countryId, setCountryId] = useState(() => getUserCountryIdFallback());
+
+  // ✅ Courts (FK) options
+  const [courts, setCourts] = useState([]);
   const [courtsLoaded, setCourtsLoaded] = useState(false);
 
-  // ✅ NEW: court search (matches controller param q)
-  const [courtSearch, setCourtSearch] = useState("");
-  const debouncedCourtSearch = useDebounce(courtSearch, 250);
-
   // UX
-  const [loading, setLoading] = useState(true); // initial load
-  const [searching, setSearching] = useState(false); // subsequent filter typing
+  const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
   const [error, setError] = useState("");
 
   const [toast, setToast] = useState(null);
@@ -344,7 +221,7 @@ export default function LawReports() {
     setTimeout(() => setToast(null), 2500);
   }
 
-  // Filters/search/sort (draft inputs)
+  // Filters/search/sort
   const [q, setQ] = useState("");
   const [reportNumber, setReportNumber] = useState("");
   const [parties, setParties] = useState("");
@@ -352,23 +229,22 @@ export default function LawReports() {
 
   const [year, setYear] = useState("");
   const [courtTypeId, setCourtTypeId] = useState("");
-  const [courtId, setCourtId] = useState(""); // Court FK
+  const [courtId, setCourtId] = useState("");
   const [townOrPostCode, setTownOrPostCode] = useState("");
 
-  // store selected values as INT strings
   const [caseType, setCaseType] = useState("");
   const [decisionType, setDecisionType] = useState("");
 
   const [sortBy, setSortBy] = useState("year_desc");
 
-  // Pagination (both modes)
+  // Pagination
   const [page, setPage] = useState(1);
-  const pageSize = 9; // 3×3
+  const pageSize = 9;
 
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // ------------------------------------------------------------
-  // Debounce ALL filters as one bundle (prevents over-triggering)
+  // Debounce ALL filters as one bundle
   // ------------------------------------------------------------
   const filters = useMemo(
     () => ({
@@ -386,31 +262,15 @@ export default function LawReports() {
       mode,
       countryId,
     }),
-    [
-      q,
-      reportNumber,
-      parties,
-      citation,
-      year,
-      courtTypeId,
-      courtId,
-      townOrPostCode,
-      caseType,
-      decisionType,
-      sortBy,
-      mode,
-      countryId,
-    ]
+    [q, reportNumber, parties, citation, year, courtTypeId, courtId, townOrPostCode, caseType, decisionType, sortBy, mode, countryId]
   );
 
   const debouncedFilters = useDebounce(filters, 300);
 
-  // Reset to page 1 ONLY when debounced filters change
   const lastDebouncedKeyRef = useRef("");
   useEffect(() => {
     const key = JSON.stringify({ ...debouncedFilters });
-    if (lastDebouncedKeyRef.current && lastDebouncedKeyRef.current !== key)
-      setPage(1);
+    if (lastDebouncedKeyRef.current && lastDebouncedKeyRef.current !== key) setPage(1);
     lastDebouncedKeyRef.current = key;
   }, [debouncedFilters]);
 
@@ -431,8 +291,42 @@ export default function LawReports() {
   }
 
   // ------------------------------------------------------------
+  // Load Countries
+  // ------------------------------------------------------------
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCountries() {
+      try {
+        const res = await api.get("/country");
+        const arr = Array.isArray(res.data) ? res.data : [];
+        if (!cancelled) {
+          setCountries(arr);
+          setCountriesLoaded(true);
+
+          // keep current selection valid
+          if (arr.length > 0) {
+            const exists = arr.some((x) => Number(x.id) === Number(countryId));
+            if (!exists) {
+              const firstId = Number(arr[0]?.id) || 1;
+              setCountryId(firstId);
+            }
+          }
+        }
+      } catch {
+        if (!cancelled) setCountriesLoaded(true);
+      }
+    }
+
+    loadCountries();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ------------------------------------------------------------
   // Load dropdown options (case/decision) + Courts (FK)
-  // Uses your controller: GET /api/law-reports/courts?countryId=1&q=
   // ------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
@@ -443,7 +337,7 @@ export default function LawReports() {
         const arr = Array.isArray(res.data) ? res.data : [];
         if (!cancelled && arr.length > 0) setCaseTypeOptions(arr);
       } catch {
-        // ignore
+        // ignore (fallback list used)
       }
 
       try {
@@ -455,59 +349,41 @@ export default function LawReports() {
       }
     }
 
-    loadCaseDecisionOptions();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // ✅ Courts loading (initial + search)
-  useEffect(() => {
-    let cancelled = false;
-
     async function loadCourts() {
-      // your controller requires countryId > 0
+      // reload when country changes
+      setCourtsLoaded(false);
+      setCourts([]);
+      setCourtId("");
+
       if (!countryId || Number(countryId) <= 0) {
-        if (!cancelled) {
-          setCourts([]);
-          setCourtsLoaded(true);
-        }
+        setCourtsLoaded(true);
         return;
       }
 
-      // when searching, we don't want to lock the dropdown; keep it usable
-      if (!courtsLoaded) setCourtsLoaded(false);
-
       try {
-        const res = await api.get("/law-reports/courts", {
-          params: {
-            countryId,
-            q: debouncedCourtSearch?.trim() || undefined,
-          },
-        });
-
-        const raw = Array.isArray(res.data)
-          ? res.data
-          : res.data?.items ?? res.data?.data ?? [];
+        const res = await api.get("/law-reports/courts", { params: { countryId } });
+        const raw = Array.isArray(res.data) ? res.data : res.data?.items ?? res.data?.data ?? [];
         const list = (Array.isArray(raw) ? raw : [])
           .map(normalizeCourtRow)
           .filter(Boolean)
           .sort((a, b) => String(a.label).localeCompare(String(b.label)));
 
-        if (!cancelled) setCourts(list);
+        if (!cancelled) {
+          setCourts(list);
+          setCourtsLoaded(true);
+        }
       } catch {
-        // fail gracefully; keep UI usable
-        if (!cancelled) setCourts([]);
-      } finally {
         if (!cancelled) setCourtsLoaded(true);
       }
     }
 
+    loadCaseDecisionOptions();
     loadCourts();
+
     return () => {
       cancelled = true;
     };
-  }, [countryId, courtsLoaded, debouncedCourtSearch]);
+  }, [countryId]);
 
   async function tryServerSearch(params) {
     if (searchUnavailableRef.current) return { ok: false, reason: "unavailable" };
@@ -533,7 +409,7 @@ export default function LawReports() {
   }
 
   // ------------------------------------------------------------
-  // Main load: server search OR client fallback
+  // Main load
   // ------------------------------------------------------------
   const firstLoadRef = useRef(true);
 
@@ -555,19 +431,15 @@ export default function LawReports() {
             reportNumber: f.reportNumber.trim() || undefined,
             parties: f.parties.trim() || undefined,
             citation: f.citation.trim() || undefined,
-
             year: f.year ? Number(f.year) : undefined,
-
             courtType: f.courtTypeId ? Number(f.courtTypeId) : undefined,
             courtId: f.courtId ? Number(f.courtId) : undefined,
-
             townOrPostCode: f.townOrPostCode || undefined,
-            caseType: f.caseType || undefined,
-            decisionType: f.decisionType || undefined,
+            caseType: f.caseType ? Number(f.caseType) : undefined,
+            decisionType: f.decisionType ? Number(f.decisionType) : undefined,
             sort: f.sortBy || "year_desc",
             page,
             pageSize,
-
             countryId: f.countryId || undefined,
           };
 
@@ -598,8 +470,7 @@ export default function LawReports() {
         setTotal(list.length);
       } catch (err) {
         console.error(err);
-        if (!cancelled)
-          setError("We couldn’t load Law Reports right now. Please try again.");
+        if (!cancelled) setError("We couldn’t load Law Reports right now. Please try again.");
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -616,7 +487,7 @@ export default function LawReports() {
   }, [debouncedFilters, page]);
 
   // ------------------------------------------------------------
-  // Client-mode enrichment (only needed in client mode)
+  // Client-mode enrichment
   // ------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
@@ -660,9 +531,7 @@ export default function LawReports() {
           return s;
         });
 
-        const results = await Promise.allSettled(
-          batch.map((id) => api.get(`/legal-documents/${id}`))
-        );
+        const results = await Promise.allSettled(batch.map((id) => api.get(`/legal-documents/${id}`)));
 
         if (cancelled) return;
 
@@ -698,37 +567,29 @@ export default function LawReports() {
   }, [mode, reports, detailsMap]);
 
   // ------------------------------------------------------------
-  // Client filtering (client mode only)
+  // Client filtering
   // ------------------------------------------------------------
   const selectedCaseLabel = useMemo(() => {
     if (!caseType) return "";
-    const match = (caseTypeOptions || []).find(
-      (x) => String(x.value) === String(caseType)
-    );
+    const match = (caseTypeOptions || []).find((x) => String(x.value) === String(caseType));
     return match?.label || "";
   }, [caseType, caseTypeOptions]);
 
   const selectedDecisionLabel = useMemo(() => {
     if (!decisionType) return "";
-    const match = (decisionOptions || []).find(
-      (x) => String(x.value) === String(decisionType)
-    );
+    const match = (decisionOptions || []).find((x) => String(x.value) === String(decisionType));
     return match?.label || "";
   }, [decisionType, decisionOptions]);
 
   const selectedCourtTypeLabel = useMemo(() => {
     if (!courtTypeId) return "";
-    const match = COURT_TYPE_OPTIONS.find(
-      (x) => String(x.value) === String(courtTypeId)
-    );
+    const match = COURT_TYPE_OPTIONS.find((x) => String(x.value) === String(courtTypeId));
     return match?.label || "";
   }, [courtTypeId]);
 
   const selectedCourtLabel = useMemo(() => {
     if (!courtId) return "";
-    const match = (courts || []).find(
-      (x) => String(x.value) === String(courtId)
-    );
+    const match = (courts || []).find((x) => String(x.value) === String(courtId));
     return match?.name || match?.label || "";
   }, [courtId, courts]);
 
@@ -759,21 +620,15 @@ export default function LawReports() {
 
       const matchesYear = !yearNum || meta.year === yearNum;
 
-      const matchesCourtType =
-        !courtTypeNorm || normalize(meta.courtType) === courtTypeNorm;
+      const matchesCourtType = !courtTypeNorm || normalize(meta.courtType) === courtTypeNorm;
 
       const metaCourtName = normalize(meta.courtName || meta.court || "");
       const matchesCourt = !courtNameNorm || metaCourtName.includes(courtNameNorm);
 
-      const matchesTown =
-        !townNorm ||
-        normalize(meta.town) === townNorm ||
-        normalize(meta.postCode) === townNorm;
+      const matchesTown = !townNorm || normalize(meta.town) === townNorm || normalize(meta.postCode) === townNorm;
 
       const matchesCaseType = !caseNorm || normalize(meta.caseType) === caseNorm;
-      const matchesDecision =
-        !decisionNorm ||
-        normalize(meta.decisionType || meta.decision || "") === decisionNorm;
+      const matchesDecision = !decisionNorm || normalize(meta.decisionType || meta.decision || "") === decisionNorm;
 
       return (
         matchesQ &&
@@ -801,35 +656,20 @@ export default function LawReports() {
     const s = debouncedFilters.sortBy;
     if (s === "year_asc") items.sort((a, b) => getYear(a) - getYear(b));
     else if (s === "year_desc") items.sort((a, b) => getYear(b) - getYear(a));
-    else if (s === "reportno_asc")
-      items.sort((a, b) =>
-        String(getReportNo(a)).localeCompare(String(getReportNo(b)))
-      );
-    else if (s === "parties_asc")
-      items.sort((a, b) =>
-        String(getParties2(a)).localeCompare(String(getParties2(b)))
-      );
+    else if (s === "reportno_asc") items.sort((a, b) => String(getReportNo(a)).localeCompare(String(getReportNo(b))));
+    else if (s === "parties_asc") items.sort((a, b) => String(getParties2(a)).localeCompare(String(getParties2(b))));
     else if (s === "date_desc") items.sort((a, b) => getDate(b) - getDate(a));
 
     return items;
-  }, [
-    mode,
-    mergedReports,
-    debouncedFilters,
-    selectedCaseLabel,
-    selectedDecisionLabel,
-    selectedCourtTypeLabel,
-    selectedCourtLabel,
-  ]);
+  }, [mode, mergedReports, debouncedFilters, selectedCaseLabel, selectedDecisionLabel, selectedCourtTypeLabel, selectedCourtLabel]);
 
   const visibleAll = mode === "client" ? visibleClientAll : reports;
 
   // ------------------------------------------------------------
-  // Pagination for BOTH modes
+  // Pagination
   // ------------------------------------------------------------
   const totalPages = useMemo(() => {
-    if (mode === "server")
-      return Math.max(1, Math.ceil((total || 0) / pageSize));
+    if (mode === "server") return Math.max(1, Math.ceil((total || 0) / pageSize));
     return Math.max(1, Math.ceil((visibleAll?.length || 0) / pageSize));
   }, [mode, total, pageSize, visibleAll]);
 
@@ -838,7 +678,7 @@ export default function LawReports() {
   }, [totalPages]);
 
   const visible = useMemo(() => {
-    if (mode === "server") return visibleAll; // already paged by backend
+    if (mode === "server") return visibleAll;
     const start = (page - 1) * pageSize;
     return (visibleAll || []).slice(start, start + pageSize);
   }, [mode, visibleAll, page, pageSize]);
@@ -875,9 +715,7 @@ export default function LawReports() {
           return s;
         });
 
-        const results = await Promise.allSettled(
-          batch.map((docId) => api.get(`/legal-documents/${docId}/access`))
-        );
+        const results = await Promise.allSettled(batch.map((docId) => api.get(`/legal-documents/${docId}/access`)));
 
         if (cancelled) return;
 
@@ -885,8 +723,7 @@ export default function LawReports() {
           const next = { ...prev };
           results.forEach((r, idx) => {
             const docId = batch[idx];
-            next[docId] =
-              r.status === "fulfilled" ? r.value?.data ?? null : null;
+            next[docId] = r.status === "fulfilled" ? r.value?.data ?? null : null;
           });
           return next;
         });
@@ -926,9 +763,7 @@ export default function LawReports() {
           return s;
         });
 
-        const results = await Promise.allSettled(
-          batch.map((docId) => api.get(`/legal-documents/${docId}/availability`))
-        );
+        const results = await Promise.allSettled(batch.map((docId) => api.get(`/legal-documents/${docId}/availability`)));
 
         if (cancelled) return;
 
@@ -937,7 +772,7 @@ export default function LawReports() {
           results.forEach((r, idx) => {
             const docId = batch[idx];
             if (r.status === "fulfilled") next[docId] = !!r.value?.data?.hasContent;
-            else next[docId] = true; // fail-open
+            else next[docId] = true;
           });
           return next;
         });
@@ -958,32 +793,20 @@ export default function LawReports() {
   }, [visible, mode]);
 
   // ------------------------------------------------------------
-  // Dropdown option lists (render value=INT string)
+  // Dropdown option lists
   // ------------------------------------------------------------
   const computedCaseOptions = useMemo(() => {
     if (caseTypeOptions && caseTypeOptions.length > 0) {
-      return [...caseTypeOptions].sort((a, b) =>
-        String(a.label || "").localeCompare(String(b.label || ""))
-      );
+      return [...caseTypeOptions].sort((a, b) => String(a.label || "").localeCompare(String(b.label || "")));
     }
-    return REPORT_CASE_TYPES_ALL.map((label, idx) => ({
-      value: idx + 1,
-      label,
-      count: 0,
-    }));
+    return REPORT_CASE_TYPES_ALL.map((label, idx) => ({ value: idx + 1, label, count: 0 }));
   }, [caseTypeOptions]);
 
   const computedDecisionOptions = useMemo(() => {
     if (decisionOptions && decisionOptions.length > 0) {
-      return [...decisionOptions].sort((a, b) =>
-        String(a.label || "").localeCompare(String(b.label || ""))
-      );
+      return [...decisionOptions].sort((a, b) => String(a.label || "").localeCompare(String(b.label || "")));
     }
-    return FALLBACK_DECISIONS.map((label, idx) => ({
-      value: idx + 1,
-      label,
-      count: 0,
-    }));
+    return FALLBACK_DECISIONS.map((label, idx) => ({ value: idx + 1, label, count: 0 }));
   }, [decisionOptions]);
 
   // ------------------------------------------------------------
@@ -992,7 +815,10 @@ export default function LawReports() {
   function getMetaForRow(r) {
     if (mode === "server") {
       return {
+        // ✅ Title FIRST
+        title: r?.title || "",
         parties: r?.parties || "",
+
         reportNumber: r?.reportNumber || "",
         citation: r?.citation || "",
         year: r?.year || null,
@@ -1004,10 +830,13 @@ export default function LawReports() {
         postCode: r?.townPostCode || "",
         judges: r?.judges || "",
         judgmentDate: r?.decisionDate ? String(r.decisionDate).slice(0, 10) : "",
-        title: r?.title || "",
       };
     }
-    return extractReportMeta(r);
+    const m = extractReportMeta(r);
+    return {
+      ...m,
+      title: r?.title || m?.title || "",
+    };
   }
 
   function getExcerptForRow(r) {
@@ -1031,50 +860,23 @@ export default function LawReports() {
 
   return (
     <div className="lr-wrap lr-theme">
-      {toast && (
-        <div className={`lr-toast ${toast.type === "error" ? "error" : ""}`}>
-          {toast.message}
-        </div>
-      )}
+      {toast && <div className={`lr-toast ${toast.type === "error" ? "error" : ""}`}>{toast.message}</div>}
 
       <div className="lr-hero">
-        <div
-          className="lr-hero-inner"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1fr) auto",
-            alignItems: "center",
-            gap: 14,
-          }}
-        >
+        <div className="lr-hero-inner" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center", gap: 14 }}>
           <div className="lr-hero-left" style={{ minWidth: 0, maxWidth: "none" }}>
             <div className="lr-chip" title="LawAfrica Reports">
               <IcCase style={{ width: 18, height: 18 }} />
             </div>
             <h1 className="lr-hero-title">Law Reports</h1>
             <p className="lr-hero-sub" style={{ maxWidth: "none" }}>
-              Access authoritative judicial decisions that set legal precedent. Filter by key criteria and preview short
-              excerpts to quickly identify relevant judgments.
+              Access authoritative judicial decisions that set legal precedent. Filter by key criteria and preview short excerpts to quickly identify relevant judgments.
             </p>
           </div>
 
-          <div
-            className="lr-hero-right"
-            style={{
-              display: "flex",
-              flexWrap: "nowrap",
-              gap: 10,
-              alignItems: "center",
-              justifyContent: "flex-end",
-              whiteSpace: "nowrap",
-            }}
-          >
-            <button className="lr-pill" onClick={() => navigate("/dashboard/explore")}>
-              Explore Publications
-            </button>
-            <button className="lr-pill ghost" onClick={resetFilters}>
-              Clear filters
-            </button>
+          <div className="lr-hero-right" style={{ display: "flex", flexWrap: "nowrap", gap: 10, alignItems: "center", justifyContent: "flex-end", whiteSpace: "nowrap" }}>
+            <button className="lr-pill" onClick={() => navigate("/dashboard/explore")}>Explore Publications</button>
+            <button className="lr-pill ghost" onClick={resetFilters}>Clear filters</button>
           </div>
         </div>
       </div>
@@ -1093,15 +895,33 @@ export default function LawReports() {
 
         {!loading && !error && (
           <div className="lr-grid">
-            {/* Filters */}
             <aside className="lr-panel">
               <div className="lr-panel-title">
-                Search &amp; Filters
-                {searching ? (
-                  <span className="lr-soft" style={{ marginLeft: 10 }}>
-                    • searching…
-                  </span>
-                ) : null}
+                Search & Filters
+                {searching ? <span className="lr-soft" style={{ marginLeft: 10 }}>• searching…</span> : null}
+              </div>
+
+              {/* ✅ Country dropdown */}
+              <div className="lr-field">
+                <div className="lr-label">Country</div>
+                <select
+                  className="lr-select"
+                  value={String(countryId)}
+                  onChange={(e) => setCountryId(Number(e.target.value))}
+                  disabled={!countriesLoaded || (countriesLoaded && countries.length === 0)}
+                >
+                  {!countriesLoaded ? (
+                    <option value={String(countryId)}>Loading…</option>
+                  ) : countries.length === 0 ? (
+                    <option value={String(countryId)}>Default</option>
+                  ) : (
+                    countries.map((c) => (
+                      <option key={String(c.id)} value={String(c.id)}>
+                        {c.name}
+                      </option>
+                    ))
+                  )}
+                </select>
               </div>
 
               <div className="lr-field">
@@ -1110,16 +930,12 @@ export default function LawReports() {
                   className="lr-input"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
-                  placeholder="Report no, parties, citation, year, court, town/post code…"
+                  placeholder="Title, report no, parties, citation, year, court, town/post code…"
                 />
               </div>
 
               <div className="lr-field">
-                <button
-                  className="lr-card-btn"
-                  onClick={() => setShowAdvanced((v) => !v)}
-                  style={{ width: "100%" }}
-                >
+                <button className="lr-card-btn" onClick={() => setShowAdvanced((v) => !v)} style={{ width: "100%" }}>
                   {showAdvanced ? "Hide" : "Show"} advanced fields
                 </button>
               </div>
@@ -1128,32 +944,17 @@ export default function LawReports() {
                 <>
                   <div className="lr-field">
                     <div className="lr-label">Report Number</div>
-                    <input
-                      className="lr-input"
-                      value={reportNumber}
-                      onChange={(e) => setReportNumber(e.target.value)}
-                      placeholder="e.g. HCK027…"
-                    />
+                    <input className="lr-input" value={reportNumber} onChange={(e) => setReportNumber(e.target.value)} placeholder="e.g. HCK027…" />
                   </div>
 
                   <div className="lr-field">
                     <div className="lr-label">Parties</div>
-                    <input
-                      className="lr-input"
-                      value={parties}
-                      onChange={(e) => setParties(e.target.value)}
-                      placeholder="e.g. Mwabonje v Sarova…"
-                    />
+                    <input className="lr-input" value={parties} onChange={(e) => setParties(e.target.value)} placeholder="e.g. Mwabonje v Sarova…" />
                   </div>
 
                   <div className="lr-field">
                     <div className="lr-label">Citation</div>
-                    <input
-                      className="lr-input"
-                      value={citation}
-                      onChange={(e) => setCitation(e.target.value)}
-                      placeholder="e.g. [2016] LLR (HCK)…"
-                    />
+                    <input className="lr-input" value={citation} onChange={(e) => setCitation(e.target.value)} placeholder="e.g. [2016] LLR (HCK)…" />
                   </div>
                 </>
               )}
@@ -1161,12 +962,7 @@ export default function LawReports() {
               <div className="lr-row">
                 <div className="lr-field">
                   <div className="lr-label">Year</div>
-                  <input
-                    className="lr-input"
-                    value={year}
-                    onChange={(e) => setYear(e.target.value.replace(/[^\d]/g, "").slice(0, 4))}
-                    placeholder="e.g. 2016"
-                  />
+                  <input className="lr-input" value={year} onChange={(e) => setYear(e.target.value.replace(/[^\d]/g, "").slice(0, 4))} placeholder="e.g. 2016" />
                 </div>
 
                 <div className="lr-field">
@@ -1187,8 +983,7 @@ export default function LawReports() {
                   <option value="">All</option>
                   {computedDecisionOptions.map((d) => (
                     <option key={String(d.value)} value={String(d.value)}>
-                      {d.label}
-                      {d.count ? ` (${d.count})` : ""}
+                      {d.label}{d.count ? ` (${d.count})` : ""}
                     </option>
                   ))}
                 </select>
@@ -1200,82 +995,50 @@ export default function LawReports() {
                   <option value="">All</option>
                   {computedCaseOptions.map((ct) => (
                     <option key={String(ct.value)} value={String(ct.value)}>
-                      {ct.label}
-                      {ct.count ? ` (${ct.count})` : ""}
+                      {ct.label}{ct.count ? ` (${ct.count})` : ""}
                     </option>
                   ))}
                 </select>
               </div>
 
-              {/* CourtType enum */}
               <div className="lr-field">
                 <div className="lr-label">Court Type</div>
                 <select className="lr-select" value={courtTypeId} onChange={(e) => setCourtTypeId(e.target.value)}>
                   {COURT_TYPE_OPTIONS.map((x) => (
-                    <option key={String(x.value)} value={String(x.value)}>
-                      {x.label}
-                    </option>
+                    <option key={String(x.value)} value={String(x.value)}>{x.label}</option>
                   ))}
                 </select>
               </div>
 
-              {/* ✅ Court FK (new Court model) + search input using controller q */}
               <div className="lr-field">
                 <div className="lr-label">Court</div>
-
-                <input
-                  className="lr-input"
-                  value={courtSearch}
-                  onChange={(e) => setCourtSearch(e.target.value)}
-                  placeholder="Search courts (name/code)…"
-                  style={{ marginBottom: 8 }}
-                />
-
                 <select
                   className="lr-select"
                   value={courtId}
                   onChange={(e) => setCourtId(e.target.value)}
-                  disabled={!courtsLoaded}
-                  title={!courtsLoaded ? "Loading courts…" : ""}
+                  disabled={!courtsLoaded || (courtsLoaded && courts.length === 0)}
+                  title={courtsLoaded && courts.length === 0 ? "Courts list not available for this country." : ""}
                 >
                   <option value="">
-                    {courtsLoaded ? (courts.length ? "All" : "All (no courts found)") : "Loading…"}
+                    {courtsLoaded ? (courts.length ? "All" : "All (courts not loaded)") : "Loading…"}
                   </option>
                   {courts.map((c) => (
-                    <option key={String(c.value)} value={String(c.value)}>
-                      {c.label}
-                    </option>
+                    <option key={String(c.value)} value={String(c.value)}>{c.label}</option>
                   ))}
                 </select>
-
-                {courtsLoaded && courts.length === 0 ? (
-                  <div className="lr-soft" style={{ marginTop: 6 }}>
-                    No courts returned for countryId={countryId}.
-                  </div>
-                ) : null}
               </div>
 
               <div className="lr-field">
                 <div className="lr-label">Town / Post Code</div>
-                <input
-                  className="lr-input"
-                  value={townOrPostCode}
-                  onChange={(e) => setTownOrPostCode(e.target.value)}
-                  placeholder="e.g. Mombasa / 00100"
-                />
+                <input className="lr-input" value={townOrPostCode} onChange={(e) => setTownOrPostCode(e.target.value)} placeholder="e.g. Mombasa / 00100" />
               </div>
 
               <div className="lr-panel-actions">
-                <button className="lr-btn secondary" onClick={resetFilters}>
-                  Clear
-                </button>
-                <button className="lr-btn" onClick={() => showToast("Tip: try Court Type + Decision + Year")}>
-                  Tip
-                </button>
+                <button className="lr-btn secondary" onClick={resetFilters}>Clear</button>
+                <button className="lr-btn" onClick={() => showToast("Tip: try Court Type + Decision + Year")}>Tip</button>
               </div>
             </aside>
 
-            {/* Results */}
             <section className="lr-results">
               <div className="lr-results-top">
                 <div className="lr-count">
@@ -1296,25 +1059,11 @@ export default function LawReports() {
                 </div>
 
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    className="lr-card-btn"
-                    disabled={page <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    title="Previous page"
-                    style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
-                  >
-                    <IcArrowLeft style={{ width: 18, height: 18 }} />
-                    Prev
+                  <button className="lr-card-btn" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} title="Previous page" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <IcArrowLeft style={{ width: 18, height: 18 }} /> Prev
                   </button>
-                  <button
-                    className="lr-card-btn"
-                    disabled={page >= totalPages}
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    title="Next page"
-                    style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
-                  >
-                    Next
-                    <IcArrowRight style={{ width: 18, height: 18 }} />
+                  <button className="lr-card-btn" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} title="Next page" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    Next <IcArrowRight style={{ width: 18, height: 18 }} />
                   </button>
                 </div>
               </div>
@@ -1341,8 +1090,8 @@ export default function LawReports() {
                       mode === "server"
                         ? !!cleanPreview(r?.previewText || "").trim()
                         : availabilityMap[docId] == null
-                        ? true
-                        : !!availabilityMap[docId];
+                          ? true
+                          : !!availabilityMap[docId];
 
                     const hasContent = inferredHasContent;
                     const isPremiumRow = !!r.isPremium;
@@ -1356,6 +1105,8 @@ export default function LawReports() {
                     const maxTags = 5;
                     const shown = tags.slice(0, maxTags);
                     const remaining = Math.max(0, tags.length - shown.length);
+
+                    const cardTitle = meta.title || meta.parties || "Untitled report";
 
                     return (
                       <article
@@ -1372,28 +1123,20 @@ export default function LawReports() {
                         }}
                       >
                         <div className="lr-card2-top">
-                          <div className="lr-card2-title">{meta.parties || meta.title || "Untitled report"}</div>
+                          <div className="lr-card2-title">{cardTitle}</div>
 
                           <div className="lr-badges">
-                            {isPremiumRow ? (
-                              <span className="lr-badge premium">Premium</span>
-                            ) : (
-                              <span className="lr-badge">Free</span>
-                            )}
+                            {isPremiumRow ? <span className="lr-badge premium">Premium</span> : <span className="lr-badge">Free</span>}
                             {showIncluded && <span className="lr-badge included">Included</span>}
                           </div>
                         </div>
 
                         <div className="lr-tags">
                           {shown.map((t, idx) => (
-                            <span key={`${r.id}-t-${idx}`} className="lr-tag">
-                              {t}
-                            </span>
+                            <span key={`${r.id}-t-${idx}`} className="lr-tag">{t}</span>
                           ))}
                           {remaining > 0 ? (
-                            <span className="lr-tag" title={tags.slice(maxTags).join(" • ")}>
-                              +{remaining}
-                            </span>
+                            <span className="lr-tag" title={tags.slice(maxTags).join(" • ")}>+{remaining}</span>
                           ) : null}
                         </div>
 
@@ -1454,20 +1197,14 @@ export default function LawReports() {
                               e.stopPropagation();
                               navigate(`/dashboard/law-reports/${detailsId}`);
                             }}
-                            style={{
-                              opacity: canReadMore ? 1 : 0.6,
-                              cursor: canReadMore ? "pointer" : "not-allowed",
-                              width: "100%",
-                            }}
+                            style={{ opacity: canReadMore ? 1 : 0.6, cursor: canReadMore ? "pointer" : "not-allowed", width: "100%" }}
                           >
                             {availabilityLoading ? "Checking…" : "Read More"}
                           </button>
                         </div>
 
                         {!hasContent && !availabilityLoading && (
-                          <div className="lr-soft" style={{ marginTop: 8 }}>
-                            This report is not available yet.
-                          </div>
+                          <div className="lr-soft" style={{ marginTop: 8 }}>This report is not available yet.</div>
                         )}
                       </article>
                     );
@@ -1477,24 +1214,11 @@ export default function LawReports() {
 
               {totalPages > 1 && (
                 <div className="lr-pager">
-                  <button
-                    className="lr-card-btn"
-                    disabled={page <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
-                  >
-                    <IcArrowLeft style={{ width: 18, height: 18 }} />
-                    Prev
+                  <button className="lr-card-btn" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <IcArrowLeft style={{ width: 18, height: 18 }} /> Prev
                   </button>
-                  <div className="lr-soft">
-                    Page <strong>{page}</strong> of <strong>{totalPages}</strong>
-                  </div>
-                  <button
-                    className="lr-card-btn"
-                    disabled={page >= totalPages}
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
-                  >
+                  <div className="lr-soft">Page <strong>{page}</strong> of <strong>{totalPages}</strong></div>
+                  <button className="lr-card-btn" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                     Next <IcArrowRight style={{ width: 18, height: 18 }} />
                   </button>
                 </div>
