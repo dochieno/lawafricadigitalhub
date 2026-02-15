@@ -317,7 +317,6 @@ const emptyForm = {
   countryId: "",
   service: 1,
   citation: "",
-  reportNumber: "",
   year: "",
   caseNumber: "",
   decisionType: 1,
@@ -432,35 +431,27 @@ export default function AdminLLRServices() {
     return base || town || "";
   }
 
-  function autoTitleDraft(next = form) {
-    const rn = normalizeText(next.reportNumber);
-    const year = normalizeText(next.year);
-    const parties = normalizeText(next.parties);
-    const courtPart = normalizeText(computeCourtDisplay(next));
-    const bits = [rn && year ? `${rn} (${year})` : rn || year, parties, courtPart].filter(Boolean);
-    return bits.join(" — ").trim();
-  }
+function autoTitleDraft(next = form) {
+  const parties = normalizeText(next.parties);
+  const citation = normalizeText(next.citation);
+
+  // ✅ Title format: "Parties [space] Citation"
+  // Example: "Chemical Partners Kenya Limited v Commissioner ... [2026] KECA 201 (KLR)"
+  const bits = [parties, citation].filter(Boolean);
+  return bits.join(" ").trim();
+}
+
 
   // Title hidden and always kept in sync
-  useEffect(() => {
-    if (!open) return;
+    useEffect(() => {
+      if (!open) return;
 
-    const nextTitle = autoTitleDraft(form);
-    if (nextTitle && nextTitle !== form.title) {
-      setForm((p) => ({ ...p, title: nextTitle }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    open,
-    form.reportNumber,
-    form.year,
-    form.parties,
-    form.courtId,
-    form.town,
-    form.courtCategory,
-    form.court,
-    courts,
-  ]);
+      const nextTitle = autoTitleDraft(form);
+      if (nextTitle && nextTitle !== form.title) {
+        setForm((p) => ({ ...p, title: nextTitle }));
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, form.parties, form.citation]);
 
   async function fetchCountries() {
     try {
@@ -729,7 +720,6 @@ export default function AdminLLRServices() {
       if (!s) return true;
 
       const title = String(pick(r, ["title", "Title"], "")).toLowerCase();
-      const reportNumber = String(pick(r, ["reportNumber", "ReportNumber"], "")).toLowerCase();
       const year = String(pick(r, ["year", "Year"], "")).toLowerCase();
       const citation = String(pick(r, ["citation", "Citation"], "")).toLowerCase();
       const town = String(pick(r, ["town", "Town"], "")).toLowerCase();
@@ -752,7 +742,7 @@ export default function AdminLLRServices() {
           SERVICE_OPTIONS.find((x) => x.value === enumToInt(serviceVal, SERVICE_OPTIONS, 0))?.label ||
           "").toLowerCase();
 
-      const meta = `${reportNumber} ${year} ${citation} ${courtName} ${courtCode} ${legacyCourt} ${courtTypeLabel} ${div} ${town} ${caseNo} ${judges} ${countryName} ${serviceLabel}`;
+      const meta = `${year} ${citation} ${courtName} ${courtCode} ${legacyCourt} ${courtTypeLabel} ${div} ${town} ${caseNo} ${judges} ${countryName} ${serviceLabel}`;
       return title.includes(s) || meta.includes(s);
     });
   }, [rows, q, countryFilter, countryMap]);
@@ -770,8 +760,6 @@ export default function AdminLLRServices() {
           return sortValue(pick(r, ["title", "Title"], ""));
         case "country":
           return sortValue(countryName);
-        case "reportNumber":
-          return sortValue(pick(r, ["reportNumber", "ReportNumber"], ""));
         case "year":
           return toInt(pick(r, ["year", "Year"], 0), 0);
         case "decision": {
@@ -923,7 +911,6 @@ export default function AdminLLRServices() {
         countryId: cid,
         service: enumToInt(pick(d, ["service", "Service"], 1), SERVICE_OPTIONS, 1),
         citation: pick(d, ["citation", "Citation"], "") ?? "",
-        reportNumber: pick(d, ["reportNumber", "ReportNumber"], "") ?? "",
         year: pick(d, ["year", "Year"], "") ?? "",
         caseNumber: pick(d, ["caseNumber", "CaseNumber"], "") ?? "",
         decisionType: decisionVal,
@@ -963,53 +950,52 @@ export default function AdminLLRServices() {
     }
   }
 
-  function buildPayload() {
-    const pid = toInt(form.contentProductId, 0);
-    const countryId = toInt(form.countryId, 0);
-    const courtId = toInt(form.courtId, 0);
+function buildPayload() {
+  const pid = toInt(form.contentProductId, 0);
+  const countryId = toInt(form.countryId, 0);
+  const courtId = toInt(form.courtId, 0);
 
-    const courtDisplay = normalizeText(computeCourtDisplay(form)) || null;
+  const courtDisplay = normalizeText(computeCourtDisplay(form)) || null;
 
-    return {
-      category: 6,
-      title: normalizeText(form.title) || null,
+  return {
+    category: 6,
+    title: normalizeText(form.title) || null,
 
-      contentProductId: pid ? pid : null,
+    contentProductId: pid ? pid : null,
 
-      countryId,
-      service: toInt(form.service, 1),
+    countryId,
+    service: toInt(form.service, 1),
 
-      citation: normalizeText(form.citation) || null,
-      reportNumber: normalizeText(form.reportNumber),
-      year: toInt(form.year, new Date().getUTCFullYear()),
-      caseNumber: normalizeText(form.caseNumber) || null,
+    citation: normalizeText(form.citation) || null,
+    year: toInt(form.year, new Date().getUTCFullYear()),
+    caseNumber: normalizeText(form.caseNumber) || null,
 
-      decisionType: toInt(form.decisionType, 1),
-      caseType: toInt(form.caseType, 2),
+    decisionType: toInt(form.decisionType, 1),
+    caseType: toInt(form.caseType, 2),
 
-      courtId: courtId ? courtId : null,
-      court: courtDisplay,
+    courtId: courtId ? courtId : null,
+    court: courtDisplay,
 
-      courtCategory: normalizeText(form.courtCategory) || null,
+    courtCategory: normalizeText(form.courtCategory) || null,
 
-      courtType: toInt(form.courtType, 3),
+    courtType: toInt(form.courtType, 3),
 
-      postCode: normalizeText(form.postCode) || null,
-      town: normalizeText(form.town) || null,
+    postCode: normalizeText(form.postCode) || null,
+    town: normalizeText(form.town) || null,
 
-      parties: normalizeText(form.parties) || null,
-      judges: normalizeText(form.judges) || null,
-      decisionDate: isoOrNullFromDateInput(form.decisionDate),
+    parties: normalizeText(form.parties) || null,
+    judges: normalizeText(form.judges) || null,
+    decisionDate: isoOrNullFromDateInput(form.decisionDate),
 
-      contentText: safeDefaultHtml(form.contentText),
-    };
-  }
+    contentText: safeDefaultHtml(form.contentText),
+  };
+}
 
   function validate() {
     if (!toInt(form.countryId, 0)) return "Country is required (select a country first).";
     if (!toInt(form.service, 0)) return "Service is required.";
     if (!normalizeText(form.parties)) return "Parties is required (e.g. A v B).";
-    if (!normalizeText(form.reportNumber)) return "Report number is required (e.g. CAR353).";
+    if (!normalizeText(form.citation)) return "Citation is required (e.g. [2026] KECA 201 (KLR)).";
 
     const year = toInt(form.year, 0);
     if (!year || year < 1900 || year > 2100) return "Year must be between 1900 and 2100.";
@@ -1025,6 +1011,7 @@ export default function AdminLLRServices() {
     if (!editing?.id && htmlLooksEmpty(form.contentText)) return "Report content is required on Create (paste the case).";
     return "";
   }
+
 
   async function save() {
     const msg = validate();
@@ -1105,7 +1092,7 @@ export default function AdminLLRServices() {
     const id = pick(row, ["id", "Id"], null);
     if (!id) return;
 
-    const title = pick(row, ["title", "Title"], "") || pick(row, ["reportNumber", "ReportNumber"], "");
+    const title = pick(row, ["title", "Title"], "");
     const ok = window.confirm(`Delete this report?\n\n${title}`);
     if (!ok) return;
 
@@ -1232,7 +1219,7 @@ export default function AdminLLRServices() {
               </span>
               <input
                 className="admin-search admin-search-wide laSearch"
-                placeholder="Search by title, report no, year, country, citation, court, division, town..."
+                placeholder="Search by title, year, country, citation, court, division, town..."
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
@@ -1274,8 +1261,6 @@ export default function AdminLLRServices() {
               <option value="title:desc">Sort: Title (Z→A)</option>
               <option value="country:asc">Sort: Country (A→Z)</option>
               <option value="country:desc">Sort: Country (Z→A)</option>
-              <option value="reportNumber:asc">Sort: Report No (A→Z)</option>
-              <option value="reportNumber:desc">Sort: Report No (Z→A)</option>
             </select>
 
             <button
@@ -1309,9 +1294,6 @@ export default function AdminLLRServices() {
                 <SortHeader k="country" width="12%">
                   Country
                 </SortHeader>
-                <SortHeader k="reportNumber" width="12%">
-                  Report No.
-                </SortHeader>
                 <SortHeader k="year" width="6%">
                   Year
                 </SortHeader>
@@ -1331,7 +1313,7 @@ export default function AdminLLRServices() {
             <tbody>
               {!loading && sorted.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="laEmptyRow">
+                  <td colSpan={7} className="laEmptyRow">
                     No reports found. Click <span className="laEm">New report</span> to add one.
                   </td>
                 </tr>
@@ -1360,7 +1342,6 @@ export default function AdminLLRServices() {
                 const citation = pick(r, ["citation", "Citation"], null);
                 const caseNumber = pick(r, ["caseNumber", "CaseNumber"], null);
 
-                const reportNumber = pick(r, ["reportNumber", "ReportNumber"], null);
                 const year = pick(r, ["year", "Year"], null);
                 const decisionDate = pick(r, ["decisionDate", "DecisionDate"], null);
 
@@ -1408,7 +1389,6 @@ export default function AdminLLRServices() {
                     </td>
 
                     <td className="tight">{countryName}</td>
-                    <td className="tight">{reportNumber || "—"}</td>
                     <td className="num-cell">{year ?? "—"}</td>
 
                     <td>
@@ -1484,7 +1464,7 @@ export default function AdminLLRServices() {
                     placeholder="e.g. A v B"
                     disabled={busy}
                   />
-                  <div className="hint">Title is generated automatically using Report No, Year, Parties and Court (auto text).</div>
+                  <div className="hint">Title is generated automatically as: Parties + Citation.</div>
                 </div>
 
                 {/* Hidden Title (kept for payload) */}
@@ -1577,16 +1557,6 @@ export default function AdminLLRServices() {
                       </option>
                     ))}
                   </select>
-                </div>
-
-                <div className="admin-field">
-                  <label>Report Number *</label>
-                  <input
-                    value={form.reportNumber}
-                    onChange={(e) => setField("reportNumber", e.target.value)}
-                    placeholder="e.g. CAR353"
-                    disabled={busy}
-                  />
                 </div>
 
                 <div className="admin-field">

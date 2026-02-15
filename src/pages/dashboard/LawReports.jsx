@@ -207,7 +207,7 @@ export default function LawReports() {
   const [towns, setTowns] = useState([]);
   const [townId, setTownId] = useState("");
 
-
+  const [townQuery, setTownQuery] = useState("");
   // ✅ Country selection (fallback from claims, but user can change)
   const [countryId, setCountryId] = useState(() => getUserCountryIdFallback());
 
@@ -331,27 +331,25 @@ export default function LawReports() {
   }, []);
 
   //Load Towns
+    useEffect(() => {
+      if (!countryId) {
+        setTowns([]);
+        return;
+      }
 
-  useEffect(() => {
-  if (!countryId) {
-    setTowns([]);
-    return;
-  }
+      const loadTowns = async () => {
+        try {
+          const res = await api.get("/towns", {
+            params: { countryId, take: 500 }
+          });
+          setTowns(res.data || []);
+        } catch (err) {
+          console.error("Failed to load towns", err);
+        }
+      };
 
-  const loadTowns = async () => {
-    try {
-      const res = await api.get("/towns", {
-        params: { countryId, take: 500 }
-      });
-      setTowns(res.data || []);
-    } catch (err) {
-      console.error("Failed to load towns", err);
-    }
-  };
-
-  loadTowns();
-}, [countryId]);
-
+      loadTowns();
+    }, [countryId]);
 
   // ------------------------------------------------------------
   // Load dropdown options (case/decision) + Courts (FK)
@@ -674,7 +672,7 @@ export default function LawReports() {
     });
 
     const getYear = (r) => extractReportMeta(r).year ?? -1;
-    const getReportNo = (r) => extractReportMeta(r).reportNumber || r.title || "";
+    const getReportNo = (r) =>extractReportMeta(r).caseNumber || r.title || "";
     const getParties2 = (r) => extractReportMeta(r).parties || r.title || "";
     const getDate = (r) => {
       const raw = extractReportMeta(r).judgmentDate;
@@ -841,52 +839,49 @@ export default function LawReports() {
   // ------------------------------------------------------------
   // Unified meta + excerpt per mode
   // ------------------------------------------------------------
-  function getMetaForRow(r) {
-    if (mode === "server") {
-      return {
-        // ✅ Title FIRST
-        title: r?.title || "",
-        parties: r?.parties || "",
-
-        reportNumber: r?.reportNumber || "",
-        citation: r?.citation || "",
-        year: r?.year || null,
-        caseType: r?.caseTypeLabel || "",
-        decisionType: r?.decisionTypeLabel || "",
-        courtType: r?.courtTypeLabel || "",
-        courtName: r?.courtName || "",
-        town: r?.town || "",
-        postCode: r?.townPostCode || "",
-        judges: r?.judges || "",
-        judgmentDate: r?.decisionDate ? String(r.decisionDate).slice(0, 10) : "",
-      };
-    }
-    const m = extractReportMeta(r);
+function getMetaForRow(r) {
+  if (mode === "server") {
     return {
-      ...m,
-      title: r?.title || m?.title || "",
+      caseNumber: r?.caseNumber || "",   // ✅ ADD THIS
+
+      title: r?.title || "",
+      parties: r?.parties || "",
+
+      citation: r?.citation || "",
+      year: r?.year || null,
+      caseType: r?.caseTypeLabel || "",
+      decisionType: r?.decisionTypeLabel || "",
+      courtType: r?.courtTypeLabel || "",
+      courtName: r?.courtName || "",
+
+      // 🔥 REMOVE town from display (court already contains it now)
+      town: "", 
+      postCode: "",
+
+      judges: r?.judges || "",
+      judgmentDate: r?.decisionDate
+        ? String(r.decisionDate).slice(0, 10)
+        : "",
     };
   }
+}
 
   function getExcerptForRow(r) {
     if (mode === "server") return truncateText(cleanPreview(r?.previewText || ""), 100);
     return truncateText(cleanPreview(makeReportExcerpt(r, 260)), 100);
   }
 
-  function buildTags(meta) {
-    const list = [];
-    if (meta.reportNumber) list.push(meta.reportNumber);
-    if (meta.year) list.push(String(meta.year));
-    if (meta.decisionType) list.push(meta.decisionType);
-    if (meta.caseType) list.push(meta.caseType);
-    if (meta.courtType) list.push(meta.courtType);
-    if (meta.courtName) list.push(meta.courtName);
-    if (meta.town) list.push(meta.town);
-    if (!meta.town && meta.postCode) list.push(meta.postCode);
-    if (meta.citation) list.push(meta.citation);
-    return list;
-  }
+function buildTags(meta) {
+  const list = [];
 
+  if (meta.caseNumber) list.push(meta.caseNumber); // ✅ primary
+  if (meta.decisionType) list.push(meta.decisionType);
+  if (meta.caseType) list.push(meta.caseType);
+  if (meta.courtName || meta.court) list.push(meta.courtName || meta.court);
+  if (meta.citation) list.push(meta.citation);
+
+  return list;
+}
   return (
     <div className="lr-wrap lr-theme">
       {toast && <div className={`lr-toast ${toast.type === "error" ? "error" : ""}`}>{toast.message}</div>}
@@ -1056,17 +1051,30 @@ export default function LawReports() {
                   ))}
                 </select>
               </div>
-              <select
-                value={townId}
-                onChange={(e) => setTownId(e.target.value)}
-              >
-                <option value="">All towns</option>
-                {towns.map(t => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} ({t.postCode})
-                  </option>
-                ))}
-              </select>
+              <div className="lr-field">
+                <div className="lr-label">Town</div>
+
+                <input
+                  className="lr-input"
+                  placeholder="Search town..."
+                  value={townQuery}
+                  onChange={(e) => setTownQuery(e.target.value)}
+                />
+
+                <select
+                  className="lr-select"
+                  value={townId}
+                  onChange={(e) => setTownId(e.target.value)}
+                >
+                  <option value="">All towns</option>
+                  {towns.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.postCode})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="lr-panel-actions">
                 <button className="lr-btn secondary" onClick={resetFilters}>Clear</button>
                 <button className="lr-btn" onClick={() => showToast("Tip: try Court Type + Decision + Year")}>Tip</button>
@@ -1140,8 +1148,7 @@ export default function LawReports() {
                     const shown = tags.slice(0, maxTags);
                     const remaining = Math.max(0, tags.length - shown.length);
 
-                    const cardTitle = meta.title || meta.parties || "Untitled report";
-
+                    const cardTitle = meta.caseNumber || meta.title || meta.parties ||"Untitled report";
                     return (
                       <article
                         key={`${mode}-${r.id}`}
@@ -1201,12 +1208,6 @@ export default function LawReports() {
                                 </span>
                               ) : null}
 
-                              {meta.town || meta.postCode ? (
-                                <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-                                  <IcPin style={{ width: 14, height: 14, opacity: 0.9 }} />
-                                  {meta.town || meta.postCode}
-                                </span>
-                              ) : null}
                             </div>
 
                             {meta.judges ? (
