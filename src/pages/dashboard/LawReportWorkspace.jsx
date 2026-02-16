@@ -774,6 +774,8 @@ export default function LawReportWorkspace() {
   const chatEndRef = useRef(null);
   const chatBoxRef = useRef(null);
   const aiAutoLoadedRef = useRef(false);
+  const summaryCards = useMemo(() => splitSummaryForCards(summaryType, summaryText), [summaryType, summaryText]);
+
 
   const isPremium = useMemo(() => {
     if (!report) return false;
@@ -1385,8 +1387,7 @@ export default function LawReportWorkspace() {
 
   const showGate = !!(preview.gated && preview.reachedLimit);
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const summaryCards = useMemo(() => splitSummaryForCards(summaryType, summaryText), [summaryType, summaryText]);
+
 
   return (
     <div className="lrwWrap" data-theme={readingTheme}>
