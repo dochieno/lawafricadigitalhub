@@ -2,13 +2,8 @@
 // FILE: src/pages/dashboard/LawReportWorkspace.jsx
 // Purpose: Premium "Case Workspace" reader (Westlaw + Notion + Linear vibe)
 // Notes:
-// - Keeps ALL existing endpoints & permission logic
-// - Top bar: Parties only (NO access chip in top area). Buttons feel premium (CSS hooks)
-// - LegalAI:
-//    - Basic: ONLY 2 cards: Summary + Key points (only if available)
-//    - Extended: Parties + Citation shown as the *title* (not a card) above sections
-//      and renders section-cards if headings exist (FACTS/ISSUES/HOLDING/REASONING/TAKEAWAYS)
-// - Chat: message cards like screen-2; assistant replies are point-form, NOT bold
+// - Fix: Drawer now has a scrollable body, chat panel uses flex so messages scroll.
+// - Fix: formatDate is used in buildDefaultCopyText (removes eslint unused warning).
 // =======================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -415,6 +410,7 @@ function getFilenameFromContentDisposition(cd) {
   return "";
 }
 
+/* ✅ used (removes eslint no-unused-vars) */
 function formatDate(d) {
   if (!d) return "";
   const dt = new Date(d);
@@ -428,17 +424,9 @@ function buildDefaultCopyText({ report, title, caseNo }) {
   const dateRaw = report?.decisionDate || report?.DecisionDate || "";
   const date = formatDate(dateRaw);
 
-  const lines = [
-    title || "",
-    caseNo || "",
-    citation || "",
-    court || "",
-    date || "",
-  ].filter(Boolean);
-
+  const lines = [title || "", caseNo || "", citation || "", court || "", date || ""].filter(Boolean);
   return lines.join("\n");
 }
-
 
 function forceUnorderedBullets(text) {
   const t = String(text || "").replace(/\r\n/g, "\n");
@@ -452,23 +440,15 @@ function forceUnorderedBullets(text) {
     .join("\n");
 }
 
-/**
- * Ensures chat UI feels like “screen 3”:
- * - if it’s plain prose, convert to bullets
- * - never use headings
- */
 function prettifyChatReplyForUi(text) {
   const t = String(text || "").trim();
   if (!t) return "";
 
-  // If already bullet/numbered, keep
   if (/^(\d+\.\s+|[-•]\s+)/m.test(t)) return t;
 
-  // Avoid markdown headings in chat (we’ll render bullets)
   const noHashes = t.replace(/^#{1,4}\s+/gm, "");
 
   if (noHashes.includes("\n\n")) {
-    // If multiple paragraphs, bulletize per paragraph
     const paras = noHashes
       .split(/\n\s*\n+/)
       .map((p) => p.replace(/\s+/g, " ").trim())
@@ -477,7 +457,6 @@ function prettifyChatReplyForUi(text) {
     return noHashes;
   }
 
-  // sentence split -> bullets
   const parts = noHashes
     .split(/(?<=[.!?])\s+/)
     .map((x) => x.trim())
@@ -529,8 +508,6 @@ function splitSummaryForCards(type, summaryText) {
   return { summary: raw, keyPoints: bullets.slice(0, 14) };
 }
 
-/* ---------------- Extended: section cards (Facts/Issues/Holding/Reasoning/Takeaways) ---------------- */
-
 function normalizeSectionTitle(t) {
   const x = String(t || "").trim().toLowerCase();
 
@@ -547,7 +524,6 @@ function parseExtendedSections(summaryText) {
   const raw = String(summaryText || "").replace(/\r\n/g, "\n").trim();
   if (!raw) return [];
 
-  // Accept headings with colon or standalone headings (all-caps etc.)
   const headings = [
     { key: "facts", re: /(^|\n)\s*(FACTS?)\s*:\s*/i },
     { key: "issues", re: /(^|\n)\s*(ISSUES?|QUESTION\(S\)?)\s*:\s*/i },
@@ -557,7 +533,6 @@ function parseExtendedSections(summaryText) {
     { key: "orders", re: /(^|\n)\s*(ORDERS?)\s*:\s*/i },
   ];
 
-  // Find all heading indices
   const hits = [];
   for (const h of headings) {
     const re = new RegExp(h.re.source, h.re.flags.includes("g") ? h.re.flags : `${h.re.flags}g`);
@@ -573,10 +548,8 @@ function parseExtendedSections(summaryText) {
     }
   }
 
-  // No headings => single section
   if (!hits.length) return [{ label: "Extended summary", body: raw }];
 
-  // Sort, de-dupe by index
   hits.sort((a, b) => a.index - b.index);
   const deduped = [];
   for (const h of hits) {
@@ -595,14 +568,11 @@ function parseExtendedSections(summaryText) {
     if (body) sections.push({ label: cur.label, body });
   }
 
-  // If something before first heading exists, prepend as “Summary”
   const first = deduped[0];
   const pre = raw.slice(0, first.index).trim();
   if (pre) sections.unshift({ label: "Summary", body: pre });
 
-  // If nothing extracted (edge case), fallback
   if (!sections.length) return [{ label: "Extended summary", body: raw }];
-
   return sections;
 }
 
@@ -631,7 +601,6 @@ function RichText({ text }) {
       continue;
     }
 
-    // Keep headings support for summaries (not chat), but our chat-prettifier strips headings anyway.
     const h2 = line.startsWith("## ");
     const h3 = line.startsWith("### ");
     const h4 = line.startsWith("#### ");
@@ -856,7 +825,6 @@ export default function LawReportWorkspace() {
     {
       id: "sys_welcome",
       role: "assistant",
-      // ✅ No headings (so it won’t look bold); point-form
       content:
         "- Ask anything about this case: issues, holding, ratio, authorities, orders, practical next steps.\n- Tip: ask for “5 bullets” or “extract issues” for clean output.\n- Disclaimer: AI may be inaccurate. Verify against the transcript.",
       createdAt: nowIso(),
@@ -993,7 +961,6 @@ export default function LawReportWorkspace() {
     return true;
   }, [report, availabilityLoading, hasContent, textHasContent]);
 
-  // Derived display bits
   const parties = useMemo(
     () => report?.parties || report?.Parties || report?.title || report?.Title || "Law Report",
     [report]
@@ -1030,7 +997,6 @@ export default function LawReportWorkspace() {
     navigator.clipboard?.writeText?.(t);
   }
 
-  // Close settings on outside click
   useEffect(() => {
     if (!settingsOpen) return;
 
@@ -1052,7 +1018,6 @@ export default function LawReportWorkspace() {
     };
   }, [settingsOpen]);
 
-  // Close AI drawer with ESC
   useEffect(() => {
     if (!aiOpen) return;
     function onKey(e) {
@@ -1062,7 +1027,6 @@ export default function LawReportWorkspace() {
     return () => document.removeEventListener("keydown", onKey);
   }, [aiOpen]);
 
-  // Load report
   useEffect(() => {
     let cancelled = false;
 
@@ -1122,7 +1086,6 @@ export default function LawReportWorkspace() {
     };
   }, [reportId]);
 
-  // Availability + access check
   useEffect(() => {
     let cancelled = false;
 
@@ -1218,7 +1181,6 @@ export default function LawReportWorkspace() {
     try {
       setPdfBusy(true);
 
-      // ✅ EXACT endpoint used by your existing AdminLLRServices flow
       const url = `/law-reports/${reportId}/attachment/download`;
       const res = await api.get(url, { responseType: "blob" });
 
@@ -1386,7 +1348,6 @@ export default function LawReportWorkspace() {
         payload?.data?.disclaimer ||
         "AI suggestions may be inaccurate. Always verify citations and holdings.";
 
-      // Keep it bullet-form and avoid markdown bold/headings (UI should stay clean)
       const lines = [];
       lines.push("- Related cases (AI):");
       if (items.length) {
@@ -1430,7 +1391,6 @@ export default function LawReportWorkspace() {
     if (a.kind === "related") return aiGenerateRelatedCases();
   }
 
-  // auto-load cached basic summary on first open
   useEffect(() => {
     if (!aiOpen) return;
     if (!aiAllowed) return;
@@ -1446,10 +1406,6 @@ export default function LawReportWorkspace() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView?.({ behavior: "smooth", block: "end" });
   }, [messages.length, aiOpen]);
-
-  /* =========================
-     Render guards
-  ========================= */
 
   if (loading) {
     return (
@@ -1491,15 +1447,10 @@ export default function LawReportWorkspace() {
     );
   }
 
-  /* =========================
-     UI
-  ========================= */
-
   const showGate = !!(preview.gated && preview.reachedLimit);
 
   return (
     <div className="lrwWrap" data-theme={readingTheme}>
-      {/* Top bar (slim): Parties only (NO access chip here). Premium button hooks added. */}
       <header className="lrwTop">
         <div className="lrwTopInner lrwTopInnerCompact">
           <button
@@ -1519,14 +1470,12 @@ export default function LawReportWorkspace() {
               {parties}
             </div>
 
-            {/* ✅ Citation can remain as subtle pill (not a card). No access chip. */}
             <div className="lrwMetaRow">
               {citation ? <span className="lrwPill soft">Citation: {citation}</span> : null}
             </div>
           </div>
 
           <div className="lrwTopActions">
-            {/* Settings */}
             <div className="lrwSettings" ref={settingsRef}>
               <button
                 type="button"
@@ -1601,7 +1550,6 @@ export default function LawReportWorkspace() {
               ) : null}
             </div>
 
-            {/* Copy */}
             <button
               type="button"
               className="lrwIconBtn premium"
@@ -1617,7 +1565,6 @@ export default function LawReportWorkspace() {
               <span className="txt">Copy</span>
             </button>
 
-            {/* Report view */}
             <button
               type="button"
               className="lrwIconBtn premium"
@@ -1630,7 +1577,6 @@ export default function LawReportWorkspace() {
               <span className="txt">Report</span>
             </button>
 
-            {/* PDF */}
             <button
               type="button"
               className={`lrwBtn premium ${pdfBusy ? "isBusy" : ""}`}
@@ -1641,7 +1587,6 @@ export default function LawReportWorkspace() {
               {pdfBusy ? "Preparing…" : pdfBtnLabel}
             </button>
 
-            {/* LegalAI */}
             <button
               type="button"
               className={`lrwBtn primary premium ${!aiAllowed ? "isDisabled" : ""}`}
@@ -1660,9 +1605,7 @@ export default function LawReportWorkspace() {
         {pdfErr ? <div className="lrwTopErr">{pdfErr}</div> : null}
       </header>
 
-      {/* Body */}
       <div className="lrwBody">
-        {/* Left rail */}
         <aside className="lrwRail" aria-label="Case details">
           <div className="lrwCard">
             <div className="h">Case details</div>
@@ -1719,12 +1662,7 @@ export default function LawReportWorkspace() {
                 Copy details
               </button>
 
-              <button
-                type="button"
-                className="lrwBtn ghost"
-                disabled={!canDownloadPdf || pdfBusy}
-                onClick={downloadPdfNow}
-              >
+              <button type="button" className="lrwBtn ghost" disabled={!canDownloadPdf || pdfBusy} onClick={downloadPdfNow}>
                 {pdfBusy ? "Preparing…" : "Download PDF"}
               </button>
 
@@ -1737,7 +1675,6 @@ export default function LawReportWorkspace() {
           </div>
         </aside>
 
-        {/* Main document */}
         <main className="lrwMain" aria-label="Transcript">
           <article
             className={[
@@ -1820,303 +1757,299 @@ export default function LawReportWorkspace() {
               ) : null}
 
               <div className="lrwAiTabs" role="tablist" aria-label="LegalAI tabs">
-                <button
-                  type="button"
-                  className={`tab ${aiTab === "summary" ? "on" : ""}`}
-                  onClick={() => setAiTab("summary")}
-                >
+                <button type="button" className={`tab ${aiTab === "summary" ? "on" : ""}`} onClick={() => setAiTab("summary")}>
                   Summary
                 </button>
-                <button
-                  type="button"
-                  className={`tab ${aiTab === "chat" ? "on" : ""}`}
-                  onClick={() => setAiTab("chat")}
-                >
+                <button type="button" className={`tab ${aiTab === "chat" ? "on" : ""}`} onClick={() => setAiTab("chat")}>
                   Chat
                 </button>
-                <button
-                  type="button"
-                  className={`tab ${aiTab === "related" ? "on" : ""}`}
-                  onClick={() => setAiTab("related")}
-                >
+                <button type="button" className={`tab ${aiTab === "related" ? "on" : ""}`} onClick={() => setAiTab("related")}>
                   Related
                 </button>
               </div>
 
-              {/* Summary */}
-              {aiTab === "summary" ? (
-                <div className="lrwAiStack">
-                  {/* Controls card */}
-                  <div className="lrwAiCard">
-                    <div className="lrwAiRow">
-                      <div className="seg" role="group" aria-label="Summary type">
-                        <button
-                          type="button"
-                          className={`segBtn ${summaryType === "basic" ? "on" : ""}`}
-                          onClick={() => {
-                            setSummaryType("basic");
-                            aiGetCachedSummary("basic");
-                          }}
-                        >
-                          Basic
-                        </button>
-                        <button
-                          type="button"
-                          className={`segBtn ${summaryType === "extended" ? "on" : ""}`}
-                          onClick={() => {
-                            setSummaryType("extended");
-                            aiGetCachedSummary("extended");
-                          }}
-                        >
-                          Extended
-                        </button>
+              {/* ✅ NEW: one scrollable drawer body */}
+              <div className="lrwDrawerBody">
+                {/* Summary */}
+                {aiTab === "summary" ? (
+                  <div className="lrwAiStack">
+                    <div className="lrwAiCard">
+                      <div className="lrwAiRow">
+                        <div className="seg" role="group" aria-label="Summary type">
+                          <button
+                            type="button"
+                            className={`segBtn ${summaryType === "basic" ? "on" : ""}`}
+                            onClick={() => {
+                              setSummaryType("basic");
+                              aiGetCachedSummary("basic");
+                            }}
+                          >
+                            Basic
+                          </button>
+                          <button
+                            type="button"
+                            className={`segBtn ${summaryType === "extended" ? "on" : ""}`}
+                            onClick={() => {
+                              setSummaryType("extended");
+                              aiGetCachedSummary("extended");
+                            }}
+                          >
+                            Extended
+                          </button>
+                        </div>
+
+                        <div className="rowActions">
+                          <button
+                            type="button"
+                            className="lrwBtn primary premium"
+                            disabled={aiBusy}
+                            onClick={() => aiGenerateSummary({ type: summaryType, forceRegenerate: false })}
+                          >
+                            Generate
+                          </button>
+                          <button
+                            type="button"
+                            className="lrwBtn ghost premium"
+                            disabled={aiBusy}
+                            onClick={() => aiGenerateSummary({ type: summaryType, forceRegenerate: true })}
+                          >
+                            Force
+                          </button>
+                        </div>
                       </div>
 
+                      {aiBusy ? <div className="lrwAiLoading">Working…</div> : null}
+
+                      {safeTrim(summaryText) ? (
+                        <div className="lrwAiAnswer">
+                          <div className="meta">
+                            <span className="pill">Type: {summaryMeta?.type || summaryType}</span>
+                            {summaryMeta?.cached ? <span className="pill soft">cached</span> : null}
+                            <button type="button" className="mini" onClick={() => copyText(summaryText)} title="Copy summary">
+                              Copy
+                            </button>
+                          </div>
+                        </div>
+                      ) : !aiBusy ? (
+                        <div className="lrwAiEmpty">
+                          <div className="t">No cached summary yet</div>
+                          <div className="s">
+                            Click <b>Generate</b> to create it once. Next time it loads instantly.
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {summaryType === "basic" && safeTrim(summaryText) ? (
+                      <>
+                        <div className="lrwAiCard lrwAiCardAccent">
+                          <div className="lrwAiCardHead">
+                            <div className="ttl">Summary</div>
+                            <div className="sub">AI-generated. Verify against the transcript.</div>
+                          </div>
+                          <div className="lrwAiCardBody">
+                            <RichText text={summaryCards.summary} />
+                          </div>
+                        </div>
+
+                        {summaryCards.keyPoints?.length ? (
+                          <div className="lrwAiCard lrwAiCardSoft">
+                            <div className="lrwAiCardHead">
+                              <div className="ttl">Key points</div>
+                              <div className="sub">Fast scan (AI-extracted)</div>
+                            </div>
+                            <div className="lrwAiCardBody">
+                              <ul className="lrwAiList">
+                                {summaryCards.keyPoints.map((kp, i) => (
+                                  <li key={i}>{kp}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        ) : null}
+                      </>
+                    ) : null}
+
+                    {summaryType === "extended" && safeTrim(summaryText) ? (
+                      <>
+                        <div className="lrwAiSummaryTitle" aria-label="Extended summary title">
+                          <div className="p">{parties}</div>
+                          {citation ? <div className="c">{citation}</div> : null}
+                        </div>
+
+                        {extendedSections.map((sec, idx) => (
+                          <div
+                            key={`${sec.label}_${idx}`}
+                            className={`lrwAiCard ${
+                              sec.label.toLowerCase().includes("key") ? "lrwAiCardSoft" : "lrwAiCardAccent"
+                            }`}
+                          >
+                            <div className="lrwAiCardHead">
+                              <div className="ttl">{sec.label}</div>
+                            </div>
+                            <div className="lrwAiCardBody">
+                              <RichText text={sec.body} />
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {/* Related */}
+                {aiTab === "related" ? (
+                  <div className="lrwAiCard">
+                    <div className="lrwAiRow">
+                      <div className="note">AI-suggested related cases (Kenya + Foreign). Always verify citations.</div>
                       <div className="rowActions">
                         <button
                           type="button"
                           className="lrwBtn primary premium"
                           disabled={aiBusy}
-                          onClick={() => aiGenerateSummary({ type: summaryType, forceRegenerate: false })}
+                          onClick={aiGenerateRelatedCases}
                         >
                           Generate
-                        </button>
-                        <button
-                          type="button"
-                          className="lrwBtn ghost premium"
-                          disabled={aiBusy}
-                          onClick={() => aiGenerateSummary({ type: summaryType, forceRegenerate: true })}
-                        >
-                          Force
                         </button>
                       </div>
                     </div>
 
                     {aiBusy ? <div className="lrwAiLoading">Working…</div> : null}
 
-                    {safeTrim(summaryText) ? (
-                      <div className="lrwAiAnswer">
-                        <div className="meta">
-                          <span className="pill">Type: {summaryMeta?.type || summaryType}</span>
-                          {summaryMeta?.cached ? <span className="pill soft">cached</span> : null}
-                          <button type="button" className="mini" onClick={() => copyText(summaryText)} title="Copy summary">
-                            Copy
-                          </button>
-                        </div>
-                      </div>
-                    ) : !aiBusy ? (
-                      <div className="lrwAiEmpty">
-                        <div className="t">No cached summary yet</div>
-                        <div className="s">
-                          Click <b>Generate</b> to create it once. Next time it loads instantly.
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {/* BASIC: ONLY 2 cards (Summary + Key points if available) */}
-                  {summaryType === "basic" && safeTrim(summaryText) ? (
-                    <>
-                      <div className="lrwAiCard lrwAiCardAccent">
-                        <div className="lrwAiCardHead">
-                          <div className="ttl">Summary</div>
-                          <div className="sub">AI-generated. Verify against the transcript.</div>
-                        </div>
-                        <div className="lrwAiCardBody">
-                          <RichText text={summaryCards.summary} />
-                        </div>
-                      </div>
-
-                      {summaryCards.keyPoints?.length ? (
-                        <div className="lrwAiCard lrwAiCardSoft">
-                          <div className="lrwAiCardHead">
-                            <div className="ttl">Key points</div>
-                            <div className="sub">Fast scan (AI-extracted)</div>
-                          </div>
-                          <div className="lrwAiCardBody">
-                            <ul className="lrwAiList">
-                              {summaryCards.keyPoints.map((kp, i) => (
-                                <li key={i}>{kp}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        </div>
-                      ) : null}
-                    </>
-                  ) : null}
-
-                  {/* EXTENDED: Parties + Citation as title (NOT a card) + section cards */}
-                  {summaryType === "extended" && safeTrim(summaryText) ? (
-                    <>
-                      <div className="lrwAiSummaryTitle" aria-label="Extended summary title">
-                        <div className="p">{parties}</div>
-                        {citation ? <div className="c">{citation}</div> : null}
-                      </div>
-
-                      {extendedSections.map((sec, idx) => (
-                        <div
-                          key={`${sec.label}_${idx}`}
-                          className={`lrwAiCard ${sec.label.toLowerCase().includes("key") ? "lrwAiCardSoft" : "lrwAiCardAccent"}`}
-                        >
-                          <div className="lrwAiCardHead">
-                            <div className="ttl">{sec.label}</div>
-                          </div>
-                          <div className="lrwAiCardBody">
-                            <RichText text={sec.body} />
-                          </div>
-                        </div>
-                      ))}
-                    </>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {/* Related */}
-              {aiTab === "related" ? (
-                <div className="lrwAiCard">
-                  <div className="lrwAiRow">
-                    <div className="note">AI-suggested related cases (Kenya + Foreign). Always verify citations.</div>
-                    <div className="rowActions">
-                      <button type="button" className="lrwBtn primary premium" disabled={aiBusy} onClick={aiGenerateRelatedCases}>
-                        Generate
-                      </button>
-                    </div>
-                  </div>
-
-                  {aiBusy ? <div className="lrwAiLoading">Working…</div> : null}
-
-                  <div className="lrwAiChat lrwAiChatTight">
-                    {messages
-                      .filter((m) => m?.kind === "related")
-                      .slice(-3)
-                      .map((m) => (
-                        <div key={m.id} className="lrwMsgCard assistant">
-                          <div className="lrwMsgCardTop">
-                            <div className="who">LegalAI</div>
-                            <button type="button" className="mini" onClick={() => copyText(m.content)}>
-                              Copy
-                            </button>
-                          </div>
-                          <div className="lrwMsgCardBody">
-                            <RichText text={m.content} />
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              ) : null}
-
-              {/* Chat */}
-              {aiTab === "chat" ? (
-                <div className="lrwAiCard">
-                  <div className="lrwAiRow">
-                    <div className="note">Suggested starters:</div>
-                    <div className="lrwSuggestRow" aria-label="Suggested questions">
-                      {SUGGESTED_QUESTIONS.slice(0, 4).map((q) => (
-                        <button
-                          key={q}
-                          type="button"
-                          className="lrwSuggest"
-                          onClick={() => {
-                            setChatInput(q);
-                            setTimeout(() => chatBoxRef.current?.focus?.(), 0);
-                          }}
-                          title="Insert into chat"
-                        >
-                          {q}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="lrwAiChat" aria-label="Chat messages">
-                    {messages
-                      .filter((m) => m?.kind !== "related" && m?.kind !== "summary")
-                      .map((m) => {
-                        const isUser = m.role === "user";
-                        const isTyping = m.kind === "typing";
-
-                        if (isTyping) {
-                          return (
-                            <div key={m.id} className="lrwMsgCard assistant isTyping">
-                              <div className="lrwMsgCardTop">
-                                <div className="who">LegalAI</div>
-                              </div>
-                              <div className="lrwMsgCardBody">
-                                <div className="typing" aria-label="Assistant is typing">
-                                  <span />
-                                  <span />
-                                  <span />
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <div key={m.id} className={`lrwMsgCard ${isUser ? "user" : "assistant"}`}>
+                    <div className="lrwAiChat lrwAiChatTight">
+                      {messages
+                        .filter((m) => m?.kind === "related")
+                        .slice(-3)
+                        .map((m) => (
+                          <div key={m.id} className="lrwMsgCard assistant">
                             <div className="lrwMsgCardTop">
-                              <div className="who">{isUser ? "You" : "LegalAI"}</div>
-                              {!isUser ? (
-                                <button type="button" className="mini" onClick={() => copyText(m.content)} title="Copy">
-                                  Copy
-                                </button>
-                              ) : null}
+                              <div className="who">LegalAI</div>
+                              <button type="button" className="mini" onClick={() => copyText(m.content)}>
+                                Copy
+                              </button>
                             </div>
                             <div className="lrwMsgCardBody">
                               <RichText text={m.content} />
                             </div>
                           </div>
-                        );
-                      })}
-
-                    <div ref={chatEndRef} />
+                        ))}
+                    </div>
                   </div>
+                ) : null}
 
-                  <div className="lrwAiComposer">
-                    <div className="lrwSuggestRow lrwSuggestRowFull">
-                      {SUGGESTED_QUESTIONS.map((q) => (
+                {/* Chat */}
+                {aiTab === "chat" ? (
+                  <div className="lrwAiCard lrwAiChatPanel">
+                    <div className="lrwAiRow">
+                      <div className="note">Suggested starters:</div>
+                      <div className="lrwSuggestRow" aria-label="Suggested questions">
+                        {SUGGESTED_QUESTIONS.slice(0, 4).map((q) => (
+                          <button
+                            key={q}
+                            type="button"
+                            className="lrwSuggest"
+                            onClick={() => {
+                              setChatInput(q);
+                              setTimeout(() => chatBoxRef.current?.focus?.(), 0);
+                            }}
+                            title="Insert into chat"
+                          >
+                            {q}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* ✅ flex:1 scroll area */}
+                    <div className="lrwAiChat lrwAiChatFlex" aria-label="Chat messages">
+                      {messages
+                        .filter((m) => m?.kind !== "related" && m?.kind !== "summary")
+                        .map((m) => {
+                          const isUser = m.role === "user";
+                          const isTyping = m.kind === "typing";
+
+                          if (isTyping) {
+                            return (
+                              <div key={m.id} className="lrwMsgCard assistant isTyping">
+                                <div className="lrwMsgCardTop">
+                                  <div className="who">LegalAI</div>
+                                </div>
+                                <div className="lrwMsgCardBody">
+                                  <div className="typing" aria-label="Assistant is typing">
+                                    <span />
+                                    <span />
+                                    <span />
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div key={m.id} className={`lrwMsgCard ${isUser ? "user" : "assistant"}`}>
+                              <div className="lrwMsgCardTop">
+                                <div className="who">{isUser ? "You" : "LegalAI"}</div>
+                                {!isUser ? (
+                                  <button type="button" className="mini" onClick={() => copyText(m.content)} title="Copy">
+                                    Copy
+                                  </button>
+                                ) : null}
+                              </div>
+                              <div className="lrwMsgCardBody">
+                                <RichText text={m.content} />
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                      <div ref={chatEndRef} />
+                    </div>
+
+                    <div className="lrwAiComposer">
+                      <div className="lrwSuggestRow lrwSuggestRowFull">
+                        {SUGGESTED_QUESTIONS.map((q) => (
+                          <button
+                            key={q}
+                            type="button"
+                            className="lrwSuggest"
+                            onClick={() => {
+                              setChatInput(q);
+                              setTimeout(() => chatBoxRef.current?.focus?.(), 0);
+                            }}
+                          >
+                            {q}
+                          </button>
+                        ))}
+                      </div>
+
+                      <textarea
+                        ref={chatBoxRef}
+                        className="inp"
+                        value={chatInput}
+                        placeholder="Ask: key issues, holding, ratio, citations, arguments, implications…"
+                        onChange={(e) => setChatInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                            e.preventDefault();
+                            aiSendChat(chatInput);
+                          }
+                        }}
+                      />
+                      <div className="composerActions">
+                        <div className="hint">Ctrl/⌘ + Enter to send</div>
                         <button
-                          key={q}
                           type="button"
-                          className="lrwSuggest"
-                          onClick={() => {
-                            setChatInput(q);
-                            setTimeout(() => chatBoxRef.current?.focus?.(), 0);
-                          }}
+                          className="lrwBtn primary premium"
+                          disabled={aiBusy || !safeTrim(chatInput)}
+                          onClick={() => aiSendChat(chatInput)}
                         >
-                          {q}
+                          Send
                         </button>
-                      ))}
-                    </div>
-
-                    <textarea
-                      ref={chatBoxRef}
-                      className="inp"
-                      value={chatInput}
-                      placeholder="Ask: key issues, holding, ratio, citations, arguments, implications…"
-                      onChange={(e) => setChatInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-                          e.preventDefault();
-                          aiSendChat(chatInput);
-                        }
-                      }}
-                    />
-                    <div className="composerActions">
-                      <div className="hint">Ctrl/⌘ + Enter to send</div>
-                      <button
-                        type="button"
-                        className="lrwBtn primary premium"
-                        disabled={aiBusy || !safeTrim(chatInput)}
-                        onClick={() => aiSendChat(chatInput)}
-                      >
-                        Send
-                      </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : null}
+                ) : null}
+              </div>
 
               <div className="lrwAiFoot">Disclaimer: AI output may be inaccurate. Verify against the transcript and citations.</div>
             </>

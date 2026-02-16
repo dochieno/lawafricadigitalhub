@@ -133,7 +133,6 @@ export default function App() {
             <Route path="law-reports/:id/workspace" element={<LawReportWorkspace />} />
             <Route path="law-reports/:id/report" element={<LawReportReportView />} />
             <Route path="law-reports/:id" element={<LawReportReader />} />
-            <Route path="law-reports/:id" element={<LawReportReader />} />
             <Route path="trials" element={<RequestTrial />} />
             <Route path="law-reports/subscribe" element={<LawReportsSubscribe />} />
             <Route path="security" element={<SecurityDashboard />} />
