@@ -2,6 +2,12 @@
    FILE: src/styles/lawReportWorkspace.css
    Premium minimal Case Workspace (CSS only)
    Westlaw + Notion + Linear upgrade (FULL REPLACEMENT)
+   - Updated to match the NEW JSX structure:
+     - Compact top bar (Parties + Citation only)
+     - Better paragraph spacing + blocks
+     - Premium LegalAI cards (Summary + Chat + Related)
+     - Suggested questions chips
+     - Message cards (not bubbles)
 ======================================================= */
 
 /* =======================================================
@@ -90,6 +96,11 @@
   grid-template-columns: auto 1fr auto;
   gap: 14px;
   align-items: center;
+}
+
+/* ✅ compact version used by the new JSX */
+.lrwTopInnerCompact {
+  padding: 12px 20px;
 }
 
 .lrwTitleBlock { min-width: 0; }
@@ -351,21 +362,42 @@
   font-weight: 750;
 }
 
+/* ✅ New wrapper hook for typography consistency */
+
+
+/* ✅ paragraph spacing improvements:
+   - tighter margin at paragraph start
+   - more generous separation between blocks
+   - headings breathe more
+*/
+.lrwBlock { margin: 0; }
+.lrwBlock + .lrwBlock { margin-top: 14px; }
+
+.lrwBlockH + .lrwBlockP { margin-top: 10px; }
+.lrwBlockP + .lrwBlockH { margin-top: 24px; }
+
 .lrwH {
-  margin: 28px 0 12px;
+  margin: 24px 0 10px;
   font-size: 16px;
   font-weight: 950;
   letter-spacing: -0.01em;
 }
 
 .lrwP {
-  margin: 14px 0;
+  margin: 0;
   font-size: 15.6px;
-  line-height: 1.92;
+  line-height: 1.95;
   color: var(--doc-ink);
+  text-wrap: pretty;
 }
 
 .lrwWrap[data-theme="dark"] .lrwP { color: rgba(255,255,255,0.90); }
+
+/* slightly nicer measure on huge screens */
+@media (min-width: 1100px) {
+  .lrwDoc,
+  .lrwHtml { max-width: 920px; }
+}
 
 /* Font scale classes */
 .lrwFs-90 .lrwP  { font-size: 14.2px; }
@@ -386,8 +418,10 @@
    GATING BLOCK (Premium, calmer)
 ======================================================= */
 
+.lrwGateSlot { margin-top: 16px; }
+
 .lrwGate {
-  margin: 26px 0 14px;
+  margin: 18px 0 10px;
   border: 1px solid rgba(107,35,59,0.22);
   background: linear-gradient(180deg, rgba(107,35,59,0.08), rgba(255,255,255,0.80));
   border-radius: 18px;
@@ -519,7 +553,7 @@
   top: 0;
   right: 0;
   height: 100%;
-  width: min(600px, 94vw); /* ✅ stronger dominance */
+  width: min(600px, 94vw);
   background: rgba(255,255,255,0.96);
   border-left: 1px solid rgba(17,24,39,0.10);
   box-shadow: -28px 0 70px rgba(0,0,0,0.22);
@@ -585,7 +619,7 @@
   font-size: 12px;
 }
 
-/* Tabs (less noisy, more premium) */
+/* Tabs */
 .lrwAiTabs {
   padding: 12px 16px 0;
   display: flex;
@@ -614,6 +648,12 @@
   color: rgba(107,35,59,0.98);
 }
 
+/* ✅ NEW: stack for multiple cards in Summary tab */
+.lrwAiStack {
+  display: flex;
+  flex-direction: column;
+}
+
 /* AI card */
 .lrwAiCard {
   margin: 16px;
@@ -624,6 +664,49 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+/* ✅ NEW: variants to match “screen 2” vibe */
+.lrwAiCardAccent {
+  border-color: rgba(107,35,59,0.18);
+  background: linear-gradient(180deg, rgba(107,35,59,0.06), rgba(255,255,255,0.90));
+}
+
+.lrwAiCardSoft {
+  border-color: rgba(17,24,39,0.10);
+  background: rgba(255,255,255,0.88);
+}
+
+/* ✅ NEW: card header + body blocks */
+.lrwAiCardHead {
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid rgba(17,24,39,0.08);
+  background: linear-gradient(180deg, rgba(255,255,255,0.75), rgba(255,255,255,0.0));
+}
+
+.lrwAiCardHead .ttl {
+  font-size: 12px;
+  font-weight: 980;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: rgba(17,24,39,0.70);
+}
+
+.lrwAiCardHead .sub {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 720;
+  color: rgba(17,24,39,0.60);
+}
+
+.lrwAiCardBody {
+  padding: 12px 14px 14px;
+}
+
+.lrwAiEmptyInline {
+  font-size: 12px;
+  font-weight: 750;
+  color: rgba(17,24,39,0.62);
 }
 
 /* Summary row */
@@ -682,7 +765,7 @@
 .lrwAiEmpty .s { margin-top: 6px; color: rgba(17,24,39,0.65); font-weight: 720; font-size: 12px; }
 
 /* Answer meta */
-.lrwAiAnswer { padding: 12px; }
+.lrwAiAnswer { padding: 12px 12px 0; }
 
 .lrwAiAnswer .meta {
   display: flex;
@@ -716,46 +799,115 @@
   color: rgba(107,35,59,0.98);
 }
 
-/* Chat scroll area */
-.lrwAiChat {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  max-height: calc(100vh - 280px);
-  overflow: auto;
+/* ✅ NEW: mini KV grid used by “Case context” card */
+.lrwAiGrid2 {
+  padding: 12px 14px 14px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
 }
 
-/* Better scrollbars (desktop) */
-.lrwAiChat::-webkit-scrollbar { width: 10px; }
-.lrwAiChat::-webkit-scrollbar-thumb { background: rgba(17,24,39,0.14); border-radius: 999px; }
-.lrwAiChat::-webkit-scrollbar-thumb:hover { background: rgba(17,24,39,0.22); }
+@media (max-width: 520px) {
+  .lrwAiGrid2 { grid-template-columns: 1fr; }
+}
 
-.lrwAiChat .msg { display: flex; }
-.lrwAiChat .msg.user { justify-content: flex-end; }
+.lrwAiMiniKV {
+  border: 1px solid rgba(17,24,39,0.10);
+  background: rgba(255,255,255,0.82);
+  border-radius: 16px;
+  padding: 10px 10px;
+}
 
-.lrwAiChat .bubble {
-  max-width: 92%;
-  border-radius: 18px;
+.lrwAiMiniKV .k {
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: rgba(17,24,39,0.60);
+}
+
+.lrwAiMiniKV .v {
+  margin-top: 6px;
+  font-size: 12.8px;
+  font-weight: 760;
+  color: rgba(17,24,39,0.88);
+  line-height: 1.35;
+}
+
+/* =======================================================
+   CHAT: suggested question chips + message cards (premium)
+======================================================= */
+
+.lrwSuggestRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.lrwSuggestRowFull {
+  justify-content: flex-start;
+  margin-bottom: 10px;
+}
+
+.lrwSuggest {
+  border: 1px solid rgba(17,24,39,0.10);
+  background: rgba(255,255,255,0.78);
+  border-radius: 999px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+}
+
+.lrwSuggest:hover {
+  transform: translateY(-1px);
+  border-color: rgba(107,35,59,0.18);
+  box-shadow: 0 12px 26px rgba(0,0,0,0.10);
+}
+
+.lrwSuggest:active { transform: translateY(0); }
+
+.lrwMsgCard {
   border: 1px solid rgba(17,24,39,0.10);
   background: rgba(255,255,255,0.90);
-  padding: 12px 12px;
-  position: relative;
+  border-radius: 18px;
   box-shadow: 0 12px 26px rgba(0,0,0,0.06);
+  overflow: hidden;
 }
 
-.lrwAiChat .msg.user .bubble {
+.lrwMsgCard.user {
   border-color: rgba(107,35,59,0.18);
-  background: rgba(107,35,59,0.10);
+  background: linear-gradient(180deg, rgba(107,35,59,0.10), rgba(255,255,255,0.86));
 }
 
-.lrwAiChat .msgActions {
-  position: absolute;
-  top: 8px;
-  right: 10px;
+.lrwMsgCardTop {
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(17,24,39,0.08);
+  background: rgba(255,255,255,0.70);
 }
 
-.lrwAiChat .mini {
+.lrwMsgCard.user .lrwMsgCardTop {
+  background: rgba(107,35,59,0.08);
+  border-bottom-color: rgba(107,35,59,0.12);
+}
+
+.lrwMsgCardTop .who {
+  font-size: 12px;
+  font-weight: 980;
+  color: rgba(17,24,39,0.70);
+}
+
+.lrwMsgCard.user .lrwMsgCardTop .who {
+  color: rgba(107,35,59,0.98);
+}
+
+.lrwMsgCardTop .mini {
   border: 0;
   background: transparent;
   cursor: pointer;
@@ -763,6 +915,28 @@
   color: rgba(107,35,59,0.98);
   font-size: 12px;
 }
+
+.lrwMsgCardBody {
+  padding: 12px 12px 14px;
+}
+
+/* Chat scroll area */
+.lrwAiChat {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: calc(100vh - 300px);
+  overflow: auto;
+}
+
+/* optional tighter mode */
+.lrwAiChatTight { max-height: calc(100vh - 320px); }
+
+/* Better scrollbars (desktop) */
+.lrwAiChat::-webkit-scrollbar { width: 10px; }
+.lrwAiChat::-webkit-scrollbar-thumb { background: rgba(17,24,39,0.14); border-radius: 999px; }
+.lrwAiChat::-webkit-scrollbar-thumb:hover { background: rgba(17,24,39,0.22); }
 
 /* Composer */
 .lrwAiComposer {
@@ -855,7 +1029,7 @@
 .lrwAiSpacer { height: 10px; }
 
 /* =======================================================
-   OPTIONAL: typing dots (if used)
+   OPTIONAL: typing dots
 ======================================================= */
 
 .typing {

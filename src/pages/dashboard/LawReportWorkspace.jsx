@@ -1,10 +1,12 @@
 // =======================================================
 // FILE: src/pages/dashboard/LawReportWorkspace.jsx
-// Purpose: New premium "Case Workspace" reader
+// Purpose: Premium "Case Workspace" reader (Westlaw + Notion + Linear vibe)
 // Notes:
 // - Keeps ALL existing endpoints & permission logic
-// - LegalAI is a right drawer (premium + minimal chrome)
-// - Transcript gating remains (preview for premium without access)
+// - Top bar: Parties + Citation only (actions stay)
+// - LegalAI: premium cards for Summary + Chat + Related
+// - Chat: suggested questions + premium message cards
+// - Transcript: improved paragraph chunking + nicer hierarchy hooks (CSS next)
 // =======================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -369,9 +371,7 @@ function pickPdfMeta(report) {
 }
 
 function guessPdfFilename({ report, reportId, title }) {
-  const base =
-    pickPdfMeta(report).filename ||
-    `LawAfrica_LawReport_${reportId || ""}`.trim();
+  const base = pickPdfMeta(report).filename || `LawAfrica_LawReport_${reportId || ""}`.trim();
 
   const cleanTitle = String(title || "")
     .replace(/[^\w\s-]+/g, "")
@@ -421,9 +421,9 @@ function formatDate(d) {
 }
 
 function buildDefaultCopyText({ report, title, caseNo }) {
-  const citation = report?.citation || "";
-  const court = report?.court || "";
-  const date = report?.decisionDate || "";
+  const citation = report?.citation || report?.Citation || "";
+  const court = report?.court || report?.Court || "";
+  const date = report?.decisionDate || report?.DecisionDate || "";
 
   const lines = [
     title,
@@ -467,6 +467,55 @@ function prettifyChatReplyForUi(text) {
 
   return t;
 }
+
+/* ---------------- LegalAI: split summary into premium cards ---------------- */
+
+function extractBullets(text) {
+  const t = String(text || "").replace(/\r\n/g, "\n");
+  const lines = t.split("\n").map((x) => x.trim());
+  const bullets = [];
+  for (const ln of lines) {
+    if (/^[-•]\s+/.test(ln)) bullets.push(ln.replace(/^[-•]\s+/, "").trim());
+    else if (/^\d+\.\s+/.test(ln)) bullets.push(ln.replace(/^\d+\.\s+/, "").trim());
+  }
+  return bullets.filter(Boolean);
+}
+
+function splitSummaryForCards(type, summaryText) {
+  const raw = String(summaryText || "").trim();
+  if (!raw) return { summary: "", keyPoints: [] };
+
+  // If the model already emits bullets, treat them as key points
+  const bullets = extractBullets(raw);
+
+  if (type === "basic") {
+    // Basic: show (a) Summary paragraph text (b) Key Points bullets
+    // Heuristic: if we have bullets, keep the non-bullet lines as summary
+    if (bullets.length) {
+      const nonBullet = raw
+        .split(/\r?\n/)
+        .map((x) => x.trim())
+        .filter((ln) => ln && !/^([-•]|\d+\.)\s+/.test(ln))
+        .join("\n")
+        .trim();
+      return { summary: nonBullet || raw, keyPoints: bullets.slice(0, 12) };
+    }
+
+    // No bullets: create key points from sentence splits
+    const sentences = raw
+      .split(/(?<=[.!?])\s+/)
+      .map((x) => x.trim())
+      .filter(Boolean);
+
+    const kp = sentences.slice(0, Math.min(6, sentences.length));
+    return { summary: raw, keyPoints: kp.length ? kp : [] };
+  }
+
+  // Extended: keep full rich text; key points optional
+  return { summary: raw, keyPoints: bullets.slice(0, 14) };
+}
+
+/* ---------------- RichText renderer ---------------- */
 
 function RichText({ text }) {
   const t = String(text || "");
@@ -642,9 +691,9 @@ function CaseContent({ text, showGate, gateAtIndex, renderGate }) {
       {paras.map((p, idx) => {
         const isHeading = isLikelyHeadingParagraph(p);
         return (
-          <div key={idx}>
+          <div key={idx} className={isHeading ? "lrwBlock lrwBlockH" : "lrwBlock lrwBlockP"}>
             {isHeading ? <h3 className="lrwH">{p}</h3> : <p className="lrwP">{p}</p>}
-            {showGate && gateAtIndex === idx + 1 ? renderGate() : null}
+            {showGate && gateAtIndex === idx + 1 ? <div className="lrwGateSlot">{renderGate()}</div> : null}
           </div>
         );
       })}
@@ -655,6 +704,16 @@ function CaseContent({ text, showGate, gateAtIndex, renderGate }) {
 /* =========================================================
    Page
 ========================================================= */
+
+const SUGGESTED_QUESTIONS = [
+  "What are the key issues in this case?",
+  "Summarize the holding/decision in 3 bullet points.",
+  "What is the court’s reasoning and ratio decidendi?",
+  "List the orders made by the court.",
+  "What authorities/cases are cited, and why?",
+  "What arguments did each side make?",
+  "What are the practical implications of this decision?",
+];
 
 export default function LawReportWorkspace() {
   const { id } = useParams();
@@ -713,6 +772,7 @@ export default function LawReportWorkspace() {
   ]);
   const [chatInput, setChatInput] = useState("");
   const chatEndRef = useRef(null);
+  const chatBoxRef = useRef(null);
   const aiAutoLoadedRef = useRef(false);
 
   const isPremium = useMemo(() => {
@@ -831,14 +891,17 @@ export default function LawReportWorkspace() {
   }, [report, availabilityLoading, hasContent, textHasContent]);
 
   // Derived display bits
-  const title = useMemo(() => report?.parties || report?.title || "Law Report", [report]);
+  const parties = useMemo(
+    () => report?.parties || report?.Parties || report?.title || report?.Title || "Law Report",
+    [report]
+  );
+  const citation = useMemo(() => report?.citation || report?.Citation || "", [report]);
+
+  const titleForCopy = useMemo(() => report?.parties || report?.title || "Law Report", [report]);
   const caseNo = useMemo(
     () => report?.caseNumber || report?.caseNo || report?.case_no || report?.CaseNumber || "",
     [report]
   );
-
-  const parties = useMemo(() => report?.parties || report?.Parties || report?.title || report?.Title || "", [report]);
-
   const courtName = useMemo(
     () =>
       report?.court ||
@@ -850,23 +913,6 @@ export default function LawReportWorkspace() {
       "",
     [report]
   );
-
-  const town = useMemo(
-    () => report?.town || report?.Town || report?.location || report?.Location || report?.courtTown || report?.CourtTown || "",
-    [report]
-  );
-
-  const decisionType = useMemo(
-    () => report?.decisionTypeLabel || report?.DecisionTypeLabel || report?.decisionType || report?.DecisionType || "",
-    [report]
-  );
-
-  const caseType = useMemo(
-    () => report?.caseTypeLabel || report?.CaseTypeLabel || report?.caseType || report?.CaseType || "",
-    [report]
-  );
-
-  const decisionDate = useMemo(() => report?.decisionDate || report?.DecisionDate || "", [report]);
 
   function goUrl(url) {
     if (!url) return;
@@ -1076,11 +1122,7 @@ export default function LawReportWorkspace() {
       const blob = res?.data;
       if (!blob) throw new Error("No file returned.");
 
-      const cd =
-        res?.headers?.["content-disposition"] ||
-        res?.headers?.["Content-Disposition"] ||
-        "";
-
+      const cd = res?.headers?.["content-disposition"] || res?.headers?.["Content-Disposition"] || "";
       const serverName = getFilenameFromContentDisposition(cd);
       const filename = serverName || fallbackName;
 
@@ -1246,10 +1288,10 @@ export default function LawReportWorkspace() {
           ? items
               .map((x, i2) => {
                 const t = (x?.title || x?.Title || `Case ${i2 + 1}`).trim();
-                const citation = (x?.citation || x?.Citation || "").trim();
+                const cit = (x?.citation || x?.Citation || "").trim();
                 const juris = (x?.jurisdiction || x?.Jurisdiction || "").trim();
                 const why = (x?.reason || x?.Reason || x?.note || "").trim();
-                const meta = [citation, juris].filter(Boolean).join(" · ");
+                const meta = [cit, juris].filter(Boolean).join(" · ");
                 return `- **${t}**${meta ? ` (${meta})` : ""}${why ? ` — ${why}` : ""}`;
               })
               .join("\n")
@@ -1343,11 +1385,14 @@ export default function LawReportWorkspace() {
 
   const showGate = !!(preview.gated && preview.reachedLimit);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const summaryCards = useMemo(() => splitSummaryForCards(summaryType, summaryText), [summaryType, summaryText]);
+
   return (
     <div className="lrwWrap" data-theme={readingTheme}>
-      {/* Top bar (single row, slim) */}
+      {/* Top bar (slim): Parties + Citation only (actions remain) */}
       <header className="lrwTop">
-        <div className="lrwTopInner">
+        <div className="lrwTopInner lrwTopInnerCompact">
           <button type="button" className="lrwIconBtn" onClick={() => navigate("/dashboard/law-reports")} title="Back">
             <span className="ico" aria-hidden="true">
               ←
@@ -1356,16 +1401,19 @@ export default function LawReportWorkspace() {
           </button>
 
           <div className="lrwTitleBlock">
-            <div className="lrwTitle" title={title}>
-              {title}
+            <div className="lrwTitle" title={parties}>
+              {parties}
             </div>
 
             <div className="lrwMetaRow">
-              {caseNo ? <span className="lrwPill">{caseNo}</span> : null}
-              {courtName ? <span className="lrwPill soft">{courtName}</span> : null}
-              {decisionType ? <span className="lrwPill soft">{decisionType}</span> : null}
-              {decisionDate ? <span className="lrwPill soft">{formatDate(decisionDate)}</span> : null}
-              {isPremium ? <AccessChip access={access} isPremium={isPremium} isAdmin={isAdmin} hasFullAccess={hasFullAccess} /> : <span className="lrwChip ok"><span className="dot" /> <span className="txt">Free</span></span>}
+              {citation ? <span className="lrwPill soft">Citation: {citation}</span> : null}
+              {isPremium ? (
+                <AccessChip access={access} isPremium={isPremium} isAdmin={isAdmin} hasFullAccess={hasFullAccess} />
+              ) : (
+                <span className="lrwChip ok">
+                  <span className="dot" /> <span className="txt">Free</span>
+                </span>
+              )}
             </div>
           </div>
 
@@ -1391,13 +1439,25 @@ export default function LawReportWorkspace() {
                   <div className="g">
                     <div className="k">Text</div>
                     <div className="r">
-                      <button type="button" className="lrwMiniBtn" onClick={() => setFontScale((v) => Math.max(0.9, Number((v - 0.05).toFixed(2))))}>
+                      <button
+                        type="button"
+                        className="lrwMiniBtn"
+                        onClick={() => setFontScale((v) => Math.max(0.9, Number((v - 0.05).toFixed(2))))}
+                      >
                         A−
                       </button>
-                      <button type="button" className="lrwMiniBtn" onClick={() => setFontScale((v) => Math.min(1.2, Number((v + 0.05).toFixed(2))))}>
+                      <button
+                        type="button"
+                        className="lrwMiniBtn"
+                        onClick={() => setFontScale((v) => Math.min(1.2, Number((v + 0.05).toFixed(2))))}
+                      >
                         A+
                       </button>
-                      <button type="button" className={`lrwMiniBtn ${serif ? "isOn" : ""}`} onClick={() => setSerif((v) => !v)}>
+                      <button
+                        type="button"
+                        className={`lrwMiniBtn ${serif ? "isOn" : ""}`}
+                        onClick={() => setSerif((v) => !v)}
+                      >
                         Serif
                       </button>
                     </div>
@@ -1406,13 +1466,25 @@ export default function LawReportWorkspace() {
                   <div className="g">
                     <div className="k">Theme</div>
                     <div className="r">
-                      <button type="button" className={`lrwMiniBtn ${readingTheme === "paper" ? "isOn" : ""}`} onClick={() => setReadingTheme("paper")}>
+                      <button
+                        type="button"
+                        className={`lrwMiniBtn ${readingTheme === "paper" ? "isOn" : ""}`}
+                        onClick={() => setReadingTheme("paper")}
+                      >
                         Paper
                       </button>
-                      <button type="button" className={`lrwMiniBtn ${readingTheme === "sepia" ? "isOn" : ""}`} onClick={() => setReadingTheme("sepia")}>
+                      <button
+                        type="button"
+                        className={`lrwMiniBtn ${readingTheme === "sepia" ? "isOn" : ""}`}
+                        onClick={() => setReadingTheme("sepia")}
+                      >
                         Sepia
                       </button>
-                      <button type="button" className={`lrwMiniBtn ${readingTheme === "dark" ? "isOn" : ""}`} onClick={() => setReadingTheme("dark")}>
+                      <button
+                        type="button"
+                        className={`lrwMiniBtn ${readingTheme === "dark" ? "isOn" : ""}`}
+                        onClick={() => setReadingTheme("dark")}
+                      >
                         Dark
                       </button>
                     </div>
@@ -1426,7 +1498,7 @@ export default function LawReportWorkspace() {
               type="button"
               className="lrwIconBtn"
               onClick={() => {
-                const payload = buildDefaultCopyText({ report, title, caseNo });
+                const payload = buildDefaultCopyText({ report, title: titleForCopy, caseNo });
                 copyText(payload);
               }}
               title="Copy citation details"
@@ -1482,7 +1554,7 @@ export default function LawReportWorkspace() {
 
       {/* Body */}
       <div className="lrwBody">
-        {/* Left rail */}
+        {/* Left rail (kept, but can be toned down via CSS next) */}
         <aside className="lrwRail" aria-label="Case details">
           <div className="lrwCard">
             <div className="h">Case details</div>
@@ -1509,31 +1581,10 @@ export default function LawReportWorkspace() {
                 </div>
               ) : null}
 
-              {town ? (
+              {citation ? (
                 <div className="row">
-                  <div className="k">Town</div>
-                  <div className="v">{town}</div>
-                </div>
-              ) : null}
-
-              {decisionDate ? (
-                <div className="row">
-                  <div className="k">Decision date</div>
-                  <div className="v">{formatDate(decisionDate)}</div>
-                </div>
-              ) : null}
-
-              {decisionType ? (
-                <div className="row">
-                  <div className="k">Decision type</div>
-                  <div className="v">{decisionType}</div>
-                </div>
-              ) : null}
-
-              {caseType ? (
-                <div className="row">
-                  <div className="k">Case type</div>
-                  <div className="v">{caseType}</div>
+                  <div className="k">Citation</div>
+                  <div className="v">{citation}</div>
                 </div>
               ) : null}
             </div>
@@ -1541,7 +1592,11 @@ export default function LawReportWorkspace() {
             <div className="railActions">
               {isPremium ? (
                 <div className="railAccess">
-                  {accessLoading ? <span className="muted">checking access…</span> : <AccessChip access={access} isPremium={isPremium} isAdmin={isAdmin} hasFullAccess={hasFullAccess} />}
+                  {accessLoading ? (
+                    <span className="muted">checking access…</span>
+                  ) : (
+                    <AccessChip access={access} isPremium={isPremium} isAdmin={isAdmin} hasFullAccess={hasFullAccess} />
+                  )}
                 </div>
               ) : null}
 
@@ -1549,19 +1604,14 @@ export default function LawReportWorkspace() {
                 type="button"
                 className="lrwBtn ghost"
                 onClick={() => {
-                  const payload = buildDefaultCopyText({ report, title, caseNo });
+                  const payload = buildDefaultCopyText({ report, title: titleForCopy, caseNo });
                   copyText(payload);
                 }}
               >
                 Copy details
               </button>
 
-              <button
-                type="button"
-                className="lrwBtn ghost"
-                disabled={!canDownloadPdf || pdfBusy}
-                onClick={downloadPdfNow}
-              >
+              <button type="button" className="lrwBtn ghost" disabled={!canDownloadPdf || pdfBusy} onClick={downloadPdfNow}>
                 {pdfBusy ? "Preparing…" : "Download PDF"}
               </button>
 
@@ -1580,6 +1630,7 @@ export default function LawReportWorkspace() {
             className={[
               "lrwPaper",
               `lrwTheme-${readingTheme}`,
+              "lrwProse", // hook for better paragraph spacing + typography in CSS
               fsClass,
               fontClass,
               showGate ? "isGated" : "",
@@ -1619,7 +1670,7 @@ export default function LawReportWorkspace() {
           <div className="lrwDrawerHead">
             <div className="t">
               <div className="ttl">LegalAI</div>
-              <div className="sub">Ask about issues, holding, ratio, authorities, orders.</div>
+              <div className="sub">Issues • Holding • Ratio • Authorities • Orders • Next steps</div>
             </div>
 
             <button type="button" className="lrwIconBtn" onClick={() => setAiOpen(false)} title="Close">
@@ -1667,82 +1718,146 @@ export default function LawReportWorkspace() {
                 </button>
               </div>
 
-              {/* Summary */}
+              {/* Summary (premium cards like your screen 2) */}
               {aiTab === "summary" ? (
-                <div className="lrwAiCard">
-                  <div className="lrwAiRow">
-                    <div className="seg" role="group" aria-label="Summary type">
-                      <button
-                        type="button"
-                        className={`segBtn ${summaryType === "basic" ? "on" : ""}`}
-                        onClick={() => {
-                          setSummaryType("basic");
-                          aiGetCachedSummary("basic");
-                        }}
-                      >
-                        Basic
-                      </button>
-                      <button
-                        type="button"
-                        className={`segBtn ${summaryType === "extended" ? "on" : ""}`}
-                        onClick={() => {
-                          setSummaryType("extended");
-                          aiGetCachedSummary("extended");
-                        }}
-                      >
-                        Extended
-                      </button>
-                    </div>
-
-                    <div className="rowActions">
-                      <button
-                        type="button"
-                        className="lrwBtn primary"
-                        disabled={aiBusy}
-                        onClick={() => aiGenerateSummary({ type: summaryType, forceRegenerate: false })}
-                      >
-                        Generate
-                      </button>
-                      <button
-                        type="button"
-                        className="lrwBtn ghost"
-                        disabled={aiBusy}
-                        onClick={() => aiGenerateSummary({ type: summaryType, forceRegenerate: true })}
-                      >
-                        Force
-                      </button>
-                    </div>
-                  </div>
-
-                  {aiBusy ? <div className="lrwAiLoading">Working…</div> : null}
-
-                  {safeTrim(summaryText) ? (
-                    <div className="lrwAiAnswer">
-                      <div className="meta">
-                        <span className="pill">Type: {summaryMeta?.type || summaryType}</span>
-                        {summaryMeta?.cached ? <span className="pill soft">cached</span> : null}
-                        <button type="button" className="mini" onClick={() => copyText(summaryText)} title="Copy summary">
-                          Copy
+                <div className="lrwAiStack">
+                  <div className="lrwAiCard">
+                    <div className="lrwAiRow">
+                      <div className="seg" role="group" aria-label="Summary type">
+                        <button
+                          type="button"
+                          className={`segBtn ${summaryType === "basic" ? "on" : ""}`}
+                          onClick={() => {
+                            setSummaryType("basic");
+                            aiGetCachedSummary("basic");
+                          }}
+                        >
+                          Basic
+                        </button>
+                        <button
+                          type="button"
+                          className={`segBtn ${summaryType === "extended" ? "on" : ""}`}
+                          onClick={() => {
+                            setSummaryType("extended");
+                            aiGetCachedSummary("extended");
+                          }}
+                        >
+                          Extended
                         </button>
                       </div>
-                      <RichText text={summaryText} />
-                    </div>
-                  ) : !aiBusy ? (
-                    <div className="lrwAiEmpty">
-                      <div className="t">No cached summary yet</div>
-                      <div className="s">
-                        Click <b>Generate</b> to create it once. Next time it loads instantly.
+
+                      <div className="rowActions">
+                        <button
+                          type="button"
+                          className="lrwBtn primary"
+                          disabled={aiBusy}
+                          onClick={() => aiGenerateSummary({ type: summaryType, forceRegenerate: false })}
+                        >
+                          Generate
+                        </button>
+                        <button
+                          type="button"
+                          className="lrwBtn ghost"
+                          disabled={aiBusy}
+                          onClick={() => aiGenerateSummary({ type: summaryType, forceRegenerate: true })}
+                        >
+                          Force
+                        </button>
                       </div>
                     </div>
+
+                    {aiBusy ? <div className="lrwAiLoading">Working…</div> : null}
+
+                    {safeTrim(summaryText) ? (
+                      <div className="lrwAiAnswer">
+                        <div className="meta">
+                          <span className="pill">Type: {summaryMeta?.type || summaryType}</span>
+                          {summaryMeta?.cached ? <span className="pill soft">cached</span> : null}
+                          <button type="button" className="mini" onClick={() => copyText(summaryText)} title="Copy summary">
+                            Copy
+                          </button>
+                        </div>
+                      </div>
+                    ) : !aiBusy ? (
+                      <div className="lrwAiEmpty">
+                        <div className="t">No cached summary yet</div>
+                        <div className="s">
+                          Click <b>Generate</b> to create it once. Next time it loads instantly.
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* EXTENDED: Parties + Court card */}
+                  {summaryType === "extended" ? (
+                    <div className="lrwAiCard lrwAiCardAccent">
+                      <div className="lrwAiCardHead">
+                        <div className="ttl">Case context</div>
+                        <div className="sub">For extended summaries (quick reference)</div>
+                      </div>
+                      <div className="lrwAiGrid2">
+                        <div className="lrwAiMiniKV">
+                          <div className="k">Parties</div>
+                          <div className="v">{parties}</div>
+                        </div>
+                        <div className="lrwAiMiniKV">
+                          <div className="k">Court</div>
+                          <div className="v">{courtName || "—"}</div>
+                        </div>
+                        <div className="lrwAiMiniKV">
+                          <div className="k">Citation</div>
+                          <div className="v">{citation || "—"}</div>
+                        </div>
+                        <div className="lrwAiMiniKV">
+                          <div className="k">Decision date</div>
+                          <div className="v">{formatDate(report?.decisionDate || report?.DecisionDate) || "—"}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* BASIC: Summary card + Key Points card (screen-2 style) */}
+                  {safeTrim(summaryText) ? (
+                    <>
+                      <div className="lrwAiCard lrwAiCardAccent">
+                        <div className="lrwAiCardHead">
+                          <div className="ttl">{summaryType === "basic" ? "Summary" : "Extended summary"}</div>
+                          <div className="sub">AI-generated. Verify against the transcript.</div>
+                        </div>
+                        <div className="lrwAiCardBody">
+                          <RichText text={summaryCards.summary} />
+                        </div>
+                      </div>
+
+                      {summaryType === "basic" ? (
+                        <div className="lrwAiCard lrwAiCardSoft">
+                          <div className="lrwAiCardHead">
+                            <div className="ttl">Key points</div>
+                            <div className="sub">Fast scan (AI-extracted)</div>
+                          </div>
+                          <div className="lrwAiCardBody">
+                            {summaryCards.keyPoints?.length ? (
+                              <ul className="lrwAiList">
+                                {summaryCards.keyPoints.map((kp, i) => (
+                                  <li key={i}>{kp}</li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <div className="lrwAiEmptyInline">No key points detected yet. Generate again (or use Extended).</div>
+                            )}
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
                   ) : null}
                 </div>
               ) : null}
 
-              {/* Related */}
+              {/* Related (premium card) */}
               {aiTab === "related" ? (
                 <div className="lrwAiCard">
                   <div className="lrwAiRow">
-                    <div className="note">Generate AI-suggested related cases (Kenya + Foreign). Verify citations.</div>
+                    <div className="note">AI-suggested related cases (Kenya + Foreign). Always verify citations.</div>
                     <div className="rowActions">
                       <button type="button" className="lrwBtn primary" disabled={aiBusy} onClick={aiGenerateRelatedCases}>
                         Generate
@@ -1752,18 +1867,19 @@ export default function LawReportWorkspace() {
 
                   {aiBusy ? <div className="lrwAiLoading">Working…</div> : null}
 
-                  <div className="lrwAiChat">
+                  <div className="lrwAiChat lrwAiChatTight">
                     {messages
                       .filter((m) => m?.kind === "related")
                       .slice(-3)
                       .map((m) => (
-                        <div key={m.id} className="msg assistant">
-                          <div className="bubble">
-                            <div className="msgActions">
-                              <button type="button" className="mini" onClick={() => copyText(m.content)}>
-                                Copy
-                              </button>
-                            </div>
+                        <div key={m.id} className="lrwMsgCard assistant">
+                          <div className="lrwMsgCardTop">
+                            <div className="who">LegalAI</div>
+                            <button type="button" className="mini" onClick={() => copyText(m.content)}>
+                              Copy
+                            </button>
+                          </div>
+                          <div className="lrwMsgCardBody">
                             <RichText text={m.content} />
                           </div>
                         </div>
@@ -1772,36 +1888,65 @@ export default function LawReportWorkspace() {
                 </div>
               ) : null}
 
-              {/* Chat */}
+              {/* Chat (premium cards + suggested questions) */}
               {aiTab === "chat" ? (
                 <div className="lrwAiCard">
-                  <div className="lrwAiChat">
+                  <div className="lrwAiRow">
+                    <div className="note">Suggested starters:</div>
+                    <div className="lrwSuggestRow" aria-label="Suggested questions">
+                      {SUGGESTED_QUESTIONS.slice(0, 4).map((q) => (
+                        <button
+                          key={q}
+                          type="button"
+                          className="lrwSuggest"
+                          onClick={() => {
+                            setChatInput(q);
+                            setTimeout(() => chatBoxRef.current?.focus?.(), 0);
+                          }}
+                          title="Insert into chat"
+                        >
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="lrwAiChat" aria-label="Chat messages">
                     {messages
                       .filter((m) => m?.kind !== "related" && m?.kind !== "summary")
                       .map((m) => {
                         const isUser = m.role === "user";
                         const isTyping = m.kind === "typing";
 
-                        return (
-                          <div key={m.id} className={`msg ${isUser ? "user" : "assistant"}`}>
-                            <div className="bubble">
-                              {!isUser && !isTyping ? (
-                                <div className="msgActions">
-                                  <button type="button" className="mini" onClick={() => copyText(m.content)} title="Copy">
-                                    Copy
-                                  </button>
-                                </div>
-                              ) : null}
-
-                              {isTyping ? (
+                        if (isTyping) {
+                          return (
+                            <div key={m.id} className="lrwMsgCard assistant isTyping">
+                              <div className="lrwMsgCardTop">
+                                <div className="who">LegalAI</div>
+                              </div>
+                              <div className="lrwMsgCardBody">
                                 <div className="typing" aria-label="Assistant is typing">
                                   <span />
                                   <span />
                                   <span />
                                 </div>
-                              ) : (
-                                <RichText text={m.content} />
-                              )}
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div key={m.id} className={`lrwMsgCard ${isUser ? "user" : "assistant"}`}>
+                            <div className="lrwMsgCardTop">
+                              <div className="who">{isUser ? "You" : "LegalAI"}</div>
+                              {!isUser ? (
+                                <button type="button" className="mini" onClick={() => copyText(m.content)} title="Copy">
+                                  Copy
+                                </button>
+                              ) : null}
+                            </div>
+                            <div className="lrwMsgCardBody">
+                              <RichText text={m.content} />
                             </div>
                           </div>
                         );
@@ -1811,10 +1956,27 @@ export default function LawReportWorkspace() {
                   </div>
 
                   <div className="lrwAiComposer">
+                    <div className="lrwSuggestRow lrwSuggestRowFull">
+                      {SUGGESTED_QUESTIONS.map((q) => (
+                        <button
+                          key={q}
+                          type="button"
+                          className="lrwSuggest"
+                          onClick={() => {
+                            setChatInput(q);
+                            setTimeout(() => chatBoxRef.current?.focus?.(), 0);
+                          }}
+                        >
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+
                     <textarea
+                      ref={chatBoxRef}
                       className="inp"
                       value={chatInput}
-                      placeholder="Ask about issues, holding, ratio, citations, arguments…"
+                      placeholder="Ask: key issues, holding, ratio, citations, arguments, implications…"
                       onChange={(e) => setChatInput(e.target.value)}
                       onKeyDown={(e) => {
                         if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
@@ -1825,7 +1987,12 @@ export default function LawReportWorkspace() {
                     />
                     <div className="composerActions">
                       <div className="hint">Ctrl/⌘ + Enter to send</div>
-                      <button type="button" className="lrwBtn primary" disabled={aiBusy || !safeTrim(chatInput)} onClick={() => aiSendChat(chatInput)}>
+                      <button
+                        type="button"
+                        className="lrwBtn primary"
+                        disabled={aiBusy || !safeTrim(chatInput)}
+                        onClick={() => aiSendChat(chatInput)}
+                      >
                         Send
                       </button>
                     </div>
