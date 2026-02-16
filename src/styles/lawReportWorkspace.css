@@ -914,6 +914,90 @@
   background: rgba(107, 35, 59, 0.10);
   box-shadow: var(--ring-soft);
 }
+/* =======================================================
+   PATCH: Make button/tab text + icons always visible
+   (fixes faint icons/text + inconsistent SVG sizing)
+   ======================================================= */
+
+/* 1) Ensure tabs + seg buttons are true "icon buttons" (even if text-only) */
+.tab,
+.segBtn,
+.lrwBtn,
+.lrwIconBtn,
+.lrwMiniBtn,
+.lrwSuggest,
+.mini {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 2) Strong default text color (light theme) */
+.tab,
+.segBtn {
+  color: rgba(15, 23, 42, 0.88);
+}
+
+/* 3) Tabs: align icon + text nicely and make them feel clickable */
+.tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  line-height: 1;
+}
+
+/* 4) If your Tab content includes any SVG/icon component, normalize it */
+.tab svg,
+.segBtn svg,
+.lrwBtn svg,
+.lrwIconBtn svg,
+.lrwMiniBtn svg,
+.lrwSuggest svg,
+.mini svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  display: block;
+  /* for outline icons */
+  stroke: currentColor;
+  /* for solid icons */
+  fill: currentColor;
+  opacity: 0.95;
+}
+
+/* If you use stroke-only icons (heroicons outline etc.), prevent heavy fills */
+.tab svg[fill="none"],
+.segBtn svg[fill="none"],
+.lrwIconBtn svg[fill="none"] {
+  fill: none;
+}
+
+/* 5) Active states: make sure text/icons pop */
+.tab.on {
+  color: rgba(107, 35, 59, 0.98);
+}
+
+.lrwWrap[data-theme="dark"] .tab.on {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+/* 6) Segmented buttons: make active more readable */
+.segBtn.on {
+  color: rgba(107, 35, 59, 0.98);
+}
+
+/* 7) Icon slot in lrwIconBtn: keep it crisp */
+.lrwIconBtn .ico {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.lrwIconBtn .ico svg {
+  width: 18px;
+  height: 18px;
+}
 
 /* Stack now just layout (scroll is handled by .lrwDrawerBody) */
 .lrwAiStack {
