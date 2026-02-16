@@ -1781,3 +1781,309 @@
   border-color: rgba(225, 29, 72, 0.22);
   background: rgba(225, 29, 72, 0.06);
 }
+/* =========================================================
+   Admin · LLR Services — HOT / Modern Form Kit
+   Scoped so other admin pages stay intact
+   Paste at END of adminCrud.css
+========================================================= */
+
+.admin-llrservices {
+  --la-maroon: #6b233b;
+  --la-ink: #0f172a;
+  --la-muted: rgba(15, 23, 42, 0.60);
+  --la-border: rgba(148, 163, 184, 0.28);
+  --la-border-strong: rgba(148, 163, 184, 0.40);
+  --la-surface: rgba(255, 255, 255, 0.88);
+  --la-surface-2: rgba(15, 23, 42, 0.03);
+  --la-focus: rgba(107, 35, 59, 0.14);
+}
+
+/* Modal: clean + premium */
+.admin-llrservices .admin-modal {
+  border-radius: 22px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.18);
+}
+
+.admin-llrservices .admin-modal-head {
+  background: linear-gradient(180deg, rgba(107, 35, 59, 0.10), rgba(255,255,255,0));
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+  padding: 16px 18px;
+}
+
+.admin-llrservices .admin-modal-title {
+  font-weight: 800; /* was too heavy */
+  letter-spacing: -0.02em;
+  color: var(--la-ink);
+}
+
+.admin-llrservices .admin-modal-subtitle {
+  font-weight: 550;
+  color: rgba(15, 23, 42, 0.58);
+}
+
+.admin-llrservices .admin-modal-body {
+  background: radial-gradient(1200px 400px at 10% 0%, rgba(107,35,59,0.06), transparent 60%),
+              radial-gradient(900px 380px at 90% 0%, rgba(15,23,42,0.04), transparent 60%),
+              #fbfbfd;
+  padding: 16px 18px;
+}
+
+.admin-llrservices .admin-modal-foot {
+  background: #fff;
+  border-top: 1px solid rgba(148, 163, 184, 0.22);
+  padding: 14px 18px;
+}
+
+/* Labels: smaller + modern */
+.admin-llrservices .admin-field > label {
+  font-size: 12px;
+  font-weight: 650; /* reduce bold */
+  color: rgba(15, 23, 42, 0.78);
+  margin-bottom: 7px;
+}
+
+/* Inputs/select/textarea: glassy + hot */
+.admin-llrservices .admin-field input,
+.admin-llrservices .admin-field select,
+.admin-llrservices .admin-field textarea {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--la-border);
+  background: var(--la-surface);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+  padding: 12px 12px;
+  color: var(--la-ink);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.06s ease, background 0.15s ease;
+}
+
+.admin-llrservices .admin-field input,
+.admin-llrservices .admin-field select {
+  height: 46px;
+}
+
+.admin-llrservices .admin-field textarea {
+  min-height: 98px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+/* Placeholders: softer */
+.admin-llrservices .admin-field input::placeholder,
+.admin-llrservices .admin-field textarea::placeholder {
+  color: rgba(15, 23, 42, 0.42);
+}
+
+/* Focus ring: maroon premium */
+.admin-llrservices .admin-field input:focus,
+.admin-llrservices .admin-field select:focus,
+.admin-llrservices .admin-field textarea:focus {
+  outline: none;
+  border-color: rgba(107, 35, 59, 0.46);
+  background: #fff;
+  box-shadow: 0 0 0 5px var(--la-focus), 0 12px 26px rgba(15, 23, 42, 0.08);
+}
+
+/* Subtle lift on focus */
+.admin-llrservices .admin-field input:focus,
+.admin-llrservices .admin-field select:focus {
+  transform: translateY(-1px);
+}
+
+/* Disabled: clearer */
+.admin-llrservices .admin-field input:disabled,
+.admin-llrservices .admin-field select:disabled,
+.admin-llrservices .admin-field textarea:disabled {
+  background: rgba(15, 23, 42, 0.04);
+  color: rgba(15, 23, 42, 0.55);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* Buttons: reduce bold, modern CTA */
+.admin-llrservices .admin-btn {
+  font-weight: 700; /* was 900 */
+  border-radius: 14px;
+  border: 1px solid var(--la-border);
+  background: rgba(255,255,255,0.92);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+  transition: transform 0.06s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.admin-llrservices .admin-btn:hover:not(:disabled) {
+  background: #fff;
+  border-color: var(--la-border-strong);
+}
+
+.admin-llrservices .admin-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.admin-llrservices .admin-btn.primary {
+  background: var(--la-maroon);
+  border-color: var(--la-maroon);
+  color: #fff;
+  box-shadow: 0 14px 26px rgba(107, 35, 59, 0.24);
+}
+
+.admin-llrservices .admin-btn.primary:hover:not(:disabled) {
+  filter: brightness(1.03);
+}
+
+/* Mini buttons in editor row */
+.admin-llrservices .miniBtn {
+  font-weight: 650;
+  border-radius: 12px;
+  border-color: var(--la-border);
+  background: rgba(255,255,255,0.9);
+}
+
+/* Attachment box: make it feel like a premium panel */
+.admin-llrservices .laAttachBox {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 14px 26px rgba(15, 23, 42, 0.06);
+}
+
+.admin-llrservices .laFileInput {
+  border-radius: 12px;
+  border: 1px dashed rgba(148, 163, 184, 0.55);
+  background: rgba(255,255,255,0.9);
+}
+
+/* Tooltip icon less harsh */
+.admin-llrservices .laTip {
+  color: rgba(15, 23, 42, 0.48);
+}
+.admin-llrservices .laTip:hover {
+  color: rgba(107, 35, 59, 0.92);
+}
+/* =========================================================
+   Admin · LLR Services — Listing page polish (toolbar + rows)
+   Paste at END of adminCrud.css
+========================================================= */
+
+/* ---------- Toolbar layout fix (stop full-width selects) ---------- */
+.admin-llrservices .admin-toolbar .laFiltersRow {
+  display: grid;
+  grid-template-columns: 1fr 220px 220px auto auto;
+  gap: 12px;
+  align-items: center;
+}
+
+/* Search keeps full width in its column */
+.admin-llrservices .admin-toolbar .searchWrap {
+  width: 100%;
+  min-width: 260px;
+}
+
+/* IMPORTANT: override the page rule that makes selects 100% width */
+.admin-llrservices .admin-toolbar select.laSelect,
+.admin-llrservices .admin-toolbar select.laMini {
+  width: auto !important;
+  min-width: 210px;
+  height: 44px;
+  border-radius: 14px;
+}
+
+.admin-llrservices .admin-toolbar .admin-btn.laClearBtn {
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+/* Count pill aligns nicely */
+.admin-llrservices .admin-toolbar .laCountPill {
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 999px;
+}
+
+/* Mobile/tablet: stack neatly */
+@media (max-width: 980px) {
+  .admin-llrservices .admin-toolbar .laFiltersRow {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-llrservices .admin-toolbar select.laSelect,
+  .admin-llrservices .admin-toolbar select.laMini,
+  .admin-llrservices .admin-toolbar .admin-btn.laClearBtn,
+  .admin-llrservices .admin-toolbar .laCountPill {
+    width: 100% !important;
+    min-width: 0;
+  }
+}
+
+/* ---------- Table: make rows look premium (card-like) ---------- */
+.admin-llrservices .laTable {
+  border-collapse: separate;
+  border-spacing: 0 10px; /* creates “cards” */
+}
+
+/* Header stays clean */
+.admin-llrservices .laTable thead th {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.02);
+}
+
+/* Row cells become a single “card” */
+.admin-llrservices .laTable tbody td {
+  background: rgba(255, 255, 255, 0.92);
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  padding: 14px 14px;
+}
+
+/* Remove the old full-width row divider look */
+.admin-llrservices .laTable tbody tr td {
+  border-left: none;
+  border-right: none;
+}
+
+/* Round the “card” edges */
+.admin-llrservices .laTable tbody tr td:first-child {
+  border-left: 1px solid rgba(148, 163, 184, 0.16);
+  border-top-left-radius: 16px;
+  border-bottom-left-radius: 16px;
+}
+
+.admin-llrservices .laTable tbody tr td:last-child {
+  border-right: 1px solid rgba(148, 163, 184, 0.16);
+  border-top-right-radius: 16px;
+  border-bottom-right-radius: 16px;
+}
+
+/* Hover feels premium */
+.admin-llrservices .laTable tbody tr:hover td {
+  background: rgba(122, 31, 31, 0.03);
+  border-top-color: rgba(122, 31, 31, 0.10);
+  border-bottom-color: rgba(122, 31, 31, 0.10);
+}
+
+/* Title weight down a bit + better wrap */
+.admin-llrservices .laTitleMain {
+  font-weight: 720;
+  line-height: 1.25;
+}
+
+/* Chips: lighter + smaller */
+.admin-llrservices .laChips .chip {
+  font-weight: 600;
+  font-size: 11px;
+  padding: 4px 10px;
+}
+
+/* Actions: keep them visually tight */
+.admin-llrservices .laActions {
+  gap: 8px;
+}
+
+.admin-llrservices .laActions .la-icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+}

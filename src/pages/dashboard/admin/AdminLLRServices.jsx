@@ -1678,27 +1678,6 @@ export default function AdminLLRServices() {
                               Case No.: —
                             </span>
                           )}
-
-                          {hasAttachment ? (
-                            <span
-                              className="chip laChipSoft"
-                              title={attachName ? `Attachment: ${attachName}` : "Attachment available"}
-                            >
-                              <span className="chipKey" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                                <Icon name="paperclip" />
-                                Attachment:
-                              </span>
-                              &nbsp;{attachName || "Available"}
-                            </span>
-                          ) : (
-                            <span className="chip muted laChipSoft" title="No attachment">
-                              <span className="chipKey" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                                <Icon name="paperclip" />
-                                Attachment:
-                              </span>
-                              &nbsp;—
-                            </span>
-                          )}
                         </div>
                       </div>
                     </td>
