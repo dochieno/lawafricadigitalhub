@@ -3,10 +3,12 @@
 // Purpose: Premium "Case Workspace" reader (Westlaw + Notion + Linear vibe)
 // Notes:
 // - Keeps ALL existing endpoints & permission logic
-// - Top bar: Parties + Citation only (actions stay)
-// - LegalAI: premium cards for Summary + Chat + Related
-// - Chat: suggested questions + premium message cards
-// - Transcript: improved paragraph chunking + nicer hierarchy hooks (CSS next)
+// - Top bar: Parties only (NO access chip in top area). Buttons feel premium (CSS hooks)
+// - LegalAI:
+//    - Basic: ONLY 2 cards: Summary + Key points (only if available)
+//    - Extended: Parties + Citation shown as the *title* (not a card) above sections
+//      and renders section-cards if headings exist (FACTS/ISSUES/HOLDING/REASONING/TAKEAWAYS)
+// - Chat: message cards like screen-2; assistant replies are point-form, NOT bold
 // =======================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -423,18 +425,20 @@ function formatDate(d) {
 function buildDefaultCopyText({ report, title, caseNo }) {
   const citation = report?.citation || report?.Citation || "";
   const court = report?.court || report?.Court || "";
-  const date = report?.decisionDate || report?.DecisionDate || "";
+  const dateRaw = report?.decisionDate || report?.DecisionDate || "";
+  const date = formatDate(dateRaw);
 
   const lines = [
-    title,
-    caseNo ? `Case Number: ${caseNo}` : "",
-    citation ? `Citation: ${citation}` : "",
-    court ? `Court: ${court}` : "",
-    date ? `Decision Date: ${date}` : "",
+    title || "",
+    caseNo || "",
+    citation || "",
+    court || "",
+    date || "",
   ].filter(Boolean);
 
   return lines.join("\n");
 }
+
 
 function forceUnorderedBullets(text) {
   const t = String(text || "").replace(/\r\n/g, "\n");
@@ -448,24 +452,39 @@ function forceUnorderedBullets(text) {
     .join("\n");
 }
 
+/**
+ * Ensures chat UI feels like “screen 3”:
+ * - if it’s plain prose, convert to bullets
+ * - never use headings
+ */
 function prettifyChatReplyForUi(text) {
   const t = String(text || "").trim();
   if (!t) return "";
 
-  if (/^#{1,4}\s+/m.test(t)) return t;
+  // If already bullet/numbered, keep
   if (/^(\d+\.\s+|[-•]\s+)/m.test(t)) return t;
-  if (t.includes("\n\n")) return t;
 
-  const parts = t
+  // Avoid markdown headings in chat (we’ll render bullets)
+  const noHashes = t.replace(/^#{1,4}\s+/gm, "");
+
+  if (noHashes.includes("\n\n")) {
+    // If multiple paragraphs, bulletize per paragraph
+    const paras = noHashes
+      .split(/\n\s*\n+/)
+      .map((p) => p.replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+    if (paras.length >= 2 && paras.length <= 12) return paras.map((p) => `- ${p}`).join("\n");
+    return noHashes;
+  }
+
+  // sentence split -> bullets
+  const parts = noHashes
     .split(/(?<=[.!?])\s+/)
     .map((x) => x.trim())
     .filter(Boolean);
 
-  if (parts.length >= 2 && parts.length <= 12) {
-    return parts.map((p) => `- ${p}`).join("\n");
-  }
-
-  return t;
+  if (parts.length >= 2) return parts.slice(0, 12).map((p) => `- ${p}`).join("\n");
+  return `- ${noHashes}`;
 }
 
 /* ---------------- LegalAI: split summary into premium cards ---------------- */
@@ -485,12 +504,9 @@ function splitSummaryForCards(type, summaryText) {
   const raw = String(summaryText || "").trim();
   if (!raw) return { summary: "", keyPoints: [] };
 
-  // If the model already emits bullets, treat them as key points
   const bullets = extractBullets(raw);
 
   if (type === "basic") {
-    // Basic: show (a) Summary paragraph text (b) Key Points bullets
-    // Heuristic: if we have bullets, keep the non-bullet lines as summary
     if (bullets.length) {
       const nonBullet = raw
         .split(/\r?\n/)
@@ -501,7 +517,6 @@ function splitSummaryForCards(type, summaryText) {
       return { summary: nonBullet || raw, keyPoints: bullets.slice(0, 12) };
     }
 
-    // No bullets: create key points from sentence splits
     const sentences = raw
       .split(/(?<=[.!?])\s+/)
       .map((x) => x.trim())
@@ -511,8 +526,84 @@ function splitSummaryForCards(type, summaryText) {
     return { summary: raw, keyPoints: kp.length ? kp : [] };
   }
 
-  // Extended: keep full rich text; key points optional
   return { summary: raw, keyPoints: bullets.slice(0, 14) };
+}
+
+/* ---------------- Extended: section cards (Facts/Issues/Holding/Reasoning/Takeaways) ---------------- */
+
+function normalizeSectionTitle(t) {
+  const x = String(t || "").trim().toLowerCase();
+
+  if (x === "facts") return "Facts";
+  if (x === "issues" || x === "issue") return "Issues";
+  if (x.includes("holding") || x.includes("decision") || x.includes("disposition")) return "Holding / Decision";
+  if (x.includes("reason")) return "Reasoning";
+  if (x.includes("takeaway") || x.includes("key")) return "Key takeaways";
+  if (x.includes("orders")) return "Orders";
+  return String(t || "").trim() || "Summary";
+}
+
+function parseExtendedSections(summaryText) {
+  const raw = String(summaryText || "").replace(/\r\n/g, "\n").trim();
+  if (!raw) return [];
+
+  // Accept headings with colon or standalone headings (all-caps etc.)
+  const headings = [
+    { key: "facts", re: /(^|\n)\s*(FACTS?)\s*:\s*/i },
+    { key: "issues", re: /(^|\n)\s*(ISSUES?|QUESTION\(S\)?)\s*:\s*/i },
+    { key: "holding", re: /(^|\n)\s*(HOLDING|DECISION|HOLDING\/DECISION|DISPOSITION)\s*:\s*/i },
+    { key: "reasoning", re: /(^|\n)\s*(REASONING|ANALYSIS|RATIONALE)\s*:\s*/i },
+    { key: "takeaways", re: /(^|\n)\s*(KEY\s+TAKEAWAYS?|TAKEAWAYS?)\s*:\s*/i },
+    { key: "orders", re: /(^|\n)\s*(ORDERS?)\s*:\s*/i },
+  ];
+
+  // Find all heading indices
+  const hits = [];
+  for (const h of headings) {
+    const re = new RegExp(h.re.source, h.re.flags.includes("g") ? h.re.flags : `${h.re.flags}g`);
+    let m;
+    while ((m = re.exec(raw)) !== null) {
+      hits.push({
+        key: h.key,
+        label: normalizeSectionTitle(m[2] || h.key),
+        index: m.index + (m[1] ? m[1].length : 0),
+        matchLen: (m[0] || "").length,
+      });
+      if (m.index === re.lastIndex) re.lastIndex++;
+    }
+  }
+
+  // No headings => single section
+  if (!hits.length) return [{ label: "Extended summary", body: raw }];
+
+  // Sort, de-dupe by index
+  hits.sort((a, b) => a.index - b.index);
+  const deduped = [];
+  for (const h of hits) {
+    if (!deduped.length || deduped[deduped.length - 1].index !== h.index) deduped.push(h);
+  }
+
+  const sections = [];
+  for (let i = 0; i < deduped.length; i++) {
+    const cur = deduped[i];
+    const next = deduped[i + 1];
+
+    const bodyStart = cur.index + cur.matchLen;
+    const bodyEnd = next ? next.index : raw.length;
+
+    const body = raw.slice(bodyStart, bodyEnd).trim();
+    if (body) sections.push({ label: cur.label, body });
+  }
+
+  // If something before first heading exists, prepend as “Summary”
+  const first = deduped[0];
+  const pre = raw.slice(0, first.index).trim();
+  if (pre) sections.unshift({ label: "Summary", body: pre });
+
+  // If nothing extracted (edge case), fallback
+  if (!sections.length) return [{ label: "Extended summary", body: raw }];
+
+  return sections;
 }
 
 /* ---------------- RichText renderer ---------------- */
@@ -540,6 +631,7 @@ function RichText({ text }) {
       continue;
     }
 
+    // Keep headings support for summaries (not chat), but our chat-prettifier strips headings anyway.
     const h2 = line.startsWith("## ");
     const h3 = line.startsWith("### ");
     const h4 = line.startsWith("#### ");
@@ -764,8 +856,9 @@ export default function LawReportWorkspace() {
     {
       id: "sys_welcome",
       role: "assistant",
+      // ✅ No headings (so it won’t look bold); point-form
       content:
-        "## LegalAI\nAsk anything about this case: issues, holding, ratio, authorities, practical next steps.\n\n_Disclaimer: AI may be inaccurate. Verify against the transcript._",
+        "- Ask anything about this case: issues, holding, ratio, authorities, orders, practical next steps.\n- Tip: ask for “5 bullets” or “extract issues” for clean output.\n- Disclaimer: AI may be inaccurate. Verify against the transcript.",
       createdAt: nowIso(),
       kind: "info",
     },
@@ -774,8 +867,16 @@ export default function LawReportWorkspace() {
   const chatEndRef = useRef(null);
   const chatBoxRef = useRef(null);
   const aiAutoLoadedRef = useRef(false);
-  const summaryCards = useMemo(() => splitSummaryForCards(summaryType, summaryText), [summaryType, summaryText]);
 
+  const summaryCards = useMemo(
+    () => splitSummaryForCards(summaryType, summaryText),
+    [summaryType, summaryText]
+  );
+
+  const extendedSections = useMemo(() => {
+    if (summaryType !== "extended") return [];
+    return parseExtendedSections(summaryText);
+  }, [summaryType, summaryText]);
 
   const isPremium = useMemo(() => {
     if (!report) return false;
@@ -1002,7 +1103,7 @@ export default function LawReportWorkspace() {
         id: "sys_welcome",
         role: "assistant",
         content:
-          "## LegalAI\nAsk anything about this case: issues, holding, ratio, authorities, practical next steps.\n\n_Disclaimer: AI may be inaccurate. Verify against the transcript._",
+          "- Ask anything about this case: issues, holding, ratio, authorities, orders, practical next steps.\n- Tip: ask for “5 bullets” or “extract issues” for clean output.\n- Disclaimer: AI may be inaccurate. Verify against the transcript.",
         createdAt: nowIso(),
         kind: "info",
       },
@@ -1237,6 +1338,7 @@ export default function LawReportWorkspace() {
 
       const payload = unwrapApi(res);
       const replyRaw = payload?.reply ?? payload?.data?.reply ?? payload?.message ?? payload?.answer ?? "";
+
       let reply = prettifyChatReplyForUi(String(replyRaw || ""));
       reply = forceUnorderedBullets(reply);
 
@@ -1247,7 +1349,7 @@ export default function LawReportWorkspace() {
           {
             id: `a_${Date.now()}`,
             role: "assistant",
-            content: reply || "I couldn’t generate a response. Please try again.",
+            content: reply || "- I couldn’t generate a response. Please try again.",
             createdAt: nowIso(),
             kind: "chat",
           },
@@ -1284,25 +1386,33 @@ export default function LawReportWorkspace() {
         payload?.data?.disclaimer ||
         "AI suggestions may be inaccurate. Always verify citations and holdings.";
 
-      const text =
-        "## Related cases (AI)\n" +
-        (items.length
-          ? items
-              .map((x, i2) => {
-                const t = (x?.title || x?.Title || `Case ${i2 + 1}`).trim();
-                const cit = (x?.citation || x?.Citation || "").trim();
-                const juris = (x?.jurisdiction || x?.Jurisdiction || "").trim();
-                const why = (x?.reason || x?.Reason || x?.note || "").trim();
-                const meta = [cit, juris].filter(Boolean).join(" · ");
-                return `- **${t}**${meta ? ` (${meta})` : ""}${why ? ` — ${why}` : ""}`;
-              })
-              .join("\n")
-          : "- No related cases returned.\n") +
-        `\n\n### Disclaimer\n${disclaimer}`;
+      // Keep it bullet-form and avoid markdown bold/headings (UI should stay clean)
+      const lines = [];
+      lines.push("- Related cases (AI):");
+      if (items.length) {
+        items.forEach((x, i2) => {
+          const t = (x?.title || x?.Title || `Case ${i2 + 1}`).trim();
+          const cit = (x?.citation || x?.Citation || "").trim();
+          const juris = (x?.jurisdiction || x?.Jurisdiction || "").trim();
+          const why = (x?.reason || x?.Reason || x?.note || "").trim();
+          const meta = [cit, juris].filter(Boolean).join(" · ");
+          lines.push(`- ${t}${meta ? ` (${meta})` : ""}${why ? ` — ${why}` : ""}`);
+        });
+      } else {
+        lines.push("- No related cases returned.");
+      }
+      lines.push("");
+      lines.push(`- Disclaimer: ${disclaimer}`);
 
       setMessages((prev) => [
         ...prev,
-        { id: `rel_${Date.now()}`, role: "assistant", content: text, createdAt: nowIso(), kind: "related" },
+        {
+          id: `rel_${Date.now()}`,
+          role: "assistant",
+          content: lines.join("\n"),
+          createdAt: nowIso(),
+          kind: "related",
+        },
       ]);
     } catch (e) {
       setAiErr(getApiErrorMessage(e, "Failed to generate related cases."));
@@ -1387,14 +1497,17 @@ export default function LawReportWorkspace() {
 
   const showGate = !!(preview.gated && preview.reachedLimit);
 
-
-
   return (
     <div className="lrwWrap" data-theme={readingTheme}>
-      {/* Top bar (slim): Parties + Citation only (actions remain) */}
+      {/* Top bar (slim): Parties only (NO access chip here). Premium button hooks added. */}
       <header className="lrwTop">
         <div className="lrwTopInner lrwTopInnerCompact">
-          <button type="button" className="lrwIconBtn" onClick={() => navigate("/dashboard/law-reports")} title="Back">
+          <button
+            type="button"
+            className="lrwIconBtn premium"
+            onClick={() => navigate("/dashboard/law-reports")}
+            title="Back"
+          >
             <span className="ico" aria-hidden="true">
               ←
             </span>
@@ -1406,15 +1519,9 @@ export default function LawReportWorkspace() {
               {parties}
             </div>
 
+            {/* ✅ Citation can remain as subtle pill (not a card). No access chip. */}
             <div className="lrwMetaRow">
               {citation ? <span className="lrwPill soft">Citation: {citation}</span> : null}
-              {isPremium ? (
-                <AccessChip access={access} isPremium={isPremium} isAdmin={isAdmin} hasFullAccess={hasFullAccess} />
-              ) : (
-                <span className="lrwChip ok">
-                  <span className="dot" /> <span className="txt">Free</span>
-                </span>
-              )}
             </div>
           </div>
 
@@ -1423,7 +1530,7 @@ export default function LawReportWorkspace() {
             <div className="lrwSettings" ref={settingsRef}>
               <button
                 type="button"
-                className={`lrwIconBtn ${settingsOpen ? "isOn" : ""}`}
+                className={`lrwIconBtn premium ${settingsOpen ? "isOn" : ""}`}
                 onClick={() => setSettingsOpen((v) => !v)}
                 aria-haspopup="menu"
                 aria-expanded={settingsOpen}
@@ -1497,7 +1604,7 @@ export default function LawReportWorkspace() {
             {/* Copy */}
             <button
               type="button"
-              className="lrwIconBtn"
+              className="lrwIconBtn premium"
               onClick={() => {
                 const payload = buildDefaultCopyText({ report, title: titleForCopy, caseNo });
                 copyText(payload);
@@ -1513,7 +1620,7 @@ export default function LawReportWorkspace() {
             {/* Report view */}
             <button
               type="button"
-              className="lrwIconBtn"
+              className="lrwIconBtn premium"
               onClick={() => navigate(`/dashboard/law-reports/${reportId}/report`)}
               title="Report view"
             >
@@ -1526,7 +1633,7 @@ export default function LawReportWorkspace() {
             {/* PDF */}
             <button
               type="button"
-              className={`lrwBtn ${pdfBusy ? "isBusy" : ""}`}
+              className={`lrwBtn premium ${pdfBusy ? "isBusy" : ""}`}
               onClick={downloadPdfNow}
               disabled={!canDownloadPdf || pdfBusy}
               title={!canDownloadPdf ? "Subscribe to download PDF" : "Download PDF"}
@@ -1537,7 +1644,7 @@ export default function LawReportWorkspace() {
             {/* LegalAI */}
             <button
               type="button"
-              className={`lrwBtn primary ${!aiAllowed ? "isDisabled" : ""}`}
+              className={`lrwBtn primary premium ${!aiAllowed ? "isDisabled" : ""}`}
               onClick={() => {
                 if (!aiAllowed) return;
                 setAiOpen(true);
@@ -1555,7 +1662,7 @@ export default function LawReportWorkspace() {
 
       {/* Body */}
       <div className="lrwBody">
-        {/* Left rail (kept, but can be toned down via CSS next) */}
+        {/* Left rail */}
         <aside className="lrwRail" aria-label="Case details">
           <div className="lrwCard">
             <div className="h">Case details</div>
@@ -1612,7 +1719,12 @@ export default function LawReportWorkspace() {
                 Copy details
               </button>
 
-              <button type="button" className="lrwBtn ghost" disabled={!canDownloadPdf || pdfBusy} onClick={downloadPdfNow}>
+              <button
+                type="button"
+                className="lrwBtn ghost"
+                disabled={!canDownloadPdf || pdfBusy}
+                onClick={downloadPdfNow}
+              >
                 {pdfBusy ? "Preparing…" : "Download PDF"}
               </button>
 
@@ -1631,7 +1743,7 @@ export default function LawReportWorkspace() {
             className={[
               "lrwPaper",
               `lrwTheme-${readingTheme}`,
-              "lrwProse", // hook for better paragraph spacing + typography in CSS
+              "lrwProse",
               fsClass,
               fontClass,
               showGate ? "isGated" : "",
@@ -1674,7 +1786,7 @@ export default function LawReportWorkspace() {
               <div className="sub">Issues • Holding • Ratio • Authorities • Orders • Next steps</div>
             </div>
 
-            <button type="button" className="lrwIconBtn" onClick={() => setAiOpen(false)} title="Close">
+            <button type="button" className="lrwIconBtn premium" onClick={() => setAiOpen(false)} title="Close">
               ✕
             </button>
           </div>
@@ -1708,20 +1820,33 @@ export default function LawReportWorkspace() {
               ) : null}
 
               <div className="lrwAiTabs" role="tablist" aria-label="LegalAI tabs">
-                <button type="button" className={`tab ${aiTab === "summary" ? "on" : ""}`} onClick={() => setAiTab("summary")}>
+                <button
+                  type="button"
+                  className={`tab ${aiTab === "summary" ? "on" : ""}`}
+                  onClick={() => setAiTab("summary")}
+                >
                   Summary
                 </button>
-                <button type="button" className={`tab ${aiTab === "chat" ? "on" : ""}`} onClick={() => setAiTab("chat")}>
+                <button
+                  type="button"
+                  className={`tab ${aiTab === "chat" ? "on" : ""}`}
+                  onClick={() => setAiTab("chat")}
+                >
                   Chat
                 </button>
-                <button type="button" className={`tab ${aiTab === "related" ? "on" : ""}`} onClick={() => setAiTab("related")}>
+                <button
+                  type="button"
+                  className={`tab ${aiTab === "related" ? "on" : ""}`}
+                  onClick={() => setAiTab("related")}
+                >
                   Related
                 </button>
               </div>
 
-              {/* Summary (premium cards like your screen 2) */}
+              {/* Summary */}
               {aiTab === "summary" ? (
                 <div className="lrwAiStack">
+                  {/* Controls card */}
                   <div className="lrwAiCard">
                     <div className="lrwAiRow">
                       <div className="seg" role="group" aria-label="Summary type">
@@ -1750,7 +1875,7 @@ export default function LawReportWorkspace() {
                       <div className="rowActions">
                         <button
                           type="button"
-                          className="lrwBtn primary"
+                          className="lrwBtn primary premium"
                           disabled={aiBusy}
                           onClick={() => aiGenerateSummary({ type: summaryType, forceRegenerate: false })}
                         >
@@ -1758,7 +1883,7 @@ export default function LawReportWorkspace() {
                         </button>
                         <button
                           type="button"
-                          className="lrwBtn ghost"
+                          className="lrwBtn ghost premium"
                           disabled={aiBusy}
                           onClick={() => aiGenerateSummary({ type: summaryType, forceRegenerate: true })}
                         >
@@ -1789,40 +1914,12 @@ export default function LawReportWorkspace() {
                     ) : null}
                   </div>
 
-                  {/* EXTENDED: Parties + Court card */}
-                  {summaryType === "extended" ? (
-                    <div className="lrwAiCard lrwAiCardAccent">
-                      <div className="lrwAiCardHead">
-                        <div className="ttl">Case context</div>
-                        <div className="sub">For extended summaries (quick reference)</div>
-                      </div>
-                      <div className="lrwAiGrid2">
-                        <div className="lrwAiMiniKV">
-                          <div className="k">Parties</div>
-                          <div className="v">{parties}</div>
-                        </div>
-                        <div className="lrwAiMiniKV">
-                          <div className="k">Court</div>
-                          <div className="v">{courtName || "—"}</div>
-                        </div>
-                        <div className="lrwAiMiniKV">
-                          <div className="k">Citation</div>
-                          <div className="v">{citation || "—"}</div>
-                        </div>
-                        <div className="lrwAiMiniKV">
-                          <div className="k">Decision date</div>
-                          <div className="v">{formatDate(report?.decisionDate || report?.DecisionDate) || "—"}</div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {/* BASIC: Summary card + Key Points card (screen-2 style) */}
-                  {safeTrim(summaryText) ? (
+                  {/* BASIC: ONLY 2 cards (Summary + Key points if available) */}
+                  {summaryType === "basic" && safeTrim(summaryText) ? (
                     <>
                       <div className="lrwAiCard lrwAiCardAccent">
                         <div className="lrwAiCardHead">
-                          <div className="ttl">{summaryType === "basic" ? "Summary" : "Extended summary"}</div>
+                          <div className="ttl">Summary</div>
                           <div className="sub">AI-generated. Verify against the transcript.</div>
                         </div>
                         <div className="lrwAiCardBody">
@@ -1830,37 +1927,57 @@ export default function LawReportWorkspace() {
                         </div>
                       </div>
 
-                      {summaryType === "basic" ? (
+                      {summaryCards.keyPoints?.length ? (
                         <div className="lrwAiCard lrwAiCardSoft">
                           <div className="lrwAiCardHead">
                             <div className="ttl">Key points</div>
                             <div className="sub">Fast scan (AI-extracted)</div>
                           </div>
                           <div className="lrwAiCardBody">
-                            {summaryCards.keyPoints?.length ? (
-                              <ul className="lrwAiList">
-                                {summaryCards.keyPoints.map((kp, i) => (
-                                  <li key={i}>{kp}</li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <div className="lrwAiEmptyInline">No key points detected yet. Generate again (or use Extended).</div>
-                            )}
+                            <ul className="lrwAiList">
+                              {summaryCards.keyPoints.map((kp, i) => (
+                                <li key={i}>{kp}</li>
+                              ))}
+                            </ul>
                           </div>
                         </div>
                       ) : null}
                     </>
                   ) : null}
+
+                  {/* EXTENDED: Parties + Citation as title (NOT a card) + section cards */}
+                  {summaryType === "extended" && safeTrim(summaryText) ? (
+                    <>
+                      <div className="lrwAiSummaryTitle" aria-label="Extended summary title">
+                        <div className="p">{parties}</div>
+                        {citation ? <div className="c">{citation}</div> : null}
+                      </div>
+
+                      {extendedSections.map((sec, idx) => (
+                        <div
+                          key={`${sec.label}_${idx}`}
+                          className={`lrwAiCard ${sec.label.toLowerCase().includes("key") ? "lrwAiCardSoft" : "lrwAiCardAccent"}`}
+                        >
+                          <div className="lrwAiCardHead">
+                            <div className="ttl">{sec.label}</div>
+                          </div>
+                          <div className="lrwAiCardBody">
+                            <RichText text={sec.body} />
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  ) : null}
                 </div>
               ) : null}
 
-              {/* Related (premium card) */}
+              {/* Related */}
               {aiTab === "related" ? (
                 <div className="lrwAiCard">
                   <div className="lrwAiRow">
                     <div className="note">AI-suggested related cases (Kenya + Foreign). Always verify citations.</div>
                     <div className="rowActions">
-                      <button type="button" className="lrwBtn primary" disabled={aiBusy} onClick={aiGenerateRelatedCases}>
+                      <button type="button" className="lrwBtn primary premium" disabled={aiBusy} onClick={aiGenerateRelatedCases}>
                         Generate
                       </button>
                     </div>
@@ -1889,7 +2006,7 @@ export default function LawReportWorkspace() {
                 </div>
               ) : null}
 
-              {/* Chat (premium cards + suggested questions) */}
+              {/* Chat */}
               {aiTab === "chat" ? (
                 <div className="lrwAiCard">
                   <div className="lrwAiRow">
@@ -1990,7 +2107,7 @@ export default function LawReportWorkspace() {
                       <div className="hint">Ctrl/⌘ + Enter to send</div>
                       <button
                         type="button"
-                        className="lrwBtn primary"
+                        className="lrwBtn primary premium"
                         disabled={aiBusy || !safeTrim(chatInput)}
                         onClick={() => aiSendChat(chatInput)}
                       >
