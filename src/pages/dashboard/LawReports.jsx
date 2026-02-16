@@ -174,6 +174,13 @@ function normalizeCourtRow(row) {
 export default function LawReports() {
   const navigate = useNavigate();
   const isInst = isInstitutionUser();
+    // ✅ New default reader route
+  const openWorkspace = (lawReportId) => {
+    const id = Number(lawReportId);
+    if (!Number.isFinite(id) || id <= 0) return;
+    navigate(`/dashboard/law-reports/${id}/workspace`);
+  };
+
   const isPublic = isPublicUser();
 
   // Mode: try server search first; fallback to client mode if 404
@@ -1174,11 +1181,11 @@ export default function LawReports() {
                         className="lr-card2"
                         role="button"
                         tabIndex={0}
-                        onClick={() => navigate(`/dashboard/law-reports/${detailsId}`)}
+                        onClick={() => openWorkspace(detailsId)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            navigate(`/dashboard/law-reports/${detailsId}`);
+                            openWorkspace(detailsId);
                           }
                         }}
                       >
@@ -1249,7 +1256,7 @@ export default function LawReports() {
                             title={!hasContent ? "Not available yet" : ""}
                             onClick={(e) => {
                               e.stopPropagation();
-                              navigate(`/dashboard/law-reports/${detailsId}`);
+                              openWorkspace(detailsId);
                             }}
                             style={{ opacity: canReadMore ? 1 : 0.6, cursor: canReadMore ? "pointer" : "not-allowed", width: "100%" }}
                           >

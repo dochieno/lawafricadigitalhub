@@ -1,0 +1,136 @@
+/* =======================================================
+   FILE: src/styles/lawReportReportView.css
+   Print-like report view (minimal)
+======================================================= */
+
+:root {
+  --ink: #111827;
+  --muted: rgba(17,24,39,0.65);
+  --border: rgba(17,24,39,0.12);
+  --shadow: 0 18px 55px rgba(0,0,0,0.10);
+  --maroon: #6b233b;
+}
+
+.lrvWrap {
+  min-height: 100vh;
+  background: #f4f6fb;
+  color: var(--ink);
+}
+
+.lrvTop {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: rgba(255,255,255,0.82);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+
+.lrvTopMid { text-align: center; }
+.lrvTopTitle { font-weight: 950; letter-spacing: -0.01em; }
+.lrvTopSub { font-size: 12px; font-weight: 750; color: var(--muted); margin-top: 2px; }
+
+.lrvTopActions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+
+.lrvTopErr {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 8px 18px 0;
+  color: #b91c1c;
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.lrvBtn {
+  border: 1px solid rgba(17,24,39,0.16);
+  background: rgba(255,255,255,0.9);
+  border-radius: 14px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 850;
+  cursor: pointer;
+  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+}
+
+.lrvBtn:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(0,0,0,0.08); border-color: rgba(17,24,39,0.24); }
+.lrvBtn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.lrvBtn.ghost { background: rgba(255,255,255,0.68); }
+.lrvBtn.primary { background: linear-gradient(180deg, rgba(107,35,59,0.98), rgba(74,21,39,0.98)); color: #fff; border-color: rgba(107,35,59,0.25); }
+
+.lrvPaper {
+  max-width: 980px;
+  margin: 18px auto 60px;
+  background: rgba(255,255,255,0.92);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.lrvHeader {
+  padding: 22px 24px 14px;
+  border-bottom: 1px solid rgba(17,24,39,0.08);
+  background: linear-gradient(180deg, rgba(107,35,59,0.06), rgba(255,255,255,0));
+}
+
+.lrvHeader .h1 {
+  font-size: 22px;
+  font-weight: 950;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.lrvHeader .meta {
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(17,24,39,0.70);
+}
+
+.lrvLock {
+  margin-top: 14px;
+  border: 1px solid rgba(107,35,59,0.18);
+  background: rgba(107,35,59,0.06);
+  border-radius: 16px;
+  padding: 12px;
+  font-weight: 800;
+  color: rgba(17,24,39,0.72);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.lrvBody {
+  padding: 20px 24px 30px;
+  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+}
+
+.lrvH {
+  margin: 18px 0 10px;
+  font-size: 16px;
+  font-weight: 950;
+  letter-spacing: -0.01em;
+}
+
+.lrvP {
+  margin: 10px 0;
+  font-size: 15px;
+  line-height: 1.85;
+  color: rgba(17,24,39,0.92);
+}
+
+/* Print tweaks */
+@media print {
+  .lrvTop, .lrvTopErr { display: none !important; }
+  .lrvWrap { background: #fff; }
+  .lrvPaper { box-shadow: none; border: 0; margin: 0; border-radius: 0; }
+  .lrvBody { padding: 0; }
+}

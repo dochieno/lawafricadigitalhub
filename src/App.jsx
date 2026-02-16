@@ -12,6 +12,9 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import TwoFactor from "./pages/TwoFactor";
 import TwoFactorSetup from "./pages/TwoFactorSetup";
+import LawReportWorkspace from "./pages/dashboard/LawReportWorkspace";
+import LawReportReportView from "./pages/dashboard/LawReportReportView";
+
 
 // ✅ Paystack return handler (public route)
 import PaystackReturn from "./pages/payments/PaystackReturn";
@@ -127,6 +130,9 @@ export default function App() {
 
             {/* ✅ Law Reports */}
             <Route path="law-reports" element={<LawReports />} />
+            <Route path="law-reports/:id/workspace" element={<LawReportWorkspace />} />
+            <Route path="law-reports/:id/report" element={<LawReportReportView />} />
+            <Route path="law-reports/:id" element={<LawReportReader />} />
             <Route path="law-reports/:id" element={<LawReportReader />} />
             <Route path="trials" element={<RequestTrial />} />
             <Route path="law-reports/subscribe" element={<LawReportsSubscribe />} />
