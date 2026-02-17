@@ -1,375 +1,512 @@
+/* =======================================================
+   FILE: src/styles/library.css
+   Purpose: Premium Library page matching Explore styles
+   - Same maroon palette + soft shadows
+   - Hover lift + glass overlay
+   - Top-only larger corner radius on cover
+   - Real full-width footer (Explore footer vibe)
+======================================================= */
 
-/* Container */
+:root {
+  --la-maroon: #6b233b;
+  --la-maroon-2: #7a2b47;
+
+  --ink: #0f172a;
+  --muted: rgba(15, 23, 42, 0.62);
+  --muted-2: rgba(15, 23, 42, 0.48);
+
+  --line: rgba(15, 23, 42, 0.10);
+  --shadow-soft: 0 10px 26px rgba(15, 23, 42, 0.08);
+  --radius: 18px;
+}
+
+/* Page container */
 .library-container {
-  box-sizing: border-box;
-  width: 100%;
-  max-width: 100%;
+  padding: 18px;
+  max-width: 1600px;
   margin: 0 auto;
-  padding: clamp(12px, 2vw, 24px);
+  font-size: 13px;
 }
 
-/* GRID:
-   - Header and cards share the same grid.
-   - Header spans all columns via grid areas.
-*/
-.library-grid {
-  display: grid;
-  gap: 24px;
-  grid-template-columns: repeat(4, 1fr);
-  grid-template-areas:
-    "header header header header"
-    "cards  cards  cards  cards";
-}
-
-/* Breakpoints keep your 4–3–2–1 layout and maintain the header spanning behavior */
-@media (max-width: 1560px) {
-  .library-grid {
-    grid-template-columns: repeat(3, 1fr);
-    grid-template-areas:
-      "header header header"
-      "cards  cards  cards";
-  }
-}
-
-@media (max-width: 1560px) {
-  .library-grid {
-    grid-template-columns: repeat(2, 1fr);
-    grid-template-areas:
-      "header header"
-      "cards  cards";
-  }
-}
-
-@media (max-width: 1560px) {
-  .library-grid {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "header"
-      "cards";
-  }
-}
-
-/* Header: now a grid item that spans all columns */
-.library-header {
-  grid-area: header;
-  margin-bottom: 0; /* spacing handled by grid gap */
-  max-width: none;  /* remove the old 800px cap so it spans the grid */
-}
-
-.library-title {
-  margin-bottom: 8px;
-  color: var(--la-dark);
-  font-size: 28px;
-}
-
-.library-intro {
-  color: var(--la-gray);
-  font-size: 15px;
-  line-height: 1.8;
-  text-align: justify; /* optional; remove if you prefer ragged-right */
-}
-
-/* Cards wrapper sits in the cards area; renders card items */
-.library-cards {
-  grid-area: cards;
-  display: contents; /* allows children (.ebook-card) to place directly on grid tracks */
-  /* If you prefer a nested grid wrapper instead of `display: contents`,
-     remove this line and add another grid here. */
-}
-
-/* Loading / empty states */
+/* Loading / empty */
 .library-loading {
-  font-size: 16px;
-  color: var(--la-gray);
+  padding: 18px;
+  color: var(--muted);
+  font-weight: 800;
 }
 
 .library-empty {
+  padding: 22px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  max-width: 900px;
+  margin: 60px auto 0;
   text-align: center;
-  margin-top: 60px;
-  color: var(--la-gray);
 }
 
-/* Card styles */
-.ebook-card {
-  background: var(--la-white);
-  border-radius: 12px;
-  padding: 16px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
-  display: flex;
-  flex-direction: column;
+.library-emptyCard {
+  margin-top: 14px;
+  padding: 22px;
+  border-radius: var(--radius);
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  box-shadow: var(--shadow-soft);
+  text-align: center;
 }
 
-.ebook-cover {
-  height: 160px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, var(--la-red), var(--la-dark));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 12px;
-}
-
-.ebook-placeholder {
-  color: white;
-  font-weight: 700;
-  letter-spacing: 2px;
-}
-
-.ebook-info h3 {
-  font-size: 16px;
-  margin: 0;
-  color: var(--la-dark);
-}
-
-.ebook-author {
-  font-size: 13px;
-  color: var(--la-gray);
+.library-emptyIcon {
+  font-size: 34px;
   margin-bottom: 10px;
 }
 
-.progress-bar {
-  background: #e5e7eb;
-  border-radius: 999px;
-  height: 6px;
-  margin-bottom: 12px;
-  overflow: hidden;
+/* Toast (reuse) */
+.toast {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 50;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+  box-shadow: var(--shadow-soft);
+  font-weight: 800;
 }
+.toast-success { border-color: rgba(107, 35, 59, 0.35); }
+.toast-error { border-color: rgba(239, 68, 68, 0.35); }
 
-.progress {
-  height: 100%;
-  background: var(--la-red);
-}
-
-.ebook-btn {
-  margin-top: auto;
-  padding: 10px;
-  border-radius: 8px;
-  border: none;
-  background: var(--la-red);
-  color: var(--la-white);
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.ebook-btn:hover {
-   background: var(--la-red-hover);
-}
-.library-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 24px;
-}
-
+/* Header hero */
 .library-header {
-  margin-bottom: 32px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  box-shadow: var(--shadow-soft);
+}
+
+.library-headerHero {
+  background: linear-gradient(
+    135deg,
+    rgba(107, 35, 59, 0.06),
+    rgba(255, 255, 255, 0.98)
+  );
+  border-color: rgba(107, 35, 59, 0.14);
+}
+
+.library-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
 }
 
 .library-title {
-  font-size: 26px;
-  font-weight: 700;
-  margin-bottom: 8px;
+  margin: 0;
+  font-size: 20px;
+  font-weight: 950;
+  color: var(--ink);
+  letter-spacing: 0.2px;
 }
 
 .library-intro {
-  color: #555;
-  max-width: 800px;
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+  max-width: 980px;
+  line-height: 1.55;
 }
 
-/* GRID */
-.library-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 24px;
+.library-heroPills {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
 }
 
-/* CARD */
-.ebook-card {
-  background: #fff;
+.library-pill {
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(107, 35, 59, 0.18);
+  background: rgba(107, 35, 59, 0.06);
+  color: var(--la-maroon);
+  font-weight: 900;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.library-pill.subtle {
+  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.04);
+  color: rgba(15, 23, 42, 0.70);
+}
+
+.library-headerActions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.library-btnGhost {
+  padding: 10px 12px;
   border-radius: 14px;
+  border: 1px solid rgba(107, 35, 59, 0.20);
+  background: #fff;
+  font-weight: 900;
+  cursor: pointer;
+}
+.library-btnGhost:hover { background: rgba(107, 35, 59, 0.06); }
+
+.library-btnPrimary {
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(107, 35, 59, 0.22);
+  background: linear-gradient(135deg, var(--la-maroon), var(--la-maroon-2));
+  color: #fff;
+  font-weight: 950;
+  cursor: pointer;
+}
+.library-btnPrimary:hover { filter: brightness(1.03); }
+
+.library-btnOutline {
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(107, 35, 59, 0.26);
+  background: #fff;
+  color: var(--la-maroon);
+  font-weight: 900;
+  cursor: pointer;
+}
+.library-btnOutline:hover { background: rgba(107, 35, 59, 0.06); }
+
+/* Grid */
+.library-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+/* Cards */
+.library-card {
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
   overflow: hidden;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
-.ebook-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.15);
+/* Premium hover lift */
+.library-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.12);
 }
 
-/* COVER */
-.ebook-cover {
-  width: 100%;
-  height: 220px;              /* ⬅️ matches Explore */
-  background: #7a1e1e;
-  overflow: hidden;
+/* Cover */
+.library-cover {
+  position: relative;
+  height: 210px; /* close to Explore */
+  background: linear-gradient(120deg, rgba(107, 35, 59, 0.12), rgba(15, 23, 42, 0.06));
   display: flex;
   align-items: center;
   justify-content: center;
+
+  /* slightly more radius only on top */
+  border-top-left-radius: 22px;
+  border-top-right-radius: 22px;
 }
 
-.ebook-cover img {
+/* Soft glass overlay (hover) */
+.library-coverOverlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 180ms ease;
+
+  background:
+    radial-gradient(circle at 20% 20%, rgba(107, 35, 59, 0.20), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.00));
+  backdrop-filter: blur(0px);
+}
+
+.library-card:hover .library-coverOverlay {
+  opacity: 1;
+  backdrop-filter: blur(8px);
+}
+
+.library-coverImg {
   width: 100%;
   height: 100%;
-  object-fit: cover;          /* bookstore style */
-  display: block;
+  object-fit: cover;
 }
 
-.ebook-placeholder {
-  color: white;
-  font-weight: 700;
+.library-coverText {
+  font-weight: 950;
+  color: rgba(107, 35, 59, 0.85);
   letter-spacing: 2px;
-  font-size: 20px;
 }
 
-/* INFO */
-.ebook-info {
-  padding: 16px;
-}
-
-.ebook-title {
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 6px;
-}
-
-.ebook-author {
-  font-size: 14px;
-  color: #666;
-  margin-bottom: 14px;
-}
-
-/* CTA */
-.ebook-btn {
-  width: 100%;
-  padding: 10px 14px;
-  border-radius: 8px;
-  border: none;
-  background: #9b1c1c;
-  color: white;
-  font-weight: 600;
+/* Bookmark (remove) */
+.library-bookmark {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.92);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+  color: rgba(15, 23, 42, 0.55);
+  transition: transform 120ms ease, background 120ms ease, color 120ms ease;
+  z-index: 3;
 }
 
-.ebook-btn:hover {
-  opacity: 0.95;
+.library-bookmark:hover {
+  transform: translateY(-1px);
+  background: #fff;
+  color: rgba(15, 23, 42, 0.85);
 }
 
-/* Progress (future-proof) */
-.progress-bar {
-  height: 6px;
-  background: #eee;
-  border-radius: 4px;
-  margin-bottom: 12px;
+.library-bookmark:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
 }
 
-.progress {
-  height: 100%;
-  background: #9b1c1c;
-  border-radius: 4px;
+.library-bookmarkIcon {
+  width: 16px;
+  height: 16px;
 }
-/* Button container */
-.ebook-actions {
+
+/* Hover quick actions (desktop only) */
+.library-hoverActions {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  z-index: 3;
+
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.library-card:hover .library-hoverActions,
+.library-card:focus-within .library-hoverActions {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.library-quickBtn {
+  border-radius: 999px;
+  padding: 8px 10px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink);
+  font-weight: 900;
+  font-size: 11px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+
+.library-quickBtn:hover {
+  border-color: rgba(107, 35, 59, 0.28);
+  background: rgba(255, 255, 255, 0.98);
+}
+
+@media (hover: none), (pointer: coarse) {
+  .library-hoverActions { display: none; }
+}
+
+/* Info */
+.library-info {
+  padding: 12px 12px 14px;
   display: flex;
-  gap: 10px;
-  margin-top: 12px;
+  flex-direction: column;
+  flex: 1;
 }
 
-/* Primary: Continue Reading */
-.ebook-btn {
-  padding: 6px 12px;          /* ⬅ reduced height */
-  font-size: 13px;            /* ⬅ slightly smaller */
-  line-height: 1.2;           /* ⬅ tighter text */
-  border-radius: 6px;
-  background: var(--la-red);
-  color: #fff;
-  border: none;
-  cursor: pointer;
-  white-space: nowrap;        /* ⬅ prevents awkward wrapping */
-}
-
-/* Secondary: Remove */
-.ebook-remove-btn {
-  padding: 6px 12px;          /* ⬅ match height */
-  font-size: 13px;
-  line-height: 1.2;
-  border-radius: 6px;
-  background: transparent;
-  border: 1px solid #dc2626;
-  color: #dc2626;
-  cursor: pointer;
-}
-
-/* Hover states */
-.ebook-btn:hover {
-  background: var(--la-red-hover);
-}
-
-.ebook-remove-btn:hover {
-  background: rgba(220, 38, 38, 0.08);
-}
-.ebook-card {
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.ebook-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.08);
-}
-/* -------------------------------- */
-/* LIBRARY CTA */
-/* -------------------------------- */
-.library-cta {
-  margin-top: 60px;
-  padding: 32px;
-  border-radius: 14px;
-  background: linear-gradient(
-    135deg,
-    rgba(161, 24, 30, 0.06),
-    rgba(0, 0, 0, 0.015)
-  );
-  text-align: center;
-}
-
-.library-cta h2 {
-  font-size: 20px;
+.library-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 8px;
-  color: var(--la-dark);
 }
 
-.library-cta p {
-  color: var(--la-gray);
-  margin-bottom: 16px;
-  font-size: 14px;
+.library-badge {
+  font-size: 11px;
+  font-weight: 950;
+  border-radius: 999px;
+  padding: 4px 10px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.04);
+  color: var(--ink);
 }
-.progress-wrapper {
-  margin-top: 8px;
+.library-badge.premium {
+  border-color: rgba(107, 35, 59, 0.22);
+  background: rgba(107, 35, 59, 0.08);
+  color: var(--la-maroon);
+}
+.library-badge.free {
+  border-color: rgba(107, 35, 59, 0.18);
+  background: rgba(107, 35, 59, 0.06);
+  color: var(--la-maroon);
+}
+.library-badge.completed {
+  border-color: rgba(107, 35, 59, 0.22);
+  background: rgba(107, 35, 59, 0.08);
+  color: var(--la-maroon);
+}
+.library-badge.progress {
+  border-color: rgba(107, 35, 59, 0.22);
+  background: rgba(107, 35, 59, 0.08);
+  color: var(--la-maroon);
+}
+.library-badge.subtle {
+  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.04);
+  color: rgba(15, 23, 42, 0.70);
 }
 
-.progress-bar {
-  width: 100%;
-  height: 6px;
-  background: #e0e0e0;
-  border-radius: 4px;
+/* Title clamp (2 lines) */
+.library-bookTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 850;
+  color: var(--ink);
+  line-height: 1.25;
+
+  /* fallback: if clamp unsupported, still looks tidy */
   overflow: hidden;
 }
 
-.progress-fill {
-  height: 100%;
-  background: #2f80ed;
+/* Use clamp only when supported */
+@supports (-webkit-line-clamp: 2) or (line-clamp: 2) {
+  .library-bookTitle {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+
+    /* standard (lint wants this) */
+    line-clamp: 2;
+    box-orient: vertical;
+  }
 }
 
-.progress-text {
-  font-size: 12px;
-  margin-top: 4px;
-  color: #555;
+
+.library-meta {
+  margin: 6px 0 10px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 650;
 }
-.badge.completed {
-  display: inline-block;
-  margin-top: 4px;
-  padding: 2px 8px;
-  font-size: 12px;
-  background: #e6f7ed;
-  color: #0f9d58;
-  border-radius: 12px;
+
+/* Progress */
+.library-progressWrap { margin-top: 2px; }
+.library-progressBar {
+  height: 6px;
+  background: rgba(15, 23, 42, 0.10);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.library-progressFill {
+  height: 100%;
+  background: linear-gradient(135deg, var(--la-maroon), var(--la-maroon-2));
+}
+
+/* Mobile actions only (hide on desktop) */
+.library-mobileActions {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding-top: 10px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .library-mobileActions { display: none; }
+}
+
+/* Footer (full-width like Explore footer) */
+.library-footer {
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+
+  margin-top: 18px;
+  padding: 22px 18px;
+
+  border-top: 1px solid rgba(107, 35, 59, 0.14);
+  background: linear-gradient(135deg, rgba(107, 35, 59, 0.06), rgba(255, 255, 255, 0.98));
+}
+
+.library-footerInner {
+  max-width: 980px;
+  margin: 0 auto;
+  text-align: center;
+  display: grid;
+  place-items: center;
+  gap: 10px;
+}
+
+.library-footerInner h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 950;
+  color: var(--ink);
+}
+
+.library-footerInner p {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 650;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.library-footerBtn {
+  min-width: 220px;
+  border-radius: 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(107, 35, 59, 0.22);
+  background: linear-gradient(135deg, var(--la-maroon), var(--la-maroon-2));
+  color: #fff;
+  font-weight: 950;
+  cursor: pointer;
+}
+.library-footerBtn:hover { filter: brightness(1.03); }
+
+/* Responsive grid like Explore */
+@media (max-width: 1450px) {
+  .library-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1180px) {
+  .library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 980px) {
+  .library-hero {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .library-heroPills {
+    justify-content: flex-start;
+  }
+
+  .library-grid { grid-template-columns: 1fr; }
 }
