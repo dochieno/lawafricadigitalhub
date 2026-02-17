@@ -811,3 +811,174 @@
 .explore-filterSectionTitle { font-size: 11px !important; font-weight: 800 !important; }
 .explore-doc-title { font-size: 12px !important; font-weight: 800 !important; }
 .explore-cta h2 { font-size: 12px !important; font-weight: 800 !important; }
+/* =======================================================
+   Explore: thinner cards + hover actions + bookmark icon
+   Paste at END of explore.css
+======================================================= */
+
+/* ---------- Thinner cards ---------- */
+.explore-cover {
+  height: 112px; /* was 132px */
+}
+
+.explore-info {
+  padding: 10px 10px 12px; /* tighter */
+}
+
+.explore-badges {
+  margin-bottom: 6px;
+  gap: 6px;
+}
+
+.badge {
+  font-size: 10px;
+  padding: 3px 9px;
+}
+
+.explore-doc-title {
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.25;
+
+  display: -webkit-box;
+  display: box; /* future compatibility */
+  
+  -webkit-line-clamp: 2;
+  line-clamp: 2; /* standard property */
+
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+
+.explore-meta {
+  margin: 6px 0 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.explore-card {
+  border-radius: 16px;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.07);
+}
+
+.explore-card:hover {
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.10);
+}
+
+/* ---------- Bookmark icon (top-right) ---------- */
+.explore-cover {
+  position: relative;
+}
+
+.explore-bookmark {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.92);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: rgba(15, 23, 42, 0.55);
+  transition: transform 120ms ease, background 120ms ease, color 120ms ease;
+  z-index: 3;
+}
+
+.explore-bookmark:hover {
+  transform: translateY(-1px);
+  background: #fff;
+  color: rgba(15, 23, 42, 0.8);
+}
+
+.explore-bookmark:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.explore-bookmark.active {
+  color: var(--la-maroon);
+  border-color: rgba(107, 35, 59, 0.22);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.explore-bookmarkIcon {
+  width: 16px;
+  height: 16px;
+}
+
+/* ---------- Hover quick actions (desktop only) ---------- */
+.explore-hoverActions {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  z-index: 3;
+
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+/* Show on hover + keyboard focus for accessibility */
+.explore-card:hover .explore-hoverActions,
+.explore-card:focus-within .explore-hoverActions {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.explore-quickBtn {
+  border-radius: 999px;
+  padding: 8px 10px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 11px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+
+.explore-quickBtn:hover {
+  border-color: rgba(107, 35, 59, 0.28);
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.explore-quickBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Hide hover actions on touch devices (desktop only) */
+@media (hover: none), (pointer: coarse) {
+  .explore-hoverActions {
+    display: none;
+  }
+}
+
+/* ---------- Mobile-only full-width actions ---------- */
+.explore-mobileOnlyActions {
+  margin-top: 6px;
+}
+
+/* On desktop, hide the bulky full-width actions */
+@media (hover: hover) and (pointer: fine) {
+  .explore-mobileOnlyActions {
+    display: none;
+  }
+}
+
+/* On mobile, keep buttons comfortable */
+@media (max-width: 980px) {
+  .explore-btn {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+}
+

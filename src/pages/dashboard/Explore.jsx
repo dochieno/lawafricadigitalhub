@@ -882,7 +882,7 @@ export default function Explore() {
                   const showPublicReadNow = d.isPremium && isPublic && hasFullAccess;
 
                   const canAddLibraryHere = hasContent && (!d.isPremium || showPremiumAsLibraryAction);
-                  const disabledReason = !hasContent ? "Coming soon" : "";
+                  //const disabledReason = !hasContent ? "Coming soon" : "";
 
                   return (
                     <div
@@ -898,8 +898,10 @@ export default function Explore() {
                         }
                       }}
                     >
+                      {/* Cover */}
                       <div className="explore-cover">
                         <div className="explore-cover-overlay" />
+
                         {coverUrl ? (
                           <img
                             src={coverUrl}
@@ -913,102 +915,167 @@ export default function Explore() {
                         ) : (
                           <span className="explore-cover-text">LAW</span>
                         )}
+
+                        {/* ✅ Bookmark icon (only when library action is allowed) */}
+                        {canAddLibraryHere && (!d.isPremium || showPremiumAsLibraryAction) && (
+                          <button
+                            type="button"
+                            className={`explore-bookmark ${inLibrary ? "active" : ""}`}
+                            aria-label={inLibrary ? "Remove from Library" : "Add to Library"}
+                            title={
+                              availabilityLoading || accessLoading
+                                ? "Checking…"
+                                : inLibrary
+                                ? "Remove from Library"
+                                : "Add to Library"
+                            }
+                            disabled={actionLoading === d.id || availabilityLoading || accessLoading}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!canAddLibraryHere) return;
+                              inLibrary ? removeFromLibrary(d.id) : addToLibrary(d.id);
+                            }}
+                          >
+                            {/* simple bookmark icon */}
+                            <svg viewBox="0 0 24 24" aria-hidden="true" className="explore-bookmarkIcon">
+                              <path
+                                d="M6 3.75C6 2.784 6.784 2 7.75 2h8.5C17.216 2 18 2.784 18 3.75V21l-6-3-6 3V3.75z"
+                                fill="currentColor"
+                              />
+                            </svg>
+                          </button>
+                        )}
+
+                        {/* ✅ Quick action on hover (desktop only via CSS) */}
+                        <div className="explore-hoverActions" aria-hidden="true">
+                          {d.isPremium && showPublicReadNow ? (
+                            <button
+                              type="button"
+                              className="explore-quickBtn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!hasContent) return;
+                                navigate(`/dashboard/documents/${d.id}/read`);
+                              }}
+                              disabled={!hasContent}
+                              title={!hasContent ? "Coming soon" : "Read Now"}
+                            >
+                              📖 Read Now
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="explore-quickBtn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/dashboard/documents/${d.id}`);
+                              }}
+                              title="View / Preview"
+                            >
+                              👁️ View / Preview
+                            </button>
+                          )}
+                        </div>
                       </div>
 
+                      {/* Info */}
                       <div className="explore-info">
                         <div className="explore-badges">
                           {d.isPremium ? <span className="badge premium">Premium</span> : <span className="badge free">Free</span>}
 
-                          {!hasContent && (
-                            <span className="badge coming-soon" style={{ marginLeft: 8 }}>
-                              Coming soon
-                            </span>
-                          )}
+                          {!hasContent && <span className="badge coming-soon">Coming soon</span>}
 
-                          {d.isPremium && isInst && !accessLoading && hasFullAccess && (
-                            <span className="badge free" style={{ marginLeft: 8 }}>
-                              Included
-                            </span>
-                          )}
+                          {d.isPremium && isInst && !accessLoading && hasFullAccess && <span className="badge free">Included</span>}
                         </div>
 
-                        <h3 className="explore-doc-title">{d.title}</h3>
+                        {/* ✅ Clamp long titles via CSS (keep title attribute) */}
+                        <h3 className="explore-doc-title" title={d.title}>
+                          {d.title}
+                        </h3>
 
                         <p className="explore-meta">
                           {d.countryName} • {d.category}
                         </p>
 
-                        {!d.isPremium && (
-                          <button
-                            className="explore-btn explore-btn-hot"
-                            disabled={actionLoading === d.id || !canAddLibraryHere || availabilityLoading}
-                            title={disabledReason}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!canAddLibraryHere) return;
-                              inLibrary ? removeFromLibrary(d.id) : addToLibrary(d.id);
-                            }}
-                            style={{
-                              opacity: canAddLibraryHere ? 1 : 0.55,
-                              cursor: canAddLibraryHere ? "pointer" : "not-allowed",
-                            }}
-                          >
-                            {availabilityLoading ? "Checking…" : inLibrary ? "🗑️ Remove from Library" : "➕ Add to Library"}
-                          </button>
-                        )}
+                        {/* ✅ Keep the big button ONLY for mobile / touch (CSS will hide on desktop) */}
+                        <div className="explore-mobileOnlyActions">
+                          {!d.isPremium && (
+                            <button
+                              className="explore-btn explore-btn-hot"
+                              disabled={actionLoading === d.id || !canAddLibraryHere || availabilityLoading}
+                              title={!hasContent ? "Coming soon" : ""}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!canAddLibraryHere) return;
+                                inLibrary ? removeFromLibrary(d.id) : addToLibrary(d.id);
+                              }}
+                              style={{
+                                opacity: canAddLibraryHere ? 1 : 0.55,
+                                cursor: canAddLibraryHere ? "pointer" : "not-allowed",
+                              }}
+                            >
+                              {availabilityLoading ? "Checking…" : inLibrary ? "🗑️ Remove from Library" : "➕ Add to Library"}
+                            </button>
+                          )}
 
-                        {d.isPremium && showPremiumAsLibraryAction && (
-                          <button
-                            className="explore-btn explore-btn-hot"
-                            disabled={actionLoading === d.id || accessLoading || availabilityLoading || !canAddLibraryHere}
-                            title={disabledReason}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!canAddLibraryHere) return;
-                              inLibrary ? removeFromLibrary(d.id) : addToLibrary(d.id);
-                            }}
-                            style={{
-                              opacity: canAddLibraryHere ? 1 : 0.55,
-                              cursor: canAddLibraryHere ? "pointer" : "not-allowed",
-                            }}
-                          >
-                            {accessLoading || availabilityLoading ? "Checking…" : inLibrary ? "🗑️ Remove from Library" : "➕ Add to Library"}
-                          </button>
-                        )}
+                          {d.isPremium && showPremiumAsLibraryAction && (
+                            <button
+                              className="explore-btn explore-btn-hot"
+                              disabled={actionLoading === d.id || accessLoading || availabilityLoading || !canAddLibraryHere}
+                              title={!hasContent ? "Coming soon" : ""}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!canAddLibraryHere) return;
+                                inLibrary ? removeFromLibrary(d.id) : addToLibrary(d.id);
+                              }}
+                              style={{
+                                opacity: canAddLibraryHere ? 1 : 0.55,
+                                cursor: canAddLibraryHere ? "pointer" : "not-allowed",
+                              }}
+                            >
+                              {accessLoading || availabilityLoading
+                                ? "Checking…"
+                                : inLibrary
+                                ? "🗑️ Remove from Library"
+                                : "➕ Add to Library"}
+                            </button>
+                          )}
 
-                        {d.isPremium && showPublicReadNow && (
-                          <button
-                            className="explore-btn explore-btn-hot"
-                            disabled={!hasContent}
-                            title={!hasContent ? "Coming soon" : ""}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!hasContent) return;
-                              navigate(`/dashboard/documents/${d.id}/read`);
-                            }}
-                            style={{
-                              opacity: hasContent ? 1 : 0.55,
-                              cursor: hasContent ? "pointer" : "not-allowed",
-                            }}
-                          >
-                            📖 Read Now
-                          </button>
-                        )}
+                          {d.isPremium && showPublicReadNow && (
+                            <button
+                              className="explore-btn explore-btn-hot"
+                              disabled={!hasContent}
+                              title={!hasContent ? "Coming soon" : ""}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!hasContent) return;
+                                navigate(`/dashboard/documents/${d.id}/read`);
+                              }}
+                              style={{
+                                opacity: hasContent ? 1 : 0.55,
+                                cursor: hasContent ? "pointer" : "not-allowed",
+                              }}
+                            >
+                              📖 Read Now
+                            </button>
+                          )}
 
-                        {d.isPremium && !showPremiumAsLibraryAction && !showPublicReadNow && (
-                          <button
-                            className="explore-btn explore-btn-hotOutline"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/dashboard/documents/${d.id}`);
-                            }}
-                          >
-                            <span>📖 View / Preview</span>
-                          </button>
-                        )}
+                          {d.isPremium && !showPremiumAsLibraryAction && !showPublicReadNow && (
+                            <button
+                              className="explore-btn explore-btn-hotOutline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/dashboard/documents/${d.id}`);
+                              }}
+                            >
+                              <span>📖 View / Preview</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
+
                 })}
               </div>
 
