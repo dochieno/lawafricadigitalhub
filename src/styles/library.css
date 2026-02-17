@@ -267,6 +267,28 @@
   flex-direction: column;
   height: 100%;
 }
+/* ✅ Make cards feel taller (overall height) */
+.library-card{
+  min-height: 560px;          /* was auto; increase the whole card */
+}
+
+/* ✅ Keep cover at your requested 300px (make sure units exist) */
+.library-cover{
+  height: 300px;              /* ensure px is present */
+}
+
+/* ✅ Give the info section more breathing room (adds height + premium feel) */
+.library-info{
+  padding: 14px 14px 18px;    /* was 12px 12px 14px */
+}
+
+/* ✅ Optional: slightly more spacing under meta/progress */
+.library-meta{
+  margin: 8px 0 12px;         /* was 6px 0 10px */
+}
+.library-progressWrap{
+  margin-top: 6px;            /* was 2px */
+}
 
 /* Premium hover lift */
 .library-card:hover {
