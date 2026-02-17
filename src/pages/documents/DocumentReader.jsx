@@ -307,6 +307,7 @@ export default function DocumentReader() {
 
   // ✅ AI panel (dedicated, NOT inside ToC)
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
+  const [aiDrawerCollapsed, setAiDrawerCollapsed] = useState(false);
 
   const viewerApiRef = useRef(null);
   const viewerUnsubRef = useRef(null); // ✅ unsubscribe for onPageChange if supported
@@ -544,7 +545,11 @@ export default function DocumentReader() {
 
   // ✅ AI drawer helpers
   const openAiDrawer = useCallback(() => setAiDrawerOpen(true), []);
-  const closeAiDrawer = useCallback(() => setAiDrawerOpen(false), []);
+  const closeAiDrawer = useCallback(() => {
+      setAiDrawerOpen(false);
+      setAiDrawerCollapsed(false);
+    }, []);
+
 
   // ✅ Calibrate offset from a ToC click:
   // offset = (pdfPage we jump to) - (printed start page from ToC)
@@ -1547,20 +1552,27 @@ export default function DocumentReader() {
           </span>
         </div>
 
-        <div className="readerpage-topbarActions">
-          <button className="readerpage-findBtn" type="button" onClick={openFind} title="Find in document (Ctrl+F)">
-            Find
-          </button>
-
           <button
             className="readerpage-aiBtn"
             type="button"
-            onClick={openAiDrawer}
-            title="AI tools (summary, copy, advanced range)"
+            onClick={() => {
+              // If closed -> open.
+              // If open but collapsed -> expand.
+              // If open and expanded -> collapse (quick reading mode).
+              if (!aiDrawerOpen) {
+                setAiDrawerOpen(true);
+                setAiDrawerCollapsed(false);
+              } else if (aiDrawerCollapsed) {
+                setAiDrawerCollapsed(false);
+              } else {
+                setAiDrawerCollapsed(true);
+              }
+            }}
+            title="Summary"
           >
-            AI
+            Summary
           </button>
-        </div>
+
       </div>
 
       {/* Backdrops */}
@@ -1582,7 +1594,7 @@ export default function DocumentReader() {
               >
                 {outlineExpanded.size ? "Collapse" : "Expand"}
               </button>
-              
+
                 <button
                   className="readerpage-aiBtn"
                   type="button"
@@ -1735,217 +1747,79 @@ export default function DocumentReader() {
         />
       </div>
 
-      {/* ✅ AI Drawer (NOT in ToC) */}
-      <div className={`readerpage-aiDrawer ${aiDrawerOpen ? "open" : ""}`} role="complementary" aria-label="AI tools">
-        <div className="readerpage-aiHeader">
-          <div className="readerpage-aiTitle">AI Tools</div>
-          <button className="readerpage-tocClose" type="button" onClick={closeAiDrawer} title="Close">
-            ✕
-          </button>
-        </div>
+        {/* ✅ AI Drawer (NOT in ToC) */}
+        <div
+          className={`readerpage-aiDrawer ${aiDrawerOpen ? "open" : ""} ${aiDrawerCollapsed ? "collapsed" : ""}`}
+          role="complementary"
+          aria-label="AI tools"
+          onMouseDown={(e) => e.stopPropagation()} // don't collapse when clicking inside drawer
+        >
+          <div className="readerpage-aiHeader">
+            <div className="readerpage-aiTitle">Summary</div>
 
-        <div className="readerpage-aiBody">
-          {/* Selected section */}
-          <div className="laAiCard">
-            <div className="laAiCardTop">
-              <div className="laAiCardTitle">Section summary</div>
-              <div className="laAiCardActions">
-                <button
-                  type="button"
-                  className="readerOutlineMiniBtn"
-                  disabled={!sectionSummaryText}
-                  onClick={onCopySummary}
-                  title="Copy summary"
-                >
-                  {aiCopied ? "Copied" : "Copy"}
-                </button>
-
-                <button
-                  type="button"
-                  className="readerOutlineMiniBtn laAccent"
-                  disabled={!sectionSummaryText}
-                  onClick={openSummaryPanel}
-                  title="Open full summary panel"
-                >
-                  Open
-                </button>
-              </div>
-            </div>
-
-            <div className="laAiCardInfo">
-              {selectedTocNode ? (
-                <>
-                  <div className="laAiSectionTitle">{nodeTitle(selectedTocNode)}</div>
-                  <div className="laAiSectionMeta">Pages: {nodeRightLabel(selectedTocNode) || "—"}</div>
-                </>
-              ) : (
-                <div className="laInlineMuted">Pick a ToC section first (☰ ToC), then run Basic or Extended.</div>
-              )}
-            </div>
-
-            <div className="laAiCardBtns">
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <button
                 type="button"
-                className="outline-btn"
-                disabled={!selectedTocNode || sectionSummaryLoading}
-                onClick={() => runSectionSummary("basic", { force: false, openPanel: false })}
+                className="readerOutlineMiniBtn"
+                onClick={() => setAiDrawerCollapsed((v) => !v)}
+                title={aiDrawerCollapsed ? "Show panel" : "Hide panel"}
               >
-                {sectionSummaryLoading && sectionSummaryType === "basic" ? "Basic…" : "Basic"}
+                {aiDrawerCollapsed ? "Show" : "Hide"}
               </button>
 
-              <button
-                type="button"
-                className="outline-btn"
-                disabled={!selectedTocNode || sectionSummaryLoading}
-                onClick={() => runSectionSummary("extended", { force: false, openPanel: false })}
-              >
-                {sectionSummaryLoading && sectionSummaryType === "extended" ? "Extended…" : "Extended"}
-              </button>
-
-              <button
-                type="button"
-                className="outline-btn laPrimary"
-                disabled={!selectedTocNode || sectionSummaryLoading}
-                onClick={() => runSectionSummary(sectionSummaryType, { force: true, openPanel: true })}
-                title="Regenerate (force)"
-              >
-                {sectionSummaryLoading ? "Working…" : "Regenerate"}
+              <button className="readerpage-tocClose" type="button" onClick={closeAiDrawer} title="Close">
+                ✕
               </button>
             </div>
-
-            {sectionSummaryError ? <div className="laInlineError">{sectionSummaryError}</div> : null}
-
-            {sectionSummaryMeta ? (
-              <div className="laInlineMetaCard">
-                <div className="laInlineMetaRow">
-                  <div>
-                    <strong>Used pages:</strong> {sectionSummaryMeta.usedPages}
-                  </div>
-                  <div>
-                    <strong>Input chars:</strong> {sectionSummaryMeta.inputCharCount}
-                  </div>
-                  <div>
-                    <strong>Cache:</strong> {sectionSummaryMeta.fromCache ? "yes" : "no"}
-                  </div>
-                </div>
-
-                {sectionSummaryMeta.warnings?.length ? (
-                  <div className="laInlineWarnings">
-                    <div className="laInlineWarningsTitle">Warnings</div>
-                    <ul className="laInlineWarningsList">
-                      {sectionSummaryMeta.warnings.map((w, i) => (
-                        <li key={`${i}-${w}`}>{w}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
           </div>
 
-          {/* Advanced summary (manual pages) */}
-          <div className="laAiCard">
-            <div className="laInlineAdvancedHeader">
-              <div className="laInlineAdvancedTitle">Advanced summary</div>
+          {/* ✅ WRAP HERE: body vs collapsed placeholder */}
+          {!aiDrawerCollapsed ? (
+            <div className="readerpage-aiBody">
+              {/* Selected section */}
+              <div className="laAiCard">
+                <div className="laAiCardTop">
+                  <div className="laAiCardTitle">Section summary</div>
+                  <div className="laAiCardActions">
+                    <button
+                      type="button"
+                      className="readerOutlineMiniBtn"
+                      disabled={!sectionSummaryText}
+                      onClick={onCopySummary}
+                      title="Copy summary"
+                    >
+                      {aiCopied ? "Copied" : "Copy"}
+                    </button>
 
-              <label className="laInlineCheckbox laTinyCheck">
-                <input
-                  style={tinyInputStyle}
-                  type="checkbox"
-                  checked={advancedEnabled}
-                  onChange={(e) => setAdvancedEnabled(e.target.checked)}
-                />
-                Use manual page range
-              </label>
-            </div>
-
-            {advancedEnabled ? (
-              <div className="laInlineAdvancedBody">
-                <div className="laInlineRadios">
-                  <label className="laInlineRadio laTinyCheck">
-                    <input
-                      style={tinyInputStyle}
-                      type="radio"
-                      name="pageMode"
-                      checked={pageMode === "printed"}
-                      onChange={() => setPageMode("printed")}
-                    />
-                    Printed pages (recommended)
-                  </label>
-
-                  <label className="laInlineRadio laTinyCheck">
-                    <input
-                      style={tinyInputStyle}
-                      type="radio"
-                      name="pageMode"
-                      checked={pageMode === "pdf"}
-                      onChange={() => setPageMode("pdf")}
-                    />
-                    PDF pages (advanced)
-                  </label>
-                </div>
-
-                {pageMode === "printed" ? (
-                  <div className="laInlineOffsetInfo">
-                    <div>
-                      <strong>Offset:</strong>{" "}
-                      {Number.isFinite(pdfPageOffset) ? (
-                        <span>
-                          {pdfPageOffset >= 0 ? `+${pdfPageOffset}` : pdfPageOffset}{" "}
-                          <span className={`laInlineOffsetBadge ${offsetVerified ? "ok" : "warn"}`}>
-                            {offsetVerified ? "verified" : "unverified"}
-                          </span>
-                        </span>
-                      ) : (
-                        <span>not set</span>
-                      )}
-                    </div>
-
-                    {!offsetVerified ? (
-                      <div className="laInlineWarnText">
-                        Offset not confirmed. Click a ToC item to calibrate before running to avoid wrong output.
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                <div className="laInlineManualInputs">
-                  <div className="laInlineManualCol">
-                    <div className="laInlineManualLabel">Start {pageMode === "printed" ? "printed" : "PDF"} page</div>
-                    <input
-                      className="readerOutlineSearch"
-                      inputMode="numeric"
-                      value={manualStart}
-                      onChange={(e) => setManualStart(e.target.value)}
-                      placeholder={pageMode === "printed" ? "e.g. 41" : "e.g. 81"}
-                    />
-                  </div>
-
-                  <div className="laInlineManualCol">
-                    <div className="laInlineManualLabel">End {pageMode === "printed" ? "printed" : "PDF"} page</div>
-                    <input
-                      className="readerOutlineSearch"
-                      inputMode="numeric"
-                      value={manualEnd}
-                      onChange={(e) => setManualEnd(e.target.value)}
-                      placeholder={pageMode === "printed" ? "e.g. 46" : "e.g. 86"}
-                    />
+                    <button
+                      type="button"
+                      className="readerOutlineMiniBtn laAccent"
+                      disabled={!sectionSummaryText}
+                      onClick={openSummaryPanel}
+                      title="Open full summary panel"
+                    >
+                      Open
+                    </button>
                   </div>
                 </div>
 
-                <div className="laInlineEffectiveRange">
-                  <div className="laInlineEffectiveText">
-                    <strong>Effective range:</strong> <span>{effectiveManual.label}</span>
-                  </div>
-                  {effectiveManual.clampNote ? <div className="laInlineWarnText">{effectiveManual.clampNote}</div> : null}
+                <div className="laAiCardInfo">
+                  {selectedTocNode ? (
+                    <>
+                      <div className="laAiSectionTitle">{nodeTitle(selectedTocNode)}</div>
+                      <div className="laAiSectionMeta">Pages: {nodeRightLabel(selectedTocNode) || "—"}</div>
+                    </>
+                  ) : (
+                    <div className="laInlineMuted">Pick a ToC section first (☰ ToC), then run Basic or Extended.</div>
+                  )}
                 </div>
 
-                <div className="laInlineManualBtns">
+                <div className="laAiCardBtns">
                   <button
                     type="button"
                     className="outline-btn"
-                    disabled={!canRunManual || sectionSummaryLoading}
-                    onClick={() => runManualSectionSummary("basic")}
+                    disabled={!selectedTocNode || sectionSummaryLoading}
+                    onClick={() => runSectionSummary("basic", { force: false, openPanel: false })}
                   >
                     {sectionSummaryLoading && sectionSummaryType === "basic" ? "Basic…" : "Basic"}
                   </button>
@@ -1953,8 +1827,8 @@ export default function DocumentReader() {
                   <button
                     type="button"
                     className="outline-btn"
-                    disabled={!canRunManual || sectionSummaryLoading}
-                    onClick={() => runManualSectionSummary("extended")}
+                    disabled={!selectedTocNode || sectionSummaryLoading}
+                    onClick={() => runSectionSummary("extended", { force: false, openPanel: false })}
                   >
                     {sectionSummaryLoading && sectionSummaryType === "extended" ? "Extended…" : "Extended"}
                   </button>
@@ -1962,26 +1836,201 @@ export default function DocumentReader() {
                   <button
                     type="button"
                     className="outline-btn laPrimary"
-                    disabled={!canRunManual || sectionSummaryLoading}
-                    onClick={() => runManualSectionSummary(sectionSummaryType)}
-                    title="Open panel after generating"
+                    disabled={!selectedTocNode || sectionSummaryLoading}
+                    onClick={() => runSectionSummary(sectionSummaryType, { force: true, openPanel: true })}
+                    title="Regenerate (force)"
                   >
-                    {sectionSummaryLoading ? "Working…" : "Open in panel"}
+                    {sectionSummaryLoading ? "Working…" : "Regenerate"}
                   </button>
                 </div>
 
-                <div className="laInlineHint">
-                  Tip: keep ranges small (Basic ≤ {BASIC_MAX_SPAN} pages, Extended ≤ {EXTENDED_MAX_SPAN} pages). Preview
-                  limits still apply.
-                </div>
+                {sectionSummaryError ? <div className="laInlineError">{sectionSummaryError}</div> : null}
+
+                {sectionSummaryMeta ? (
+                  <div className="laInlineMetaCard">
+                    <div className="laInlineMetaRow">
+                      <div>
+                        <strong>Used pages:</strong> {sectionSummaryMeta.usedPages}
+                      </div>
+                      <div>
+                        <strong>Input chars:</strong> {sectionSummaryMeta.inputCharCount}
+                      </div>
+                      <div>
+                        <strong>Cache:</strong> {sectionSummaryMeta.fromCache ? "yes" : "no"}
+                      </div>
+                    </div>
+
+                    {sectionSummaryMeta.warnings?.length ? (
+                      <div className="laInlineWarnings">
+                        <div className="laInlineWarningsTitle">Warnings</div>
+                        <ul className="laInlineWarningsList">
+                          {sectionSummaryMeta.warnings.map((w, i) => (
+                            <li key={`${i}-${w}`}>{w}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
-            ) : null}
-          </div>
+
+              {/* Advanced summary (manual pages) */}
+              <div className="laAiCard">
+                <div className="laInlineAdvancedHeader">
+                  <div className="laInlineAdvancedTitle">Advanced summary</div>
+
+                  <label className="laInlineCheckbox laTinyCheck">
+                    <input
+                      style={tinyInputStyle}
+                      type="checkbox"
+                      checked={advancedEnabled}
+                      onChange={(e) => setAdvancedEnabled(e.target.checked)}
+                    />
+                    Use manual page range
+                  </label>
+                </div>
+
+                {advancedEnabled ? (
+                  <div className="laInlineAdvancedBody">
+                    <div className="laInlineRadios">
+                      <label className="laInlineRadio laTinyCheck">
+                        <input
+                          style={tinyInputStyle}
+                          type="radio"
+                          name="pageMode"
+                          checked={pageMode === "printed"}
+                          onChange={() => setPageMode("printed")}
+                        />
+                        Printed pages (recommended)
+                      </label>
+
+                      <label className="laInlineRadio laTinyCheck">
+                        <input
+                          style={tinyInputStyle}
+                          type="radio"
+                          name="pageMode"
+                          checked={pageMode === "pdf"}
+                          onChange={() => setPageMode("pdf")}
+                        />
+                        PDF pages (advanced)
+                      </label>
+                    </div>
+
+                    {pageMode === "printed" ? (
+                      <div className="laInlineOffsetInfo">
+                        <div>
+                          <strong>Offset:</strong>{" "}
+                          {Number.isFinite(pdfPageOffset) ? (
+                            <span>
+                              {pdfPageOffset >= 0 ? `+${pdfPageOffset}` : pdfPageOffset}{" "}
+                              <span className={`laInlineOffsetBadge ${offsetVerified ? "ok" : "warn"}`}>
+                                {offsetVerified ? "verified" : "unverified"}
+                              </span>
+                            </span>
+                          ) : (
+                            <span>not set</span>
+                          )}
+                        </div>
+
+                        {!offsetVerified ? (
+                          <div className="laInlineWarnText">
+                            Offset not confirmed. Click a ToC item to calibrate before running to avoid wrong output.
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    <div className="laInlineManualInputs">
+                      <div className="laInlineManualCol">
+                        <div className="laInlineManualLabel">Start {pageMode === "printed" ? "printed" : "PDF"} page</div>
+                        <input
+                          className="readerOutlineSearch"
+                          inputMode="numeric"
+                          value={manualStart}
+                          onChange={(e) => setManualStart(e.target.value)}
+                          placeholder={pageMode === "printed" ? "e.g. 41" : "e.g. 81"}
+                        />
+                      </div>
+
+                      <div className="laInlineManualCol">
+                        <div className="laInlineManualLabel">End {pageMode === "printed" ? "printed" : "PDF"} page</div>
+                        <input
+                          className="readerOutlineSearch"
+                          inputMode="numeric"
+                          value={manualEnd}
+                          onChange={(e) => setManualEnd(e.target.value)}
+                          placeholder={pageMode === "printed" ? "e.g. 46" : "e.g. 86"}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="laInlineEffectiveRange">
+                      <div className="laInlineEffectiveText">
+                        <strong>Effective range:</strong> <span>{effectiveManual.label}</span>
+                      </div>
+                      {effectiveManual.clampNote ? <div className="laInlineWarnText">{effectiveManual.clampNote}</div> : null}
+                    </div>
+
+                    <div className="laInlineManualBtns">
+                      <button
+                        type="button"
+                        className="outline-btn"
+                        disabled={!canRunManual || sectionSummaryLoading}
+                        onClick={() => runManualSectionSummary("basic")}
+                      >
+                        {sectionSummaryLoading && sectionSummaryType === "basic" ? "Basic…" : "Basic"}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="outline-btn"
+                        disabled={!canRunManual || sectionSummaryLoading}
+                        onClick={() => runManualSectionSummary("extended")}
+                      >
+                        {sectionSummaryLoading && sectionSummaryType === "extended" ? "Extended…" : "Extended"}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="outline-btn laPrimary"
+                        disabled={!canRunManual || sectionSummaryLoading}
+                        onClick={() => runManualSectionSummary(sectionSummaryType)}
+                        title="Open panel after generating"
+                      >
+                        {sectionSummaryLoading ? "Working…" : "Open in panel"}
+                      </button>
+                    </div>
+
+                    <div className="laInlineHint">
+                      Tip: keep ranges small (Basic ≤ {BASIC_MAX_SPAN} pages, Extended ≤ {EXTENDED_MAX_SPAN} pages). Preview limits
+                      still apply.
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : (
+            <div style={{ padding: 10 }}>
+              <button
+                type="button"
+                className="readerOutlineMiniBtn laAccent"
+                onClick={() => setAiDrawerCollapsed(false)}
+                title="Show summary tools"
+              >
+                Open Summary
+              </button>
+            </div>
+          )}
         </div>
-      </div>
 
       {/* Main reader */}
-      <div className="readerpage-main">
+       <div
+          className="readerpage-main"
+          onMouseDown={() => {
+            // If user clicks back into the document, collapse the AI drawer for better reading
+            if (aiDrawerOpen) setAiDrawerCollapsed(true);
+          }}
+        >
         {loadingMeta ? <div className="readerMetaPill">Preparing document…</div> : null}
 
         <PdfViewer

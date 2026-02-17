@@ -2917,3 +2917,12 @@ mark.pdf-find {
   opacity: 0;
   pointer-events: none;
 }
+.readerpage-aiDrawer.collapsed {
+  width: 64px !important;
+  min-width: 64px !important;
+  max-width: 64px !important;
+}
+
+.readerpage-aiDrawer.collapsed .readerpage-aiTitle {
+  display: none;
+}
