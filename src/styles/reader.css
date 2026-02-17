@@ -2474,3 +2474,446 @@ mark.pdf-find {
   border-radius: 3px;
   padding: 0 1px;
 }
+/* =========================
+   TOAST (Fix giant oval)
+   ========================= */
+.toast {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 9999;
+
+  max-width: min(360px, calc(100vw - 28px));
+  padding: 10px 12px;
+  border-radius: 12px;
+
+  font-size: 13px;
+  line-height: 1.25;
+  font-weight: 700;
+
+  background: rgba(17, 24, 39, 0.92);
+  color: #fff;
+
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toast::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  flex: 0 0 auto;
+}
+
+.toast-success::before {
+  background: rgba(34, 197, 94, 0.85);
+}
+
+.toast-error::before {
+  background: rgba(239, 68, 68, 0.90);
+}
+/* =========================================================
+   PATCH: DocumentReader AI Drawer + class mismatch fixes
+   Paste at END of file
+   ========================================================= */
+
+/* ---------- Topbar actions (Find + AI) polish ---------- */
+.readerpage-topbarActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.readerpage-findBtn {
+  appearance: none;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  background: rgba(255, 255, 255, 0.90);
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  color: #111827;
+}
+
+.readerpage-findBtn:hover {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.reader-shell.dark .readerpage-findBtn {
+  background: rgba(17, 24, 39, 0.78);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #e5e7eb;
+}
+
+/* ---------- AI Drawer (mobile = bottom sheet; desktop = right panel) ---------- */
+.readerpage-aiDrawer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+
+  height: 78vh;
+  background: var(--reader-drawer-bg);
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -18px 48px rgba(2, 6, 23, 0.22);
+
+  transform: translateY(100%);
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+
+  z-index: 55;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.readerpage-aiDrawer.open {
+  transform: translateY(0);
+}
+
+.readerpage-aiHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.70);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.reader-shell.dark .readerpage-aiHeader {
+  background: rgba(17, 24, 39, 0.72);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+.readerpage-aiTitle {
+  font-size: 15px;
+  font-weight: 950;
+  color: var(--reader-ink);
+}
+
+.readerpage-aiBody {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 12px 16px;
+}
+
+/* Desktop: AI drawer becomes right sidebar */
+@media (min-width: 1024px) {
+  .readerpage-aiDrawer {
+    top: 0;
+    bottom: 0;
+    left: auto;
+    right: 0;
+
+    height: 100vh;
+    width: min(420px, 36vw);
+    border-radius: 0;
+    border-left: 1px solid rgba(15, 23, 42, 0.12);
+    box-shadow: -18px 0 60px rgba(2, 6, 23, 0.14);
+
+    transform: translateX(100%);
+    transition: transform 220ms ease;
+  }
+
+  .readerpage-aiDrawer.open {
+    transform: translateX(0);
+  }
+}
+
+/* ---------- AI Cards ---------- */
+.laAiCard {
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: 0 10px 28px rgba(2, 6, 23, 0.06);
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.reader-shell.dark .laAiCard {
+  background: rgba(17, 24, 39, 0.62);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+.laAiCardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.laAiCardTitle {
+  font-weight: 950;
+  font-size: 13px;
+  letter-spacing: 0.2px;
+  color: var(--reader-ink);
+}
+
+.laAiCardActions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.laAiCardInfo {
+  margin-top: 8px;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.76);
+  line-height: 1.35;
+}
+
+.reader-shell.dark .laAiCardInfo {
+  color: rgba(229, 231, 235, 0.72);
+}
+
+.laAiSectionTitle {
+  font-weight: 950;
+  color: var(--reader-ink);
+}
+
+.laAiSectionMeta {
+  margin-top: 2px;
+  opacity: 0.85;
+}
+
+.laInlineMuted {
+  opacity: 0.78;
+}
+
+.laAiCardBtns {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+@media (max-width: 520px) {
+  .laAiCardBtns {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.outline-btn.laPrimary,
+.readerOutlineMiniBtn.laPrimary {
+  border-color: rgba(107, 35, 59, 0.35);
+  background: rgba(107, 35, 59, 0.10);
+}
+
+.outline-btn.laPrimary:hover,
+.readerOutlineMiniBtn.laPrimary:hover {
+  background: rgba(107, 35, 59, 0.14);
+}
+
+.laInlineError {
+  margin-top: 10px;
+  color: #b42318;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+/* meta card under AI summary */
+.laInlineMetaCard {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.reader-shell.dark .laInlineMetaCard {
+  background: rgba(0, 0, 0, 0.20);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+.laInlineMetaRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 850;
+  color: rgba(15, 23, 42, 0.76);
+}
+
+.reader-shell.dark .laInlineMetaRow {
+  color: rgba(229, 231, 235, 0.72);
+}
+
+@media (max-width: 520px) {
+  .laInlineMetaRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+.laInlineWarnings {
+  margin-top: 10px;
+}
+
+.laInlineWarningsTitle {
+  font-size: 12px;
+  font-weight: 950;
+  color: var(--reader-ink);
+  margin-bottom: 6px;
+}
+
+.laInlineWarningsList {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.74);
+}
+
+.reader-shell.dark .laInlineWarningsList {
+  color: rgba(229, 231, 235, 0.70);
+}
+
+/* ---------- Tiny checkbox/radio (premium) ---------- */
+.laTinyCheck {
+  gap: 8px;
+}
+
+.laTinyCheck input[type="checkbox"],
+.laTinyCheck input[type="radio"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--la-red);
+  transform: translateY(0.5px);
+}
+
+.laInlineRadios .laTinyCheck {
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.reader-shell.dark .laInlineRadios .laTinyCheck {
+  background: rgba(17, 24, 39, 0.60);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* ---------- Fix: Empty ToC card class mismatch ---------- */
+/* JSX uses readerNoTocCard/Title/Body/Actions/Hint */
+.readerNoTocCard {
+  margin: 10px;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 10px 28px rgba(2, 6, 23, 0.06);
+  padding: 14px;
+  text-align: left;
+}
+
+.reader-shell.dark .readerNoTocCard {
+  background: rgba(17, 24, 39, 0.65);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+.readerNoTocTitle {
+  font-weight: 950;
+  color: var(--reader-ink);
+  margin: 0 0 6px;
+}
+
+.readerNoTocBody {
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.68);
+  line-height: 1.5;
+}
+
+.reader-shell.dark .readerNoTocBody {
+  color: rgba(229, 231, 235, 0.72);
+}
+
+.readerNoTocActions {
+  margin-top: 10px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.readerNoTocHint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.62);
+}
+
+.reader-shell.dark .readerNoTocHint {
+  color: rgba(229, 231, 235, 0.70);
+}
+
+/* ---------- Fix: Unlock bar mismatch (JSX vs CSS names) ---------- */
+/* JSX uses readerUnlockBarText + readerUnlockBarActions */
+.readerUnlockBarText {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--reader-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.readerUnlockBarActions {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+/* keep your existing look but map to your buttons */
+.readerUnlockBarActions .outline-btn,
+.readerUnlockBarActions .primary-btn {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+/* ---------- Fix: Find bar mismatch (JSX vs CSS names) ---------- */
+.readerFindBarInner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.readerFindBarTitle {
+  font-weight: 950;
+  font-size: 13px;
+  white-space: nowrap;
+  color: var(--reader-ink);
+}
+
+.readerFindBarBtns {
+  display: inline-flex;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.readerFindHint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.62);
+}
+
+.reader-shell.dark .readerFindHint {
+  color: rgba(229, 231, 235, 0.70);
+}
+
+/* ---------- Hidden textarea used by copy fallback ---------- */
+.laHiddenTextareaCopy {
+  position: fixed;
+  top: -1000px;
+  left: -1000px;
+  opacity: 0;
+  pointer-events: none;
+}

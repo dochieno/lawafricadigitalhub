@@ -305,8 +305,8 @@ export default function DocumentReader() {
   // ✅ sticky ToC header+search on desktop (JS-only via inline style)
   const [isDesktop, setIsDesktop] = useState(false);
 
-  // ✅ AI preview clamp show more/less
-  const [aiPreviewExpanded, setAiPreviewExpanded] = useState(false);
+  // ✅ AI panel (dedicated, NOT inside ToC)
+  const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
 
   const viewerApiRef = useRef(null);
   const viewerUnsubRef = useRef(null); // ✅ unsubscribe for onPageChange if supported
@@ -374,7 +374,7 @@ export default function DocumentReader() {
   }, [outlineWidth]);
 
   // =========================================================
-  // ✅ V2: Summary panel state
+  // ✅ Summary panel state
   // =========================================================
   const [summaryPanelOpen, setSummaryPanelOpen] = useState(false);
   const [summaryExpanded, setSummaryExpanded] = useState(false);
@@ -387,6 +387,9 @@ export default function DocumentReader() {
   const [sectionSummaryText, setSectionSummaryText] = useState("");
   const [sectionSummaryMeta, setSectionSummaryMeta] = useState(null);
   const lastSummaryKeyRef = useRef("");
+
+  // ✅ inline “Copied” state for AI copy (quiet feedback)
+  const [aiCopied, setAiCopied] = useState(false);
 
   // =========================================================
   // ✅ Remember last summary per document (localStorage)
@@ -436,7 +439,7 @@ export default function DocumentReader() {
   }, [SUMMARY_LAST_KEY, sectionSummaryType, sectionSummaryText, sectionSummaryMeta, selectedTocNode]);
 
   // =========================================================
-  // ✅ V2: Advanced manual page summary (Printed or PDF mode)
+  // ✅ Advanced manual page summary (Printed or PDF mode)
   // =========================================================
   const [advancedEnabled, setAdvancedEnabled] = useState(false);
   const [pageMode, setPageMode] = useState("printed"); // "printed" | "pdf"
@@ -460,7 +463,6 @@ export default function DocumentReader() {
       mq.addEventListener("change", apply);
       return () => mq.removeEventListener("change", apply);
     } catch {
-      // Safari fallback
       mq.addListener?.(apply);
       return () => mq.removeListener?.(apply);
     }
@@ -539,6 +541,10 @@ export default function DocumentReader() {
   const openSummaryPanel = useCallback(() => setSummaryPanelOpen(true), []);
   const closeSummaryPanel = useCallback(() => setSummaryPanelOpen(false), []);
   const toggleSummaryExpanded = useCallback(() => setSummaryExpanded((p) => !p), []);
+
+  // ✅ AI drawer helpers
+  const openAiDrawer = useCallback(() => setAiDrawerOpen(true), []);
+  const closeAiDrawer = useCallback(() => setAiDrawerOpen(false), []);
 
   // ✅ Calibrate offset from a ToC click:
   // offset = (pdfPage we jump to) - (printed start page from ToC)
@@ -749,9 +755,10 @@ export default function DocumentReader() {
     setManualStart("");
     setManualEnd("");
 
-    // close panel on doc switch
+    // close panels on doc switch
     setSummaryPanelOpen(false);
     setSummaryExpanded(false);
+    setAiDrawerOpen(false);
 
     // unlock bar reset
     setLocked(false);
@@ -762,8 +769,8 @@ export default function DocumentReader() {
     setFindQuery("");
     setFindBusy(false);
 
-    // ai preview
-    setAiPreviewExpanded(false);
+    // copy state reset
+    setAiCopied(false);
 
     fetchOutline();
   }, [docId, fetchOutline]);
@@ -902,7 +909,6 @@ export default function DocumentReader() {
 
     function pickDocTitleFromAny(data) {
       if (!data) return "";
-      // tolerant mapping
       return (
         data?.title ??
         data?.Title ??
@@ -929,7 +935,6 @@ export default function DocumentReader() {
           .then((r) => r.data)
           .catch(() => null);
 
-        // ✅ best-effort doc meta for proper title in topbar
         const docMetaPromise = api
           .get(`/legal-documents/${docId}`)
           .then((r) => r.data)
@@ -1043,7 +1048,6 @@ export default function DocumentReader() {
       }
 
       setSectionSummaryText(String(summary));
-      setAiPreviewExpanded(false);
 
       const fromCache = data?.fromCache ?? data?.FromCache ?? false;
       const usedStart = data?.startPage ?? data?.StartPage ?? null;
@@ -1065,7 +1069,8 @@ export default function DocumentReader() {
         warnings: warningsArr.map((w) => String(w)),
       });
 
-      showToast(fromCache ? "Loaded from cache" : "Summary generated", "success");
+      // quiet + subtle
+      showToast(fromCache ? "Loaded from cache" : "Summary ready", "success");
     },
     [showToast]
   );
@@ -1116,9 +1121,13 @@ export default function DocumentReader() {
 
   const onCopySummary = useCallback(async () => {
     if (!sectionSummaryText) return;
+
+    // quiet feedback (no big popup UX)
     const ok = await safeCopyToClipboard(sectionSummaryText);
-    if (ok) showToast("Copied ✅", "success");
-    else showToast("Copy failed (browser blocked clipboard)", "error");
+    setAiCopied(true);
+    window.setTimeout(() => setAiCopied(false), 1100);
+
+    if (!ok) showToast("Copy failed (browser blocked clipboard)", "error");
   }, [sectionSummaryText, showToast]);
 
   const onRegenerateSummary = useCallback(() => {
@@ -1136,7 +1145,7 @@ export default function DocumentReader() {
   );
 
   // =========================================================
-  // ✅ V2: Manual range → compute effective PDF pages + run summary
+  // ✅ Manual range → compute effective PDF pages + run summary
   // =========================================================
   function parsePositiveInt(raw) {
     const n = Number(String(raw || "").trim());
@@ -1297,7 +1306,6 @@ export default function DocumentReader() {
 
       setFindBusy(true);
       try {
-        // try common APIs
         const fns = [
           () => apiObj.openFind?.(),
           () => apiObj.openSearch?.(),
@@ -1323,7 +1331,6 @@ export default function DocumentReader() {
 
         if (!did) {
           showToast("Find-in-document is not supported by this viewer yet. Use Ctrl+F.", "error");
-          // open browser find hint: we can't programmatically open Ctrl+F
         }
       } finally {
         setFindBusy(false);
@@ -1334,7 +1341,6 @@ export default function DocumentReader() {
 
   const openFind = useCallback(() => {
     setFindOpen(true);
-    // try to open native find if viewer supports it
     try {
       viewerApiRef.current?.openFind?.();
     } catch {
@@ -1348,13 +1354,12 @@ export default function DocumentReader() {
     setFindBusy(false);
   }, []);
 
-  // keyboard shortcut: Ctrl/Cmd + F opens our bar (and lets viewer handle if it wants)
+  // keyboard shortcut: Ctrl/Cmd + F opens our bar
   useEffect(() => {
     function onKeyDown(e) {
       const isF = (e.key || "").toLowerCase() === "f";
       const meta = e.metaKey || e.ctrlKey;
       if (meta && isF) {
-        // don't block browser find on inputs
         const tag = (e.target?.tagName || "").toLowerCase();
         const isTyping = tag === "input" || tag === "textarea" || e.target?.isContentEditable;
         if (!isTyping) {
@@ -1364,11 +1369,13 @@ export default function DocumentReader() {
       }
       if ((e.key || "").toLowerCase() === "escape") {
         if (findOpen) closeFind();
+        if (outlineOpen) closeOutline();
+        if (aiDrawerOpen) closeAiDrawer();
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [closeFind, findOpen, openFind]);
+  }, [aiDrawerOpen, closeAiDrawer, closeFind, closeOutline, findOpen, openFind, outlineOpen]);
 
   // ✅ Gate UI only on access
   if (loadingAccess) {
@@ -1490,39 +1497,26 @@ export default function DocumentReader() {
     return "—";
   })();
 
-// ✅ AI preview clamp (JS-only)
-  const PREVIEW_CHARS = 720;
-  const _summaryRaw = String(sectionSummaryText || "");
-  const aiPreview =
-    !_summaryRaw.trim()
-      ? ""
-      : aiPreviewExpanded
-      ? _summaryRaw
-      : _summaryRaw.length <= PREVIEW_CHARS
-      ? _summaryRaw
-      : `${_summaryRaw.slice(0, PREVIEW_CHARS).trim()}…`;
-
-  const hasAiOverflow = !!_summaryRaw.trim() && _summaryRaw.length > PREVIEW_CHARS;
-
-
   // unlock bar should show if locked AND not dismissed
   const showUnlockBar = locked && !access.hasFullAccess && !unlockBarDismissed;
 
   // desktop sticky styles (JS-only, applied inline)
-    const stickyWrapStyle = isDesktop
-      ? { position: "sticky", top: 0, zIndex: 5, background: "var(--reader-drawer-bg, #fff)" }
-      : undefined;
+  const stickyWrapStyle = isDesktop
+    ? { position: "sticky", top: 0, zIndex: 5, background: "var(--reader-drawer-bg, #fff)" }
+    : undefined;
 
-    const stickySearchStyle = isDesktop
-      ? { position: "sticky", top: 0, zIndex: 6, background: "var(--reader-drawer-bg, #fff)", paddingBottom: 10 }
-      : undefined;
+  const stickySearchStyle = isDesktop
+    ? { position: "sticky", top: 0, zIndex: 6, background: "var(--reader-drawer-bg, #fff)", paddingBottom: 10 }
+    : undefined;
 
+  // Small input style hook (we’ll finalize in CSS next)
+  const tinyInputStyle = { transform: "scale(0.85)", transformOrigin: "left center" };
 
   return (
     <div className="reader-layout" onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp}>
       {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
 
-      {/* ✅ V2 Summary Panel */}
+      {/* ✅ V2 Summary Panel (modal-like) */}
       <SectionSummaryPanel
         open={summaryPanelOpen}
         logoSrc={lawAfricaLogo}
@@ -1540,7 +1534,7 @@ export default function DocumentReader() {
         onSwitchType={onSwitchSummaryType}
       />
 
-      {/* Topbar (mobile + desktop) */}
+      {/* Topbar */}
       <div className="readerpage-topbar">
         <button className="readerpage-tocbtn" type="button" onClick={openOutline} title="Table of Contents">
           ☰ ToC
@@ -1561,20 +1555,20 @@ export default function DocumentReader() {
           <button
             className="readerpage-aiBtn"
             type="button"
-            onClick={openSummaryPanel}
-            disabled={!sectionSummaryText}
-            title={sectionSummaryText ? "Open AI summary" : "Generate a summary first (ToC → Basic/Extended)"}
+            onClick={openAiDrawer}
+            title="AI tools (summary, copy, advanced range)"
           >
             AI
           </button>
         </div>
       </div>
 
+      {/* Backdrops */}
       {outlineOpen && <div className="readerpage-tocBackdrop" onClick={closeOutline} />}
+      {aiDrawerOpen && <div className="readerpage-tocBackdrop" onClick={closeAiDrawer} />}
 
-      {/* Drawer / sidebar */}
+      {/* Drawer / sidebar (ToC only) */}
       <div className={`readerpage-tocDrawer ${outlineOpen ? "open" : ""}`}>
-        {/* ✅ Sticky group (header + offset + search) */}
         <div className="readerpage-tocSticky" style={stickyWrapStyle}>
           <div className="readerpage-tocHeader" style={stickySearchStyle}>
             <div className="readerpage-tocTitle">Table of Contents</div>
@@ -1589,23 +1583,8 @@ export default function DocumentReader() {
                 {outlineExpanded.size ? "Collapse" : "Expand"}
               </button>
 
-              <button
-                className="readerOutlineMiniBtn"
-                type="button"
-                onClick={openFind}
-                title="Find in document (Ctrl+F)"
-              >
+              <button className="readerOutlineMiniBtn" type="button" onClick={openFind} title="Find in document (Ctrl+F)">
                 Find
-              </button>
-
-              <button
-                className="readerOutlineMiniBtn laAccent"
-                type="button"
-                onClick={openSummaryPanel}
-                disabled={!sectionSummaryText}
-                title={sectionSummaryText ? "Open AI summary panel" : "Generate a summary first"}
-              >
-                Summary
               </button>
             </div>
 
@@ -1701,7 +1680,6 @@ export default function DocumentReader() {
               </div>
             </div>
           ) : (
-            // ✅ Better "No ToC" UX
             <div className="readerpage-tocState">
               <div className="readerNoTocCard">
                 <div className="readerNoTocTitle">No table of contents available</div>
@@ -1738,21 +1716,41 @@ export default function DocumentReader() {
               </div>
             </div>
           )}
+        </div>
 
-          {/* AI Summary box (inline) */}
-          <div className="laInlineTocSummary">
-            <div className="laInlineTocSummaryTop">
-              <div className="laInlineTocSummaryTitle">AI · Section summary</div>
+        {/* Desktop resize handle */}
+        <div
+          className="readerOutlineResizeHandle"
+          role="separator"
+          aria-orientation="vertical"
+          title="Drag to resize"
+          onPointerDown={onResizePointerDown}
+        />
+      </div>
 
-              <div className="laInlineTocSummaryTopActions">
+      {/* ✅ AI Drawer (NOT in ToC) */}
+      <div className={`readerpage-aiDrawer ${aiDrawerOpen ? "open" : ""}`} role="complementary" aria-label="AI tools">
+        <div className="readerpage-aiHeader">
+          <div className="readerpage-aiTitle">AI Tools</div>
+          <button className="readerpage-tocClose" type="button" onClick={closeAiDrawer} title="Close">
+            ✕
+          </button>
+        </div>
+
+        <div className="readerpage-aiBody">
+          {/* Selected section */}
+          <div className="laAiCard">
+            <div className="laAiCardTop">
+              <div className="laAiCardTitle">Section summary</div>
+              <div className="laAiCardActions">
                 <button
                   type="button"
                   className="readerOutlineMiniBtn"
-                  disabled={!selectedTocNode || !sectionSummaryText}
+                  disabled={!sectionSummaryText}
                   onClick={onCopySummary}
                   title="Copy summary"
                 >
-                  Copy
+                  {aiCopied ? "Copied" : "Copy"}
                 </button>
 
                 <button
@@ -1760,31 +1758,30 @@ export default function DocumentReader() {
                   className="readerOutlineMiniBtn laAccent"
                   disabled={!sectionSummaryText}
                   onClick={openSummaryPanel}
-                  title="Open summary panel"
+                  title="Open full summary panel"
                 >
                   Open
                 </button>
               </div>
             </div>
 
-            <div className="laInlineTocSummaryInfo">
+            <div className="laAiCardInfo">
               {selectedTocNode ? (
                 <>
-                  <div className="laInlineTocSummarySection">{nodeTitle(selectedTocNode)}</div>
-                  <div className="laInlineTocSummaryPages">Pages: {nodeRightLabel(selectedTocNode) || "—"}</div>
+                  <div className="laAiSectionTitle">{nodeTitle(selectedTocNode)}</div>
+                  <div className="laAiSectionMeta">Pages: {nodeRightLabel(selectedTocNode) || "—"}</div>
                 </>
               ) : (
-                <div className="laInlineMuted">Select a ToC section, then choose Basic or Extended.</div>
+                <div className="laInlineMuted">Pick a ToC section first (☰ ToC), then run Basic or Extended.</div>
               )}
             </div>
 
-            <div className="laInlineTocSummaryBtns">
+            <div className="laAiCardBtns">
               <button
                 type="button"
                 className="outline-btn"
                 disabled={!selectedTocNode || sectionSummaryLoading}
                 onClick={() => runSectionSummary("basic", { force: false, openPanel: false })}
-                title="Generate basic summary"
               >
                 {sectionSummaryLoading && sectionSummaryType === "basic" ? "Basic…" : "Basic"}
               </button>
@@ -1794,7 +1791,6 @@ export default function DocumentReader() {
                 className="outline-btn"
                 disabled={!selectedTocNode || sectionSummaryLoading}
                 onClick={() => runSectionSummary("extended", { force: false, openPanel: false })}
-                title="Generate extended summary"
               >
                 {sectionSummaryLoading && sectionSummaryType === "extended" ? "Extended…" : "Extended"}
               </button>
@@ -1838,33 +1834,20 @@ export default function DocumentReader() {
                 ) : null}
               </div>
             ) : null}
-
-           /* {/* ✅ Clamp preview + show more/less */}
-            {sectionSummaryText ? (
-              <div className="laInlineSummaryPreviewWrap">
-                <div className="laInlineSummaryPreview">{aiPreview}</div>
-
-                {hasAiOverflow ? (
-                  <button
-                    type="button"
-                    className="readerOutlineMiniBtn"
-                    onClick={() => setAiPreviewExpanded((p) => !p)}
-                    title={aiPreviewExpanded ? "Show less" : "Show more"}
-                  >
-                    {aiPreviewExpanded ? "Show less" : "Show more"}
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
           </div>
 
           {/* Advanced summary (manual pages) */}
-          <div className="laInlineAdvanced">
+          <div className="laAiCard">
             <div className="laInlineAdvancedHeader">
               <div className="laInlineAdvancedTitle">Advanced summary</div>
 
-              <label className="laInlineCheckbox">
-                <input type="checkbox" checked={advancedEnabled} onChange={(e) => setAdvancedEnabled(e.target.checked)} />
+              <label className="laInlineCheckbox laTinyCheck">
+                <input
+                  style={tinyInputStyle}
+                  type="checkbox"
+                  checked={advancedEnabled}
+                  onChange={(e) => setAdvancedEnabled(e.target.checked)}
+                />
                 Use manual page range
               </label>
             </div>
@@ -1872,8 +1855,9 @@ export default function DocumentReader() {
             {advancedEnabled ? (
               <div className="laInlineAdvancedBody">
                 <div className="laInlineRadios">
-                  <label className="laInlineRadio">
+                  <label className="laInlineRadio laTinyCheck">
                     <input
+                      style={tinyInputStyle}
                       type="radio"
                       name="pageMode"
                       checked={pageMode === "printed"}
@@ -1882,8 +1866,14 @@ export default function DocumentReader() {
                     Printed pages (recommended)
                   </label>
 
-                  <label className="laInlineRadio">
-                    <input type="radio" name="pageMode" checked={pageMode === "pdf"} onChange={() => setPageMode("pdf")} />
+                  <label className="laInlineRadio laTinyCheck">
+                    <input
+                      style={tinyInputStyle}
+                      type="radio"
+                      name="pageMode"
+                      checked={pageMode === "pdf"}
+                      onChange={() => setPageMode("pdf")}
+                    />
                     PDF pages (advanced)
                   </label>
                 </div>
@@ -1974,21 +1964,13 @@ export default function DocumentReader() {
                 </div>
 
                 <div className="laInlineHint">
-                  Tip: keep ranges small (Basic ≤ {BASIC_MAX_SPAN} pages, Extended ≤ {EXTENDED_MAX_SPAN} pages). Preview limits still apply.
+                  Tip: keep ranges small (Basic ≤ {BASIC_MAX_SPAN} pages, Extended ≤ {EXTENDED_MAX_SPAN} pages). Preview
+                  limits still apply.
                 </div>
               </div>
             ) : null}
           </div>
         </div>
-
-        {/* Desktop resize handle */}
-        <div
-          className="readerOutlineResizeHandle"
-          role="separator"
-          aria-orientation="vertical"
-          title="Drag to resize"
-          onPointerDown={onResizePointerDown}
-        />
       </div>
 
       {/* Main reader */}
@@ -2005,7 +1987,7 @@ export default function DocumentReader() {
           onRegisterApi={handleRegisterApi}
         />
 
-        {/* ✅ Find bar (lightweight, JS-only; uses viewer API if available) */}
+        {/* ✅ Find bar */}
         {findOpen ? (
           <div className="readerFindBar" role="dialog" aria-label="Find in document">
             <div className="readerFindBarInner">
@@ -2062,7 +2044,7 @@ export default function DocumentReader() {
           </div>
         ) : null}
 
-        {/* ✅ Bottom unlock bar (replaces fullscreen overlay) */}
+        {/* ✅ Bottom unlock bar */}
         {showUnlockBar ? (
           <div className="readerUnlockBar" role="region" aria-label="Unlock full access">
             <div className="readerUnlockBarInner">
