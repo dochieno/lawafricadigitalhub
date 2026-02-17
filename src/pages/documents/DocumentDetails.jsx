@@ -1,4 +1,14 @@
-// src/pages/documents/DocumentDetails.jsx
+// =======================================================
+// FILE: src/pages/documents/DocumentDetails.jsx
+// Purpose: Premium Document Details (Explore/Library-aligned)
+// Changes:
+// - Cleaner hero structure + action hierarchy
+// - Reduced “visual noise”: one primary CTA + quieter secondary actions
+// - Purchase section gets an anchor + “Buy full access” jump link (optional UX win)
+// - Footer markup aligned to Explore/Library footer pattern (full-width + inner container)
+// - No endpoint/logic changes (all existing API calls preserved)
+// =======================================================
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import api, { API_BASE_URL } from "../../api/client";
@@ -51,8 +61,8 @@ function savePaystackCtx(ref, ctx) {
     if (!ref) return;
     localStorage.setItem(paystackCtxKey(ref), JSON.stringify(ctx));
   } catch (e) {
-if (import.meta?.env?.DEV) console.warn("clearCtx failed:", e);
-}
+    if (import.meta?.env?.DEV) console.warn("clearCtx failed:", e);
+  }
 }
 
 function toBool(v) {
@@ -117,19 +127,16 @@ function extractAxiosError(e) {
   const data = e?.response?.data;
   if (!data) return e?.message || "Request failed.";
   if (typeof data === "string") return data;
-  if (typeof data === "object")
-    return data.detail || data.title || data.message || e?.message || "Request failed.";
+  if (typeof data === "object") return data.detail || data.title || data.message || e?.message || "Request failed.";
   return e?.message || "Request failed.";
 }
 
 /* =========================
-   ✅ VAT helpers
+   VAT helpers (unchanged)
 ========================= */
 function hasVatRate(doc, offer) {
   const vatRateId =
-    pick(offer, ["vatRateId", "VatRateId"]) ??
-    pick(doc, ["vatRateId", "VatRateId"]) ??
-    null;
+    pick(offer, ["vatRateId", "VatRateId"]) ?? pick(doc, ["vatRateId", "VatRateId"]) ?? null;
 
   const ratePercent =
     pick(offer, ["vatRatePercent", "VatRatePercent", "ratePercent", "RatePercent"]) ??
@@ -142,10 +149,7 @@ function hasVatRate(doc, offer) {
 
 function getIsTaxInclusive(doc, offer) {
   const v =
-    pick(offer, ["isTaxInclusive", "IsTaxInclusive"]) ??
-    pick(doc, ["isTaxInclusive", "IsTaxInclusive"]) ??
-    null;
-
+    pick(offer, ["isTaxInclusive", "IsTaxInclusive"]) ?? pick(doc, ["isTaxInclusive", "IsTaxInclusive"]) ?? null;
   return !!v;
 }
 
@@ -190,6 +194,8 @@ export default function DocumentDetails() {
   const isInst = isInstitutionUser();
   const [coverFailed, setCoverFailed] = useState(false);
 
+  const purchaseRef = useRef(null);
+
   // Paystack post-return confirmation overlay state
   const [paystackFinal, setPaystackFinal] = useState({
     open: false,
@@ -232,12 +238,15 @@ export default function DocumentDetails() {
     next.delete("paymentIntentId");
 
     navigate(
-      {
-        pathname: location.pathname,
-        search: next.toString() ? `?${next.toString()}` : "",
-      },
+      { pathname: location.pathname, search: next.toString() ? `?${next.toString()}` : "" },
       { replace: true }
     );
+  }
+
+  function scrollToPurchase() {
+    const el = purchaseRef.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   async function refreshOffer(docId) {
@@ -313,10 +322,10 @@ export default function DocumentDetails() {
     load();
     return () => {
       alive = false;
-    };    
+    };
   }, [id]);
 
-  // Paystack return confirmation
+  // Paystack return confirmation (unchanged)
   useEffect(() => {
     if (paystackRanRef.current) return;
     if (!(paid === "1" && provider.toLowerCase() === "paystack")) return;
@@ -530,10 +539,7 @@ export default function DocumentDetails() {
     const email = String(user?.email || "").trim() || extractEmailFromClaims(claims);
 
     if (!email) {
-      showToast(
-        "Missing account email for Paystack. Please update your profile email or log out and log in again.",
-        "error"
-      );
+      showToast("Missing account email for Paystack. Please update your profile email or log out and log in again.", "error");
       return;
     }
 
@@ -544,9 +550,7 @@ export default function DocumentDetails() {
     }
 
     const currency =
-      pick(publicOffer, ["currency", "Currency"]) ||
-      pick(doc, ["publicCurrency", "PublicCurrency"]) ||
-      "KES";
+      pick(publicOffer, ["currency", "Currency"]) || pick(doc, ["publicCurrency", "PublicCurrency"]) || "KES";
 
     setPurchaseLoading(true);
     try {
@@ -565,9 +569,7 @@ export default function DocumentDetails() {
 
       const reference = data?.reference || data?.data?.reference || data?.trxref || null;
 
-      if (!authorizationUrl) {
-        throw new Error("Paystack initialize did not return authorization_url.");
-      }
+      if (!authorizationUrl) throw new Error("Paystack initialize did not return authorization_url.");
 
       if (reference) {
         savePaystackCtx(reference, {
@@ -610,15 +612,13 @@ export default function DocumentDetails() {
   const hasFullAccess = !!access?.hasFullAccess;
 
   const isBlocked = !!access?.isBlocked;
-  const blockMessage =
-    access?.blockMessage || "Institution subscription expired. Please contact your administrator.";
+  const blockMessage = access?.blockMessage || "Institution subscription expired. Please contact your administrator.";
 
   const canPurchaseIndividually =
     access?.canPurchaseIndividually === undefined ? true : !!access?.canPurchaseIndividually;
 
   const purchaseDisabledReason =
-    access?.purchaseDisabledReason ||
-    "Purchases are disabled for this account. Please contact your administrator.";
+    access?.purchaseDisabledReason || "Purchases are disabled for this account. Please contact your administrator.";
 
   const showPublicPurchaseDisabledMessage =
     !!doc.isPremium &&
@@ -636,11 +636,7 @@ export default function DocumentDetails() {
     purchaseLoading || !hasContent || (isInst && isBlocked && !canPurchaseIndividually);
 
   const purchaseButtonTitle =
-    !hasContent
-      ? "Coming soon"
-      : isInst && isBlocked && !canPurchaseIndividually
-      ? purchaseDisabledReason
-      : "";
+    !hasContent ? "Coming soon" : isInst && isBlocked && !canPurchaseIndividually ? purchaseDisabledReason : "";
 
   const showIncludedActiveBadge = doc.isPremium && isInst && !accessLoading && hasFullAccess;
   const showIncludedInactiveBadge = doc.isPremium && isInst && !accessLoading && isBlocked && !hasFullAccess;
@@ -656,8 +652,10 @@ export default function DocumentDetails() {
   const canInstitutionAddPremium = isInst && doc.isPremium && hasFullAccess;
   const canAddToLibrary = hasContent && (!doc.isPremium || canInstitutionAddPremium);
 
-  // ✅ Description (only)
   const description = String(doc?.description || "").trim();
+
+  // Lock state UX helper (used only for UI decisions)
+  const isLockedPremium = !!doc.isPremium && !hasFullAccess && !offerOwned;
 
   return (
     <div className="doc-detail-container">
@@ -780,53 +778,81 @@ export default function DocumentDetails() {
         </div>
       )}
 
+      {/* HERO */}
       <div className="doc-detail-grid">
+        {/* Cover */}
         <div className="doc-detail-cover">
-          {!coverFailed && coverUrl ? (
-            <img src={coverUrl} alt={doc.title} className="doc-cover-img" onError={() => setCoverFailed(true)} />
-          ) : (
-            <div className="doc-cover-placeholder">LAW</div>
-          )}
+          {/* “plate” wrapper for more premium look (CSS next) */}
+          <div className="doc-cover-plate">
+            {!coverFailed && coverUrl ? (
+              <img
+                src={coverUrl}
+                alt={doc.title}
+                className="doc-cover-img"
+                onError={() => setCoverFailed(true)}
+              />
+            ) : (
+              <div className="doc-cover-placeholder">LAW</div>
+            )}
+          </div>
         </div>
 
+        {/* Info */}
         <div className="doc-detail-info">
           <div className="doc-head">
-            <h1 className="doc-title">{doc.title}</h1>
-            
+            <div className="doc-headTop">
+              <h1 className="doc-title">{doc.title}</h1>
+
+              {/* Right-side mini stack (price/cta hint) — shown only when locked premium & purchasable */}
+              {isLockedPremium && showPurchaseBox && (
+                <div className="doc-headAside">
+                  <div className="doc-pricePill" title="One-time purchase price">
+                    {currency} {formatMoney(price)}
+                  </div>
+                  <button
+                    type="button"
+                    className="doc-linkBtn"
+                    onClick={scrollToPurchase}
+                    disabled={!hasContent}
+                    title={!hasContent ? "Coming soon" : "Jump to purchase options"}
+                  >
+                    Buy full access →
+                  </button>
+                </div>
+              )}
+            </div>
+
             <p className="doc-meta">
               {doc.countryName} • {doc.category}
               {doc.author ? ` • ${doc.author}` : ""}
             </p>
 
-            {/* ✅ ONLY ADDITION: Description (no layout changes) */}
+            {/* Description in a calmer surface (CSS will remove colorful gradients) */}
             {description ? <p className="doc-desc">{description}</p> : null}
 
-            <div className="doc-badge">
+            <div className="doc-badge" aria-label="Document tags">
               {doc.isPremium ? <span className="badge premium">Premium</span> : <span className="badge free">Free</span>}
               {!hasContent && <span className="badge coming-soon">Coming soon</span>}
 
-              {showIncludedActiveBadge && (
-                <span className="badge free" style={{ marginLeft: 8 }}>
-                  Included in subscription
-                </span>
-              )}
+              {showIncludedActiveBadge && <span className="badge included">Included</span>}
 
               {showIncludedInactiveBadge && (
-                <span className="badge coming-soon" style={{ marginLeft: 8 }} title={blockMessage}>
+                <span className="badge included-inactive" title={blockMessage}>
                   Included — inactive
                 </span>
               )}
             </div>
+
+            {/* Subscription inactive banner */}
+            {isInst && isBlocked && (
+              <div className="doc-offer-card doc-info-banner" style={{ marginTop: 12, opacity: 0.95 }}>
+                <div className="doc-offer-title">Subscription inactive</div>
+                <div className="doc-offer-sub">{blockMessage}</div>
+              </div>
+            )}
           </div>
 
-          {isInst && isBlocked && (
-            <div className="doc-offer-card doc-info-banner" style={{ marginTop: 12, opacity: 0.95 }}>
-              <div className="doc-offer-title">Subscription inactive</div>
-              <div className="doc-offer-sub">{blockMessage}</div>
-            </div>
-          )}
-
-          {/* Top actions */}
+          {/* Action bar (primary clearly dominant) */}
           <div className="doc-actions doc-actions-compact">
             <button
               className="btn btn-primary"
@@ -853,12 +879,25 @@ export default function DocumentDetails() {
                 cursor: canAddToLibrary ? "pointer" : "not-allowed",
               }}
             >
-              {inLibrary ? "🗑️ Library" : "➕ Library"}
+              {inLibrary ? "Saved ✓" : "Save"}
             </button>
 
             <button className="btn btn-outline-danger" onClick={() => navigate("/dashboard/explore")} type="button">
               Browse
             </button>
+
+            {/* Optional contextual nudge when locked (quiet secondary) */}
+            {isLockedPremium && showPurchaseBox && (
+              <button
+                className="btn btn-outline-danger doc-buyNudge"
+                type="button"
+                onClick={scrollToPurchase}
+                disabled={!hasContent}
+                title={!hasContent ? "Coming soon" : ""}
+              >
+                Unlock
+              </button>
+            )}
           </div>
 
           {/* Purchase */}
@@ -869,7 +908,7 @@ export default function DocumentDetails() {
                   Checking price…
                 </div>
               ) : showPurchaseBox ? (
-                <div className="doc-offer-card doc-purchase-card">
+                <div ref={purchaseRef} className="doc-offer-card doc-purchase-card">
                   <div className="doc-offer-top">
                     <div>
                       <div className="doc-offer-title">Buy this document</div>
@@ -973,31 +1012,32 @@ export default function DocumentDetails() {
         </div>
       </div>
 
-      <section className="doc-footer-explore">
-        <div className="doc-footer-explore-inner">
-          <h2>Continue Your Legal Research</h2>
+      {/* Footer CTA (Explore/Library-aligned markup; CSS will make it match) */}
+      <footer className="doc-footer">
+        <div className="doc-footerInner">
+          <h3>Continue your legal research</h3>
           <p>
             Discover more free and premium legal publications across jurisdictions, categories, and practice areas curated by LawAfrica.
           </p>
 
-          <div className="doc-footer-explore-actions">
-            <button className="doc-footer-primary" onClick={() => navigate("/dashboard/explore")}>
+          <div className="doc-footerActions">
+            <button className="doc-footerBtnPrimary" onClick={() => navigate("/dashboard/explore")}>
               Browse All Publications
             </button>
 
-            <button className="doc-footer-secondary" onClick={() => navigate("/dashboard/library")}>
+            <button className="doc-footerBtnGhost" onClick={() => navigate("/dashboard/library")}>
               Go to My Library →
             </button>
           </div>
         </div>
-      </section>
+      </footer>
 
       {showUnavailable && (
         <div className="modal-overlay">
           <div className="modal">
             <h3>Content not available</h3>
             <p>
-              Great news! This document is in our catalog, but the content isn’t ready just yet. Check back soon we are working on it!
+              Great news! This document is in our catalog, but the content isn’t ready just yet. Check back soon — we’re working on it!
             </p>
 
             <button className="btn btn-primary" onClick={() => setShowUnavailable(false)}>
@@ -1054,16 +1094,30 @@ export default function DocumentDetails() {
                   disabled={purchaseLoading}
                 />
                 <div style={{ marginTop: 8, opacity: 0.85, fontSize: 13 }}>
-                  Amount: <b>{currency} {formatMoney(priceToPay())}</b>
-                  {vatNote ? <div className="doc-offer-note" style={{ marginTop: 6 }}>{vatNote}</div> : null}
+                  Amount:{" "}
+                  <b>
+                    {currency} {formatMoney(priceToPay())}
+                  </b>
+                  {vatNote ? (
+                    <div className="doc-offer-note" style={{ marginTop: 6 }}>
+                      {vatNote}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ) : (
               <div style={{ marginTop: 12, opacity: 0.9, textAlign: "left" }}>
                 <div style={{ fontSize: 13 }}>
-                  Amount: <b>{currency} {formatMoney(priceToPay())}</b>
+                  Amount:{" "}
+                  <b>
+                    {currency} {formatMoney(priceToPay())}
+                  </b>
                 </div>
-                {vatNote ? <div className="doc-offer-note" style={{ marginTop: 6 }}>{vatNote}</div> : null}
+                {vatNote ? (
+                  <div className="doc-offer-note" style={{ marginTop: 6 }}>
+                    {vatNote}
+                  </div>
+                ) : null}
                 <div style={{ marginTop: 6, fontSize: 13, color: "#6b7280" }}>
                   You’ll be redirected to Paystack to complete the payment securely.
                 </div>

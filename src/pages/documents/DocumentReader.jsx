@@ -1329,7 +1329,7 @@ export default function DocumentReader() {
               disabled={!sectionSummaryText}
               title={sectionSummaryText ? "Open AI summary panel" : "Generate a summary first"}
             >
-              Open summary
+              Summary
             </button>
           </div>
 
