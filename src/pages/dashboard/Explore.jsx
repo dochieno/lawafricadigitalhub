@@ -724,10 +724,8 @@ export default function Explore() {
                   ⚙️ Filters
                 </button>
 
-                <div className="explore-kpi">
-                  <div className="explore-kpiNum">{filtered.length}</div>
-                  <div className="explore-kpiLbl">Results</div>
-                </div>
+                <div className="explore-resultsPill">{filtered.length} results</div>
+
               </div>
             </div>
 
