@@ -608,48 +608,46 @@ export default function DocumentReader() {
   );
 
   // ✅ Preview clamp + jump (also sets selected node now)
-  const onOutlineClick = useCallback(
-    (node, pageNumber) => {
-      setSelectedTocNode(node);
-      // ✅ If existing summary belongs to another section, clear it to prevent mismatch on "Open"
-      const nextOwnerKey = makeSummaryOwnerKey(docId, {
-        tocEntryId: node?.id ?? node?.Id ?? null,
-      });
-      if (summaryOwnerKey && summaryOwnerKey !== nextOwnerKey) {
-        setSectionSummaryText("");
-        setSectionSummaryMeta(null);
-        setSectionSummaryError("");
-        lastSummaryKeyRef.current = "";
-        setSectionSummaryText("");
-        setSectionSummaryMeta(null);
-        setSummaryOwnerKey("");
+const onOutlineClick = useCallback(
+  (node, pageNumber) => {
+    setSelectedTocNode(node);
 
+    const nextOwnerKey = makeSummaryOwnerKey(docId, {
+      tocEntryId: node?.id ?? node?.Id ?? null,
+    });
+
+    if (summaryOwnerKey && summaryOwnerKey !== nextOwnerKey) {
+      setSectionSummaryText("");
+      setSectionSummaryMeta(null);
+      setSectionSummaryError("");
+      lastSummaryKeyRef.current = "";
+      setSummaryOwnerKey("");
+    }
+
+    const p = Number(pageNumber);
+    if (!Number.isFinite(p) || p <= 0) return;
+
+    if (!access?.hasFullAccess && Number.isFinite(access?.previewMaxPages)) {
+      if (p > access?.previewMaxPages) {
+        showToast(
+          `This section is outside preview (ends at page ${access?.previewMaxPages}). Purchase to continue.`,
+          "error"
+        );
+        setLocked(true);
+        setUnlockBarDismissed(false);
+        return;
       }
+    }
 
-      const p = Number(pageNumber);
-      if (!Number.isFinite(p) || p <= 0) return;
+    const ok = viewerApiRef.current?.jumpToPage?.(p, "smooth");
+    if (ok) {
+      calibrateOffsetFromTocNode(node, p);
+      setOutlineOpen(false);
+    }
+  },
+  [access?.hasFullAccess, access?.previewMaxPages, calibrateOffsetFromTocNode, docId, showToast, summaryOwnerKey]
+);
 
-      // Preview clamp
-      if (!access?.hasFullAccess && Number.isFinite(access?.previewMaxPages)) {
-        if (p > access.previewMaxPages) {
-          showToast(
-            `This section is outside preview (ends at page ${access.previewMaxPages}). Purchase to continue.`,
-            "error"
-          );
-          setLocked(true);
-          setUnlockBarDismissed(false);
-          return;
-        }
-      }
-
-      const ok = viewerApiRef.current?.jumpToPage?.(p, "smooth");
-      if (ok) {
-        calibrateOffsetFromTocNode(node, p);
-        setOutlineOpen(false);
-      }
-    },
-    [access?.hasFullAccess, access.previewMaxPages, calibrateOffsetFromTocNode, docId, showToast, summaryOwnerKey]
-  );
 
   const toggleOutlineNode = useCallback((idStr) => {
     setOutlineExpanded((prevSet) => {
