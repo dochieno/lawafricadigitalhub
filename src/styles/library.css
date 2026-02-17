@@ -649,3 +649,36 @@
   object-fit: cover;
   display: block;
 }
+/* =======================================================
+   HARD OVERRIDE: Make the COVER dominate the card
+   (wins even if you have duplicates earlier)
+   Paste at the VERY END of library.css
+======================================================= */
+
+.library-grid .library-card {
+  height: 560px !important;     /* overall card height */
+  min-height: 560px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden;
+}
+
+/* Cover should take MOST of the card */
+.library-grid .library-card .library-cover {
+  height: 420px !important;     /* ✅ cover dominates */
+  flex: 0 0 420px !important;   /* ✅ fixed cover portion */
+}
+
+/* Info MUST stay compact (prevents the huge white block) */
+.library-grid .library-card .library-info {
+  flex: 0 0 auto !important;
+  padding: 14px 14px 16px !important;
+}
+
+/* Ensure the image actually fills the cover block */
+.library-grid .library-card .library-coverImg {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block !important;
+}
