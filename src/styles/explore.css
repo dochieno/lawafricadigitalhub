@@ -12,6 +12,105 @@
   --shadow-soft: 0 10px 26px rgba(15, 23, 42, 0.08);
   --radius: 18px;
 }
+/* -----------------------------------------
+   Typography downshift (Explore only)
+------------------------------------------ */
+
+/* Base font sizing for Explore page */
+.explore-container {
+  font-size: 13px;
+}
+
+/* Header */
+.explore-title {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.explore-subtitle {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* Sidebar */
+.explore-sidebarTitle {
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.explore-sidebarSub {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.explore-filterSectionTitle {
+  font-size: 12.5px;
+  font-weight: 850;
+}
+
+.explore-radio,
+.explore-toggle,
+.explore-check {
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.explore-sidebarSearch,
+.explore-miniSearch,
+.explore-select {
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+/* Chips */
+.explore-chip {
+  font-weight: 750;
+}
+.explore-chipText {
+  font-size: 11.5px;
+}
+
+/* Pager */
+.explore-pager-mid {
+  font-size: 12px;
+  font-weight: 650;
+}
+.explore-pager-btn {
+  font-size: 12.5px;
+  font-weight: 750;
+}
+
+/* Cards */
+.explore-doc-title {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.explore-meta {
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.explore-btn {
+  font-size: 12.5px;
+  font-weight: 800;
+}
+
+/* CTA footer typography */
+.explore-cta h2 {
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.explore-cta p {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.explore-cta-btn {
+  font-size: 12.5px;
+  font-weight: 850;
+}
 
 /* Base */
 .explore-container {
@@ -632,4 +731,41 @@
   .explore-grid {
     grid-template-columns: 1fr;
   }
+}
+/* -----------------------------------------
+   Full-width footer CTA
+------------------------------------------ */
+
+.explore-ctaFooter {
+  /* break out of max-width container padding */
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+
+  /* spacing */
+  margin-top: 18px;
+  padding: 22px 18px;
+
+  /* footer look */
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+
+  background: linear-gradient(135deg, rgba(107, 35, 59, 0.06), rgba(255, 255, 255, 0.98));
+}
+
+.explore-ctaFooter .explore-cta-btn {
+  min-width: 220px;
+}
+
+/* Keep content centered within footer */
+.explore-ctaFooter {
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+.explore-ctaFooter h2,
+.explore-ctaFooter p {
+  max-width: 980px;
 }

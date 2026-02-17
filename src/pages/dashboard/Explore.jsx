@@ -975,7 +975,10 @@ export default function Explore() {
             </>
           )}
 
-          <section className="explore-cta">
+
+        </div>
+      </div>
+            <section className="explore-cta explore-ctaFooter">
             <h2>Build Your Personal Legal Library</h2>
             <p>
               Save free publications to your library and keep all your trusted legal resources organized in one place for quick access
@@ -986,8 +989,7 @@ export default function Explore() {
               📚 Go to My Library
             </button>
           </section>
-        </div>
-      </div>
     </div>
+    
   );
 }
