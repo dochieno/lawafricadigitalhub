@@ -2341,3 +2341,136 @@ svg.highlight-layer {
   font-weight: 800;
   color: rgba(15, 23, 42, 0.78);
 }
+/* =========================
+   PdfViewer Popovers (Find + Go-to-page)
+   ========================= */
+
+.reader-popover {
+  position: absolute;
+  top: 52px;
+  right: 14px;
+  width: min(360px, 92vw);
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 20px 60px rgba(2, 6, 23, 0.18);
+  padding: 12px;
+  z-index: 9999;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.reader-shell.dark .reader-popover {
+  background: rgba(17, 24, 39, 0.92);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.reader-popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.reader-popover-title {
+  font-weight: 950;
+  font-size: 13px;
+  color: #111827;
+}
+
+.reader-shell.dark .reader-popover-title {
+  color: #e5e7eb;
+}
+
+.reader-popover-x {
+  height: 34px;
+  width: 34px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  font-weight: 950;
+  color: #111827;
+}
+
+.reader-shell.dark .reader-popover-x {
+  background: rgba(17, 24, 39, 0.8);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #e5e7eb;
+}
+
+.reader-popover-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.reader-popover-input {
+  flex: 1;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.8);
+  outline: none;
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.reader-popover-input:focus {
+  border-color: rgba(139, 28, 28, 0.35);
+  box-shadow: 0 0 0 3px rgba(139, 28, 28, 0.10);
+}
+
+.reader-popover-btn {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  font-weight: 950;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.reader-popover-btn.primary {
+  border-color: rgba(139, 28, 28, 0.35);
+  background: rgba(139, 28, 28, 0.08);
+}
+
+.reader-popover-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.reader-popover-meta {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 950;
+  color: rgba(15, 23, 42, 0.65);
+}
+
+.reader-popover-error {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 900;
+  color: #b91c1c;
+}
+
+.reader-popover-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.62);
+  line-height: 1.4;
+}
+
+/* Find highlight */
+mark.pdf-find {
+  background: rgba(245, 158, 11, 0.35);
+  border-radius: 3px;
+  padding: 0 1px;
+}
