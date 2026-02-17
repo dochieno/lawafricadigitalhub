@@ -607,3 +607,45 @@
 
   .library-grid { grid-template-columns: 1fr; }
 }
+/* =======================================================
+   FIX: make cover dominate + remove giant empty white space
+   Paste at the VERY END of library.css
+======================================================= */
+
+/* Make each card a fixed height, and let cover fill it */
+.library-card {
+  height: 560px;           /* overall card height (tweak) */
+  display: flex;
+  flex-direction: column;
+}
+
+/* Cover should take most of the card */
+.library-cover {
+  flex: 1 1 auto;          /* ✅ grows to fill available height */
+  height: auto !important; /* ✅ overrides earlier height: 450px */
+  min-height: 380px;       /* safety so image is always big */
+}
+
+/* Info should NOT stretch */
+.library-info {
+  flex: 0 0 auto;          /* ✅ prevents growing (removes white space) */
+  padding: 14px 14px 16px; /* compact, premium */
+}
+
+/* Optional: keep title + meta compact */
+.library-bookTitle {
+  margin: 0;
+  line-height: 1.25;
+}
+
+.library-meta {
+  margin: 8px 0 10px;
+}
+
+/* Ensure image fills the cover area perfectly */
+.library-coverImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
