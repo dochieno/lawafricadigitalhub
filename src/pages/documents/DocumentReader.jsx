@@ -1582,11 +1582,18 @@ export default function DocumentReader() {
               >
                 {outlineExpanded.size ? "Collapse" : "Expand"}
               </button>
+              
+                <button
+                  className="readerpage-aiBtn"
+                  type="button"
+                  onClick={openAiDrawer}
+                  title="AI tools (summary, copy, advanced range)"
+                >
+                  AI Summary
+                </button>
 
-              <button className="readerOutlineMiniBtn" type="button" onClick={openFind} title="Find in document (Ctrl+F)">
-                Find
-              </button>
             </div>
+
 
             <button className="readerpage-tocClose" type="button" onClick={closeOutline} title="Close">
               ✕
