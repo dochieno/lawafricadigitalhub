@@ -3,11 +3,11 @@
 // Purpose: Premium "My Library" matching Explore standards
 // - Pagination: 12 items per page (3 rows x 4 cards)
 // - Quick search (title, author, category, country)
-// - Fixed cover height: 300px
-// - Same maroon/neutral palette + soft shadows
-// - Card hover lift + glass hover overlay
-// - Bookmark-style remove affordance (top-right)
-// - Real footer (full-width like Explore footer)
+// - Sort dropdown: Recently Added / Progress / Title
+// - Resume hero card (top in-progress item)
+// - Smooth progress fill animation
+// - Card click opens READER directly (not details)
+// - Subtle empty-state illustration (no emoji)
 // - Keeps ALL existing API calls and routes
 // =======================================================
 
@@ -32,6 +32,11 @@ function buildCoverUrl(coverImagePath) {
   return `${getServerOrigin()}/storage/${clean}`;
 }
 
+// Stable “recently added” heuristic: preserve server order from /my-library
+function attachAddedIndex(items) {
+  return items.map((x, idx) => ({ ...x, _addedIndex: idx }));
+}
+
 export default function Library() {
   const [ebooks, setEbooks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +48,10 @@ export default function Library() {
 
   // ✅ Quick search
   const [q, setQ] = useState("");
+
+  // ✅ Sort
+  // recent | progress | title
+  const [sortBy, setSortBy] = useState("recent");
 
   // ✅ Pagination (3 rows x 4 cards)
   const PAGE_SIZE = 12;
@@ -63,9 +72,12 @@ export default function Library() {
         ]);
 
         // ✅ Remove reports from My Library entirely
-        const libraryItems = (libraryRes.data || []).filter(
+        const libraryItemsRaw = (libraryRes.data || []).filter(
           (x) => !isLawReportDocument(x)
         );
+
+        // Preserve server order for "Recently Added" fallback
+        const libraryItems = attachAddedIndex(libraryItemsRaw);
 
         const progressMap = {};
         (progressRes.data || []).forEach((p) => {
@@ -74,7 +86,6 @@ export default function Library() {
 
         const mapped = libraryItems.map((item) => {
           const progress = progressMap[item.id];
-
           return {
             id: item.id,
             title: item.title,
@@ -85,14 +96,8 @@ export default function Library() {
             isPremium: !!item.isPremium,
             progress: progress?.percentage ?? 0,
             isCompleted: progress?.isCompleted ?? false,
+            _addedIndex: item._addedIndex ?? 0,
           };
-        });
-
-        // In-progress first, then progress desc
-        mapped.sort((a, b) => {
-          if (a.isCompleted && !b.isCompleted) return 1;
-          if (!a.isCompleted && b.isCompleted) return -1;
-          return (b.progress || 0) - (a.progress || 0);
         });
 
         setEbooks(mapped);
@@ -129,22 +134,62 @@ export default function Library() {
     return { total, completed, inProgress };
   }, [ebooks]);
 
-  // ✅ Search + filter (no UI filters, just query)
-  const filtered = useMemo(() => {
+  // ✅ Resume item (top in-progress by %)
+  const resumeItem = useMemo(() => {
+    const inProg = ebooks
+      .filter((x) => !x.isCompleted && Number(x.progress || 0) > 0)
+      .slice()
+      .sort((a, b) => Number(b.progress || 0) - Number(a.progress || 0));
+    return inProg[0] || null;
+  }, [ebooks]);
+
+  // ✅ Search
+  const searched = useMemo(() => {
     const s = String(q || "").trim().toLowerCase();
     if (!s) return ebooks;
 
     return ebooks.filter((b) => {
-      const hay =
-        `${b.title || ""} ${b.author || ""} ${b.category || ""} ${b.countryName || ""}`.toLowerCase();
+      const hay = `${b.title || ""} ${b.author || ""} ${b.category || ""} ${
+        b.countryName || ""
+      }`.toLowerCase();
       return hay.includes(s);
     });
   }, [ebooks, q]);
 
-  // ✅ Reset to page 1 when query changes
+  // ✅ Sort (applied after search)
+  const filtered = useMemo(() => {
+    const out = searched.slice();
+    const mode = String(sortBy || "recent");
+
+    out.sort((a, b) => {
+      if (mode === "title") {
+        return String(a.title || "").localeCompare(String(b.title || ""));
+      }
+
+      if (mode === "progress") {
+        // In-progress first, then progress desc, then title
+        const ap = Number(a.progress || 0);
+        const bp = Number(b.progress || 0);
+        const aDone = !!a.isCompleted;
+        const bDone = !!b.isCompleted;
+
+        if (aDone !== bDone) return aDone ? 1 : -1;
+        if (bp !== ap) return bp - ap;
+        return String(a.title || "").localeCompare(String(b.title || ""));
+      }
+
+      // recent (default): use server order as proxy (lower index = newer)
+      // If server returns oldest first, just invert by changing to (a._addedIndex - b._addedIndex)
+      return (a._addedIndex ?? 0) - (b._addedIndex ?? 0);
+    });
+
+    return out;
+  }, [searched, sortBy]);
+
+  // ✅ Reset to page 1 when query/sort changes
   useEffect(() => {
     setPage(1);
-  }, [q]);
+  }, [q, sortBy]);
 
   const totalPages = useMemo(() => {
     return Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -169,6 +214,10 @@ export default function Library() {
     });
   }
 
+  function openReader(documentId) {
+    navigate(`/dashboard/documents/${documentId}/read`);
+  }
+
   if (loading) return <p className="library-loading">Loading your library…</p>;
 
   if (error) {
@@ -180,6 +229,7 @@ export default function Library() {
     );
   }
 
+  // ✅ Empty state (no emoji)
   if (ebooks.length === 0) {
     return (
       <div className="library-container">
@@ -203,9 +253,16 @@ export default function Library() {
         </header>
 
         <div className="library-emptyCard">
-          <div className="library-emptyIcon">📚</div>
+          <div className="library-illustration" aria-hidden="true">
+            <div className="library-illusCard" />
+            <div className="library-illusCard two" />
+            <div className="library-illusCard three" />
+            <div className="library-illusLine" />
+          </div>
+
           <h2>Your library is empty</h2>
           <p>Add books from the Explore page to see them here.</p>
+
           <button
             className="library-btnPrimary"
             onClick={() => navigate("/dashboard/explore")}
@@ -217,13 +274,8 @@ export default function Library() {
         <footer className="library-footer">
           <div className="library-footerInner">
             <h3>Build your personal LawAfrica library</h3>
-            <p>
-              Save trusted publications and keep your research organized in one place.
-            </p>
-            <button
-              className="library-footerBtn"
-              onClick={() => navigate("/dashboard/explore")}
-            >
+            <p>Save trusted publications and keep your research organized in one place.</p>
+            <button className="library-footerBtn" onClick={() => navigate("/dashboard/explore")}>
               Explore Catalog
             </button>
           </div>
@@ -263,7 +315,54 @@ export default function Library() {
           </div>
         </div>
 
-        {/* ✅ Search + actions row */}
+        {/* ✅ Resume hero card */}
+        {resumeItem && (
+          <div className="library-resumeCard" role="button" tabIndex={0}
+               onClick={() => openReader(resumeItem.id)}
+               onKeyDown={(e) => {
+                 if (e.key === "Enter" || e.key === " ") {
+                   e.preventDefault();
+                   openReader(resumeItem.id);
+                 }
+               }}
+          >
+            <div className="library-resumeLeft">
+              <div className="library-resumeKicker">Resume where you left off</div>
+              <div className="library-resumeTitle" title={resumeItem.title}>
+                {resumeItem.title}
+              </div>
+              <div className="library-resumeMeta">
+                {resumeItem.author}
+                <span className="library-metaDot">•</span>
+                <span className="library-metaMuted">
+                  {[resumeItem.countryName, resumeItem.category].filter(Boolean).join(" • ")}
+                </span>
+              </div>
+
+              <div className="library-resumeBar" aria-label="Reading progress">
+                <div
+                  className="library-resumeFill"
+                  style={{ width: `${Math.max(0, Math.min(100, Number(resumeItem.progress || 0)))}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="library-resumeRight">
+              <button
+                type="button"
+                className="library-resumeBtn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openReader(resumeItem.id);
+                }}
+              >
+                ▶ Continue
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ✅ Search + sort + actions row */}
         <div className="library-toolbar">
           <div className="library-searchWrap">
             <input
@@ -272,6 +371,19 @@ export default function Library() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
+          </div>
+
+          <div className="library-sortWrap">
+            <select
+              className="library-sort"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              aria-label="Sort library"
+            >
+              <option value="recent">Recently added</option>
+              <option value="progress">Progress</option>
+              <option value="title">Title A–Z</option>
+            </select>
           </div>
 
           <div className="library-headerActions">
@@ -319,7 +431,13 @@ export default function Library() {
 
       {filtered.length === 0 ? (
         <div className="library-emptyCard">
-          <div className="library-emptyIcon">🔎</div>
+          <div className="library-illustration" aria-hidden="true">
+            <div className="library-illusCard" />
+            <div className="library-illusCard two" />
+            <div className="library-illusCard three" />
+            <div className="library-illusLine" />
+          </div>
+
           <h2>No matches</h2>
           <p>Try a different keyword (title, author, country, category).</p>
           <button className="library-btnOutline" onClick={() => setQ("")}>
@@ -339,16 +457,17 @@ export default function Library() {
                   className="library-card"
                   role="button"
                   tabIndex={0}
-                  onClick={() => navigate(`/dashboard/documents/${book.id}`)}
+                  onClick={() => openReader(book.id)}   // ✅ OPEN READER DIRECTLY
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      navigate(`/dashboard/documents/${book.id}`);
+                      openReader(book.id);
                     }
                   }}
                 >
                   <div className="library-cover">
                     <div className="library-coverOverlay" />
+
                     {coverUrl ? (
                       <img
                         src={coverUrl}
@@ -375,11 +494,7 @@ export default function Library() {
                         removeFromLibrary(book.id);
                       }}
                     >
-                      <svg
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                        className="library-bookmarkIcon"
-                      >
+                      <svg viewBox="0 0 24 24" aria-hidden="true" className="library-bookmarkIcon">
                         <path
                           d="M6 3.75C6 2.784 6.784 2 7.75 2h8.5C17.216 2 18 2.784 18 3.75V21l-6-3-6 3V3.75z"
                           fill="currentColor"
@@ -387,18 +502,18 @@ export default function Library() {
                       </svg>
                     </button>
 
-                    {/* Quick action on hover (desktop via CSS) */}
+                    {/* Quick action on hover */}
                     <div className="library-hoverActions" aria-hidden="true">
                       <button
                         type="button"
                         className="library-quickBtn"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/dashboard/documents/${book.id}/read`);
+                          openReader(book.id);
                         }}
                         title="Continue Reading"
                       >
-                        📖 Continue
+                        ▶ Continue
                       </button>
                     </div>
                   </div>
@@ -451,7 +566,7 @@ export default function Library() {
                         className="library-btnPrimary"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/dashboard/documents/${book.id}/read`);
+                          openReader(book.id);
                         }}
                       >
                         Continue Reading
@@ -512,10 +627,7 @@ export default function Library() {
             Discover more publications across jurisdictions and practice areas to grow your personal LawAfrica library.
           </p>
 
-          <button
-            className="library-footerBtn"
-            onClick={() => navigate("/dashboard/explore")}
-          >
+          <button className="library-footerBtn" onClick={() => navigate("/dashboard/explore")}>
             Browse All Publications
           </button>
         </div>

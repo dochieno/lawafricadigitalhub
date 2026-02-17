@@ -1,10 +1,14 @@
 /* =======================================================
    FILE: src/styles/library.css
    Purpose: Premium Library page matching Explore styles
-   - Pagination: supports 3 rows x 4 cards (12/page)
-   - Quick search field
+   - Pagination: 12 items/page (3 rows x 4 cards)
+   - Quick search + Sort by dropdown
+   - "Resume where you left off" hero card
+   - Smooth progress fill micro-animation
    - Hover lift + glass overlay
-   - Top-only larger corner radius on cover
+   - Cover dominates the card (no giant white space)
+   - Title clamp (lint-friendly)
+   - Subtle empty-state illustration (NO emoji)
    - Full-width footer (Explore footer vibe)
 ======================================================= */
 
@@ -29,7 +33,7 @@
   font-size: 13px;
 }
 
-/* Loading / empty */
+/* Loading / error */
 .library-loading {
   padding: 18px;
   color: var(--muted);
@@ -57,12 +61,68 @@
   text-align: center;
 }
 
-.library-emptyIcon {
-  font-size: 34px;
-  margin-bottom: 10px;
+/* -------------------------------------------------------
+   Subtle empty-state illustration (NO emoji, no images)
+-------------------------------------------------------- */
+.library-illustration {
+  position: relative;
+  width: min(460px, 92%);
+  height: 128px;
+  margin: 8px auto 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(107, 35, 59, 0.12);
+  background: linear-gradient(
+    135deg,
+    rgba(107, 35, 59, 0.07),
+    rgba(15, 23, 42, 0.03)
+  );
+  overflow: hidden;
 }
 
-/* Toast (reuse) */
+.library-illusCard {
+  position: absolute;
+  bottom: 18px;
+  left: 28px;
+  width: 122px;
+  height: 70px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+  transform: rotate(-2deg);
+}
+
+.library-illusCard.two {
+  left: 120px;
+  bottom: 26px;
+  width: 150px;
+  height: 78px;
+  transform: rotate(1deg);
+}
+
+.library-illusCard.three {
+  left: 235px;
+  bottom: 18px;
+  width: 122px;
+  height: 70px;
+  transform: rotate(-1deg);
+}
+
+.library-illusLine {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 12px;
+  height: 6px;
+  opacity: 0.25;
+  background: linear-gradient(
+    90deg,
+    rgba(107, 35, 59, 0.55),
+    rgba(107, 35, 59, 0.10)
+  );
+}
+
+/* Toast */
 .toast {
   position: fixed;
   right: 18px;
@@ -78,7 +138,9 @@
 .toast-success { border-color: rgba(107, 35, 59, 0.35); }
 .toast-error { border-color: rgba(239, 68, 68, 0.35); }
 
-/* Header hero */
+/* -------------------------------------------------------
+   Header hero
+-------------------------------------------------------- */
 .library-header {
   padding: 14px 16px;
   border-radius: var(--radius);
@@ -144,7 +206,102 @@
   color: rgba(15, 23, 42, 0.70);
 }
 
-/* Toolbar (search + button) */
+/* -------------------------------------------------------
+   Resume Hero Card
+-------------------------------------------------------- */
+.library-resumeCard {
+  margin-top: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(107, 35, 59, 0.14);
+  background: linear-gradient(
+    135deg,
+    rgba(107, 35, 59, 0.09),
+    rgba(255, 255, 255, 0.94)
+  );
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.library-resumeCard:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.12);
+}
+
+.library-resumeLeft { min-width: 0; }
+
+.library-resumeKicker {
+  font-weight: 900;
+  font-size: 12px;
+  color: rgba(107, 35, 59, 0.85);
+}
+
+.library-resumeTitle {
+  margin-top: 4px;
+  font-weight: 950;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.25;
+  max-width: 980px;
+  overflow: hidden;
+}
+
+@supports (-webkit-line-clamp: 2) or (line-clamp: 2) {
+  .library-resumeTitle {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    box-orient: vertical;
+  }
+}
+
+.library-resumeMeta {
+  margin-top: 4px;
+  color: var(--muted);
+  font-weight: 650;
+  font-size: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.library-resumeBar {
+  margin-top: 10px;
+  height: 7px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(15, 23, 42, 0.10);
+}
+
+.library-resumeFill {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(135deg, var(--la-maroon), var(--la-maroon-2));
+  transition: width 420ms ease; /* ✅ micro animation */
+}
+
+.library-resumeBtn {
+  border-radius: 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(107, 35, 59, 0.22);
+  background: linear-gradient(135deg, var(--la-maroon), var(--la-maroon-2));
+  color: #fff;
+  font-weight: 950;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.library-resumeBtn:hover { filter: brightness(1.03); }
+
+/* -------------------------------------------------------
+   Toolbar (Search + Sort + Add more)
+-------------------------------------------------------- */
 .library-toolbar {
   margin-top: 12px;
   display: flex;
@@ -153,9 +310,7 @@
   gap: 12px;
 }
 
-.library-searchWrap {
-  flex: 1;
-}
+.library-searchWrap { flex: 1; }
 
 .library-search {
   width: 100%;
@@ -168,6 +323,25 @@
   font-size: 12.5px;
 }
 .library-search:focus {
+  border-color: rgba(107, 35, 59, 0.45);
+  box-shadow: 0 0 0 4px rgba(107, 35, 59, 0.10);
+}
+
+/* Sort dropdown */
+.library-sortWrap { width: 210px; }
+
+.library-sort {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  outline: none;
+  background: #fff;
+  font-weight: 850;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.library-sort:focus {
   border-color: rgba(107, 35, 59, 0.45);
   box-shadow: 0 0 0 4px rgba(107, 35, 59, 0.10);
 }
@@ -210,7 +384,9 @@
 }
 .library-btnOutline:hover { background: rgba(107, 35, 59, 0.06); }
 
-/* Pager (matches Explore) */
+/* -------------------------------------------------------
+   Pager
+-------------------------------------------------------- */
 .library-pager {
   margin-top: 12px;
   display: flex;
@@ -246,7 +422,9 @@
 }
 .library-pagerDot { opacity: 0.7; }
 
-/* Grid (4 columns desktop) */
+/* -------------------------------------------------------
+   Grid
+-------------------------------------------------------- */
 .library-grid {
   margin-top: 14px;
   display: grid;
@@ -254,7 +432,9 @@
   gap: 14px;
 }
 
-/* Cards */
+/* -------------------------------------------------------
+   Cards (cover dominates; no duplicate overrides needed)
+-------------------------------------------------------- */
 .library-card {
   border-radius: 18px;
   background: #fff;
@@ -265,47 +445,32 @@
   transition: transform 160ms ease, box-shadow 160ms ease;
   display: flex;
   flex-direction: column;
-  height: 100%;
-}
-/* ✅ Make cards feel taller (overall height) */
-.library-card{
-  min-height: 560px;          /* was auto; increase the whole card */
+
+  /* fixed card height (prevents huge white space) */
+  height: 460px;
+  min-height: 460px;
 }
 
-/* ✅ Keep cover at your requested 300px (make sure units exist) */
-.library-cover{
-  height: 450px;              /* ensure px is present */
-}
-
-/* ✅ Give the info section more breathing room (adds height + premium feel) */
-.library-info{
-  padding: 14px 14px 18px;    /* was 12px 12px 14px */
-}
-
-/* ✅ Optional: slightly more spacing under meta/progress */
-.library-meta{
-  margin: 8px 0 12px;         /* was 6px 0 10px */
-}
-.library-progressWrap{
-  margin-top: 6px;            /* was 2px */
-}
-
-/* Premium hover lift */
 .library-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 16px 34px rgba(15, 23, 42, 0.12);
 }
 
-/* Cover */
+/* Cover takes the major part */
 .library-cover {
   position: relative;
-  height: 450px; /* ✅ as requested */
-  background: linear-gradient(120deg, rgba(107, 35, 59, 0.12), rgba(15, 23, 42, 0.06));
+  flex: 0 0 320px;       /* ✅ cover dominates */
+  height: 320px;
+
+  background: linear-gradient(
+    120deg,
+    rgba(107, 35, 59, 0.12),
+    rgba(15, 23, 42, 0.06)
+  );
   display: flex;
   align-items: center;
   justify-content: center;
 
-  /* slightly more radius only on top */
   border-top-left-radius: 22px;
   border-top-right-radius: 22px;
 }
@@ -317,7 +482,6 @@
   pointer-events: none;
   opacity: 0;
   transition: opacity 180ms ease;
-
   background:
     radial-gradient(circle at 20% 20%, rgba(107, 35, 59, 0.20), transparent 55%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.00));
@@ -333,6 +497,7 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .library-coverText {
@@ -359,23 +524,17 @@
   transition: transform 120ms ease, background 120ms ease, color 120ms ease;
   z-index: 3;
 }
-
 .library-bookmark:hover {
   transform: translateY(-1px);
   background: #fff;
   color: rgba(15, 23, 42, 0.85);
 }
-
 .library-bookmark:disabled {
   opacity: 0.55;
   cursor: not-allowed;
   transform: none;
 }
-
-.library-bookmarkIcon {
-  width: 16px;
-  height: 16px;
-}
+.library-bookmarkIcon { width: 16px; height: 16px; }
 
 /* Hover quick actions (desktop only) */
 .library-hoverActions {
@@ -383,13 +542,11 @@
   left: 10px;
   bottom: 10px;
   z-index: 3;
-
   opacity: 0;
   transform: translateY(6px);
   pointer-events: none;
   transition: opacity 140ms ease, transform 140ms ease;
 }
-
 .library-card:hover .library-hoverActions,
 .library-card:focus-within .library-hoverActions {
   opacity: 1;
@@ -408,22 +565,21 @@
   cursor: pointer;
   backdrop-filter: blur(6px);
 }
-
 .library-quickBtn:hover {
   border-color: rgba(107, 35, 59, 0.28);
   background: rgba(255, 255, 255, 0.98);
 }
-
 @media (hover: none), (pointer: coarse) {
   .library-hoverActions { display: none; }
 }
 
-/* Info */
+/* Info (compact; prevents white block) */
 .library-info {
-  padding: 12px 12px 14px;
+  flex: 1 1 auto;
+  padding: 14px 14px 16px;
   display: flex;
   flex-direction: column;
-  flex: 1;
+  min-height: 0;
 }
 
 .library-badges {
@@ -442,7 +598,9 @@
   background: rgba(15, 23, 42, 0.04);
   color: var(--ink);
 }
-.library-badge.premium {
+.library-badge.premium,
+.library-badge.progress,
+.library-badge.completed {
   border-color: rgba(107, 35, 59, 0.22);
   background: rgba(107, 35, 59, 0.08);
   color: var(--la-maroon);
@@ -452,23 +610,13 @@
   background: rgba(107, 35, 59, 0.06);
   color: var(--la-maroon);
 }
-.library-badge.completed {
-  border-color: rgba(107, 35, 59, 0.22);
-  background: rgba(107, 35, 59, 0.08);
-  color: var(--la-maroon);
-}
-.library-badge.progress {
-  border-color: rgba(107, 35, 59, 0.22);
-  background: rgba(107, 35, 59, 0.08);
-  color: var(--la-maroon);
-}
 .library-badge.subtle {
   border-color: rgba(15, 23, 42, 0.12);
   background: rgba(15, 23, 42, 0.04);
   color: rgba(15, 23, 42, 0.70);
 }
 
-/* Title clamp (2 lines) – with lint-friendly standard prop */
+/* Title clamp (2 lines) – lint-friendly */
 .library-bookTitle {
   margin: 0;
   font-size: 13px;
@@ -483,14 +631,13 @@
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
-
     line-clamp: 2;
     box-orient: vertical;
   }
 }
 
 .library-meta {
-  margin: 6px 0 10px;
+  margin: 8px 0 10px;
   color: var(--muted);
   font-size: 11.5px;
   font-weight: 650;
@@ -499,24 +646,24 @@
   gap: 6px;
   flex-wrap: wrap;
 }
-.library-metaDot {
-  opacity: 0.7;
-}
-.library-metaMuted {
-  color: var(--muted-2);
-}
+.library-metaDot { opacity: 0.7; }
+.library-metaMuted { color: var(--muted-2); }
 
-/* Progress */
-.library-progressWrap { margin-top: 2px; }
+/* Progress (✅ micro animation on width) */
+.library-progressWrap { margin-top: 6px; }
+
 .library-progressBar {
   height: 6px;
   background: rgba(15, 23, 42, 0.10);
   border-radius: 999px;
   overflow: hidden;
 }
+
 .library-progressFill {
   height: 100%;
+  width: 0;
   background: linear-gradient(135deg, var(--la-maroon), var(--la-maroon-2));
+  transition: width 420ms ease;
 }
 
 /* Mobile actions only (hide on desktop) */
@@ -527,22 +674,25 @@
   gap: 10px;
   padding-top: 10px;
 }
-
 @media (hover: hover) and (pointer: fine) {
   .library-mobileActions { display: none; }
 }
 
-/* Footer (full-width like Explore footer) */
+/* -------------------------------------------------------
+   Footer (full-width like Explore footer)
+-------------------------------------------------------- */
 .library-footer {
   width: 100vw;
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
-
   margin-top: 18px;
   padding: 22px 18px;
-
   border-top: 1px solid rgba(107, 35, 59, 0.14);
-  background: linear-gradient(135deg, rgba(107, 35, 59, 0.06), rgba(255, 255, 255, 0.98));
+  background: linear-gradient(
+    135deg,
+    rgba(107, 35, 59, 0.06),
+    rgba(255, 255, 255, 0.98)
+  );
 }
 
 .library-footerInner {
@@ -581,7 +731,9 @@
 }
 .library-footerBtn:hover { filter: brightness(1.03); }
 
-/* Responsive grid like Explore */
+/* -------------------------------------------------------
+   Responsive
+-------------------------------------------------------- */
 @media (max-width: 1450px) {
   .library-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
@@ -605,80 +757,17 @@
     align-items: stretch;
   }
 
+  .library-sortWrap { width: 100%; }
+
   .library-grid { grid-template-columns: 1fr; }
-}
-/* =======================================================
-   FIX: make cover dominate + remove giant empty white space
-   Paste at the VERY END of library.css
-======================================================= */
 
-/* Make each card a fixed height, and let cover fill it */
-.library-card {
-  height: 560px;           /* overall card height (tweak) */
-  display: flex;
-  flex-direction: column;
-}
-
-/* Cover should take most of the card */
-.library-cover {
-  flex: 1 1 auto;          /* ✅ grows to fill available height */
-  height: auto !important; /* ✅ overrides earlier height: 450px */
-  min-height: 380px;       /* safety so image is always big */
-}
-
-/* Info should NOT stretch */
-.library-info {
-  flex: 0 0 auto;          /* ✅ prevents growing (removes white space) */
-  padding: 14px 14px 16px; /* compact, premium */
-}
-
-/* Optional: keep title + meta compact */
-.library-bookTitle {
-  margin: 0;
-  line-height: 1.25;
-}
-
-.library-meta {
-  margin: 8px 0 10px;
-}
-
-/* Ensure image fills the cover area perfectly */
-.library-coverImg {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-/* =======================================================
-   HARD OVERRIDE: Make the COVER dominate the card
-   (wins even if you have duplicates earlier)
-   Paste at the VERY END of library.css
-======================================================= */
-
-.library-grid .library-card {
-  height: 460px !important;     /* overall card height */
-  min-height: 460px !important;
-  display: flex !important;
-  flex-direction: column !important;
-  overflow: hidden;
-}
-
-/* Cover should take MOST of the card */
-.library-grid .library-card .library-cover {
-  height: 320px !important;     /* ✅ cover dominates */
-  flex: 0 0 320px !important;   /* ✅ fixed cover portion */
-}
-
-/* Info MUST stay compact (prevents the huge white block) */
-.library-grid .library-card .library-info {
-  flex: 0 0 auto !important;
-  padding: 14px 14px 16px !important;
-}
-
-/* Ensure the image actually fills the cover block */
-.library-grid .library-card .library-coverImg {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
-  display: block !important;
+  /* Keep cards feeling premium on mobile */
+  .library-card {
+    height: auto;
+    min-height: 0;
+  }
+  .library-cover {
+    height: 280px;
+    flex: 0 0 280px;
+  }
 }
