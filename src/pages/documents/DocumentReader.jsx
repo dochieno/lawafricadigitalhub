@@ -22,6 +22,7 @@ function safeAbort(ctrl) {
   }
 }
 
+
 function safeJsonParse(str, fallback) {
   try {
     return JSON.parse(str);
@@ -68,6 +69,18 @@ async function safeCopyToClipboard(text) {
   } catch {
     return false;
   }
+}
+
+// ✅ Summary ownership key (prevents opening wrong summary)
+function makeSummaryOwnerKey(docId, payload) {
+  const d = Number(docId) || 0;
+  if (!payload) return `doc:${d}|none`;
+
+  if (payload.tocEntryId != null) return `doc:${d}|toc:${payload.tocEntryId}`;
+
+  const s = payload.startPage ?? "?";
+  const e = payload.endPage ?? "?";
+  return `doc:${d}|range:${s}-${e}`;
 }
 
 /** ---------------------------
@@ -122,6 +135,7 @@ function collectAllNodeIds(nodes, depth = 0, out = new Set()) {
   }
   return out;
 }
+
 
 /**
  * Filter tree by title, keeping ancestor chain for matches.
@@ -388,6 +402,8 @@ export default function DocumentReader() {
   const [sectionSummaryText, setSectionSummaryText] = useState("");
   const [sectionSummaryMeta, setSectionSummaryMeta] = useState(null);
   const lastSummaryKeyRef = useRef("");
+  const [summaryOwnerKey, setSummaryOwnerKey] = useState(""); // which section the current summary belongs to
+
 
   // ✅ inline “Copied” state for AI copy (quiet feedback)
   const [aiCopied, setAiCopied] = useState(false);
@@ -539,7 +555,24 @@ export default function DocumentReader() {
   const openOutline = useCallback(() => setOutlineOpen(true), []);
   const closeOutline = useCallback(() => setOutlineOpen(false), []);
 
-  const openSummaryPanel = useCallback(() => setSummaryPanelOpen(true), []);
+  const openSummaryPanel = useCallback(() => {
+  if (!sectionSummaryText || !sectionSummaryText.trim()) {
+    showToast("No summary for this section yet. Run Basic or Extended first.", "error");
+    return;
+  }
+
+  const expectedOwnerKey = selectedTocNode
+    ? makeSummaryOwnerKey(docId, { tocEntryId: selectedTocNode?.id ?? selectedTocNode?.Id ?? null })
+    : "";
+
+  if (expectedOwnerKey && summaryOwnerKey && summaryOwnerKey !== expectedOwnerKey) {
+    showToast("That summary belongs to a different section. Please generate again for this section.", "error");
+    return;
+  }
+
+  setSummaryPanelOpen(true);
+}, [docId, sectionSummaryText, selectedTocNode, showToast, summaryOwnerKey]);
+
   const closeSummaryPanel = useCallback(() => setSummaryPanelOpen(false), []);
   const toggleSummaryExpanded = useCallback(() => setSummaryExpanded((p) => !p), []);
 
@@ -578,6 +611,20 @@ export default function DocumentReader() {
   const onOutlineClick = useCallback(
     (node, pageNumber) => {
       setSelectedTocNode(node);
+      // ✅ If existing summary belongs to another section, clear it to prevent mismatch on "Open"
+      const nextOwnerKey = makeSummaryOwnerKey(docId, {
+        tocEntryId: node?.id ?? node?.Id ?? null,
+      });
+      if (summaryOwnerKey && summaryOwnerKey !== nextOwnerKey) {
+        setSectionSummaryText("");
+        setSectionSummaryMeta(null);
+        setSectionSummaryError("");
+        lastSummaryKeyRef.current = "";
+        setSectionSummaryText("");
+        setSectionSummaryMeta(null);
+        setSummaryOwnerKey("");
+
+      }
 
       const p = Number(pageNumber);
       if (!Number.isFinite(p) || p <= 0) return;
@@ -601,7 +648,7 @@ export default function DocumentReader() {
         setOutlineOpen(false);
       }
     },
-    [access, calibrateOffsetFromTocNode, showToast]
+    [access?.hasFullAccess, access.previewMaxPages, calibrateOffsetFromTocNode, docId, showToast, summaryOwnerKey]
   );
 
   const toggleOutlineNode = useCallback((idStr) => {
@@ -1073,11 +1120,14 @@ export default function DocumentReader() {
         inputCharCount: Number(inputCharCount) || 0,
         warnings: warningsArr.map((w) => String(w)),
       });
+      // ✅ record what this summary belongs to (section/range)
+      setSummaryOwnerKey(makeSummaryOwnerKey(docId, payload));
+
 
       // quiet + subtle
       showToast(fromCache ? "Loaded from cache" : "Summary ready", "success");
     },
-    [showToast]
+    [docId, showToast]
   );
 
   const runSectionSummary = useCallback(
