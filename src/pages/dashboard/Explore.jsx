@@ -794,8 +794,23 @@ export default function Explore() {
           <header className="explore-header">
             <div className="explore-titleRow">
               <div>
-                <h1 className="explore-title">Explore LawAfrica Legal Knowledge Hub</h1>
-                <p className="explore-subtitle">Browse publications, save favorites, and build your personal legal library.</p>
+              <div className="explore-brandTitle">
+                <div className="explore-brandKicker">LawAfrica</div>
+                <h1 className="explore-title">
+                  Legal Knowledge Hub <span className="explore-titleDot">•</span>{" "}
+                  <span className="explore-titleAccent">Explore</span>
+                </h1>
+                <p className="explore-subtitle">
+                  Premium legal publications. Save favorites, preview instantly, and build your personal legal library.
+                </p>
+
+                <div className="explore-brandBadges" aria-label="Platform highlights">
+                  <span className="explore-brandBadge">⚡ Fast Search</span>
+                  <span className="explore-brandBadge">🔖 Save to Library</span>
+                  <span className="explore-brandBadge">🧠 Smart Discovery</span>
+                </div>
+              </div>
+
               </div>
 
               <div className="explore-headerActions">
