@@ -656,8 +656,8 @@
 ======================================================= */
 
 .library-grid .library-card {
-  height: 560px !important;     /* overall card height */
-  min-height: 560px !important;
+  height: 460px !important;     /* overall card height */
+  min-height: 460px !important;
   display: flex !important;
   flex-direction: column !important;
   overflow: hidden;
@@ -665,8 +665,8 @@
 
 /* Cover should take MOST of the card */
 .library-grid .library-card .library-cover {
-  height: 420px !important;     /* ✅ cover dominates */
-  flex: 0 0 420px !important;   /* ✅ fixed cover portion */
+  height: 320px !important;     /* ✅ cover dominates */
+  flex: 0 0 320px !important;   /* ✅ fixed cover portion */
 }
 
 /* Info MUST stay compact (prevents the huge white block) */
