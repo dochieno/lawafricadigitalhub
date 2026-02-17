@@ -249,6 +249,12 @@ export default function DocumentDetails() {
     el.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  function openPaymentChooser() {
+  setPayMethod("MPESA"); // default tab
+  setShowPayModal(true);
+}
+
+
   async function refreshOffer(docId) {
     setOfferLoading(true);
     setOfferError("");
@@ -926,33 +932,16 @@ export default function DocumentDetails() {
                       {currency} {formatMoney(price)}
                     </div>
                   </div>
-
                   <div className="doc-purchase-actions">
                     <button
                       className="btn btn-primary"
-                      onClick={() => {
-                        setPayMethod("MPESA");
-                        setShowPayModal(true);
-                      }}
+                      onClick={openPaymentChooser}
                       disabled={purchaseButtonDisabled}
                       title={purchaseButtonTitle}
                     >
-                      {purchaseLoading ? "Processing…" : "Pay with M-PESA"}
-                    </button>
-
-                    <button
-                      className="btn btn-outline-danger"
-                      onClick={() => {
-                        setPayMethod("PAYSTACK");
-                        setShowPayModal(true);
-                      }}
-                      disabled={purchaseButtonDisabled}
-                      title={purchaseButtonTitle}
-                    >
-                      {purchaseLoading ? "Processing…" : "Pay with Paystack"}
+                      {purchaseLoading ? "Processing…" : "Choose payment method"}
                     </button>
                   </div>
-
                   {isInst && isBlocked && !canPurchaseIndividually && (
                     <div className="doc-offer-note">{purchaseDisabledReason}</div>
                   )}
@@ -1145,7 +1134,7 @@ export default function DocumentDetails() {
                       : ""
                   }
                 >
-                  {purchaseLoading ? "Processing…" : "Send STK Prompt"}
+                  {purchaseLoading ? "Processing…" : "Pay with M-PESA"}
                 </button>
               ) : (
                 <button
