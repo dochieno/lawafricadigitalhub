@@ -274,7 +274,7 @@
 
 /* ✅ Keep cover at your requested 300px (make sure units exist) */
 .library-cover{
-  height: 300px;              /* ensure px is present */
+  height: 450px;              /* ensure px is present */
 }
 
 /* ✅ Give the info section more breathing room (adds height + premium feel) */
@@ -299,7 +299,7 @@
 /* Cover */
 .library-cover {
   position: relative;
-  height: 300px; /* ✅ as requested */
+  height: 450px; /* ✅ as requested */
   background: linear-gradient(120deg, rgba(107, 35, 59, 0.12), rgba(15, 23, 42, 0.06));
   display: flex;
   align-items: center;
