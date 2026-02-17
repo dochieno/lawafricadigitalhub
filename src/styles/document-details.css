@@ -679,3 +679,42 @@ input:focus-visible {
   border-color: rgba(239, 68, 68, 0.28);
   color: #7f1d1d;
 }
+/* ======================================================
+   Sticky purchase card (desktop only)
+   - Keeps "Buy this document" visible while scrolling
+   - CSS-only (no JSX changes)
+====================================================== */
+
+/* Desktop / large screens only */
+@media (min-width: 980px) {
+  /* Make the right column a predictable scroll context */
+  .doc-detail-info {
+    position: relative;
+    min-width: 0;
+  }
+
+  /* Make the purchase card sticky */
+  .doc-purchase-card {
+    position: sticky;
+    top: 92px; /* adjust if you have a fixed top navbar (try 80–110px) */
+    z-index: 5;
+
+    /* Slight premium emphasis while sticky */
+    box-shadow: 0 18px 44px rgba(2, 6, 23, 0.12);
+    border-color: rgba(107, 35, 59, 0.18);
+  }
+
+  /* Optional: keep the "subscription inactive" banner above it */
+  .doc-info-banner {
+    position: relative;
+    z-index: 6;
+  }
+}
+
+/* Safety: disable sticky on small screens (prevents awkward stacking) */
+@media (max-width: 979px) {
+  .doc-purchase-card {
+    position: static;
+    top: auto;
+  }
+}
