@@ -2236,3 +2236,108 @@ svg.highlight-layer {
     text-align: center;
   }
 }
+/* =========================
+   Better Popover (Find / Offset)
+   ========================= */
+
+.readerPopover {
+  position: absolute;
+  right: 12px;
+  top: calc(100% + 10px);
+  width: min(360px, 92vw);
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 18px 55px rgba(2, 6, 23, 0.18);
+  padding: 12px;
+  z-index: 9999;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.reader-shell.dark .readerPopover {
+  background: rgba(17, 24, 39, 0.92);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.readerPopoverHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.readerPopoverTitle {
+  font-weight: 950;
+  font-size: 13px;
+  color: #111827;
+}
+
+.reader-shell.dark .readerPopoverTitle {
+  color: #e5e7eb;
+}
+
+.readerPopoverClose {
+  height: 34px;
+  width: 34px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  font-weight: 950;
+}
+
+.reader-shell.dark .readerPopoverClose {
+  background: rgba(17, 24, 39, 0.8);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #e5e7eb;
+}
+
+.readerPopoverHint {
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.65);
+  line-height: 1.45;
+  margin-top: 8px;
+}
+
+.reader-shell.dark .readerPopoverHint {
+  color: rgba(229, 231, 235, 0.7);
+}
+/* =========================
+   Advanced summary controls sizing + alignment
+   ========================= */
+
+.readerAdvancedToggle input[type="checkbox"],
+.readerAdvancedModes input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  transform: none;
+  accent-color: #6b233b; /* LawAfrica maroon */
+}
+
+.readerAdvancedModes {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.readerAdvancedModeLabel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.70);
+}
+
+.readerAdvancedModeLabel:hover {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.readerAdvancedModeLabel span {
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(15, 23, 42, 0.78);
+}
