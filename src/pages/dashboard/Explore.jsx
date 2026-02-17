@@ -92,6 +92,214 @@ function Chip({ label, onRemove }) {
   );
 }
 
+/* -------------------------------------------------------
+   ✅ IMPORTANT: FilterPanel is OUTSIDE Explore()
+   (prevents remounting & input focus loss)
+-------------------------------------------------------- */
+function FilterPanel({
+  inDrawer = false,
+  filteredCount,
+  q,
+  setQ,
+  clearAllFilters,
+
+  accessMode,
+  setAccessMode,
+  onlyAvailable,
+  setOnlyAvailable,
+
+  sortBy,
+  setSortBy,
+
+  countrySet,
+  setCountrySet,
+  categorySet,
+  setCategorySet,
+
+  countryListQ,
+  setCountryListQ,
+  categoryListQ,
+  setCategoryListQ,
+
+  visibleCountries,
+  visibleCategories,
+
+  isInst,
+  isPublic,
+
+  onApplyDrawer,
+}) {
+  return (
+    <div className={`explore-sidebar ${inDrawer ? "drawer" : ""}`}>
+      <div className="explore-sidebarTop">
+        <div className="explore-sidebarTitleRow">
+          <div>
+            <div className="explore-sidebarTitle">Filters</div>
+            <div className="explore-sidebarSub">
+              <b>{filteredCount}</b> results
+            </div>
+          </div>
+
+          <button type="button" className="explore-linkBtn" onClick={clearAllFilters}>
+            Clear all
+          </button>
+        </div>
+
+        <div className="explore-sidebarSearchWrap">
+          <input
+            className="explore-sidebarSearch"
+            placeholder="Search title, category, country…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="explore-sidebarBody">
+        <FilterSection title="Access">
+          <div className="explore-radioGroup">
+            <label className="explore-radio">
+              <input
+                type="radio"
+                name={inDrawer ? "accessDrawer" : "access"}
+                checked={accessMode === "all"}
+                onChange={() => setAccessMode("all")}
+              />
+              <span>All content</span>
+            </label>
+
+            <label className="explore-radio">
+              <input
+                type="radio"
+                name={inDrawer ? "accessDrawer" : "access"}
+                checked={accessMode === "free"}
+                onChange={() => setAccessMode("free")}
+              />
+              <span>Free only</span>
+            </label>
+
+            <label className="explore-radio">
+              <input
+                type="radio"
+                name={inDrawer ? "accessDrawer" : "access"}
+                checked={accessMode === "premium"}
+                onChange={() => setAccessMode("premium")}
+              />
+              <span>Premium only</span>
+            </label>
+
+            <label className={`explore-radio ${!isInst && !isPublic ? "disabled" : ""}`}>
+              <input
+                type="radio"
+                name={inDrawer ? "accessDrawer" : "access"}
+                checked={accessMode === "included"}
+                onChange={() => setAccessMode("included")}
+                disabled={!isInst && !isPublic}
+              />
+              <span>Included for me</span>
+            </label>
+          </div>
+
+          <label className="explore-toggle">
+            <input
+              type="checkbox"
+              checked={onlyAvailable}
+              onChange={(e) => setOnlyAvailable(e.target.checked)}
+            />
+            <span>Available now</span>
+          </label>
+        </FilterSection>
+
+        <FilterSection title="Sort">
+          <select className="explore-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+            <option value="relevance">Relevance</option>
+            <option value="title">Title A–Z</option>
+            <option value="country">Country A–Z</option>
+            <option value="category">Category A–Z</option>
+            <option value="premium">Premium first</option>
+          </select>
+          <div className="explore-hint">Tip: Relevance prioritizes title matches when searching.</div>
+        </FilterSection>
+
+        <FilterSection
+          title="Country"
+          right={setHasAny(countrySet) ? <span className="explore-pill">{countrySet.size}</span> : null}
+        >
+          <input
+            className="explore-miniSearch"
+            placeholder="Find country…"
+            value={countryListQ}
+            onChange={(e) => setCountryListQ(e.target.value)}
+          />
+
+          <div className="explore-checkList">
+            {visibleCountries.length === 0 ? (
+              <div className="explore-muted">No matches</div>
+            ) : (
+              visibleCountries.map((c) => {
+                const checked = countrySet.has(c);
+                return (
+                  <label key={c} className="explore-check">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => setCountrySet((prev) => toggleInSet(prev, c))}
+                    />
+                    <span>{c}</span>
+                  </label>
+                );
+              })
+            )}
+          </div>
+        </FilterSection>
+
+        <FilterSection
+          title="Category"
+          right={setHasAny(categorySet) ? <span className="explore-pill">{categorySet.size}</span> : null}
+        >
+          <input
+            className="explore-miniSearch"
+            placeholder="Find category…"
+            value={categoryListQ}
+            onChange={(e) => setCategoryListQ(e.target.value)}
+          />
+
+          <div className="explore-checkList">
+            {visibleCategories.length === 0 ? (
+              <div className="explore-muted">No matches</div>
+            ) : (
+              visibleCategories.map((c) => {
+                const checked = categorySet.has(c);
+                return (
+                  <label key={c} className="explore-check">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => setCategorySet((prev) => toggleInSet(prev, c))}
+                    />
+                    <span>{c}</span>
+                  </label>
+                );
+              })
+            )}
+          </div>
+        </FilterSection>
+
+        {inDrawer && (
+          <div className="explore-drawerActions">
+            <button type="button" className="explore-btnPrimary" onClick={onApplyDrawer}>
+              Apply filters
+            </button>
+            <button type="button" className="explore-btnGhost" onClick={clearAllFilters}>
+              Clear all
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Explore() {
   const navigate = useNavigate();
 
@@ -224,7 +432,6 @@ export default function Explore() {
         if (!d.isPremium) return false;
         if (!isInst && !isPublic) return false;
         if (!accessMap[d.id]?.hasFullAccess) return false;
-
       }
 
       // Multi filters
@@ -501,177 +708,6 @@ export default function Explore() {
 
   const showPager = filtered.length > PAGE_SIZE;
 
-  // Shared filter panel (desktop + mobile drawer content)
-  const FilterPanel = ({ inDrawer = false }) => (
-    <div className={`explore-sidebar ${inDrawer ? "drawer" : ""}`}>
-      <div className="explore-sidebarTop">
-        <div className="explore-sidebarTitleRow">
-          <div>
-            <div className="explore-sidebarTitle">Filters</div>
-            <div className="explore-sidebarSub">
-              <b>{filtered.length}</b> results
-            </div>
-          </div>
-
-          <button type="button" className="explore-linkBtn" onClick={clearAllFilters}>
-            Clear all
-          </button>
-        </div>
-
-        <div className="explore-sidebarSearchWrap">
-          <input
-            className="explore-sidebarSearch"
-            placeholder="Search title, category, country…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-        </div>
-      </div>
-
-      <div className="explore-sidebarBody">
-        <FilterSection title="Access">
-          <div className="explore-radioGroup">
-            <label className="explore-radio">
-              <input
-                type="radio"
-                name={inDrawer ? "accessDrawer" : "access"}
-                checked={accessMode === "all"}
-                onChange={() => setAccessMode("all")}
-              />
-              <span>All content</span>
-            </label>
-
-            <label className="explore-radio">
-              <input
-                type="radio"
-                name={inDrawer ? "accessDrawer" : "access"}
-                checked={accessMode === "free"}
-                onChange={() => setAccessMode("free")}
-              />
-              <span>Free only</span>
-            </label>
-
-            <label className="explore-radio">
-              <input
-                type="radio"
-                name={inDrawer ? "accessDrawer" : "access"}
-                checked={accessMode === "premium"}
-                onChange={() => setAccessMode("premium")}
-              />
-              <span>Premium only</span>
-            </label>
-
-            <label className={`explore-radio ${!isInst && !isPublic ? "disabled" : ""}`}>
-              <input
-                type="radio"
-                name={inDrawer ? "accessDrawer" : "access"}
-                checked={accessMode === "included"}
-                onChange={() => setAccessMode("included")}
-                disabled={!isInst && !isPublic}
-              />
-              <span>Included for me</span>
-            </label>
-          </div>
-
-          <label className="explore-toggle">
-            <input type="checkbox" checked={onlyAvailable} onChange={(e) => setOnlyAvailable(e.target.checked)} />
-            <span>Available now</span>
-          </label>
-        </FilterSection>
-
-        <FilterSection title="Sort">
-          <select className="explore-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-            <option value="relevance">Relevance</option>
-            <option value="title">Title A–Z</option>
-            <option value="country">Country A–Z</option>
-            <option value="category">Category A–Z</option>
-            <option value="premium">Premium first</option>
-          </select>
-          <div className="explore-hint">Tip: Relevance prioritizes title matches when searching.</div>
-        </FilterSection>
-
-        <FilterSection
-          title="Country"
-          right={setHasAny(countrySet) ? <span className="explore-pill">{countrySet.size}</span> : null}
-        >
-          <input
-            className="explore-miniSearch"
-            placeholder="Find country…"
-            value={countryListQ}
-            onChange={(e) => setCountryListQ(e.target.value)}
-          />
-
-          <div className="explore-checkList">
-            {visibleCountries.length === 0 ? (
-              <div className="explore-muted">No matches</div>
-            ) : (
-              visibleCountries.map((c) => {
-                const checked = countrySet.has(c);
-                return (
-                  <label key={c} className="explore-check">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => setCountrySet((prev) => toggleInSet(prev, c))}
-                    />
-                    <span>{c}</span>
-                  </label>
-                );
-              })
-            )}
-          </div>
-        </FilterSection>
-
-        <FilterSection
-          title="Category"
-          right={setHasAny(categorySet) ? <span className="explore-pill">{categorySet.size}</span> : null}
-        >
-          <input
-            className="explore-miniSearch"
-            placeholder="Find category…"
-            value={categoryListQ}
-            onChange={(e) => setCategoryListQ(e.target.value)}
-          />
-
-          <div className="explore-checkList">
-            {visibleCategories.length === 0 ? (
-              <div className="explore-muted">No matches</div>
-            ) : (
-              visibleCategories.map((c) => {
-                const checked = categorySet.has(c);
-                return (
-                  <label key={c} className="explore-check">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => setCategorySet((prev) => toggleInSet(prev, c))}
-                    />
-                    <span>{c}</span>
-                  </label>
-                );
-              })
-            )}
-          </div>
-        </FilterSection>
-
-        {inDrawer && (
-          <div className="explore-drawerActions">
-            <button
-              type="button"
-              className="explore-btnPrimary"
-              onClick={() => setMobileFiltersOpen(false)}
-            >
-              Apply filters
-            </button>
-            <button type="button" className="explore-btnGhost" onClick={clearAllFilters}>
-              Clear all
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
   return (
     <div className="explore-container">
       <div ref={topRef} />
@@ -693,7 +729,33 @@ export default function Explore() {
                 ×
               </button>
             </div>
-            <FilterPanel inDrawer />
+
+            <FilterPanel
+              inDrawer
+              filteredCount={filtered.length}
+              q={q}
+              setQ={setQ}
+              clearAllFilters={clearAllFilters}
+              accessMode={accessMode}
+              setAccessMode={setAccessMode}
+              onlyAvailable={onlyAvailable}
+              setOnlyAvailable={setOnlyAvailable}
+              sortBy={sortBy}
+              setSortBy={setSortBy}
+              countrySet={countrySet}
+              setCountrySet={setCountrySet}
+              categorySet={categorySet}
+              setCategorySet={setCategorySet}
+              countryListQ={countryListQ}
+              setCountryListQ={setCountryListQ}
+              categoryListQ={categoryListQ}
+              setCategoryListQ={setCategoryListQ}
+              visibleCountries={visibleCountries}
+              visibleCategories={visibleCategories}
+              isInst={isInst}
+              isPublic={isPublic}
+              onApplyDrawer={() => setMobileFiltersOpen(false)}
+            />
           </div>
         </div>
       )}
@@ -701,7 +763,30 @@ export default function Explore() {
       <div className="explore-shell">
         {/* Desktop sidebar */}
         <div className="explore-shellLeft">
-          <FilterPanel />
+          <FilterPanel
+            filteredCount={filtered.length}
+            q={q}
+            setQ={setQ}
+            clearAllFilters={clearAllFilters}
+            accessMode={accessMode}
+            setAccessMode={setAccessMode}
+            onlyAvailable={onlyAvailable}
+            setOnlyAvailable={setOnlyAvailable}
+            sortBy={sortBy}
+            setSortBy={setSortBy}
+            countrySet={countrySet}
+            setCountrySet={setCountrySet}
+            categorySet={categorySet}
+            setCategorySet={setCategorySet}
+            countryListQ={countryListQ}
+            setCountryListQ={setCountryListQ}
+            categoryListQ={categoryListQ}
+            setCategoryListQ={setCategoryListQ}
+            visibleCountries={visibleCountries}
+            visibleCategories={visibleCategories}
+            isInst={isInst}
+            isPublic={isPublic}
+          />
         </div>
 
         {/* Main content */}
@@ -710,22 +795,15 @@ export default function Explore() {
             <div className="explore-titleRow">
               <div>
                 <h1 className="explore-title">Explore LawAfrica Legal Knowledge Hub</h1>
-                <p className="explore-subtitle">
-                  Browse publications, save favorites, and build your personal legal library.
-                </p>
+                <p className="explore-subtitle">Browse publications, save favorites, and build your personal legal library.</p>
               </div>
 
               <div className="explore-headerActions">
-                <button
-                  type="button"
-                  className="explore-filtersBtn"
-                  onClick={() => setMobileFiltersOpen(true)}
-                >
+                <button type="button" className="explore-filtersBtn" onClick={() => setMobileFiltersOpen(true)}>
                   ⚙️ Filters
                 </button>
 
                 <div className="explore-resultsPill">{filtered.length} results</div>
-
               </div>
             </div>
 
@@ -839,11 +917,7 @@ export default function Explore() {
 
                       <div className="explore-info">
                         <div className="explore-badges">
-                          {d.isPremium ? (
-                            <span className="badge premium">Premium</span>
-                          ) : (
-                            <span className="badge free">Free</span>
-                          )}
+                          {d.isPremium ? <span className="badge premium">Premium</span> : <span className="badge free">Free</span>}
 
                           {!hasContent && (
                             <span className="badge coming-soon" style={{ marginLeft: 8 }}>
@@ -898,11 +972,7 @@ export default function Explore() {
                               cursor: canAddLibraryHere ? "pointer" : "not-allowed",
                             }}
                           >
-                            {accessLoading || availabilityLoading
-                              ? "Checking…"
-                              : inLibrary
-                              ? "🗑️ Remove from Library"
-                              : "➕ Add to Library"}
+                            {accessLoading || availabilityLoading ? "Checking…" : inLibrary ? "🗑️ Remove from Library" : "➕ Add to Library"}
                           </button>
                         )}
 
@@ -927,7 +997,7 @@ export default function Explore() {
 
                         {d.isPremium && !showPremiumAsLibraryAction && !showPublicReadNow && (
                           <button
-                            className="explore-btn explore-btn-premium explore-btn-hotOutline"
+                            className="explore-btn explore-btn-hotOutline"
                             onClick={(e) => {
                               e.stopPropagation();
                               navigate(`/dashboard/documents/${d.id}`);
@@ -974,22 +1044,20 @@ export default function Explore() {
               )}
             </>
           )}
-
-
         </div>
       </div>
-            <section className="explore-cta explore-ctaFooter">
-            <h2>Build Your Personal Legal Library</h2>
-            <p>
-              Save free publications to your library and keep all your trusted legal resources organized in one place for quick access
-              anytime.
-            </p>
 
-            <button className="explore-cta-btn explore-cta-btn-hot" onClick={() => navigate("/dashboard/library")}>
-              📚 Go to My Library
-            </button>
-          </section>
+      {/* ✅ Footer CTA (full-width via CSS class explore-ctaFooter) */}
+      <section className="explore-cta explore-ctaFooter">
+        <h2>Build Your Personal Legal Library</h2>
+        <p>
+          Save free publications to your library and keep all your trusted legal resources organized in one place for quick access anytime.
+        </p>
+
+        <button className="explore-cta-btn explore-cta-btn-hot" onClick={() => navigate("/dashboard/library")}>
+          📚 Go to My Library
+        </button>
+      </section>
     </div>
-    
   );
 }

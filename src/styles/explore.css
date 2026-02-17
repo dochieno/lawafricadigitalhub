@@ -769,3 +769,45 @@
 .explore-ctaFooter p {
   max-width: 980px;
 }
+/* =========================
+   Explore typography clamp
+   - normal text <= 10px
+   - UI text <= 11px
+   - titles can be > 11px
+========================= */
+
+.explore-container { font-size: 11px; }
+
+/* non-title body text */
+.explore-subtitle,
+.explore-sidebarSub,
+.explore-hint,
+.explore-meta,
+.explore-muted,
+.explore-pager-mid,
+.explore-chipText {
+  font-size: 10px !important;
+  font-weight: 600 !important;
+}
+
+/* UI labels/buttons/inputs */
+.explore-radio,
+.explore-toggle,
+.explore-check,
+.explore-sidebarSearch,
+.explore-miniSearch,
+.explore-select,
+.explore-pager-btn,
+.explore-btn,
+.explore-resultsPill,
+.explore-linkBtn {
+  font-size: 11px !important;
+  font-weight: 650 !important;
+}
+
+/* titles (allowed bigger) */
+.explore-title { font-size: 16px !important; font-weight: 800 !important; }
+.explore-sidebarTitle { font-size: 11px !important; font-weight: 800 !important; }
+.explore-filterSectionTitle { font-size: 11px !important; font-weight: 800 !important; }
+.explore-doc-title { font-size: 12px !important; font-weight: 800 !important; }
+.explore-cta h2 { font-size: 12px !important; font-weight: 800 !important; }
