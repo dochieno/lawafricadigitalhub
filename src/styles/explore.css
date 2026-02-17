@@ -532,7 +532,7 @@
 
 .explore-cover {
   position: relative;
-  height: 210px;
+  height: 250px;
   background: linear-gradient(120deg, rgba(107, 35, 59, 0.12), rgba(15, 23, 42, 0.06));
   display: flex;
   align-items: center;
@@ -830,7 +830,7 @@
 
 /* ---------- Thinner cards ---------- */
 .explore-cover {
-  height: 210px; /* was 132px */
+  height: 250px; /* was 132px */
 }
 
 .explore-info {
