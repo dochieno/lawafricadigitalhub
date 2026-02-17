@@ -251,7 +251,10 @@ export default function DocumentReader() {
   const [access, setAccess] = useState(null);
   const [offer, setOffer] = useState(null);
   const [contentAvailable, setContentAvailable] = useState(true);
+
+  // ✅ replace fullscreen lock with bottom unlock bar
   const [locked, setLocked] = useState(false);
+  const [unlockBarDismissed, setUnlockBarDismissed] = useState(false);
 
   const [loadingAccess, setLoadingAccess] = useState(true);
   const [loadingMeta, setLoadingMeta] = useState(true);
@@ -287,6 +290,23 @@ export default function DocumentReader() {
   const [outlineExpanded, setOutlineExpanded] = useState(() => new Set());
   const [outlineQuery, setOutlineQuery] = useState("");
   const [activePage, setActivePage] = useState(null);
+
+  // ✅ page count in topbar
+  const [totalPages, setTotalPages] = useState(null);
+
+  // ✅ proper title in topbar
+  const [docTitle, setDocTitle] = useState("");
+
+  // ✅ Find-in-document (best-effort)
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [findBusy, setFindBusy] = useState(false);
+
+  // ✅ sticky ToC header+search on desktop (JS-only via inline style)
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  // ✅ AI preview clamp show more/less
+  const [aiPreviewExpanded, setAiPreviewExpanded] = useState(false);
 
   const viewerApiRef = useRef(null);
   const viewerUnsubRef = useRef(null); // ✅ unsubscribe for onPageChange if supported
@@ -427,6 +447,25 @@ export default function DocumentReader() {
   const BASIC_MAX_SPAN = 6;
   const EXTENDED_MAX_SPAN = 12;
 
+  // ✅ desktop breakpoint (JS-only)
+  useEffect(() => {
+    const mq = window.matchMedia?.("(min-width: 980px)");
+    if (!mq) {
+      setIsDesktop(true);
+      return;
+    }
+    const apply = () => setIsDesktop(!!mq.matches);
+    apply();
+    try {
+      mq.addEventListener("change", apply);
+      return () => mq.removeEventListener("change", apply);
+    } catch {
+      // Safari fallback
+      mq.addListener?.(apply);
+      return () => mq.removeListener?.(apply);
+    }
+  }, []);
+
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -453,12 +492,40 @@ export default function DocumentReader() {
     }
     viewerUnsubRef.current = null;
 
+    // total pages (best-effort)
+    try {
+      const t =
+        apiObj?.getTotalPages?.() ??
+        apiObj?.getPageCount?.() ??
+        apiObj?.pageCount ??
+        apiObj?.totalPages ??
+        null;
+      const tn = Number(t);
+      if (Number.isFinite(tn) && tn > 0) setTotalPages(tn);
+    } catch {
+      // ignore
+    }
+
     // if viewer supports event-driven page change, use it
     if (apiObj?.onPageChange) {
       try {
         viewerUnsubRef.current = apiObj.onPageChange((p) => {
           const n = Number(p);
           if (Number.isFinite(n) && n > 0) setActivePage(n);
+
+          // also refresh total pages occasionally if available
+          try {
+            const tp =
+              apiObj?.getTotalPages?.() ??
+              apiObj?.getPageCount?.() ??
+              apiObj?.pageCount ??
+              apiObj?.totalPages ??
+              null;
+            const tpn = Number(tp);
+            if (Number.isFinite(tpn) && tpn > 0) setTotalPages(tpn);
+          } catch {
+            // ignore
+          }
         });
       } catch {
         // ignore
@@ -512,6 +579,7 @@ export default function DocumentReader() {
             "error"
           );
           setLocked(true);
+          setUnlockBarDismissed(false);
           return;
         }
       }
@@ -576,7 +644,19 @@ export default function DocumentReader() {
       if (Number.isFinite(n) && n > 0) {
         setActivePage((prev) => (prev === n ? prev : n));
       }
-    }, 500);
+
+      // total pages fallback
+      const tp =
+        viewerApiRef.current?.getTotalPages?.() ??
+        viewerApiRef.current?.getPageCount?.() ??
+        viewerApiRef.current?.pageCount ??
+        viewerApiRef.current?.totalPages ??
+        null;
+      const tpn = Number(tp);
+      if (Number.isFinite(tpn) && tpn > 0) {
+        setTotalPages((prev) => (prev === tpn ? prev : tpn));
+      }
+    }, 600);
 
     return () => window.clearInterval(t);
   }, []);
@@ -656,6 +736,7 @@ export default function DocumentReader() {
     if (!Number.isFinite(docId) || docId <= 0) return;
     setOutlineQuery("");
     setActivePage(null);
+    setTotalPages(null);
 
     // reset summary state when doc changes
     setSectionSummaryError("");
@@ -671,6 +752,18 @@ export default function DocumentReader() {
     // close panel on doc switch
     setSummaryPanelOpen(false);
     setSummaryExpanded(false);
+
+    // unlock bar reset
+    setLocked(false);
+    setUnlockBarDismissed(false);
+
+    // find reset
+    setFindOpen(false);
+    setFindQuery("");
+    setFindBusy(false);
+
+    // ai preview
+    setAiPreviewExpanded(false);
 
     fetchOutline();
   }, [docId, fetchOutline]);
@@ -734,6 +827,7 @@ export default function DocumentReader() {
         setLoadingAccess(true);
 
         setLocked(false);
+        setUnlockBarDismissed(false);
         setBlocked(false);
         setOffer(null);
 
@@ -776,7 +870,11 @@ export default function DocumentReader() {
               return;
             }
 
-            if (accessData?.hasFullAccess) setLocked(false);
+            if (accessData?.hasFullAccess) {
+              setLocked(false);
+              setUnlockBarDismissed(false);
+            }
+
             if (justPaid) setJustPaid(false);
 
             return;
@@ -802,12 +900,38 @@ export default function DocumentReader() {
       }
     }
 
+    function pickDocTitleFromAny(data) {
+      if (!data) return "";
+      // tolerant mapping
+      return (
+        data?.title ??
+        data?.Title ??
+        data?.name ??
+        data?.Name ??
+        data?.documentTitle ??
+        data?.DocumentTitle ??
+        data?.publicationTitle ??
+        data?.PublicationTitle ??
+        data?.legalDocumentTitle ??
+        data?.LegalDocumentTitle ??
+        data?.citation ??
+        data?.Citation ??
+        ""
+      );
+    }
+
     async function loadMetaInBackground() {
       setLoadingMeta(true);
 
       try {
         const offerPromise = api
           .get(`/legal-documents/${docId}/public-offer`)
+          .then((r) => r.data)
+          .catch(() => null);
+
+        // ✅ best-effort doc meta for proper title in topbar
+        const docMetaPromise = api
+          .get(`/legal-documents/${docId}`)
           .then((r) => r.data)
           .catch(() => null);
 
@@ -833,11 +957,16 @@ export default function DocumentReader() {
           }
         })();
 
-        const [offerData, isAvailable] = await Promise.all([offerPromise, availabilityPromise]);
+        const [offerData, docMeta, isAvailable] = await Promise.all([offerPromise, docMetaPromise, availabilityPromise]);
         if (cancelled || !aliveRef.current) return;
 
         if (offerData) setOffer(offerData);
         setContentAvailable(!!isAvailable);
+
+        const titleFromDoc = pickDocTitleFromAny(docMeta);
+        const titleFromOffer = pickDocTitleFromAny(offerData);
+        const t = String(titleFromDoc || titleFromOffer || "").trim();
+        setDocTitle(t);
       } finally {
         if (!cancelled && aliveRef.current) setLoadingMeta(false);
       }
@@ -914,6 +1043,7 @@ export default function DocumentReader() {
       }
 
       setSectionSummaryText(String(summary));
+      setAiPreviewExpanded(false);
 
       const fromCache = data?.fromCache ?? data?.FromCache ?? false;
       const usedStart = data?.startPage ?? data?.StartPage ?? null;
@@ -958,7 +1088,9 @@ export default function DocumentReader() {
         return;
       }
 
-      const key = `${payload.legalDocumentId}|${payload.tocEntryId ?? ""}|${payload.type}|${payload.startPage ?? ""}-${payload.endPage ?? ""}|force=${payload.forceRegenerate ? "1" : "0"}`;
+      const key = `${payload.legalDocumentId}|${payload.tocEntryId ?? ""}|${payload.type}|${
+        payload.startPage ?? ""
+      }-${payload.endPage ?? ""}|force=${payload.forceRegenerate ? "1" : "0"}`;
       if (sectionSummaryLoading && lastSummaryKeyRef.current === key) return;
       lastSummaryKeyRef.current = key;
 
@@ -979,13 +1111,7 @@ export default function DocumentReader() {
         setSectionSummaryLoading(false);
       }
     },
-    [
-      applySummaryResponse,
-      buildSummaryPayloadFromNode,
-      selectedTocNode,
-      sectionSummaryLoading,
-      setSummaryPanelOpen,
-    ]
+    [applySummaryResponse, buildSummaryPayloadFromNode, selectedTocNode, sectionSummaryLoading]
   );
 
   const onCopySummary = useCallback(async () => {
@@ -1078,12 +1204,17 @@ export default function DocumentReader() {
     }
 
     if (!Number.isFinite(startPdf) || startPdf <= 0 || !Number.isFinite(endPdf) || endPdf <= 0) {
-      return { ok: false, label: labelPrefix, clampNote: "Computed PDF pages are invalid.", startPdf: null, endPdf: null };
+      return {
+        ok: false,
+        label: labelPrefix,
+        clampNote: "Computed PDF pages are invalid.",
+        startPdf: null,
+        endPdf: null,
+      };
     }
 
     const endPreviewClamped = clampToPreview(endPdf);
-    const previewNote =
-      endPreviewClamped !== endPdf ? `Clamped to preview max page ${access?.previewMaxPages}.` : "";
+    const previewNote = endPreviewClamped !== endPdf ? `Clamped to preview max page ${access?.previewMaxPages}.` : "";
 
     return { ok: true, label: labelPrefix, clampNote: previewNote, startPdf, endPdf: endPreviewClamped };
   }, [manualStart, manualEnd, pageMode, offsetVerified, pdfPageOffset, access]);
@@ -1150,6 +1281,95 @@ export default function DocumentReader() {
     effectiveManual.endPdf != null &&
     (pageMode !== "printed" || offsetVerified);
 
+  // =========================================================
+  // ✅ Find in document (best-effort bridge to PdfViewer)
+  // =========================================================
+  const tryInvokeFind = useCallback(
+    async (q, dir = "next") => {
+      const query = String(q || "").trim();
+      if (!query) return;
+
+      const apiObj = viewerApiRef.current;
+      if (!apiObj) {
+        showToast("Viewer not ready yet.", "error");
+        return;
+      }
+
+      setFindBusy(true);
+      try {
+        // try common APIs
+        const fns = [
+          () => apiObj.openFind?.(),
+          () => apiObj.openSearch?.(),
+          () => apiObj.find?.(query, { direction: dir }),
+          () => apiObj.findText?.(query, { direction: dir }),
+          () => apiObj.searchText?.(query, { direction: dir }),
+          () => apiObj.search?.(query, { direction: dir }),
+          () => apiObj.setFindQuery?.(query),
+        ];
+
+        let did = false;
+        for (const fn of fns) {
+          try {
+            const res = fn();
+            if (res !== undefined) {
+              did = true;
+              break;
+            }
+          } catch {
+            // keep trying
+          }
+        }
+
+        if (!did) {
+          showToast("Find-in-document is not supported by this viewer yet. Use Ctrl+F.", "error");
+          // open browser find hint: we can't programmatically open Ctrl+F
+        }
+      } finally {
+        setFindBusy(false);
+      }
+    },
+    [showToast]
+  );
+
+  const openFind = useCallback(() => {
+    setFindOpen(true);
+    // try to open native find if viewer supports it
+    try {
+      viewerApiRef.current?.openFind?.();
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const closeFind = useCallback(() => {
+    setFindOpen(false);
+    setFindQuery("");
+    setFindBusy(false);
+  }, []);
+
+  // keyboard shortcut: Ctrl/Cmd + F opens our bar (and lets viewer handle if it wants)
+  useEffect(() => {
+    function onKeyDown(e) {
+      const isF = (e.key || "").toLowerCase() === "f";
+      const meta = e.metaKey || e.ctrlKey;
+      if (meta && isF) {
+        // don't block browser find on inputs
+        const tag = (e.target?.tagName || "").toLowerCase();
+        const isTyping = tag === "input" || tag === "textarea" || e.target?.isContentEditable;
+        if (!isTyping) {
+          e.preventDefault();
+          openFind();
+        }
+      }
+      if ((e.key || "").toLowerCase() === "escape") {
+        if (findOpen) closeFind();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [closeFind, findOpen, openFind]);
+
   // ✅ Gate UI only on access
   if (loadingAccess) {
     return (
@@ -1175,8 +1395,7 @@ export default function DocumentReader() {
 
   // HARD BLOCK overlay
   if (blocked) {
-    const canPay =
-      canPurchaseIndividually === true && offer?.allowPublicPurchase === true && offer?.alreadyOwned !== true;
+    const canPay = canPurchaseIndividually === true && offer?.allowPublicPurchase === true && offer?.alreadyOwned !== true;
 
     const primaryLabel = (() => {
       if (!canPurchaseIndividually) return "Purchases disabled";
@@ -1230,9 +1449,7 @@ export default function DocumentReader() {
                 : "Purchasing is disabled for your institution account. Please contact your administrator."}
             </p>
 
-            {canPay && (
-              <p className="preview-lock-footnote readerTip">Tip: Go to the details page to complete the purchase.</p>
-            )}
+            {canPay && <p className="preview-lock-footnote readerTip">Tip: Go to the details page to complete the purchase.</p>}
           </div>
         </div>
       </div>
@@ -1262,6 +1479,45 @@ export default function DocumentReader() {
 
   const maxPages = access.hasFullAccess ? null : access.previewMaxPages;
 
+  const resolvedTitle = (docTitle || "").trim() || `Document #${docId}`;
+
+  const pageLabel = (() => {
+    const p = Number(activePage);
+    const t = Number(totalPages);
+    if (Number.isFinite(p) && p > 0 && Number.isFinite(t) && t > 0) return `Page ${p} / ${t}`;
+    if (Number.isFinite(p) && p > 0) return `Page ${p}`;
+    if (Number.isFinite(t) && t > 0) return `${t} pages`;
+    return "—";
+  })();
+
+// ✅ AI preview clamp (JS-only)
+  const PREVIEW_CHARS = 720;
+  const _summaryRaw = String(sectionSummaryText || "");
+  const aiPreview =
+    !_summaryRaw.trim()
+      ? ""
+      : aiPreviewExpanded
+      ? _summaryRaw
+      : _summaryRaw.length <= PREVIEW_CHARS
+      ? _summaryRaw
+      : `${_summaryRaw.slice(0, PREVIEW_CHARS).trim()}…`;
+
+  const hasAiOverflow = !!_summaryRaw.trim() && _summaryRaw.length > PREVIEW_CHARS;
+
+
+  // unlock bar should show if locked AND not dismissed
+  const showUnlockBar = locked && !access.hasFullAccess && !unlockBarDismissed;
+
+  // desktop sticky styles (JS-only, applied inline)
+    const stickyWrapStyle = isDesktop
+      ? { position: "sticky", top: 0, zIndex: 5, background: "var(--reader-drawer-bg, #fff)" }
+      : undefined;
+
+    const stickySearchStyle = isDesktop
+      ? { position: "sticky", top: 0, zIndex: 6, background: "var(--reader-drawer-bg, #fff)", paddingBottom: 10 }
+      : undefined;
+
+
   return (
     <div className="reader-layout" onPointerMove={onResizePointerMove} onPointerUp={onResizePointerUp}>
       {toast && <div className={`toast toast-${toast.type}`}>{toast.message}</div>}
@@ -1284,61 +1540,80 @@ export default function DocumentReader() {
         onSwitchType={onSwitchSummaryType}
       />
 
-      {/* Mobile topbar */}
+      {/* Topbar (mobile + desktop) */}
       <div className="readerpage-topbar">
         <button className="readerpage-tocbtn" type="button" onClick={openOutline} title="Table of Contents">
           ☰ ToC
         </button>
 
-        <div className="readerpage-title" title={`Document ${docId}`}>
-          Reader
+        <div className="readerpage-title" title={resolvedTitle}>
+          {resolvedTitle}
+          <span className="readerpage-titleSub" title={pageLabel}>
+            {pageLabel}
+          </span>
         </div>
 
-        <button
-          className="readerpage-aiBtn"
-          type="button"
-          onClick={openSummaryPanel}
-          disabled={!sectionSummaryText}
-          title={sectionSummaryText ? "Open AI summary" : "Generate a summary first (ToC → Basic/Extended)"}
-        >
-          AI
-        </button>
+        <div className="readerpage-topbarActions">
+          <button className="readerpage-findBtn" type="button" onClick={openFind} title="Find in document (Ctrl+F)">
+            Find
+          </button>
+
+          <button
+            className="readerpage-aiBtn"
+            type="button"
+            onClick={openSummaryPanel}
+            disabled={!sectionSummaryText}
+            title={sectionSummaryText ? "Open AI summary" : "Generate a summary first (ToC → Basic/Extended)"}
+          >
+            AI
+          </button>
+        </div>
       </div>
 
       {outlineOpen && <div className="readerpage-tocBackdrop" onClick={closeOutline} />}
 
       {/* Drawer / sidebar */}
       <div className={`readerpage-tocDrawer ${outlineOpen ? "open" : ""}`}>
-        <div className="readerpage-tocHeader">
-          <div className="readerpage-tocTitle">Table of Contents</div>
+        {/* ✅ Sticky group (header + offset + search) */}
+        <div className="readerpage-tocSticky" style={stickyWrapStyle}>
+          <div className="readerpage-tocHeader" style={stickySearchStyle}>
+            <div className="readerpage-tocTitle">Table of Contents</div>
 
-          <div className="readerOutlineHeaderActions">
-            <button
-              className="readerOutlineMiniBtn"
-              type="button"
-              onClick={toggleExpandCollapseAll}
-              title={outlineExpanded.size ? "Collapse all" : "Expand all"}
-            >
-              {outlineExpanded.size ? "Collapse" : "Expand"}
-            </button>
+            <div className="readerOutlineHeaderActions">
+              <button
+                className="readerOutlineMiniBtn"
+                type="button"
+                onClick={toggleExpandCollapseAll}
+                title={outlineExpanded.size ? "Collapse all" : "Expand all"}
+              >
+                {outlineExpanded.size ? "Collapse" : "Expand"}
+              </button>
 
-            <button
-              className="readerOutlineMiniBtn laAccent"
-              type="button"
-              onClick={openSummaryPanel}
-              disabled={!sectionSummaryText}
-              title={sectionSummaryText ? "Open AI summary panel" : "Generate a summary first"}
-            >
-              Summary
+              <button
+                className="readerOutlineMiniBtn"
+                type="button"
+                onClick={openFind}
+                title="Find in document (Ctrl+F)"
+              >
+                Find
+              </button>
+
+              <button
+                className="readerOutlineMiniBtn laAccent"
+                type="button"
+                onClick={openSummaryPanel}
+                disabled={!sectionSummaryText}
+                title={sectionSummaryText ? "Open AI summary panel" : "Generate a summary first"}
+              >
+                Summary
+              </button>
+            </div>
+
+            <button className="readerpage-tocClose" type="button" onClick={closeOutline} title="Close">
+              ✕
             </button>
           </div>
 
-          <button className="readerpage-tocClose" type="button" onClick={closeOutline} title="Close">
-            ✕
-          </button>
-        </div>
-
-        <div className="readerpage-tocBody">
           {/* Offset status */}
           <div className="laInlineOffsetCard">
             <div className="laInlineOffsetRow">
@@ -1381,12 +1656,19 @@ export default function DocumentReader() {
               aria-label="Search table of contents"
             />
             {outlineQuery ? (
-              <button type="button" className="readerOutlineClear" onClick={() => setOutlineQuery("")} title="Clear search">
+              <button
+                type="button"
+                className="readerOutlineClear"
+                onClick={() => setOutlineQuery("")}
+                title="Clear search"
+              >
                 ✕
               </button>
             ) : null}
           </div>
+        </div>
 
+        <div className="readerpage-tocBody">
           {outlineLoading ? (
             <div className="readerpage-tocState">Loading ToC…</div>
           ) : outlineError ? (
@@ -1419,15 +1701,40 @@ export default function DocumentReader() {
               </div>
             </div>
           ) : (
+            // ✅ Better "No ToC" UX
             <div className="readerpage-tocState">
-              No ToC available for document #{docId}.
-              <div className="readerOutlineHint">
-                Confirm the Reader API returns it: <span>/api/legal-documents/{docId}/outline</span>
-              </div>
-              <div className="readerOutlineStateActions">
-                <button className="outline-btn" type="button" onClick={fetchOutline}>
-                  Reload
-                </button>
+              <div className="readerNoTocCard">
+                <div className="readerNoTocTitle">No table of contents available</div>
+                <div className="readerNoTocBody">
+                  This PDF does not have a usable outline yet, or the ToC endpoint returned an empty tree.
+                </div>
+
+                <div className="readerNoTocActions">
+                  <button className="outline-btn" type="button" onClick={fetchOutline}>
+                    Reload ToC
+                  </button>
+
+                  <button className="outline-btn" type="button" onClick={() => navigate(`/dashboard/documents/${id}`)}>
+                    Details
+                  </button>
+
+                  <button
+                    className="outline-btn"
+                    type="button"
+                    onClick={async () => {
+                      const endpoint = `/api/legal-documents/${docId}/outline`;
+                      const ok = await safeCopyToClipboard(endpoint);
+                      showToast(ok ? "Copied endpoint ✅" : "Copy failed", ok ? "success" : "error");
+                    }}
+                    title="Copy the expected endpoint path"
+                  >
+                    Copy endpoint
+                  </button>
+                </div>
+
+                <div className="readerNoTocHint">
+                  Tip: You can still use <strong>Find</strong> to search inside the PDF.
+                </div>
               </div>
             </div>
           )}
@@ -1532,7 +1839,23 @@ export default function DocumentReader() {
               </div>
             ) : null}
 
-            {sectionSummaryText ? <div className="laInlineSummaryPreview">{sectionSummaryText}</div> : null}
+            {/* ✅ Clamp preview + show more/less */}
+            {sectionSummaryText ? (
+              <div className="laInlineSummaryPreviewWrap">
+                <div className="laInlineSummaryPreview">{aiPreview}</div>
+
+                {hasAiOverflow ? (
+                  <button
+                    type="button"
+                    className="readerOutlineMiniBtn"
+                    onClick={() => setAiPreviewExpanded((p) => !p)}
+                    title={aiPreviewExpanded ? "Show less" : "Show more"}
+                  >
+                    {aiPreviewExpanded ? "Show less" : "Show more"}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           {/* Advanced summary (manual pages) */}
@@ -1675,38 +1998,101 @@ export default function DocumentReader() {
         <PdfViewer
           documentId={docId}
           maxAllowedPage={maxPages}
-          onPreviewLimitReached={() => setLocked(true)}
+          onPreviewLimitReached={() => {
+            setLocked(true);
+            setUnlockBarDismissed(false);
+          }}
           onRegisterApi={handleRegisterApi}
         />
 
-        {locked && !access.hasFullAccess && (
-          <div className="preview-lock-backdrop">
-            <div className="preview-lock-card">
-              <h2>Preview limit reached</h2>
-              <p>
-                You’re reading a preview of this publication. To continue beyond page {access.previewMaxPages}, you’ll need full access.
-              </p>
+        {/* ✅ Find bar (lightweight, JS-only; uses viewer API if available) */}
+        {findOpen ? (
+          <div className="readerFindBar" role="dialog" aria-label="Find in document">
+            <div className="readerFindBarInner">
+              <div className="readerFindBarTitle">Find</div>
 
-              <div className="preview-lock-actions">
+              <input
+                className="readerFindInput"
+                value={findQuery}
+                onChange={(e) => setFindQuery(e.target.value)}
+                placeholder="Type to search…"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    tryInvokeFind(findQuery, "next");
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    closeFind();
+                  }
+                }}
+              />
+
+              <div className="readerFindBarBtns">
+                <button
+                  type="button"
+                  className="readerOutlineMiniBtn"
+                  disabled={!findQuery.trim() || findBusy}
+                  onClick={() => tryInvokeFind(findQuery, "prev")}
+                  title="Previous match"
+                >
+                  Prev
+                </button>
+
+                <button
+                  type="button"
+                  className="readerOutlineMiniBtn laAccent"
+                  disabled={!findQuery.trim() || findBusy}
+                  onClick={() => tryInvokeFind(findQuery, "next")}
+                  title="Next match"
+                >
+                  Next
+                </button>
+
+                <button type="button" className="readerOutlineMiniBtn" onClick={closeFind} title="Close (Esc)">
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="readerFindHint">
+              Tip: If the PDF viewer doesn’t support search yet, use <strong>Ctrl+F</strong>.
+            </div>
+          </div>
+        ) : null}
+
+        {/* ✅ Bottom unlock bar (replaces fullscreen overlay) */}
+        {showUnlockBar ? (
+          <div className="readerUnlockBar" role="region" aria-label="Unlock full access">
+            <div className="readerUnlockBarInner">
+              <div className="readerUnlockBarText">
+                <strong>Preview limit reached.</strong> Continue beyond page {access.previewMaxPages} by unlocking full access.
+              </div>
+
+              <div className="readerUnlockBarActions">
                 <button className="outline-btn" onClick={() => navigate(`/dashboard/documents/${id}`)}>
-                  Back to Details
+                  Details
                 </button>
 
                 <button className="primary-btn" onClick={() => navigate(`/dashboard/documents/${id}`)}>
-                  Purchase Access
+                  Unlock
                 </button>
 
-                <button className="outline-btn" onClick={() => navigate("/dashboard/explore")}>
-                  Explore More
+                <button
+                  className="outline-btn"
+                  onClick={() => {
+                    setUnlockBarDismissed(true);
+                    showToast("Dismissed", "success");
+                  }}
+                  title="Dismiss"
+                >
+                  Dismiss
                 </button>
               </div>
-
-              <p className="preview-lock-footnote">
-                You can purchase this publication from the details page to unlock full reading access.
-              </p>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

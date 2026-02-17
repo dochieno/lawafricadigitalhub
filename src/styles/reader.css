@@ -1,14 +1,21 @@
 /* =========================
-   Reader (2026 Minimal) — CLEANED (FULL)
+   Reader (2026 Minimal) — CLEANED (FULL / DEDUPED)
    - PdfViewer styles (react-pdf + notes + page jump + FAB)
    - DocumentReader layout + ToC drawer (mobile bottom sheet + desktop sidebar)
    - Outline UI (search, expand/collapse, resize, depth indentation)
-   - AI mini summary + Advanced summary (moved from inline styles)
+   - AI mini summary + Advanced summary
+   - SectionSummaryPanel modal (CANONICAL)
+   - Killer changes support: Unlock bar + Find-in-document bar + better empty ToC
    ========================= */
 
-/* Safe fallbacks (keep if you don't define tokens elsewhere) */
+/* =========================================================
+   Tokens / safe fallbacks
+   ========================================================= */
 :root {
-  --la-red: #a11212;
+  --la-red: #6b233b;     /* LawAfrica maroon */
+  --la-red-2: #7a2b47;
+  --la-red-deep: #4a1527;
+
   --la-gray: #6b7280;
 
   --reader-bg: #f3f4f6;
@@ -18,6 +25,9 @@
   --reader-muted: #6b7280;
   --reader-shadow: 0 18px 45px rgba(0, 0, 0, 0.10);
   --reader-radius: 16px;
+
+  /* Drawer background (used by JS sticky inline styles) */
+  --reader-drawer-bg: rgba(255, 255, 255, 0.96);
 }
 
 /* =========================================================
@@ -36,6 +46,9 @@
   --reader-ink: #e5e7eb;
   --reader-muted: rgba(229, 231, 235, 0.72);
   --reader-shadow: 0 18px 55px rgba(0, 0, 0, 0.55);
+
+  --reader-drawer-bg: rgba(17, 24, 39, 0.96);
+
   background: var(--reader-bg);
   color: var(--reader-ink);
 }
@@ -77,7 +90,7 @@
   padding: 0 10px;
   border-radius: 999px;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.2px;
   color: var(--reader-ink);
   background: rgba(255, 255, 255, 0.65);
@@ -97,13 +110,13 @@
   background: rgba(255, 255, 255, 0.55);
   color: var(--reader-ink);
   cursor: pointer;
-  font-weight: 800;
+  font-weight: 900;
   line-height: 1;
-  transition: transform 0.06s ease, background 0.15s ease, border-color 0.15s ease;
+  transition: transform 0.06s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .icon-btn:hover {
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.85);
 }
 
 .reader-shell.dark .icon-btn:hover {
@@ -115,8 +128,8 @@
 }
 
 .icon-btn.active {
-  border-color: rgba(161, 18, 18, 0.45);
-  box-shadow: 0 0 0 3px rgba(161, 18, 18, 0.14);
+  border-color: rgba(107, 35, 59, 0.45);
+  box-shadow: 0 0 0 3px rgba(107, 35, 59, 0.14);
 }
 
 /* =========================================================
@@ -241,7 +254,7 @@ svg.highlight-layer {
   background: rgba(255, 255, 255, 0.6);
   color: var(--reader-ink);
   cursor: pointer;
-  font-weight: 900;
+  font-weight: 950;
   transition: transform 0.06s ease, background 0.15s ease;
 }
 
@@ -250,11 +263,11 @@ svg.highlight-layer {
 }
 
 .fab-btn:hover {
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .reader-shell.dark .fab-btn:hover {
-  background: rgba(17, 24, 39, 0.8);
+  background: rgba(17, 24, 39, 0.80);
 }
 
 .fab-btn:disabled {
@@ -274,7 +287,7 @@ svg.highlight-layer {
   background: rgba(255, 255, 255, 0.55);
   color: var(--reader-ink);
   cursor: pointer;
-  font-weight: 800;
+  font-weight: 850;
   font-size: 13px;
   white-space: nowrap;
 }
@@ -298,7 +311,7 @@ svg.highlight-layer {
   box-shadow: 0 22px 70px rgba(0, 0, 0, 0.22);
   padding: 12px;
   z-index: 9999;
-  pointer-events: auto; /* critical: typing/clicking */
+  pointer-events: auto;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
@@ -316,7 +329,7 @@ svg.highlight-layer {
 }
 
 .pagejump-title {
-  font-weight: 900;
+  font-weight: 950;
   font-size: 13px;
   letter-spacing: 0.2px;
 }
@@ -336,7 +349,7 @@ svg.highlight-layer {
   background: rgba(255, 255, 255, 0.65);
   color: var(--reader-ink);
   outline: none;
-  font-weight: 700;
+  font-weight: 800;
   font-size: 14px;
 }
 
@@ -345,8 +358,8 @@ svg.highlight-layer {
 }
 
 .pagejump-input:focus {
-  border-color: rgba(161, 18, 18, 0.45);
-  box-shadow: 0 0 0 3px rgba(161, 18, 18, 0.14);
+  border-color: rgba(107, 35, 59, 0.45);
+  box-shadow: 0 0 0 3px rgba(107, 35, 59, 0.14);
 }
 
 .pagejump-iconbtn {
@@ -354,8 +367,8 @@ svg.highlight-layer {
   height: 36px;
   border-radius: 10px;
   border: 1px solid var(--reader-border);
-  background: rgba(255, 255, 255, 0.9);
-  font-weight: 900;
+  background: rgba(255, 255, 255, 0.90);
+  font-weight: 950;
   cursor: pointer;
   color: var(--reader-ink);
 }
@@ -364,18 +377,14 @@ svg.highlight-layer {
   background: rgba(17, 24, 39, 0.75);
 }
 
-.pagejump-iconbtn.primary {
-  border-color: rgba(0, 0, 0, 0.10);
-}
-
 .pagejump-error {
   margin-top: 8px;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 850;
   color: #b91c1c;
 }
 
-/* (Legacy classes retained in case older markup exists) */
+/* Legacy hidden */
 .pagejump-go,
 .pagejump-close {
   display: none;
@@ -444,7 +453,7 @@ svg.highlight-layer {
 .hl-color-label {
   font-size: 13px;
   opacity: 0.85;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .hl-color-chip {
@@ -477,13 +486,13 @@ svg.highlight-layer {
   border: none;
   padding: 10px 14px;
   border-radius: 12px;
-  font-weight: 900;
+  font-weight: 950;
   cursor: pointer;
 }
 
 .reader-btn.secondary {
   background: transparent;
-  border: 1px solid rgba(161, 18, 18, 0.45);
+  border: 1px solid rgba(107, 35, 59, 0.45);
   color: var(--la-red);
 }
 
@@ -537,7 +546,7 @@ svg.highlight-layer {
 .notes-header h3 {
   margin: 0;
   font-size: 16px;
-  font-weight: 900;
+  font-weight: 950;
 }
 
 .notes-header button {
@@ -574,7 +583,7 @@ svg.highlight-layer {
 }
 
 .notes-group-title {
-  font-weight: 900;
+  font-weight: 950;
   margin: 10px 0 8px;
   opacity: 0.9;
 }
@@ -598,7 +607,7 @@ svg.highlight-layer {
 }
 
 .note-item.active {
-  outline: 2px solid rgba(161, 18, 18, 0.22);
+  outline: 2px solid rgba(107, 35, 59, 0.22);
 }
 
 .note-item.flash {
@@ -612,7 +621,7 @@ svg.highlight-layer {
 
 .note-meta {
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 950;
   color: var(--la-red);
   margin-bottom: 6px;
 }
@@ -687,7 +696,9 @@ svg.highlight-layer {
 .reader-nav { display: none; }
 
 /* =========================================================
-   Preview lock overlay
+   Preview lock overlay (kept for HARD BLOCK / fallback)
+   NOTE: Killer changes use bottom unlock bar, but this is
+   still used for "blocked" and any legacy flows.
    ========================================================= */
 .preview-lock-backdrop {
   position: fixed;
@@ -728,12 +739,188 @@ svg.highlight-layer {
   gap: 10px;
   justify-content: flex-end;
   margin-top: 10px;
+  flex-wrap: wrap;
 }
 
 .preview-lock-footnote {
   margin-top: 12px;
   font-size: 12px;
   color: var(--reader-muted);
+}
+
+/* =========================================================
+   Killer change: Bottom Unlock Bar (DocumentReader)
+   ========================================================= */
+.readerUnlockBar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 12px;
+  z-index: 90;
+  display: flex;
+  justify-content: center;
+  pointer-events: none; /* let PDF scroll; inner enables clicks */
+}
+
+.readerUnlockBarInner {
+  pointer-events: auto;
+  width: min(980px, calc(100vw - 24px));
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 18px 60px rgba(2, 6, 23, 0.18);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  padding: 10px 12px;
+
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.reader-shell.dark .readerUnlockBarInner {
+  background: rgba(17, 24, 39, 0.92);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+.readerUnlockText {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--reader-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.readerUnlockSub {
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(15, 23, 42, 0.60);
+  margin-left: 6px;
+}
+
+.reader-shell.dark .readerUnlockSub {
+  color: rgba(229, 231, 235, 0.72);
+}
+
+.readerUnlockBtns {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.readerUnlockBtn {
+  appearance: none;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.92);
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-weight: 950;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--reader-ink);
+}
+
+.reader-shell.dark .readerUnlockBtn {
+  background: rgba(17, 24, 39, 0.80);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.readerUnlockBtn.primary {
+  border-color: rgba(107, 35, 59, 0.35);
+  background: rgba(107, 35, 59, 0.10);
+}
+
+.readerUnlockBtn:hover {
+  filter: brightness(1.02);
+}
+
+.readerUnlockBtn:active {
+  transform: translateY(1px);
+}
+
+@media (max-width: 520px) {
+  .readerUnlockSub { display: none; }
+  .readerUnlockText { font-size: 12px; }
+}
+
+/* =========================================================
+   Find-in-document bar (DocumentReader)
+   ========================================================= */
+.readerFindBar {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.readerFindRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.readerFindInput {
+  flex: 1;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(229, 231, 235, 0.95);
+  background: rgba(255, 255, 255, 0.92);
+  padding: 0 12px;
+  outline: none;
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--reader-ink);
+}
+
+.readerFindInput:focus {
+  border-color: rgba(107, 35, 59, 0.35);
+  box-shadow: 0 0 0 3px rgba(107, 35, 59, 0.10);
+}
+
+.readerFindBtn {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.92);
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.readerFindBtn.primary {
+  border-color: rgba(107, 35, 59, 0.35);
+  background: rgba(107, 35, 59, 0.10);
+}
+
+.readerFindBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.reader-shell.dark .readerFindBar {
+  background: rgba(17, 24, 39, 0.88);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+.reader-shell.dark .readerFindInput {
+  background: rgba(0, 0, 0, 0.22);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #e5e7eb;
+}
+
+.reader-shell.dark .readerFindBtn {
+  background: rgba(17, 24, 39, 0.80);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #e5e7eb;
 }
 
 /* =========================================================
@@ -754,7 +941,7 @@ svg.highlight-layer {
   border-radius: 999px;
 
   font-size: 13px;
-  font-weight: 900;
+  font-weight: 950;
   letter-spacing: 0.2px;
 
   border: 1px solid rgba(17, 24, 39, 0.12);
@@ -777,7 +964,7 @@ svg.highlight-layer {
 
 /* =========================================================
    Reader: helpers + loading states
-========================================================= */
+   ========================================================= */
 .readerCenter {
   display: grid;
   place-items: center;
@@ -794,7 +981,7 @@ svg.highlight-layer {
 }
 
 .readerLoadingTitle {
-  font-weight: 900;
+  font-weight: 950;
   margin-bottom: 8px;
 }
 
@@ -809,7 +996,7 @@ svg.highlight-layer {
   padding: 6px 10px;
   border-radius: 999px;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 950;
   border: 1px solid #fecaca;
   background: #fef2f2;
   color: #991b1b;
@@ -828,12 +1015,10 @@ svg.highlight-layer {
   border: 1px solid #fcd34d;
   color: #92400e;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 750;
 }
 
-.readerTip {
-  margin-top: 6px;
-}
+.readerTip { margin-top: 6px; }
 
 /* meta pill */
 .readerMetaPill {
@@ -843,7 +1028,7 @@ svg.highlight-layer {
   transform: translateX(-50%);
   z-index: 20;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 850;
   color: #6b7280;
   background: rgba(255, 255, 255, 0.75);
   border: 1px solid rgba(229, 231, 235, 0.9);
@@ -857,7 +1042,7 @@ svg.highlight-layer {
    DocumentReader layout + ToC drawer
    - Mobile: bottom sheet
    - Desktop: left sidebar (resizable via --reader-outline-width)
-========================================================= */
+   ========================================================= */
 .reader-layout {
   position: relative;
   height: 100vh;
@@ -893,7 +1078,7 @@ svg.highlight-layer {
   border-radius: 10px;
   padding: 6px 12px;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 900;
   cursor: pointer;
 }
 
@@ -903,11 +1088,29 @@ svg.highlight-layer {
 
 .readerpage-title {
   font-size: 14px;
-  font-weight: 900;
+  font-weight: 950;
   color: #111827;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.readerpage-aiBtn {
+  margin-left: auto;
+  appearance: none;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  background: rgba(107, 35, 59, 0.06);
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 950;
+  cursor: pointer;
+  color: #111827;
+}
+
+.readerpage-aiBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* Backdrop (mobile) */
@@ -928,7 +1131,7 @@ svg.highlight-layer {
   bottom: 0;
 
   height: 72vh;
-  background: #ffffff;
+  background: var(--reader-drawer-bg);
   border-radius: 18px 18px 0 0;
   box-shadow: 0 -18px 48px rgba(2, 6, 23, 0.22);
 
@@ -950,12 +1153,19 @@ svg.highlight-layer {
   justify-content: space-between;
   padding: 14px 16px;
   border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.70);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.reader-shell.dark .readerpage-tocHeader {
+  background: rgba(17, 24, 39, 0.70);
 }
 
 .readerpage-tocTitle {
   font-size: 15px;
   font-weight: 950;
-  color: #111827;
+  color: var(--reader-ink);
 }
 
 .readerpage-tocClose {
@@ -965,6 +1175,7 @@ svg.highlight-layer {
   font-size: 18px;
   cursor: pointer;
   padding: 4px;
+  color: var(--reader-ink);
 }
 
 .readerpage-tocBody {
@@ -974,17 +1185,62 @@ svg.highlight-layer {
 }
 
 .readerpage-tocState {
-  padding: 20px;
+  padding: 18px 16px;
   text-align: center;
-  font-size: 14px;
+  font-size: 13px;
   color: #6b7280;
-  font-weight: 650;
+  font-weight: 750;
 }
 
 .readerpage-tocState.error {
   color: #b91c1c;
 }
 
+.readerpage-tocState strong {
+  color: #111827;
+}
+
+/* "No ToC available" better UX card */
+.readerTocEmptyCard {
+  margin: 10px;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 10px 28px rgba(2, 6, 23, 0.06);
+  padding: 14px;
+  text-align: left;
+}
+
+.reader-shell.dark .readerTocEmptyCard {
+  background: rgba(17, 24, 39, 0.65);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+.readerTocEmptyTitle {
+  font-weight: 950;
+  color: var(--reader-ink);
+  margin: 0 0 6px;
+}
+
+.readerTocEmptyHint {
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.65);
+  line-height: 1.5;
+}
+
+.reader-shell.dark .readerTocEmptyHint {
+  color: rgba(229, 231, 235, 0.72);
+}
+
+.readerTocEmptyActions {
+  margin-top: 10px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* List */
 .readerpage-tocList {
   display: flex;
   flex-direction: column;
@@ -1016,14 +1272,14 @@ svg.highlight-layer {
 
 .readerpage-tocItemTitle {
   font-size: 13.5px;
-  font-weight: 650;
-  color: #111827;
+  font-weight: 700;
+  color: var(--reader-ink);
   line-height: 1.25;
 }
 
 .readerpage-tocItemPage {
   font-size: 12px;
-  font-weight: 850;
+  font-weight: 900;
   color: #6b7280;
   padding-left: 10px;
 }
@@ -1087,7 +1343,7 @@ svg.highlight-layer {
 
 /* =========================================================
    Outline resize handle (desktop)
-========================================================= */
+   ========================================================= */
 .readerOutlineResizeHandle {
   display: none;
 }
@@ -1124,32 +1380,51 @@ svg.highlight-layer {
 
 /* =========================================================
    Outline header actions + search
-========================================================= */
+   ========================================================= */
 .readerOutlineHeaderActions {
   display: inline-flex;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
   margin-left: auto;
   margin-right: 8px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .readerOutlineMiniBtn {
-  border: 1px solid rgba(229, 231, 235, 0.9);
-  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(229, 231, 235, 0.95);
+  background: rgba(255, 255, 255, 0.88);
   padding: 6px 10px;
   border-radius: 999px;
-  font-weight: 800;
+  font-weight: 900;
   font-size: 12px;
   color: #374151;
   cursor: pointer;
+  white-space: nowrap;
+}
+
+.reader-shell.dark .readerOutlineMiniBtn {
+  background: rgba(17, 24, 39, 0.75);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #e5e7eb;
 }
 
 .readerOutlineMiniBtn:hover {
   background: rgba(255, 255, 255, 1);
 }
 
+.reader-shell.dark .readerOutlineMiniBtn:hover {
+  background: rgba(17, 24, 39, 0.85);
+}
+
 .readerOutlineMiniBtn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.readerOutlineMiniBtn.laAccent {
+  border-color: rgba(107, 35, 59, 0.30);
+  background: rgba(107, 35, 59, 0.08);
 }
 
 .readerOutlineSearchWrap {
@@ -1164,12 +1439,20 @@ svg.highlight-layer {
   padding: 10px 36px 10px 12px;
   font-size: 13px;
   outline: none;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--reader-ink);
+  font-weight: 800;
+}
+
+.reader-shell.dark .readerOutlineSearch {
+  background: rgba(0, 0, 0, 0.22);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #e5e7eb;
 }
 
 .readerOutlineSearch:focus {
-  border-color: rgba(139, 28, 28, 0.35); /* LawAfrica maroon feel */
-  box-shadow: 0 0 0 3px rgba(139, 28, 28, 0.10);
+  border-color: rgba(107, 35, 59, 0.35);
+  box-shadow: 0 0 0 3px rgba(107, 35, 59, 0.10);
 }
 
 .readerOutlineClear {
@@ -1195,16 +1478,12 @@ svg.highlight-layer {
 }
 
 .readerOutlineHint span {
-  font-weight: 800;
+  font-weight: 900;
 }
 
 /* =========================================================
    Outline tree rows
-========================================================= */
-.readerOutlineRow {
-  margin-left: calc(var(--outline-depth, 0) * 14px); /* legacy fallback if still used */
-}
-
+   ========================================================= */
 .readerOutlineRowInner {
   display: flex;
   align-items: stretch;
@@ -1219,7 +1498,7 @@ svg.highlight-layer {
   cursor: pointer;
   font-size: 14px;
   line-height: 34px;
-  color: #111827;
+  color: var(--reader-ink);
   opacity: 1;
 }
 
@@ -1232,51 +1511,58 @@ svg.highlight-layer {
   margin-top: 2px;
 }
 
-/* active item highlight */
+/* Active item highlight */
 .readerpage-tocItem.active {
-  border-color: rgba(139, 28, 28, 0.35);
-  background: rgba(139, 28, 28, 0.06);
+  border-color: rgba(107, 35, 59, 0.32);
+  background: rgba(107, 35, 59, 0.06);
 }
 
 .readerpage-tocItem.active .readerpage-tocItemTitle {
-  color: #7a1414;
-  font-weight: 900;
+  color: var(--la-red);
+  font-weight: 950;
 }
 
-/* Future-proof: use depth-* classes instead of inline vars */
-.readerOutlineRow.depth-0 { margin-left: 0; }
-.readerOutlineRow.depth-1 { margin-left: 14px; }
-.readerOutlineRow.depth-2 { margin-left: 28px; }
-.readerOutlineRow.depth-3 { margin-left: 42px; }
-.readerOutlineRow.depth-4 { margin-left: 56px; }
-.readerOutlineRow.depth-5 { margin-left: 70px; }
-.readerOutlineRow.depth-6 { margin-left: 84px; }
-.readerOutlineRow.depth-7 { margin-left: 98px; }
-.readerOutlineRow.depth-8 { margin-left: 112px; }
-.readerOutlineRow.depth-9 { margin-left: 126px; }
-.readerOutlineRow.depth-10 { margin-left: 140px; }
-.readerOutlineRow.depth-11 { margin-left: 154px; }
-.readerOutlineRow.depth-12 { margin-left: 168px; }
+/* Depth indentation (matches your JSX depth classes: readerOutlineDepth-*) */
+.readerOutlineDepth-0 { margin-left: 0; }
+.readerOutlineDepth-1 { margin-left: 14px; }
+.readerOutlineDepth-2 { margin-left: 28px; }
+.readerOutlineDepth-3 { margin-left: 42px; }
+.readerOutlineDepth-4 { margin-left: 56px; }
+.readerOutlineDepth-5 { margin-left: 70px; }
+.readerOutlineDepth-6 { margin-left: 84px; }
+.readerOutlineDepth-7 { margin-left: 98px; }
+.readerOutlineDepth-8 { margin-left: 112px; }
+.readerOutlineDepth-9 { margin-left: 126px; }
+.readerOutlineDepth-10 { margin-left: 140px; }
+.readerOutlineDepth-11 { margin-left: 154px; }
+.readerOutlineDepth-12 { margin-left: 168px; }
 
 /* =========================================================
    ToC: Offset card + AI mini + Advanced summary
-   (moved from inline styles)
-========================================================= */
+   ========================================================= */
 
-/* Offset status card */
-.readerOffsetCard {
+/* Offset status card (supports your existing laInlineOffsetCard markup too) */
+.readerOffsetCard,
+.laInlineOffsetCard {
   margin-bottom: 10px;
   padding: 10px;
   border-radius: 14px;
   border: 1px solid rgba(15, 23, 42, 0.10);
-  background: rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.70);
   font-size: 12px;
   line-height: 1.35;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
 
-.readerOffsetRow {
+.reader-shell.dark .readerOffsetCard,
+.reader-shell.dark .laInlineOffsetCard {
+  background: rgba(17, 24, 39, 0.65);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+.readerOffsetRow,
+.laInlineOffsetRow {
   display: flex;
   justify-content: space-between;
   gap: 10px;
@@ -1284,124 +1570,180 @@ svg.highlight-layer {
   align-items: center;
 }
 
-.readerOffsetTip {
+.readerOffsetTip,
+.laInlineOffsetTip {
   margin-top: 6px;
   opacity: 0.8;
 }
 
-/* Mini AI box */
-.readerAiBox {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(15, 23, 42, 0.12);
+.laInlineOffsetBadge,
+.readerInlineOffsetBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-weight: 900;
+  font-size: 11px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
 }
 
-.readerAiHeader {
+.laInlineOffsetBadge.ok,
+.readerInlineOffsetBadge.ok {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.22);
+}
+
+.laInlineOffsetBadge.warn,
+.readerInlineOffsetBadge.warn {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.22);
+}
+
+/* Mini AI box */
+.readerAiBox,
+.laInlineTocSummary {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 10px 28px rgba(2, 6, 23, 0.06);
+}
+
+.reader-shell.dark .readerAiBox,
+.reader-shell.dark .laInlineTocSummary {
+  background: rgba(17, 24, 39, 0.62);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+.readerAiHeader,
+.laInlineTocSummaryTop {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
 
-.readerAiHeaderTitle {
-  font-weight: 900;
+.readerAiHeaderTitle,
+.laInlineTocSummaryTitle {
+  font-weight: 950;
   font-size: 13px;
+  letter-spacing: 0.2px;
+  color: var(--reader-ink);
 }
 
-.readerAiSelection {
+.readerAiSelection,
+.laInlineTocSummaryInfo {
   margin-top: 8px;
   font-size: 12px;
-  opacity: 0.9;
+  opacity: 0.92;
 }
 
-.readerAiSelectionTitle {
-  font-weight: 800;
+.readerAiSelectionTitle,
+.laInlineTocSummarySection {
+  font-weight: 900;
 }
 
-.readerAiSelectionMeta {
+.readerAiSelectionMeta,
+.laInlineTocSummaryPages {
   opacity: 0.75;
   margin-top: 2px;
 }
 
-.readerAiButtons {
-  display: flex;
+.readerAiButtons,
+.laInlineTocSummaryBtns {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 8px;
   margin-top: 10px;
 }
 
-.readerAiError {
+@media (max-width: 520px) {
+  .readerAiButtons,
+  .laInlineTocSummaryBtns {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.readerAiError,
+.laInlineError {
   margin-top: 10px;
   color: #b42318;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 800;
 }
 
-/* Summary meta card */
-.readerAiMetaCard {
+/* Summary preview clamp (killer change) */
+.readerAiSummaryText,
+.laInlineSummaryPreview {
   margin-top: 10px;
   padding: 10px;
   border-radius: 14px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: rgba(255, 255, 255, 0.55);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.readerAiMetaRow {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.readerAiWarnings {
-  margin-top: 8px;
-}
-
-.readerAiWarningsTitle {
-  font-weight: 900;
-  margin-bottom: 4px;
-}
-
-.readerAiWarnings ul {
-  margin: 0;
-  padding-left: 18px;
-}
-
-/* Summary text preview */
-.readerAiSummaryText {
-  margin-top: 10px;
-  padding: 10px;
-  border-radius: 14px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: rgba(255, 255, 255, 0.72);
-  max-height: 180px;
-  overflow: auto;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.78);
   font-size: 12px;
   white-space: pre-wrap;
   line-height: 1.45;
 }
 
-/* Advanced summary section */
-.readerAdvancedBox {
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px dashed rgba(15, 23, 42, 0.18);
+.reader-shell.dark .readerAiSummaryText,
+.reader-shell.dark .laInlineSummaryPreview {
+  background: rgba(0, 0, 0, 0.20);
+  border-color: rgba(255, 255, 255, 0.10);
 }
 
-.readerAdvancedHeader {
+/* show more / less button */
+.readerAiToggleBtn,
+.laInlineShowMore {
+  margin-top: 8px;
+  width: 100%;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.82);
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.reader-shell.dark .readerAiToggleBtn,
+.reader-shell.dark .laInlineShowMore {
+  background: rgba(17, 24, 39, 0.75);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #e5e7eb;
+}
+
+/* Advanced summary section */
+.readerAdvancedBox,
+.laInlineAdvanced {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px dashed rgba(15, 23, 42, 0.18);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.reader-shell.dark .readerAdvancedBox,
+.reader-shell.dark .laInlineAdvanced {
+  background: rgba(17, 24, 39, 0.55);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.readerAdvancedHeader,
+.laInlineAdvancedHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
 
-.readerAdvancedTitle {
+.readerAdvancedTitle,
+.laInlineAdvancedTitle {
   font-weight: 950;
   font-size: 13px;
 }
 
-.readerAdvancedToggle {
+.readerAdvancedToggle,
+.laInlineCheckbox {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1410,18 +1752,21 @@ svg.highlight-layer {
   user-select: none;
 }
 
-.readerAdvancedBody {
+.readerAdvancedBody,
+.laInlineAdvancedBody {
   margin-top: 10px;
 }
 
-.readerAdvancedModes {
+.readerAdvancedModes,
+.laInlineRadios {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
   font-size: 12px;
 }
 
-.readerAdvancedModeLabel {
+.readerAdvancedModeLabel,
+.laInlineRadio {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1429,97 +1774,104 @@ svg.highlight-layer {
   user-select: none;
 }
 
-.readerAdvancedOffsetInfo {
+.readerAdvancedOffsetInfo,
+.laInlineOffsetInfo {
   margin-top: 8px;
   font-size: 12px;
-  opacity: 0.9;
+  opacity: 0.92;
 }
 
-.readerAdvancedOffsetWarn {
+.readerAdvancedOffsetWarn,
+.laInlineWarnText {
   margin-top: 6px;
   color: #b42318;
-  font-weight: 750;
+  font-weight: 850;
 }
 
-.readerAdvancedRangeGrid {
+.readerAdvancedRangeGrid,
+.laInlineManualInputs {
   display: flex;
   gap: 10px;
   margin-top: 10px;
 }
 
-.readerAdvancedRangeCol {
+.readerAdvancedRangeCol,
+.laInlineManualCol {
   flex: 1;
 }
 
-.readerAdvancedLabel {
+.readerAdvancedLabel,
+.laInlineManualLabel {
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 950;
   margin-bottom: 6px;
 }
 
-.readerAdvancedEffective {
+.readerAdvancedEffective,
+.laInlineEffectiveRange {
   margin-top: 10px;
   font-size: 12px;
 }
 
-.readerAdvancedEffectiveNote {
+.readerAdvancedEffectiveNote,
+.laInlineEffectiveNote {
   margin-top: 4px;
   color: #b42318;
 }
 
-.readerAdvancedButtons {
+.readerAdvancedButtons,
+.laInlineManualBtns {
   display: flex;
   gap: 8px;
   margin-top: 10px;
+  flex-wrap: wrap;
 }
 
-.readerAdvancedTip {
+.readerAdvancedTip,
+.laInlineHint {
   margin-top: 8px;
   font-size: 12px;
   opacity: 0.75;
 }
 
 /* =========================================================
-   Responsive tweaks
-========================================================= */
-@media (max-width: 520px) {
-  .reader-topbar-inner {
-    padding: 10px 10px;
-  }
-
-  .reader-chip {
-    height: 30px;
-    padding: 0 8px;
-  }
-
-  .icon-btn {
-    height: 32px;
-    min-width: 32px;
-    padding: 0 9px;
-  }
-
-  .reader-fab {
-    bottom: 12px;
-  }
-
-  .fab-mid {
-    display: none;
-  }
-
-  .toast {
-    top: 10px;
-    width: min(92vw, 520px);
-    justify-content: center;
-    text-align: center;
-  }
-/* =========================
-   AI Summary Modal (Popup) — CANONICAL
-   Matches SectionSummaryPanel.jsx (overlay + modal)
-   ========================= */
-
-.laModalOpen {
-  overflow: hidden;
+   Reusable buttons used by DocumentReader
+   ========================================================= */
+.outline-btn,
+.primary-btn {
+  appearance: none;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-weight: 950;
+  cursor: pointer;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.90);
+  color: #111827;
 }
+
+.outline-btn:hover {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.primary-btn {
+  border-color: rgba(107, 35, 59, 0.35);
+  background: rgba(107, 35, 59, 0.10);
+}
+
+.primary-btn:hover {
+  background: rgba(107, 35, 59, 0.14);
+}
+
+.outline-btn:disabled,
+.primary-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   AI Summary Modal (SectionSummaryPanel.jsx) — CANONICAL
+   ========================================================= */
+.laModalOpen { overflow: hidden; }
 
 /* overlay */
 .laSummaryOverlay {
@@ -1532,8 +1884,10 @@ svg.highlight-layer {
   padding: 16px;
 }
 
-.laSummaryOverlay.open { opacity: 1; }
-.laSummaryOverlay.closing { opacity: 0; transition: opacity 160ms ease; }
+.laSummaryOverlay.closing {
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
 
 /* modal */
 .laSummaryModal {
@@ -1546,13 +1900,16 @@ svg.highlight-layer {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-
-  transform: translateY(0);
 }
 
 .laSummaryModal.expanded {
   width: min(1040px, calc(100vw - 24px));
   max-height: 90vh;
+}
+
+.reader-shell.dark .laSummaryModal {
+  background: rgba(17, 24, 39, 0.98);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 /* header */
@@ -1566,14 +1923,17 @@ svg.highlight-layer {
   background: rgba(255, 255, 255, 0.92);
 }
 
-.laSummaryHeaderLeft {
-  min-width: 0;
+.reader-shell.dark .laSummaryHeader {
+  background: rgba(17, 24, 39, 0.92);
+  border-color: rgba(255, 255, 255, 0.10);
 }
+
+.laSummaryHeaderLeft { min-width: 0; }
 
 .laSummaryKicker {
   font-size: 12px;
-  font-weight: 900;
-  color: rgba(139, 28, 28, 0.70); /* LawAfrica maroon feel */
+  font-weight: 950;
+  color: rgba(107, 35, 59, 0.70);
   letter-spacing: 0.2px;
 }
 
@@ -1581,7 +1941,7 @@ svg.highlight-layer {
   margin-top: 2px;
   font-size: 15px;
   font-weight: 950;
-  color: #111827;
+  color: var(--reader-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1597,7 +1957,12 @@ svg.highlight-layer {
   border-radius: 12px;
   cursor: pointer;
   font-weight: 950;
-  color: #111827;
+  color: var(--reader-ink);
+}
+
+.reader-shell.dark .laSummaryIconBtn {
+  background: rgba(17, 24, 39, 0.80);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .laSummaryIconBtn:hover {
@@ -1615,6 +1980,11 @@ svg.highlight-layer {
   background: rgba(248, 250, 252, 0.80);
 }
 
+.reader-shell.dark .laSummaryControls {
+  background: rgba(2, 6, 23, 0.30);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
 .laSummaryTypePills {
   display: inline-flex;
   gap: 8px;
@@ -1627,14 +1997,20 @@ svg.highlight-layer {
   background: rgba(255, 255, 255, 0.92);
   padding: 7px 12px;
   border-radius: 999px;
-  font-weight: 900;
+  font-weight: 950;
   font-size: 12px;
   cursor: pointer;
 }
 
+.reader-shell.dark .laPill {
+  background: rgba(17, 24, 39, 0.80);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #e5e7eb;
+}
+
 .laPill.active {
-  border-color: rgba(139, 28, 28, 0.35);
-  box-shadow: 0 0 0 3px rgba(139, 28, 28, 0.10);
+  border-color: rgba(107, 35, 59, 0.35);
+  box-shadow: 0 0 0 3px rgba(107, 35, 59, 0.10);
 }
 
 .laSummaryHeaderActions {
@@ -1655,13 +2031,19 @@ svg.highlight-layer {
   cursor: pointer;
 }
 
+.reader-shell.dark .laActionBtn {
+  background: rgba(17, 24, 39, 0.80);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #e5e7eb;
+}
+
 .laActionBtn:hover {
   background: rgba(15, 23, 42, 0.04);
 }
 
 .laActionBtn.primary {
-  border-color: rgba(139, 28, 28, 0.35);
-  background: rgba(139, 28, 28, 0.08);
+  border-color: rgba(107, 35, 59, 0.35);
+  background: rgba(107, 35, 59, 0.10);
 }
 
 .laActionBtn:disabled,
@@ -1682,7 +2064,7 @@ svg.highlight-layer {
   border-radius: 14px;
   border: 1px solid rgba(15, 23, 42, 0.10);
   background: rgba(248, 250, 252, 0.80);
-  font-weight: 900;
+  font-weight: 950;
   color: rgba(15, 23, 42, 0.75);
 }
 
@@ -1693,23 +2075,7 @@ svg.highlight-layer {
   border-color: rgba(239, 68, 68, 0.30);
 }
 
-/* footer */
-.laSummaryFooter {
-  border-top: 1px solid rgba(15, 23, 42, 0.08);
-  padding: 10px 16px;
-  background: rgba(255, 255, 255, 0.92);
-}
-
-.laSummaryFooterHint {
-  font-size: 12px;
-  font-weight: 800;
-  color: rgba(15, 23, 42, 0.60);
-}
-
-/* =========================
-   Premium section cards (screen 1)
-   ========================= */
-
+/* premium section cards */
 .laSummarySectionCard {
   position: relative;
   border-radius: 16px;
@@ -1719,6 +2085,11 @@ svg.highlight-layer {
   padding: 12px 14px;
   margin-bottom: 12px;
   overflow: hidden;
+}
+
+.reader-shell.dark .laSummarySectionCard {
+  background: rgba(17, 24, 39, 0.92);
+  border-color: rgba(255, 255, 255, 0.10);
 }
 
 .laSummarySectionCard::before {
@@ -1754,7 +2125,7 @@ svg.highlight-layer {
   font-weight: 950;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #111827;
+  color: var(--reader-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1763,6 +2134,10 @@ svg.highlight-layer {
 .laSummarySectionBody {
   font-size: 13px;
   color: rgba(15, 23, 42, 0.92);
+}
+
+.reader-shell.dark .laSummarySectionBody {
+  color: rgba(229, 231, 235, 0.86);
 }
 
 .laSummaryP {
@@ -1780,21 +2155,12 @@ svg.highlight-layer {
   line-height: 1.55;
 }
 
-/* Key-points look (used for Takeaways / case-scenario vibe) */
-.laSummaryUlKeypoints {
-  list-style: disc;
-}
-
-.laSummarySectionCard.scenario {
-  background: linear-gradient(180deg, rgba(139, 28, 28, 0.04), rgba(255, 255, 255, 0.96));
-}
-
 /* Accent palettes */
 .laAccent-neutral .laSummarySectionDot { background: rgba(15, 23, 42, 0.28); }
 .laAccent-neutral::before { background: rgba(15, 23, 42, 0.16); }
 
-.laAccent-keypoints .laSummarySectionDot { background: rgba(139, 28, 28, 0.55); }
-.laAccent-keypoints::before { background: rgba(139, 28, 28, 0.40); }
+.laAccent-keypoints .laSummarySectionDot { background: rgba(107, 35, 59, 0.55); }
+.laAccent-keypoints::before { background: rgba(107, 35, 59, 0.40); }
 
 .laAccent-terms .laSummarySectionDot { background: rgba(59, 130, 246, 0.55); }
 .laAccent-terms::before { background: rgba(59, 130, 246, 0.38); }
@@ -1813,407 +2179,60 @@ svg.highlight-layer {
 
 .laAccent-reasoning .laSummarySectionDot { background: rgba(168, 85, 247, 0.60); }
 .laAccent-reasoning::before { background: rgba(168, 85, 247, 0.40); }
-}
-.laSummaryState.muted {
-  opacity: 0.85;
-}
 
-/* "Report-like" section pills + cards */
-.laSumSection {
-  margin-top: 14px;
-}
-
-.laSumPillRow {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, 0.10);
-  background: rgba(255, 255, 255, 0.85);
-  font-weight: 900;
-  font-size: 12px;
-  letter-spacing: 0.2px;
-}
-
-.laSumDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.35);
-}
-
-.laSumCard {
-  margin-top: 10px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(15, 23, 42, 0.10);
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 12px 30px rgba(2, 6, 23, 0.08);
-  position: relative;
-}
-
-.laSumCard::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 10px;
-  bottom: 10px;
-  width: 4px;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.15);
-}
-
-/* Accents (like your screenshot) */
-.laAccent-facts .laSumDot { background: rgba(34, 197, 94, 0.55); }
-.laAccent-facts .laSumCard::before { background: rgba(34, 197, 94, 0.45); }
-
-.laAccent-issues .laSumDot { background: rgba(59, 130, 246, 0.55); }
-.laAccent-issues .laSumCard::before { background: rgba(59, 130, 246, 0.40); }
-
-.laAccent-holding .laSumDot { background: rgba(239, 68, 68, 0.55); }
-.laAccent-holding .laSumCard::before { background: rgba(239, 68, 68, 0.35); }
-
-.laAccent-reasoning .laSumDot { background: rgba(168, 85, 247, 0.55); }
-.laAccent-reasoning .laSumCard::before { background: rgba(168, 85, 247, 0.35); }
-
-.laAccent-takeaways .laSumDot { background: rgba(245, 158, 11, 0.65); }
-.laAccent-takeaways .laSumCard::before { background: rgba(245, 158, 11, 0.40); }
-
-.laSummaryP {
-  margin: 0 0 10px;
-  font-size: 13px;
-  line-height: 1.55;
-  color: rgba(15, 23, 42, 0.90);
-}
-
-.laSummaryUl {
-  margin: 0;
-  padding-left: 18px;
-}
-
-.laSummaryLi {
-  margin: 6px 0;
-  font-size: 13px;
-  line-height: 1.55;
-  color: rgba(15, 23, 42, 0.90);
-}
-
-/* Footer actions */
-.laSummaryActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 12px 16px;
-  border-top: 1px solid rgba(15, 23, 42, 0.10);
-  background: rgba(248, 250, 252, 0.75);
-}
-
-.laActionBtn {
-  border: 1px solid rgba(15, 23, 42, 0.14);
-  background: rgba(255, 255, 255, 0.92);
-  padding: 9px 12px;
-  border-radius: 12px;
-  font-weight: 900;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.laActionBtn.primary {
-  border-color: rgba(139, 28, 28, 0.35);
-  background: rgba(139, 28, 28, 0.08);
-}
-
-.laActionBtn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-/* --- ToC header actions: keep on one line --- */
-.readerOutlineHeaderActions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: nowrap;
-  white-space: nowrap;
-}
-
-.readerOutlineMiniBtn {
-  white-space: nowrap;
-}
-
-/* compact icon button */
-.readerOutlineIconBtn {
-  height: 34px;
-  width: 34px;
-  border-radius: 999px;
-  border: 1px solid rgba(229, 231, 235, 0.95);
-  background: rgba(255, 255, 255, 0.9);
-  cursor: pointer;
-  font-weight: 900;
-  font-size: 16px;
-  line-height: 1;
-  color: #111827;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.readerOutlineIconBtn:hover {
-  background: rgba(15, 23, 42, 0.04);
-}
-
-/* --- Summary modal backdrop --- */
-.laSummaryBackdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.35);
-  backdrop-filter: blur(2px);
-  z-index: 9998;
-}
-
-/* --- Summary modal --- */
-.laSummaryPanel {
-  position: fixed;
-  top: 18px;
-  left: 18px;
-  width: min(520px, calc(100vw - 36px));
-  height: calc(100vh - 36px);
-  z-index: 9999;
-
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  border-radius: 16px;
-  box-shadow: 0 24px 80px rgba(2, 6, 23, 0.22);
-
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-/* tab row: never wrap */
-.laSummaryTypePills {
-  display: inline-flex;
-  gap: 8px;
-  flex-wrap: nowrap;
-  white-space: nowrap;
-}
-
-/* section headers bold + clear */
-.laSummaryH3 {
-  font-weight: 900;
-  letter-spacing: 0.2px;
-  margin: 14px 0 8px;
-}
-
-/* optional: give headings a subtle divider feel */
-.laSummarySection + .laSummarySection {
-  padding-top: 4px;
-}/* Modal overlay */
-.laSummaryOverlay{
-  position: fixed;
-  inset: 0;
-  background: rgba(16, 24, 40, 0.45);
-  display: grid;
-  place-items: center;
-  z-index: 9999;
-  padding: 16px;
-}
-
-.laSummaryModal{
-  width: min(920px, calc(100vw - 24px));
-  max-height: min(86vh, 860px);
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 24px 64px rgba(16, 24, 40, 0.22);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.laSummaryPanelHeader{
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
-  border-bottom: 1px solid #eef2f7;
-}
-
-.laSummaryKicker{
-  font-size: 12px;
-  color: #667085;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  text-transform: none;
-  margin-bottom: 4px;
-}
-
-.laSummaryTitle{
-  font-size: 16px;
-  font-weight: 800;
-  color: #101828;
-  line-height: 1.25;
-}
-
-.laSummaryIconBtn{
-  border: 1px solid #e4e7ec;
-  background: #fff;
-  border-radius: 10px;
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-}
-
-.laSummaryPanelSubHeader{
+/* footer */
+.laSummaryFooter {
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
   padding: 10px 16px;
-  border-bottom: 1px solid #eef2f7;
+  background: rgba(255, 255, 255, 0.92);
 }
 
-.laSummaryTypePills{
-  display: flex;
-  gap: 8px;
-  flex-wrap: nowrap;
+.reader-shell.dark .laSummaryFooter {
+  background: rgba(17, 24, 39, 0.92);
+  border-color: rgba(255, 255, 255, 0.10);
 }
 
-.laPill{
-  border: 1px solid #e4e7ec;
-  background: #fff;
-  border-radius: 999px;
-  padding: 7px 10px;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
+.laSummaryFooterHint {
+  font-size: 12px;
+  font-weight: 850;
+  color: rgba(15, 23, 42, 0.60);
 }
 
-.laPill.active{
-  border-color: #d0d5dd;
-  box-shadow: 0 0 0 3px rgba(152, 162, 179, 0.25);
+.reader-shell.dark .laSummaryFooterHint {
+  color: rgba(229, 231, 235, 0.72);
 }
 
-.laSummaryBody{
-  padding: 12px 16px 0;
-  overflow: auto;
-  flex: 1;
-}
-
-.laSummaryContent{
-  padding-bottom: 16px;
-}
-
-.laSummarySection{
-  margin-bottom: 14px;
-}
-
-.laSummaryH3{
-  font-size: 13px;
-  font-weight: 900;
-  color: #101828;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  margin: 14px 0 8px;
-}
-
-.laSummaryUl{
-  margin: 0;
-  padding-left: 18px;
-}
-
-.laSummaryLi{
-  margin: 6px 0;
-  line-height: 1.55;
-}
-
-.laSummaryP{
-  margin: 8px 0;
-  line-height: 1.65;
-}
-
-.laSummaryActions{
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  padding: 12px 16px;
-  border-top: 1px solid #eef2f7;
-  background: #fff;
-}
-
-.laActionBtn{
-  border: 1px solid #e4e7ec;
-  background: #fff;
-  border-radius: 10px;
-  padding: 9px 12px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.laActionBtn.primary{
-  border-color: #f04438;
-  background: #fef3f2;
-}
-
-.laSummaryState{
-  padding: 14px 0;
-  color: #101828;
-  font-weight: 600;
-}
-
-.laSummaryState.muted{
-  color: #667085;
-}
-
-.laSummaryState.error{
-  color: #b42318;
-}
-/* Keep DocumentReader clean: hide meta blocks */
-.readerAiMetaCard,
-.readerAiSummaryText {
-  display: none !important;
-}
-/* =========================
-   ToC AI Controls polish (screen 2)
-   ========================= */
-
-.readerAiBox {
-  margin-top: 12px;
-  padding: 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(15, 23, 42, 0.10);
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: 0 10px 28px rgba(2, 6, 23, 0.06);
-}
-
-.readerAiHeaderTitle {
-  font-weight: 950;
-  font-size: 13px;
-  letter-spacing: 0.2px;
-  color: #111827;
-}
-
-.readerAiButtons {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.readerAiButtons .readerOutlineMiniBtn,
-.readerAiButtons button {
-  height: 36px;
-  border-radius: 12px;
-  font-weight: 950;
-}
-
-.readerAiButtons .primary,
-.readerAiButtons .danger {
-  border-color: rgba(139, 28, 28, 0.35);
-  background: rgba(139, 28, 28, 0.08);
-}
-
+/* =========================================================
+   Responsive tweaks
+   ========================================================= */
 @media (max-width: 520px) {
-  .readerAiButtons {
-    grid-template-columns: 1fr 1fr;
+  .reader-topbar-inner {
+    padding: 10px 10px;
+  }
+
+  .reader-chip {
+    height: 30px;
+    padding: 0 8px;
+  }
+
+  .icon-btn {
+    height: 32px;
+    min-width: 32px;
+    padding: 0 9px;
+  }
+
+  .reader-fab {
+    bottom: 12px;
+  }
+
+  .fab-mid {
+    display: none;
+  }
+
+  .toast {
+    top: 10px;
+    width: min(92vw, 520px);
+    justify-content: center;
+    text-align: center;
   }
 }
-
-
