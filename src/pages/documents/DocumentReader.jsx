@@ -1839,6 +1839,23 @@ export default function DocumentReader() {
               </div>
             ) : null}
 
+           /* {/* ✅ Clamp preview + show more/less */}
+            {sectionSummaryText ? (
+              <div className="laInlineSummaryPreviewWrap">
+                <div className="laInlineSummaryPreview">{aiPreview}</div>
+
+                {hasAiOverflow ? (
+                  <button
+                    type="button"
+                    className="readerOutlineMiniBtn"
+                    onClick={() => setAiPreviewExpanded((p) => !p)}
+                    title={aiPreviewExpanded ? "Show less" : "Show more"}
+                  >
+                    {aiPreviewExpanded ? "Show less" : "Show more"}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           {/* Advanced summary (manual pages) */}

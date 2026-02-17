@@ -109,6 +109,72 @@ function applyHighlightByOffsets(textLayerEl, start, end, noteId, color = "yello
   }
 }
 
+/* ---------- Find helpers (simple + safe) ---------- */
+function escapeRegExp(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function clearFindMarks(textLayerEl) {
+  const marks = textLayerEl.querySelectorAll("mark.pdf-find");
+  marks.forEach((mark) => {
+    const parent = mark.parentNode;
+    while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+    parent.removeChild(mark);
+    parent.normalize();
+  });
+}
+
+/**
+ * Simple highlight: highlights matches *within individual spans*.
+ * (Won't catch matches spanning multiple spans, but works well in practice and is fast.)
+ */
+function applyFindHighlight(textLayerEl, query) {
+  const q = String(query || "").trim();
+  if (!q) return;
+
+  clearFindMarks(textLayerEl);
+
+  const spans = Array.from(textLayerEl.querySelectorAll("span"));
+  if (!spans.length) return;
+
+  const re = new RegExp(escapeRegExp(q), "gi");
+
+  for (const span of spans) {
+    const t = span.textContent || "";
+    if (!t) continue;
+    if (!re.test(t)) continue;
+
+    // reset lastIndex (global regex)
+    re.lastIndex = 0;
+
+    const parts = [];
+    let last = 0;
+    let m;
+
+    while ((m = re.exec(t)) !== null) {
+      const start = m.index;
+      const end = start + m[0].length;
+
+      if (start > last) parts.push(document.createTextNode(t.slice(last, start)));
+
+      const mark = document.createElement("mark");
+      mark.className = "pdf-find";
+      mark.textContent = t.slice(start, end);
+      parts.push(mark);
+
+      last = end;
+
+      // safety
+      if (re.lastIndex === m.index) re.lastIndex++;
+    }
+
+    if (last < t.length) parts.push(document.createTextNode(t.slice(last)));
+
+    span.textContent = "";
+    for (const p of parts) span.appendChild(p);
+  }
+}
+
 /** Defer state updates so we don't setState synchronously in effect bodies */
 function defer(fn) {
   if (typeof queueMicrotask === "function") queueMicrotask(fn);
@@ -123,10 +189,13 @@ export default function PdfViewer({
   startPage = 1,
   maxAllowedPage = null,
   onPreviewLimitReached,
-  onRegisterApi, // parent uses this for ToC click: { jumpToPage, getCurrentPage, onPageChange }
+  onRegisterApi,
 }) {
   const [numPages, setNumPages] = useState(null);
   const [page, setPage] = useState(startPage || 1);
+
+  // pdf proxy (from react-pdf)
+  const pdfRef = useRef(null);
 
   // ✅ Always-current page value for external polling / reads
   const currentPageRef = useRef(startPage || 1);
@@ -175,6 +244,19 @@ export default function PdfViewer({
   const [pageJumpError, setPageJumpError] = useState("");
   const pageJumpInputRef = useRef(null);
 
+  /* ---------------- Find in PDF ---------------- */
+  const [showFind, setShowFind] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [findBusy, setFindBusy] = useState(false);
+  const [findError, setFindError] = useState("");
+  const [findResults, setFindResults] = useState([]); // array of page numbers (unique)
+  const [findActiveIdx, setFindActiveIdx] = useState(0);
+  const findInputRef = useRef(null);
+
+  // text cache per page
+  const pageTextCacheRef = useRef(new Map()); // pageNumber -> string
+  const findAbortRef = useRef({ aborted: false });
+
   const isProgrammaticNavRef = useRef(false);
 
   /* ---------------- Notes ---------------- */
@@ -199,7 +281,6 @@ export default function PdfViewer({
   const scrollRootRef = useRef(null);
   const pageObserverRef = useRef(null);
 
-  // ✅ used to make scroll-based detection fallback-only
   const observerReadyRef = useRef(false);
   const fallbackIdleTimerRef = useRef(null);
 
@@ -258,6 +339,18 @@ export default function PdfViewer({
     clearTimeout(snapTimeoutRef.current);
     if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
     scrollRafRef.current = null;
+
+    // reset find cache/state
+    pageTextCacheRef.current = new Map();
+    findAbortRef.current.aborted = true;
+    defer(() => {
+      setShowFind(false);
+      setFindQuery("");
+      setFindResults([]);
+      setFindActiveIdx(0);
+      setFindBusy(false);
+      setFindError("");
+    });
 
     defer(() => {
       setNumPages(null);
@@ -439,7 +532,7 @@ export default function PdfViewer({
     readingStartRef.current = Date.now();
   }, [documentId]);
 
-  // ✅ if preview maxAllowedPage changes (e.g. after access loads), clamp current page safely
+  // ✅ clamp current page safely
   useEffect(() => {
     const max = allowedMaxPage ?? numPages ?? null;
     if (!max) return;
@@ -448,7 +541,7 @@ export default function PdfViewer({
   }, [allowedMaxPage, numPages]);
 
   /* ==================================================
-     ✅ Unified page commit (prevents observer vs scroll fighting)
+     ✅ Unified page commit
      ================================================== */
   const commitDetectedPage = useCallback(
     (detectedPage) => {
@@ -489,7 +582,7 @@ export default function PdfViewer({
   );
 
   /* ==================================================
-     Scroll-based current-page detection (fallback-only)
+     Scroll fallback-only
      ================================================== */
   const computePageFromScroll = useCallback(() => {
     const root = scrollRootRef.current;
@@ -607,6 +700,7 @@ export default function PdfViewer({
     setPageJumpError("");
     setPageJumpValue(String(page));
     setShowPageJump(true);
+    setShowFind(false);
   }, [page]);
 
   const submitPageJump = useCallback(() => {
@@ -648,6 +742,121 @@ export default function PdfViewer({
   }, [showPageJump]);
 
   /* ==================================================
+     Find in PDF (text extraction + page list)
+     ================================================== */
+  const openFind = useCallback(() => {
+    setShowFind(true);
+    setShowPageJump(false);
+    setFindError("");
+    setTimeout(() => {
+      const el = findInputRef.current;
+      if (el) {
+        el.focus();
+        try {
+          el.select();
+        } catch {
+          //
+        }
+      }
+    }, 0);
+  }, []);
+
+  const closeFind = useCallback(() => {
+    setShowFind(false);
+    setFindBusy(false);
+    setFindError("");
+  }, []);
+
+  const extractPageText = useCallback(async (pdf, pageNumber) => {
+    if (!pdf) return "";
+    const cached = pageTextCacheRef.current.get(pageNumber);
+    if (cached != null) return cached;
+
+    const p = await pdf.getPage(pageNumber);
+    const content = await p.getTextContent();
+    const text = (content?.items || []).map((it) => it?.str || "").join(" ");
+    pageTextCacheRef.current.set(pageNumber, text);
+    return text;
+  }, []);
+
+  const runFind = useCallback(async () => {
+    const q = String(findQuery || "").trim();
+    if (!q) {
+      setFindResults([]);
+      setFindActiveIdx(0);
+      setFindError("Type something to search.");
+      return;
+    }
+
+    const pdf = pdfRef.current;
+    if (!pdf) {
+      setFindError("PDF not ready yet.");
+      return;
+    }
+
+    const max = allowedMaxPage ?? numPages ?? 0;
+    if (!max) return;
+
+    setFindBusy(true);
+    setFindError("");
+    setFindResults([]);
+    setFindActiveIdx(0);
+
+    // cancel any previous run
+    findAbortRef.current.aborted = true;
+    findAbortRef.current = { aborted: false };
+
+    const abortObj = findAbortRef.current;
+
+    try {
+      const hits = [];
+      const needle = q.toLowerCase();
+
+      // progressive scan (fast enough; cache helps a lot)
+      for (let pg = 1; pg <= max; pg++) {
+        if (abortObj.aborted) return;
+
+        const text = await extractPageText(pdf, pg);
+        if (String(text).toLowerCase().includes(needle)) hits.push(pg);
+
+        // yield occasionally
+        if (pg % 4 === 0) await new Promise((r) => setTimeout(r, 0));
+      }
+
+      if (abortObj.aborted) return;
+
+      setFindResults(hits);
+      if (hits.length === 0) {
+        setFindError("No matches found.");
+        return;
+      }
+
+      // jump to first match
+      setFindActiveIdx(0);
+      safeSetPage(hits[0]);
+    } catch (err) {
+      console.warn("find failed:", err);
+      setFindError("Search failed. Try again.");
+    } finally {
+      setFindBusy(false);
+    }
+  }, [findQuery, allowedMaxPage, numPages, extractPageText, safeSetPage]);
+
+  const goFindNext = useCallback(() => {
+    if (!findResults.length) return;
+    const next = (findActiveIdx + 1) % findResults.length;
+    setFindActiveIdx(next);
+    safeSetPage(findResults[next]);
+  }, [findResults, findActiveIdx, safeSetPage]);
+
+  const goFindPrev = useCallback(() => {
+    if (!findResults.length) return;
+    const prev = (findActiveIdx - 1 + findResults.length) % findResults.length;
+    setFindActiveIdx(prev);
+    safeSetPage(findResults[prev]);
+  }, [findResults, findActiveIdx, safeSetPage]);
+
+  /* ==================================================
      KEYBOARD SHORTCUTS
      ================================================== */
   useEffect(() => {
@@ -657,6 +866,15 @@ export default function PdfViewer({
         tag === "input" ||
         tag === "textarea" ||
         document.activeElement?.isContentEditable;
+
+      // Ctrl/Cmd+F should open our find (even if typing is false)
+      const isFindCombo = (e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "F");
+      if (isFindCombo) {
+        e.preventDefault();
+        openFind();
+        return;
+      }
+
       if (typing) return;
 
       if (e.key === "ArrowLeft") {
@@ -684,12 +902,53 @@ export default function PdfViewer({
         if (showNoteBox) setShowNoteBox(false);
         if (showNotes) setShowNotes(false);
         if (showPageJump) setShowPageJump(false);
+        if (showFind) closeFind();
+      } else if (e.key === "Enter" && showFind) {
+        // quick "enter to search"
+        runFind();
       }
     }
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [page, numPages, allowedMaxPage, showNoteBox, showNotes, showPageJump, safeSetPage, openPageJump]);
+  }, [
+    page,
+    numPages,
+    allowedMaxPage,
+    showNoteBox,
+    showNotes,
+    showPageJump,
+    showFind,
+    safeSetPage,
+    openPageJump,
+    openFind,
+    closeFind,
+    runFind,
+  ]);
+
+  /* ==================================================
+     Close popovers on outside click
+     ================================================== */
+  useEffect(() => {
+    function onDown(e) {
+      const pop = document.querySelector(".reader-popover");
+      if (!pop) return;
+
+      // if click is inside any popover, ignore
+      if (pop.contains(e.target)) return;
+
+      // close
+      setShowPageJump(false);
+      setShowFind(false);
+      setPageJumpError("");
+      setFindError("");
+    }
+
+    if (showPageJump || showFind) {
+      window.addEventListener("mousedown", onDown);
+      return () => window.removeEventListener("mousedown", onDown);
+    }
+  }, [showPageJump, showFind]);
 
   /* ==================================================
      Highlight capture
@@ -769,7 +1028,6 @@ export default function PdfViewer({
 
       const target = Math.min(Math.max(1, raw), max);
 
-      // ✅ If parent tries to jump outside preview, block + notify
       if (maxAllowedPage && raw > maxAllowedPage) {
         if (typeof onPreviewLimitReached === "function") onPreviewLimitReached();
         return false;
@@ -900,9 +1158,16 @@ export default function PdfViewer({
         }
       }
 
+      // apply find highlight on the current page only
+      if (showFind && findQuery && (findResults?.includes?.(pageNumber) || pageNumber === page)) {
+        applyFindHighlight(textLayer, findQuery);
+      } else {
+        clearFindMarks(textLayer);
+      }
+
       attachHighlightClickHandler(textLayer);
     },
-    [notes, attachHighlightClickHandler]
+    [notes, attachHighlightClickHandler, showFind, findQuery, findResults, page]
   );
 
   useEffect(() => {
@@ -1077,8 +1342,24 @@ export default function PdfViewer({
               +
             </button>
 
-            <button className="icon-btn" onClick={openPageJump} title="Go to page (G)" type="button">
-              🔎
+            {/* Find */}
+            <button
+              className={`icon-btn ${showFind ? "active" : ""}`}
+              onClick={() => (showFind ? closeFind() : openFind())}
+              title="Find in PDF (Ctrl/⌘ + F)"
+              type="button"
+            >
+              ⌕
+            </button>
+
+            {/* Go to page */}
+            <button
+              className={`icon-btn ${showPageJump ? "active" : ""}`}
+              onClick={openPageJump}
+              title="Go to page (G)"
+              type="button"
+            >
+              #️⃣
             </button>
 
             <button
@@ -1098,6 +1379,129 @@ export default function PdfViewer({
             >
               📝
             </button>
+
+            {/* Find popover (premium, not oval) */}
+            {showFind && (
+              <div
+                className="reader-popover"
+                role="dialog"
+                aria-modal="false"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="reader-popover-head">
+                  <div className="reader-popover-title">Find in document</div>
+                  <button className="reader-popover-x" onClick={closeFind} type="button" title="Close">
+                    ✕
+                  </button>
+                </div>
+
+                <div className="reader-popover-row">
+                  <input
+                    ref={findInputRef}
+                    className="reader-popover-input"
+                    value={findQuery}
+                    onChange={(e) => setFindQuery(e.target.value)}
+                    placeholder="Type to search…"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") runFind();
+                      if (e.key === "Escape") closeFind();
+                    }}
+                  />
+                  <button
+                    className="reader-popover-btn primary"
+                    onClick={runFind}
+                    type="button"
+                    disabled={findBusy}
+                    title="Search"
+                  >
+                    {findBusy ? "…" : "Go"}
+                  </button>
+                </div>
+
+                <div className="reader-popover-actions">
+                  <button
+                    className="reader-popover-btn"
+                    onClick={goFindPrev}
+                    type="button"
+                    disabled={!findResults.length || findBusy}
+                    title="Previous match"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    className="reader-popover-btn"
+                    onClick={goFindNext}
+                    type="button"
+                    disabled={!findResults.length || findBusy}
+                    title="Next match"
+                  >
+                    Next
+                  </button>
+
+                  <div className="reader-popover-meta" title="Matches">
+                    {findResults.length
+                      ? `${findActiveIdx + 1} / ${findResults.length}`
+                      : "0 / 0"}
+                  </div>
+                </div>
+
+                {!!findError && <div className="reader-popover-error">{findError}</div>}
+
+                <div className="reader-popover-hint">
+                  Tip: Use <b>Enter</b> to search, <b>Prev/Next</b> to jump matches.
+                </div>
+              </div>
+            )}
+
+            {/* Page jump popover (small + clear) */}
+            {showPageJump && (
+              <div
+                className="reader-popover"
+                role="dialog"
+                aria-modal="false"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="reader-popover-head">
+                  <div className="reader-popover-title">Go to page</div>
+                  <button
+                    className="reader-popover-x"
+                    onClick={() => setShowPageJump(false)}
+                    title="Close"
+                    type="button"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="reader-popover-row">
+                  <input
+                    ref={pageJumpInputRef}
+                    className="reader-popover-input"
+                    value={pageJumpValue}
+                    onChange={(e) => setPageJumpValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") submitPageJump();
+                      if (e.key === "Escape") setShowPageJump(false);
+                    }}
+                    inputMode="numeric"
+                    placeholder={`1 - ${allowedMaxPage ?? numPages ?? "?"}`}
+                    autoFocus
+                  />
+                  <button
+                    className="reader-popover-btn primary"
+                    onClick={submitPageJump}
+                    title="Go"
+                    type="button"
+                  >
+                    Go
+                  </button>
+                </div>
+
+                {!!pageJumpError && <div className="reader-popover-error">{pageJumpError}</div>}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1213,7 +1617,11 @@ export default function PdfViewer({
               setNumPages(null);
               setLoadError("Unable to load document source.");
             }}
-            onLoadSuccess={({ numPages: loadedPages }) => {
+            onLoadSuccess={(pdf) => {
+              // IMPORTANT: keep pdf proxy for Find
+              pdfRef.current = pdf;
+
+              const loadedPages = pdf?.numPages ?? null;
               setNumPages(loadedPages);
 
               const allowed = maxAllowedPage ? Math.min(maxAllowedPage, loadedPages) : loadedPages;
@@ -1319,49 +1727,6 @@ export default function PdfViewer({
         >
           ▶
         </button>
-
-        {showPageJump && (
-          <div
-            className="pagejump-popover"
-            role="dialog"
-            aria-modal="true"
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="pagejump-head">
-              <div className="pagejump-title">Go to page</div>
-              <button
-                className="pagejump-iconbtn"
-                onClick={() => setShowPageJump(false)}
-                title="Close"
-                type="button"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="pagejump-row">
-              <input
-                ref={pageJumpInputRef}
-                className="pagejump-input"
-                value={pageJumpValue}
-                onChange={(e) => setPageJumpValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") submitPageJump();
-                  if (e.key === "Escape") setShowPageJump(false);
-                }}
-                inputMode="numeric"
-                placeholder={`1 - ${allowedMaxPage ?? numPages ?? "?"}`}
-                autoFocus
-              />
-              <button className="pagejump-iconbtn primary" onClick={submitPageJump} title="Go" type="button">
-                ✓
-              </button>
-            </div>
-
-            {!!pageJumpError && <div className="pagejump-error">{pageJumpError}</div>}
-          </div>
-        )}
       </div>
 
       {/* NOTE OVERLAY + Notes sidebar */}
