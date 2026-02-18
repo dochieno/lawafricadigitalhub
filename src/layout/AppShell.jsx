@@ -390,6 +390,17 @@ export default function AppShell() {
   const approvalsOpenFinal = openDd === "approvals";
   const financeOpenFinal = openDd === "finance";
   const adminOpenFinal = openDd === "admin";
+  console.log("NAV DEBUG children:", [
+  "Home",
+  "Explore",
+  "Library",
+  "Ask AI",
+  "Law Reports",
+  "Trials",
+  "Subscriptions",
+  "Security",
+]);
+
 
   return (
     <div className="app-shell">
@@ -410,6 +421,10 @@ export default function AppShell() {
           </Link>
 
           <nav className="topnav-links" aria-label="Main navigation">
+                <span style={{ color: "yellow", fontWeight: 900, padding: "0 6px" }}>
+                NAV-FINGERPRINT-2026 ✅
+              </span>
+
             <NavLink to="/dashboard" end className={navLinkClass}>Home</NavLink>
             <NavLink to="/dashboard/explore" className={navLinkClass}>Explore</NavLink>
             <NavLink to="/dashboard/library" className={navLinkClass}>Library</NavLink>
