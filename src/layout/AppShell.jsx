@@ -1,5 +1,6 @@
 // src/layout/AppShell.jsx
 import { Outlet, NavLink, useLocation, Link, useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
 import { useAuth } from "../auth/AuthContext";
 import UserProfileMenu from "../components/UserProfileMenu";
 import {
@@ -53,7 +54,6 @@ function IcSpark() {
     </svg>
   );
 }
-
 
 function IcGrid() {
   return (
@@ -122,7 +122,12 @@ function IcCard() {
     <svg viewBox="0 0 24 24" fill="none">
       <path d="M4 7h16v10H4V7Z" stroke="currentColor" strokeWidth="2" />
       <path d="M4 10h16" stroke="currentColor" strokeWidth="2" />
-      <path d="M7 14h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path
+        d="M7 14h4"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
@@ -153,7 +158,12 @@ function IcBook() {
         stroke="currentColor"
         strokeWidth="2"
       />
-      <path d="M7 20h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path
+        d="M7 20h12"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
@@ -161,14 +171,24 @@ function IcBook() {
 function IcUpload() {
   return (
     <svg viewBox="0 0 24 24" fill="none">
-      <path d="M12 3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path
+        d="M12 3v12"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
       <path
         d="M7 8l5-5 5 5"
         stroke="currentColor"
         strokeWidth="2"
         strokeLinejoin="round"
       />
-      <path d="M5 21h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path
+        d="M5 21h14"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
@@ -236,7 +256,6 @@ export default function AppShell() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-
 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
@@ -395,7 +414,11 @@ export default function AppShell() {
     <div className="app-shell">
       <header className="topnav">
         <div className="topnav-inner">
-          <Link to="/dashboard" className="topnav-brand" aria-label="LawAfrica Dashboard">
+          <Link
+            to="/dashboard"
+            className="topnav-brand"
+            aria-label="LawAfrica Dashboard"
+          >
             <img
               src="/logo.png"
               alt="LawAfrica"
@@ -410,26 +433,43 @@ export default function AppShell() {
           </Link>
 
           <nav className="topnav-links" aria-label="Main navigation">
-            <NavLink to="/dashboard" end className={navLinkClass}>Home</NavLink>
-            <NavLink to="/dashboard/explore" className={navLinkClass}>Explore</NavLink>
-            <NavLink to="/dashboard/library" className={navLinkClass}>Library</NavLink>
-            <NavLink to="/dashboard/law-reports" className={navLinkClass}>Law Reports</NavLink>
-            <NavLink to="/dashboard/trials" className={navLinkClass}>Trials</NavLink>
+            <NavLink to="/dashboard" end className={navLinkClass}>
+              Home
+            </NavLink>
+            <NavLink to="/dashboard/explore" className={navLinkClass}>
+              Explore
+            </NavLink>
+            <NavLink to="/dashboard/library" className={navLinkClass}>
+              Library
+            </NavLink>
+            <NavLink to="/dashboard/law-reports" className={navLinkClass}>
+              Law Reports
+            </NavLink>
+            <NavLink to="/dashboard/trials" className={navLinkClass}>
+              Trials
+            </NavLink>
 
-            <NavLink to="/dashboard/law-reports/subscribe" className={navLinkClass}>
+            <NavLink
+              to="/dashboard/law-reports/subscribe"
+              className={navLinkClass}
+            >
               Subscriptions
             </NavLink>
 
             {import.meta.env.DEV && (
               <NavLink
                 to="/dashboard/content-blocks"
-                className={({ isActive }) => `topnav-link dev ${isActive ? "active" : ""}`}
+                className={({ isActive }) =>
+                  `topnav-link dev ${isActive ? "active" : ""}`
+                }
               >
                 🧪 Content Blocks Tester
               </NavLink>
             )}
 
-            <NavLink to="/dashboard/security" className={navLinkClass}>Security</NavLink>
+            <NavLink to="/dashboard/security" className={navLinkClass}>
+              Security
+            </NavLink>
 
             {/* ================= APPROVALS ================= */}
             {canSeeApprovals() && (
@@ -441,13 +481,18 @@ export default function AppShell() {
               >
                 <button
                   type="button"
-                  className={`topnav-link dd-toggle ${isInApprovals ? "active" : ""}`}
+                  className={`topnav-link dd-toggle ${
+                    isInApprovals ? "active" : ""
+                  }`}
                   aria-expanded={approvalsOpenFinal}
                   aria-haspopup="menu"
                   onClick={() =>
                     setOpenDd((cur) => {
                       const next = cur === "approvals" ? null : "approvals";
-                      if (next) requestAnimationFrame(() => computeAndSetMenuPos("approvals"));
+                      if (next)
+                        requestAnimationFrame(() =>
+                          computeAndSetMenuPos("approvals")
+                        );
                       return next;
                     })
                   }
@@ -471,11 +516,24 @@ export default function AppShell() {
                     onMouseEnter={() => openNow("approvals")}
                     onMouseLeave={() => scheduleCloseFor("approvals")}
                   >
-                    <MenuHeader title="Approvals" subtitle="Review and manage approvals" />
+                    <MenuHeader
+                      title="Approvals"
+                      subtitle="Review and manage approvals"
+                    />
                     <div className="dd-scroll">
-                      <DdItem to="/dashboard/approvals" label="Dashboard" icon={<IcGrid />} onClick={() => setOpenDd(null)} />
+                      <DdItem
+                        to="/dashboard/approvals"
+                        label="Dashboard"
+                        icon={<IcGrid />}
+                        onClick={() => setOpenDd(null)}
+                      />
                       {meIsInstitutionAdmin && (
-                        <DdItem to="/dashboard/approvals/members" label="Members" icon={<IcUsers />} onClick={() => setOpenDd(null)} />
+                        <DdItem
+                          to="/dashboard/approvals/members"
+                          label="Members"
+                          icon={<IcUsers />}
+                          onClick={() => setOpenDd(null)}
+                        />
                       )}
                       {meIsAdminRole && (
                         <DdItem
@@ -501,13 +559,18 @@ export default function AppShell() {
               >
                 <button
                   type="button"
-                  className={`topnav-link dd-toggle ${isInFinance ? "active" : ""}`}
+                  className={`topnav-link dd-toggle ${
+                    isInFinance ? "active" : ""
+                  }`}
                   aria-expanded={financeOpenFinal}
                   aria-haspopup="menu"
                   onClick={() =>
                     setOpenDd((cur) => {
                       const next = cur === "finance" ? null : "finance";
-                      if (next) requestAnimationFrame(() => computeAndSetMenuPos("finance"));
+                      if (next)
+                        requestAnimationFrame(() =>
+                          computeAndSetMenuPos("finance")
+                        );
                       return next;
                     })
                   }
@@ -531,12 +594,35 @@ export default function AppShell() {
                     onMouseEnter={() => openNow("finance")}
                     onMouseLeave={() => scheduleCloseFor("finance")}
                   >
-                    <MenuHeader title="Finance" subtitle="Invoices, payments and tax setup" />
+                    <MenuHeader
+                      title="Finance"
+                      subtitle="Invoices, payments and tax setup"
+                    />
                     <div className="dd-scroll">
-                      <DdItem to="/dashboard/admin/finance/invoices" label="Invoices" icon={<IcReceipt />} onClick={() => setOpenDd(null)} />
-                      <DdItem to="/dashboard/admin/finance/payments" label="Payments" icon={<IcCard />} onClick={() => setOpenDd(null)} />
-                      <DdItem to="/dashboard/admin/finance/invoice-settings" label="Invoice Settings" icon={<IcSettings />} onClick={() => setOpenDd(null)} />
-                      <DdItem to="/dashboard/admin/finance/vat-rates" label="VAT Setup" icon={<IcSettings />} onClick={() => setOpenDd(null)} />
+                      <DdItem
+                        to="/dashboard/admin/finance/invoices"
+                        label="Invoices"
+                        icon={<IcReceipt />}
+                        onClick={() => setOpenDd(null)}
+                      />
+                      <DdItem
+                        to="/dashboard/admin/finance/payments"
+                        label="Payments"
+                        icon={<IcCard />}
+                        onClick={() => setOpenDd(null)}
+                      />
+                      <DdItem
+                        to="/dashboard/admin/finance/invoice-settings"
+                        label="Invoice Settings"
+                        icon={<IcSettings />}
+                        onClick={() => setOpenDd(null)}
+                      />
+                      <DdItem
+                        to="/dashboard/admin/finance/vat-rates"
+                        label="VAT Setup"
+                        icon={<IcSettings />}
+                        onClick={() => setOpenDd(null)}
+                      />
                     </div>
                   </div>
                 ) : null}
@@ -553,13 +639,18 @@ export default function AppShell() {
               >
                 <button
                   type="button"
-                  className={`topnav-link dd-toggle ${isInAdmin ? "active" : ""}`}
+                  className={`topnav-link dd-toggle ${
+                    isInAdmin ? "active" : ""
+                  }`}
                   aria-expanded={adminOpenFinal}
                   aria-haspopup="menu"
                   onClick={() =>
                     setOpenDd((cur) => {
                       const next = cur === "admin" ? null : "admin";
-                      if (next) requestAnimationFrame(() => computeAndSetMenuPos("admin"));
+                      if (next)
+                        requestAnimationFrame(() =>
+                          computeAndSetMenuPos("admin")
+                        );
                       return next;
                     })
                   }
@@ -583,22 +674,95 @@ export default function AppShell() {
                     onMouseEnter={() => openNow("admin")}
                     onMouseLeave={() => scheduleCloseFor("admin")}
                   >
-                    <MenuHeader title="Admin" subtitle="Manage platform configuration" />
+                    <MenuHeader
+                      title="Admin"
+                      subtitle="Manage platform configuration"
+                    />
                     <div className="dd-scroll">
-                      <DdItem to="/dashboard/admin/institutions" label="Institutions" icon={<IcUsers />} onClick={() => setOpenDd(null)} />
-                      <DdItem to="/dashboard/admin/content-products" label="Products" icon={<IcGrid />} onClick={() => setOpenDd(null)} />
-                      <DdItem to="/dashboard/admin/content-product-prices" label="Product Prices" icon={<IcReceipt />} onClick={() => setOpenDd(null)} />
-                      <DdItem to="/dashboard/admin/documents" label="Books" icon={<IcBook />} onClick={() => setOpenDd(null)} />
-                      <DdItem to="/dashboard/admin/toc-test" label="Table of Contents (Test)" icon={<IcLink />} onClick={() => setOpenDd(null)} />
-                      <DdItem to="/dashboard/admin/llr-services" label="LLR Services" icon={<IcSettings />} onClick={() => setOpenDd(null)} />
-                      <DdItem to="/dashboard/admin/courts" label="Courts" icon={<IcGrid />} onClick={() => setOpenDd(null)} />
-                      <DdItem to="/dashboard/admin/llr-services/import" label="Import Cases" icon={<IcUpload />} onClick={() => setOpenDd(null)} />
-                      <DdItem to="/dashboard/admin/institution-subscriptions" label="Subscriptions" icon={<IcShield />} onClick={() => setOpenDd(null)} />
-                      <DdItem to="/dashboard/admin/user-subscriptions" label="Public Subscriptions" icon={<IcUsers />} onClick={() => setOpenDd(null)} />
-                      <DdItem to="/dashboard/admin/trials" label="Trials" icon={<IcCheck />} onClick={() => setOpenDd(null)} />
-                      <DdItem to="/dashboard/admin/institution-bundle-subscriptions" label="Bundle" icon={<IcLink />} onClick={() => setOpenDd(null)} />
-                      <DdItem to="/dashboard/admin/institution-admins" label="Institution Admins" icon={<IcUsers />} onClick={() => setOpenDd(null)} />
-                      <DdItem to="/dashboard/admin/users" label="Users" icon={<IcUsers />} onClick={() => setOpenDd(null)} />
+                      <DdItem
+                        to="/dashboard/admin/institutions"
+                        label="Institutions"
+                        icon={<IcUsers />}
+                        onClick={() => setOpenDd(null)}
+                      />
+                      <DdItem
+                        to="/dashboard/admin/content-products"
+                        label="Products"
+                        icon={<IcGrid />}
+                        onClick={() => setOpenDd(null)}
+                      />
+                      <DdItem
+                        to="/dashboard/admin/content-product-prices"
+                        label="Product Prices"
+                        icon={<IcReceipt />}
+                        onClick={() => setOpenDd(null)}
+                      />
+                      <DdItem
+                        to="/dashboard/admin/documents"
+                        label="Books"
+                        icon={<IcBook />}
+                        onClick={() => setOpenDd(null)}
+                      />
+                      <DdItem
+                        to="/dashboard/admin/toc-test"
+                        label="Table of Contents (Test)"
+                        icon={<IcLink />}
+                        onClick={() => setOpenDd(null)}
+                      />
+                      <DdItem
+                        to="/dashboard/admin/llr-services"
+                        label="LLR Services"
+                        icon={<IcSettings />}
+                        onClick={() => setOpenDd(null)}
+                      />
+                      <DdItem
+                        to="/dashboard/admin/courts"
+                        label="Courts"
+                        icon={<IcGrid />}
+                        onClick={() => setOpenDd(null)}
+                      />
+                      <DdItem
+                        to="/dashboard/admin/llr-services/import"
+                        label="Import Cases"
+                        icon={<IcUpload />}
+                        onClick={() => setOpenDd(null)}
+                      />
+                      <DdItem
+                        to="/dashboard/admin/institution-subscriptions"
+                        label="Subscriptions"
+                        icon={<IcShield />}
+                        onClick={() => setOpenDd(null)}
+                      />
+                      <DdItem
+                        to="/dashboard/admin/user-subscriptions"
+                        label="Public Subscriptions"
+                        icon={<IcUsers />}
+                        onClick={() => setOpenDd(null)}
+                      />
+                      <DdItem
+                        to="/dashboard/admin/trials"
+                        label="Trials"
+                        icon={<IcCheck />}
+                        onClick={() => setOpenDd(null)}
+                      />
+                      <DdItem
+                        to="/dashboard/admin/institution-bundle-subscriptions"
+                        label="Bundle"
+                        icon={<IcLink />}
+                        onClick={() => setOpenDd(null)}
+                      />
+                      <DdItem
+                        to="/dashboard/admin/institution-admins"
+                        label="Institution Admins"
+                        icon={<IcUsers />}
+                        onClick={() => setOpenDd(null)}
+                      />
+                      <DdItem
+                        to="/dashboard/admin/users"
+                        label="Users"
+                        icon={<IcUsers />}
+                        onClick={() => setOpenDd(null)}
+                      />
                     </div>
                   </div>
                 ) : null}
@@ -626,15 +790,22 @@ export default function AppShell() {
       <main className="app-main">
         <Outlet />
       </main>
-      <button
-        type="button"
-        className="ai-fab"
-        title="Ask AI"
-        onClick={() => navigate("/dashboard/ai/commentary")}
-      >
-        <span className="ai-fab-ic" aria-hidden="true"><IcSpark /></span>
-        <span className="ai-fab-txt">Ask AI</span>
-      </button>
+
+      {/* ✅ Always-visible floating Ask AI button (portal to <body> to avoid z-index/transform issues) */}
+      {createPortal(
+        <button
+          type="button"
+          className="ai-fab"
+          title="Ask AI"
+          onClick={() => navigate("/dashboard/ai/commentary")}
+        >
+          <span className="ai-fab-ic" aria-hidden="true">
+            <IcSpark />
+          </span>
+          <span className="ai-fab-txt">Ask AI</span>
+        </button>,
+        document.body
+      )}
 
       {showLogoutConfirm && (
         <div className="modal-overlay">
