@@ -11,7 +11,6 @@ import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import "../styles/appshell.css";
 import "../styles/lawAfricaLanding.css";
 import "../styles/lawAfricaBrand.css";
-console.log("✅ AppShell loaded from src/layout/AppShell.jsx v2");
 
 
 function Chevron({ open }) {
@@ -390,17 +389,6 @@ export default function AppShell() {
   const approvalsOpenFinal = openDd === "approvals";
   const financeOpenFinal = openDd === "finance";
   const adminOpenFinal = openDd === "admin";
-  console.log("NAV DEBUG children:", [
-  "Home",
-  "Explore",
-  "Library",
-  "Ask AI",
-  "Law Reports",
-  "Trials",
-  "Subscriptions",
-  "Security",
-]);
-
 
   return (
     <div className="app-shell">
@@ -420,13 +408,10 @@ export default function AppShell() {
             </div>
           </Link>
 
-            <nav className="topnav-links" aria-label="Main navigation">
-              <span style={{ color: "yellow", fontWeight: 900, padding: "0 6px" }}>
-                NAV-FINGERPRINT-2026 ✅
-              </span>
+          <nav className="topnav-links" aria-label="Main navigation">
             <NavLink to="/dashboard" end className={navLinkClass}>Home</NavLink>
-            <NavLink to="/dashboard/explore" className={navLinkClass}>Explore Yours</NavLink>
-            <NavLink to="/dashboard/library" className={navLinkClass}>Library Testing Tabs</NavLink>
+            <NavLink to="/dashboard/explore" className={navLinkClass}>Explore</NavLink>
+            <NavLink to="/dashboard/library" className={navLinkClass}>Library</NavLink>
 
             {/* ✅ NEW TAB AFTER LIBRARY */}
             <NavLink to="/dashboard/ai/commentary" className={navLinkClass}>Ask AI</NavLink>
