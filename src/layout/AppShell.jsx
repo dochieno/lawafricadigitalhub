@@ -11,6 +11,8 @@ import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import "../styles/appshell.css";
 import "../styles/lawAfricaLanding.css";
 import "../styles/lawAfricaBrand.css";
+console.log("✅ AppShell loaded from src/layout/AppShell.jsx v2");
+
 
 function Chevron({ open }) {
   return <span className={`nav-chevron ${open ? "open" : ""}`}>▸</span>;
