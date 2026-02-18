@@ -22,7 +22,6 @@ function safeAbort(ctrl) {
   }
 }
 
-
 function safeJsonParse(str, fallback) {
   try {
     return JSON.parse(str);
@@ -71,7 +70,8 @@ async function safeCopyToClipboard(text) {
   }
 }
 
-// ✅ Summary ownership key (prevents opening wrong summary)
+// ✅ Summary ownership key (frontend fallback)
+// (Backend now returns OwnerKey; we prefer backend key whenever present.)
 function makeSummaryOwnerKey(docId, payload) {
   const d = Number(docId) || 0;
   if (!payload) return `doc:${d}|none`;
@@ -135,7 +135,6 @@ function collectAllNodeIds(nodes, depth = 0, out = new Set()) {
   }
   return out;
 }
-
 
 /**
  * Filter tree by title, keeping ancestor chain for matches.
@@ -315,6 +314,7 @@ export default function DocumentReader() {
   const [findOpen, setFindOpen] = useState(false);
   const [findQuery, setFindQuery] = useState("");
   const [findBusy, setFindBusy] = useState(false);
+  const [findInlineHint, setFindInlineHint] = useState(""); // ✅ avoids “popup” toast spam
 
   // ✅ sticky ToC header+search on desktop (JS-only via inline style)
   const [isDesktop, setIsDesktop] = useState(false);
@@ -404,6 +404,11 @@ export default function DocumentReader() {
   const lastSummaryKeyRef = useRef("");
   const [summaryOwnerKey, setSummaryOwnerKey] = useState(""); // which section the current summary belongs to
 
+  // ✅ store server cache keys (for debugging and UI clarity)
+  const [summaryCacheKey, setSummaryCacheKey] = useState("");
+  const [summaryContentHash, setSummaryContentHash] = useState("");
+  const [summaryPromptVersion, setSummaryPromptVersion] = useState("");
+  const [summaryModelUsed, setSummaryModelUsed] = useState("");
 
   // ✅ inline “Copied” state for AI copy (quiet feedback)
   const [aiCopied, setAiCopied] = useState(false);
@@ -428,6 +433,13 @@ export default function DocumentReader() {
       setSectionSummaryMeta(data.meta || null);
       setSectionSummaryType(data.type === "extended" ? "extended" : "basic");
       setSelectedTocNode(data.selectedNode || null);
+
+      // restore keys (best effort)
+      if (typeof data.ownerKey === "string") setSummaryOwnerKey(data.ownerKey);
+      if (typeof data.cacheKey === "string") setSummaryCacheKey(data.cacheKey);
+      if (typeof data.contentHash === "string") setSummaryContentHash(data.contentHash);
+      if (typeof data.promptVersion === "string") setSummaryPromptVersion(data.promptVersion);
+      if (typeof data.modelUsed === "string") setSummaryModelUsed(data.modelUsed);
     }
   }, [SUMMARY_LAST_KEY]);
 
@@ -440,6 +452,11 @@ export default function DocumentReader() {
       type: sectionSummaryType,
       summaryText: sectionSummaryText,
       meta: sectionSummaryMeta,
+      ownerKey: summaryOwnerKey || "",
+      cacheKey: summaryCacheKey || "",
+      contentHash: summaryContentHash || "",
+      promptVersion: summaryPromptVersion || "",
+      modelUsed: summaryModelUsed || "",
       selectedNode: selectedTocNode
         ? {
             id: selectedTocNode?.id ?? selectedTocNode?.Id ?? null,
@@ -453,7 +470,18 @@ export default function DocumentReader() {
     };
 
     safeSetLS(SUMMARY_LAST_KEY, JSON.stringify(payload));
-  }, [SUMMARY_LAST_KEY, sectionSummaryType, sectionSummaryText, sectionSummaryMeta, selectedTocNode]);
+  }, [
+    SUMMARY_LAST_KEY,
+    sectionSummaryType,
+    sectionSummaryText,
+    sectionSummaryMeta,
+    selectedTocNode,
+    summaryOwnerKey,
+    summaryCacheKey,
+    summaryContentHash,
+    summaryPromptVersion,
+    summaryModelUsed,
+  ]);
 
   // =========================================================
   // ✅ Advanced manual page summary (Printed or PDF mode)
@@ -556,22 +584,26 @@ export default function DocumentReader() {
   const closeOutline = useCallback(() => setOutlineOpen(false), []);
 
   const openSummaryPanel = useCallback(() => {
-  if (!sectionSummaryText || !sectionSummaryText.trim()) {
-    showToast("No summary for this section yet. Run Basic or Extended first.", "error");
-    return;
-  }
+    if (!sectionSummaryText || !sectionSummaryText.trim()) {
+      showToast("No summary for this section yet. Run Basic or Extended first.", "error");
+      return;
+    }
 
-  const expectedOwnerKey = selectedTocNode
-    ? makeSummaryOwnerKey(docId, { tocEntryId: selectedTocNode?.id ?? selectedTocNode?.Id ?? null })
-    : "";
+    // ✅ strict ownership check (prefer server OwnerKey; fallback to computed key)
+    const expectedOwnerKey = (() => {
+      if (!selectedTocNode) return "";
+      const tocEntryId = selectedTocNode?.id ?? selectedTocNode?.Id ?? null;
+      if (tocEntryId != null) return `doc:${Number(docId) || 0}|toc:${tocEntryId}`;
+      return "";
+    })();
 
-  if (expectedOwnerKey && summaryOwnerKey && summaryOwnerKey !== expectedOwnerKey) {
-    showToast("That summary belongs to a different section. Please generate again for this section.", "error");
-    return;
-  }
+    if (expectedOwnerKey && summaryOwnerKey && summaryOwnerKey !== expectedOwnerKey) {
+      showToast("That summary belongs to a different section. Please generate again for this section.", "error");
+      return;
+    }
 
-  setSummaryPanelOpen(true);
-}, [docId, sectionSummaryText, selectedTocNode, showToast, summaryOwnerKey]);
+    setSummaryPanelOpen(true);
+  }, [docId, sectionSummaryText, selectedTocNode, showToast, summaryOwnerKey]);
 
   const closeSummaryPanel = useCallback(() => setSummaryPanelOpen(false), []);
   const toggleSummaryExpanded = useCallback(() => setSummaryExpanded((p) => !p), []);
@@ -579,10 +611,9 @@ export default function DocumentReader() {
   // ✅ AI drawer helpers
   const openAiDrawer = useCallback(() => setAiDrawerOpen(true), []);
   const closeAiDrawer = useCallback(() => {
-      setAiDrawerOpen(false);
-      setAiDrawerCollapsed(false);
-    }, []);
-
+    setAiDrawerOpen(false);
+    setAiDrawerCollapsed(false);
+  }, []);
 
   // ✅ Calibrate offset from a ToC click:
   // offset = (pdfPage we jump to) - (printed start page from ToC)
@@ -608,46 +639,49 @@ export default function DocumentReader() {
   );
 
   // ✅ Preview clamp + jump (also sets selected node now)
-const onOutlineClick = useCallback(
-  (node, pageNumber) => {
-    setSelectedTocNode(node);
+  const onOutlineClick = useCallback(
+    (node, pageNumber) => {
+      setSelectedTocNode(node);
 
-    const nextOwnerKey = makeSummaryOwnerKey(docId, {
-      tocEntryId: node?.id ?? node?.Id ?? null,
-    });
+      // ✅ If summary currently belongs to another section, clear UI immediately
+      const tocEntryId = node?.id ?? node?.Id ?? null;
+      const nextOwnerKey = tocEntryId != null ? `doc:${Number(docId) || 0}|toc:${tocEntryId}` : "";
 
-    if (summaryOwnerKey && summaryOwnerKey !== nextOwnerKey) {
-      setSectionSummaryText("");
-      setSectionSummaryMeta(null);
-      setSectionSummaryError("");
-      lastSummaryKeyRef.current = "";
-      setSummaryOwnerKey("");
-    }
-
-    const p = Number(pageNumber);
-    if (!Number.isFinite(p) || p <= 0) return;
-
-    if (!access?.hasFullAccess && Number.isFinite(access?.previewMaxPages)) {
-      if (p > access?.previewMaxPages) {
-        showToast(
-          `This section is outside preview (ends at page ${access?.previewMaxPages}). Purchase to continue.`,
-          "error"
-        );
-        setLocked(true);
-        setUnlockBarDismissed(false);
-        return;
+      if (summaryOwnerKey && nextOwnerKey && summaryOwnerKey !== nextOwnerKey) {
+        setSectionSummaryText("");
+        setSectionSummaryMeta(null);
+        setSectionSummaryError("");
+        lastSummaryKeyRef.current = "";
+        setSummaryOwnerKey("");
+        setSummaryCacheKey("");
+        setSummaryContentHash("");
+        setSummaryPromptVersion("");
+        setSummaryModelUsed("");
       }
-    }
 
-    const ok = viewerApiRef.current?.jumpToPage?.(p, "smooth");
-    if (ok) {
-      calibrateOffsetFromTocNode(node, p);
-      setOutlineOpen(false);
-    }
-  },
-  [access?.hasFullAccess, access?.previewMaxPages, calibrateOffsetFromTocNode, docId, showToast, summaryOwnerKey]
-);
+      const p = Number(pageNumber);
+      if (!Number.isFinite(p) || p <= 0) return;
 
+      if (!access?.hasFullAccess && Number.isFinite(access?.previewMaxPages)) {
+        if (p > access?.previewMaxPages) {
+          showToast(
+            `This section is outside preview (ends at page ${access?.previewMaxPages}). Purchase to continue.`,
+            "error"
+          );
+          setLocked(true);
+          setUnlockBarDismissed(false);
+          return;
+        }
+      }
+
+      const ok = viewerApiRef.current?.jumpToPage?.(p, "smooth");
+      if (ok) {
+        calibrateOffsetFromTocNode(node, p);
+        setOutlineOpen(false);
+      }
+    },
+    [access?.hasFullAccess, access?.previewMaxPages, calibrateOffsetFromTocNode, docId, showToast, summaryOwnerKey]
+  );
 
   const toggleOutlineNode = useCallback((idStr) => {
     setOutlineExpanded((prevSet) => {
@@ -799,6 +833,13 @@ const onOutlineClick = useCallback(
     setSectionSummaryLoading(false);
     lastSummaryKeyRef.current = "";
 
+    // reset summary keys
+    setSummaryOwnerKey("");
+    setSummaryCacheKey("");
+    setSummaryContentHash("");
+    setSummaryPromptVersion("");
+    setSummaryModelUsed("");
+
     // reset advanced UI
     setAdvancedEnabled(false);
     setPageMode("printed");
@@ -818,6 +859,7 @@ const onOutlineClick = useCallback(
     setFindOpen(false);
     setFindQuery("");
     setFindBusy(false);
+    setFindInlineHint("");
 
     // copy state reset
     setAiCopied(false);
@@ -1060,6 +1102,7 @@ const onOutlineClick = useCallback(
           type,
           forceRegenerate: !!forceRegenerate,
           sectionTitle: nodeTitle(node, ""),
+          // promptVersion: "v1", // optional (backend defaults); add later if you want explicit pinning
         };
       }
 
@@ -1084,6 +1127,7 @@ const onOutlineClick = useCallback(
         endPage: endClamped,
         forceRegenerate: !!forceRegenerate,
         sectionTitle: nodeTitle(node, ""),
+        // promptVersion: "v1",
       };
     },
     [access, docId, pdfPageOffset]
@@ -1107,6 +1151,21 @@ const onOutlineClick = useCallback(
       const warnings = data?.warnings ?? data?.Warnings ?? [];
       const warningsArr = Array.isArray(warnings) ? warnings : [];
 
+      // ✅ prefer server-owned keys (new backend alignment)
+      const serverOwnerKey = data?.ownerKey ?? data?.OwnerKey ?? "";
+      const serverCacheKey = data?.cacheKey ?? data?.CacheKey ?? "";
+      const serverHash = data?.contentHash ?? data?.ContentHash ?? "";
+      const serverPv = data?.promptVersion ?? data?.PromptVersion ?? "";
+      const serverModel = data?.modelUsed ?? data?.ModelUsed ?? "";
+
+      const effectiveOwnerKey = String(serverOwnerKey || makeSummaryOwnerKey(docId, payload) || "");
+
+      setSummaryOwnerKey(effectiveOwnerKey);
+      setSummaryCacheKey(String(serverCacheKey || ""));
+      setSummaryContentHash(String(serverHash || ""));
+      setSummaryPromptVersion(String(serverPv || ""));
+      setSummaryModelUsed(String(serverModel || ""));
+
       setSectionSummaryMeta({
         fromCache,
         usedPages:
@@ -1117,10 +1176,12 @@ const onOutlineClick = useCallback(
             : "—",
         inputCharCount: Number(inputCharCount) || 0,
         warnings: warningsArr.map((w) => String(w)),
+        ownerKey: effectiveOwnerKey,
+        cacheKey: String(serverCacheKey || ""),
+        contentHash: String(serverHash || ""),
+        promptVersion: String(serverPv || ""),
+        modelUsed: String(serverModel || ""),
       });
-      // ✅ record what this summary belongs to (section/range)
-      setSummaryOwnerKey(makeSummaryOwnerKey(docId, payload));
-
 
       // quiet + subtle
       showToast(fromCache ? "Loaded from cache" : "Summary ready", "success");
@@ -1175,12 +1236,15 @@ const onOutlineClick = useCallback(
   const onCopySummary = useCallback(async () => {
     if (!sectionSummaryText) return;
 
-    // quiet feedback (no big popup UX)
+    // ✅ quiet feedback (NO toast, avoids “popup” UX)
     const ok = await safeCopyToClipboard(sectionSummaryText);
     setAiCopied(true);
     window.setTimeout(() => setAiCopied(false), 1100);
 
-    if (!ok) showToast("Copy failed (browser blocked clipboard)", "error");
+    if (!ok) {
+      // still allow a small toast on true failure
+      showToast("Copy failed (browser blocked clipboard)", "error");
+    }
   }, [sectionSummaryText, showToast]);
 
   const onRegenerateSummary = useCallback(() => {
@@ -1345,55 +1409,56 @@ const onOutlineClick = useCallback(
 
   // =========================================================
   // ✅ Find in document (best-effort bridge to PdfViewer)
+  // - IMPORTANT: No toast spam here (this was the “popup” you complained about)
   // =========================================================
-  const tryInvokeFind = useCallback(
-    async (q, dir = "next") => {
-      const query = String(q || "").trim();
-      if (!query) return;
+  const tryInvokeFind = useCallback(async (q, dir = "next") => {
+    const query = String(q || "").trim();
+    if (!query) return;
 
-      const apiObj = viewerApiRef.current;
-      if (!apiObj) {
-        showToast("Viewer not ready yet.", "error");
-        return;
-      }
+    const apiObj = viewerApiRef.current;
+    if (!apiObj) {
+      setFindInlineHint("Viewer not ready yet.");
+      return;
+    }
 
-      setFindBusy(true);
-      try {
-        const fns = [
-          () => apiObj.openFind?.(),
-          () => apiObj.openSearch?.(),
-          () => apiObj.find?.(query, { direction: dir }),
-          () => apiObj.findText?.(query, { direction: dir }),
-          () => apiObj.searchText?.(query, { direction: dir }),
-          () => apiObj.search?.(query, { direction: dir }),
-          () => apiObj.setFindQuery?.(query),
-        ];
+    setFindBusy(true);
+    setFindInlineHint("");
 
-        let did = false;
-        for (const fn of fns) {
-          try {
-            const res = fn();
-            if (res !== undefined) {
-              did = true;
-              break;
-            }
-          } catch {
-            // keep trying
+    try {
+      const fns = [
+        () => apiObj.openFind?.(),
+        () => apiObj.openSearch?.(),
+        () => apiObj.find?.(query, { direction: dir }),
+        () => apiObj.findText?.(query, { direction: dir }),
+        () => apiObj.searchText?.(query, { direction: dir }),
+        () => apiObj.search?.(query, { direction: dir }),
+        () => apiObj.setFindQuery?.(query),
+      ];
+
+      let did = false;
+      for (const fn of fns) {
+        try {
+          const res = fn();
+          if (res !== undefined) {
+            did = true;
+            break;
           }
+        } catch {
+          // keep trying
         }
-
-        if (!did) {
-          showToast("Find-in-document is not supported by this viewer yet. Use Ctrl+F.", "error");
-        }
-      } finally {
-        setFindBusy(false);
       }
-    },
-    [showToast]
-  );
+
+      if (!did) {
+        setFindInlineHint("Search is not supported by this viewer yet. Use Ctrl+F.");
+      }
+    } finally {
+      setFindBusy(false);
+    }
+  }, []);
 
   const openFind = useCallback(() => {
     setFindOpen(true);
+    setFindInlineHint("");
     try {
       viewerApiRef.current?.openFind?.();
     } catch {
@@ -1405,6 +1470,7 @@ const onOutlineClick = useCallback(
     setFindOpen(false);
     setFindQuery("");
     setFindBusy(false);
+    setFindInlineHint("");
   }, []);
 
   // keyboard shortcut: Ctrl/Cmd + F opens our bar
@@ -1600,27 +1666,23 @@ const onOutlineClick = useCallback(
           </span>
         </div>
 
-          <button
-            className="readerpage-aiBtn"
-            type="button"
-            onClick={() => {
-              // If closed -> open.
-              // If open but collapsed -> expand.
-              // If open and expanded -> collapse (quick reading mode).
-              if (!aiDrawerOpen) {
-                setAiDrawerOpen(true);
-                setAiDrawerCollapsed(false);
-              } else if (aiDrawerCollapsed) {
-                setAiDrawerCollapsed(false);
-              } else {
-                setAiDrawerCollapsed(true);
-              }
-            }}
-            title="Summary"
-          >
-            Summary
-          </button>
-
+        <button
+          className="readerpage-aiBtn"
+          type="button"
+          onClick={() => {
+            if (!aiDrawerOpen) {
+              setAiDrawerOpen(true);
+              setAiDrawerCollapsed(false);
+            } else if (aiDrawerCollapsed) {
+              setAiDrawerCollapsed(false);
+            } else {
+              setAiDrawerCollapsed(true);
+            }
+          }}
+          title="Summary"
+        >
+          Summary
+        </button>
       </div>
 
       {/* Backdrops */}
@@ -1643,17 +1705,15 @@ const onOutlineClick = useCallback(
                 {outlineExpanded.size ? "Collapse" : "Expand"}
               </button>
 
-                <button
-                  className="readerpage-aiBtn"
-                  type="button"
-                  onClick={openAiDrawer}
-                  title="AI tools (summary, copy, advanced range)"
-                >
-                  AI Summary
-                </button>
-
+              <button
+                className="readerpage-aiBtn"
+                type="button"
+                onClick={openAiDrawer}
+                title="AI tools (summary, copy, advanced range)"
+              >
+                AI Summary
+              </button>
             </div>
-
 
             <button className="readerpage-tocClose" type="button" onClick={closeOutline} title="Close">
               ✕
@@ -1702,12 +1762,7 @@ const onOutlineClick = useCallback(
               aria-label="Search table of contents"
             />
             {outlineQuery ? (
-              <button
-                type="button"
-                className="readerOutlineClear"
-                onClick={() => setOutlineQuery("")}
-                title="Clear search"
-              >
+              <button type="button" className="readerOutlineClear" onClick={() => setOutlineQuery("")} title="Clear search">
                 ✕
               </button>
             ) : null}
@@ -1795,290 +1850,302 @@ const onOutlineClick = useCallback(
         />
       </div>
 
-        {/* ✅ AI Drawer (NOT in ToC) */}
-        <div
-          className={`readerpage-aiDrawer ${aiDrawerOpen ? "open" : ""} ${aiDrawerCollapsed ? "collapsed" : ""}`}
-          role="complementary"
-          aria-label="AI tools"
-          onMouseDown={(e) => e.stopPropagation()} // don't collapse when clicking inside drawer
-        >
-          <div className="readerpage-aiHeader">
-            <div className="readerpage-aiTitle">Summary</div>
+      {/* ✅ AI Drawer (NOT in ToC) */}
+      <div
+        className={`readerpage-aiDrawer ${aiDrawerOpen ? "open" : ""} ${aiDrawerCollapsed ? "collapsed" : ""}`}
+        role="complementary"
+        aria-label="AI tools"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="readerpage-aiHeader">
+          <div className="readerpage-aiTitle">Summary</div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <button
-                type="button"
-                className="readerOutlineMiniBtn"
-                onClick={() => setAiDrawerCollapsed((v) => !v)}
-                title={aiDrawerCollapsed ? "Show panel" : "Hide panel"}
-              >
-                {aiDrawerCollapsed ? "Show" : "Hide"}
-              </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button
+              type="button"
+              className="readerOutlineMiniBtn"
+              onClick={() => setAiDrawerCollapsed((v) => !v)}
+              title={aiDrawerCollapsed ? "Show panel" : "Hide panel"}
+            >
+              {aiDrawerCollapsed ? "Show" : "Hide"}
+            </button>
 
-              <button className="readerpage-tocClose" type="button" onClick={closeAiDrawer} title="Close">
-                ✕
-              </button>
-            </div>
+            <button className="readerpage-tocClose" type="button" onClick={closeAiDrawer} title="Close">
+              ✕
+            </button>
           </div>
-
-          {/* ✅ WRAP HERE: body vs collapsed placeholder */}
-          {!aiDrawerCollapsed ? (
-            <div className="readerpage-aiBody">
-              {/* Selected section */}
-              <div className="laAiCard">
-                <div className="laAiCardTop">
-                  <div className="laAiCardTitle">Section summary</div>
-                  <div className="laAiCardActions">
-                    <button
-                      type="button"
-                      className="readerOutlineMiniBtn"
-                      disabled={!sectionSummaryText}
-                      onClick={onCopySummary}
-                      title="Copy summary"
-                    >
-                      {aiCopied ? "Copied" : "Copy"}
-                    </button>
-
-                    <button
-                      type="button"
-                      className="readerOutlineMiniBtn laAccent"
-                      disabled={!sectionSummaryText}
-                      onClick={openSummaryPanel}
-                      title="Open full summary panel"
-                    >
-                      Open
-                    </button>
-                  </div>
-                </div>
-
-                <div className="laAiCardInfo">
-                  {selectedTocNode ? (
-                    <>
-                      <div className="laAiSectionTitle">{nodeTitle(selectedTocNode)}</div>
-                      <div className="laAiSectionMeta">Pages: {nodeRightLabel(selectedTocNode) || "—"}</div>
-                    </>
-                  ) : (
-                    <div className="laInlineMuted">Pick a ToC section first (☰ ToC), then run Basic or Extended.</div>
-                  )}
-                </div>
-
-                <div className="laAiCardBtns">
-                  <button
-                    type="button"
-                    className="outline-btn"
-                    disabled={!selectedTocNode || sectionSummaryLoading}
-                    onClick={() => runSectionSummary("basic", { force: false, openPanel: false })}
-                  >
-                    {sectionSummaryLoading && sectionSummaryType === "basic" ? "Basic…" : "Basic"}
-                  </button>
-
-                  <button
-                    type="button"
-                    className="outline-btn"
-                    disabled={!selectedTocNode || sectionSummaryLoading}
-                    onClick={() => runSectionSummary("extended", { force: false, openPanel: false })}
-                  >
-                    {sectionSummaryLoading && sectionSummaryType === "extended" ? "Extended…" : "Extended"}
-                  </button>
-
-                  <button
-                    type="button"
-                    className="outline-btn laPrimary"
-                    disabled={!selectedTocNode || sectionSummaryLoading}
-                    onClick={() => runSectionSummary(sectionSummaryType, { force: true, openPanel: true })}
-                    title="Regenerate (force)"
-                  >
-                    {sectionSummaryLoading ? "Working…" : "Regenerate"}
-                  </button>
-                </div>
-
-                {sectionSummaryError ? <div className="laInlineError">{sectionSummaryError}</div> : null}
-
-                {sectionSummaryMeta ? (
-                  <div className="laInlineMetaCard">
-                    <div className="laInlineMetaRow">
-                      <div>
-                        <strong>Used pages:</strong> {sectionSummaryMeta.usedPages}
-                      </div>
-                      <div>
-                        <strong>Input chars:</strong> {sectionSummaryMeta.inputCharCount}
-                      </div>
-                      <div>
-                        <strong>Cache:</strong> {sectionSummaryMeta.fromCache ? "yes" : "no"}
-                      </div>
-                    </div>
-
-                    {sectionSummaryMeta.warnings?.length ? (
-                      <div className="laInlineWarnings">
-                        <div className="laInlineWarningsTitle">Warnings</div>
-                        <ul className="laInlineWarningsList">
-                          {sectionSummaryMeta.warnings.map((w, i) => (
-                            <li key={`${i}-${w}`}>{w}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-
-              {/* Advanced summary (manual pages) */}
-              <div className="laAiCard">
-                <div className="laInlineAdvancedHeader">
-                  <div className="laInlineAdvancedTitle">Advanced summary</div>
-
-                  <label className="laInlineCheckbox laTinyCheck">
-                    <input
-                      style={tinyInputStyle}
-                      type="checkbox"
-                      checked={advancedEnabled}
-                      onChange={(e) => setAdvancedEnabled(e.target.checked)}
-                    />
-                    Use manual page range
-                  </label>
-                </div>
-
-                {advancedEnabled ? (
-                  <div className="laInlineAdvancedBody">
-                    <div className="laInlineRadios">
-                      <label className="laInlineRadio laTinyCheck">
-                        <input
-                          style={tinyInputStyle}
-                          type="radio"
-                          name="pageMode"
-                          checked={pageMode === "printed"}
-                          onChange={() => setPageMode("printed")}
-                        />
-                        Printed pages (recommended)
-                      </label>
-
-                      <label className="laInlineRadio laTinyCheck">
-                        <input
-                          style={tinyInputStyle}
-                          type="radio"
-                          name="pageMode"
-                          checked={pageMode === "pdf"}
-                          onChange={() => setPageMode("pdf")}
-                        />
-                        PDF pages (advanced)
-                      </label>
-                    </div>
-
-                    {pageMode === "printed" ? (
-                      <div className="laInlineOffsetInfo">
-                        <div>
-                          <strong>Offset:</strong>{" "}
-                          {Number.isFinite(pdfPageOffset) ? (
-                            <span>
-                              {pdfPageOffset >= 0 ? `+${pdfPageOffset}` : pdfPageOffset}{" "}
-                              <span className={`laInlineOffsetBadge ${offsetVerified ? "ok" : "warn"}`}>
-                                {offsetVerified ? "verified" : "unverified"}
-                              </span>
-                            </span>
-                          ) : (
-                            <span>not set</span>
-                          )}
-                        </div>
-
-                        {!offsetVerified ? (
-                          <div className="laInlineWarnText">
-                            Offset not confirmed. Click a ToC item to calibrate before running to avoid wrong output.
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-
-                    <div className="laInlineManualInputs">
-                      <div className="laInlineManualCol">
-                        <div className="laInlineManualLabel">Start {pageMode === "printed" ? "printed" : "PDF"} page</div>
-                        <input
-                          className="readerOutlineSearch"
-                          inputMode="numeric"
-                          value={manualStart}
-                          onChange={(e) => setManualStart(e.target.value)}
-                          placeholder={pageMode === "printed" ? "e.g. 41" : "e.g. 81"}
-                        />
-                      </div>
-
-                      <div className="laInlineManualCol">
-                        <div className="laInlineManualLabel">End {pageMode === "printed" ? "printed" : "PDF"} page</div>
-                        <input
-                          className="readerOutlineSearch"
-                          inputMode="numeric"
-                          value={manualEnd}
-                          onChange={(e) => setManualEnd(e.target.value)}
-                          placeholder={pageMode === "printed" ? "e.g. 46" : "e.g. 86"}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="laInlineEffectiveRange">
-                      <div className="laInlineEffectiveText">
-                        <strong>Effective range:</strong> <span>{effectiveManual.label}</span>
-                      </div>
-                      {effectiveManual.clampNote ? <div className="laInlineWarnText">{effectiveManual.clampNote}</div> : null}
-                    </div>
-
-                    <div className="laInlineManualBtns">
-                      <button
-                        type="button"
-                        className="outline-btn"
-                        disabled={!canRunManual || sectionSummaryLoading}
-                        onClick={() => runManualSectionSummary("basic")}
-                      >
-                        {sectionSummaryLoading && sectionSummaryType === "basic" ? "Basic…" : "Basic"}
-                      </button>
-
-                      <button
-                        type="button"
-                        className="outline-btn"
-                        disabled={!canRunManual || sectionSummaryLoading}
-                        onClick={() => runManualSectionSummary("extended")}
-                      >
-                        {sectionSummaryLoading && sectionSummaryType === "extended" ? "Extended…" : "Extended"}
-                      </button>
-
-                      <button
-                        type="button"
-                        className="outline-btn laPrimary"
-                        disabled={!canRunManual || sectionSummaryLoading}
-                        onClick={() => runManualSectionSummary(sectionSummaryType)}
-                        title="Open panel after generating"
-                      >
-                        {sectionSummaryLoading ? "Working…" : "Open in panel"}
-                      </button>
-                    </div>
-
-                    <div className="laInlineHint">
-                      Tip: keep ranges small (Basic ≤ {BASIC_MAX_SPAN} pages, Extended ≤ {EXTENDED_MAX_SPAN} pages). Preview limits
-                      still apply.
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          ) : (
-            <div style={{ padding: 10 }}>
-              <button
-                type="button"
-                className="readerOutlineMiniBtn laAccent"
-                onClick={() => setAiDrawerCollapsed(false)}
-                title="Show summary tools"
-              >
-                Open Summary
-              </button>
-            </div>
-          )}
         </div>
 
+        {!aiDrawerCollapsed ? (
+          <div className="readerpage-aiBody">
+            {/* Selected section */}
+            <div className="laAiCard">
+              <div className="laAiCardTop">
+                <div className="laAiCardTitle">Section summary</div>
+                <div className="laAiCardActions">
+                  <button
+                    type="button"
+                    className="readerOutlineMiniBtn"
+                    disabled={!sectionSummaryText}
+                    onClick={onCopySummary}
+                    title="Copy summary"
+                  >
+                    {aiCopied ? "Copied" : "Copy"}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="readerOutlineMiniBtn laAccent"
+                    disabled={!sectionSummaryText}
+                    onClick={openSummaryPanel}
+                    title="Open full summary panel"
+                  >
+                    Open
+                  </button>
+                </div>
+              </div>
+
+              <div className="laAiCardInfo">
+                {selectedTocNode ? (
+                  <>
+                    <div className="laAiSectionTitle">{nodeTitle(selectedTocNode)}</div>
+                    <div className="laAiSectionMeta">Pages: {nodeRightLabel(selectedTocNode) || "—"}</div>
+                  </>
+                ) : (
+                  <div className="laInlineMuted">Pick a ToC section first (☰ ToC), then run Basic or Extended.</div>
+                )}
+              </div>
+
+              <div className="laAiCardBtns">
+                <button
+                  type="button"
+                  className="outline-btn"
+                  disabled={!selectedTocNode || sectionSummaryLoading}
+                  onClick={() => runSectionSummary("basic", { force: false, openPanel: false })}
+                >
+                  {sectionSummaryLoading && sectionSummaryType === "basic" ? "Basic…" : "Basic"}
+                </button>
+
+                <button
+                  type="button"
+                  className="outline-btn"
+                  disabled={!selectedTocNode || sectionSummaryLoading}
+                  onClick={() => runSectionSummary("extended", { force: false, openPanel: false })}
+                >
+                  {sectionSummaryLoading && sectionSummaryType === "extended" ? "Extended…" : "Extended"}
+                </button>
+
+                <button
+                  type="button"
+                  className="outline-btn laPrimary"
+                  disabled={!selectedTocNode || sectionSummaryLoading}
+                  onClick={() => runSectionSummary(sectionSummaryType, { force: true, openPanel: true })}
+                  title="Regenerate (force)"
+                >
+                  {sectionSummaryLoading ? "Working…" : "Regenerate"}
+                </button>
+              </div>
+
+              {sectionSummaryError ? <div className="laInlineError">{sectionSummaryError}</div> : null}
+
+              {sectionSummaryMeta ? (
+                <div className="laInlineMetaCard">
+                  <div className="laInlineMetaRow">
+                    <div>
+                      <strong>Used pages:</strong> {sectionSummaryMeta.usedPages}
+                    </div>
+                    <div>
+                      <strong>Input chars:</strong> {sectionSummaryMeta.inputCharCount}
+                    </div>
+                    <div>
+                      <strong>Cache:</strong> {sectionSummaryMeta.fromCache ? "yes" : "no"}
+                    </div>
+                  </div>
+
+                  {/* ✅ optional debug line (quiet, helps support) */}
+                  <div className="laInlineMetaRow" style={{ marginTop: 6, opacity: 0.85 }}>
+                    <div title={sectionSummaryMeta.ownerKey || ""}>
+                      <strong>Owner:</strong> {String(sectionSummaryMeta.ownerKey || "—").slice(0, 26)}
+                      {String(sectionSummaryMeta.ownerKey || "").length > 26 ? "…" : ""}
+                    </div>
+                    <div title={sectionSummaryMeta.promptVersion || ""}>
+                      <strong>PV:</strong> {sectionSummaryMeta.promptVersion || "—"}
+                    </div>
+                    <div title={sectionSummaryMeta.modelUsed || ""}>
+                      <strong>Model:</strong> {sectionSummaryMeta.modelUsed || "—"}
+                    </div>
+                  </div>
+
+                  {sectionSummaryMeta.warnings?.length ? (
+                    <div className="laInlineWarnings">
+                      <div className="laInlineWarningsTitle">Warnings</div>
+                      <ul className="laInlineWarningsList">
+                        {sectionSummaryMeta.warnings.map((w, i) => (
+                          <li key={`${i}-${w}`}>{w}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
+            {/* Advanced summary (manual pages) */}
+            <div className="laAiCard">
+              <div className="laInlineAdvancedHeader">
+                <div className="laInlineAdvancedTitle">Advanced summary</div>
+
+                <label className="laInlineCheckbox laTinyCheck">
+                  <input
+                    style={tinyInputStyle}
+                    type="checkbox"
+                    checked={advancedEnabled}
+                    onChange={(e) => setAdvancedEnabled(e.target.checked)}
+                  />
+                  Use manual page range
+                </label>
+              </div>
+
+              {advancedEnabled ? (
+                <div className="laInlineAdvancedBody">
+                  <div className="laInlineRadios">
+                    <label className="laInlineRadio laTinyCheck">
+                      <input
+                        style={tinyInputStyle}
+                        type="radio"
+                        name="pageMode"
+                        checked={pageMode === "printed"}
+                        onChange={() => setPageMode("printed")}
+                      />
+                      Printed pages (recommended)
+                    </label>
+
+                    <label className="laInlineRadio laTinyCheck">
+                      <input
+                        style={tinyInputStyle}
+                        type="radio"
+                        name="pageMode"
+                        checked={pageMode === "pdf"}
+                        onChange={() => setPageMode("pdf")}
+                      />
+                      PDF pages (advanced)
+                    </label>
+                  </div>
+
+                  {pageMode === "printed" ? (
+                    <div className="laInlineOffsetInfo">
+                      <div>
+                        <strong>Offset:</strong>{" "}
+                        {Number.isFinite(pdfPageOffset) ? (
+                          <span>
+                            {pdfPageOffset >= 0 ? `+${pdfPageOffset}` : pdfPageOffset}{" "}
+                            <span className={`laInlineOffsetBadge ${offsetVerified ? "ok" : "warn"}`}>
+                              {offsetVerified ? "verified" : "unverified"}
+                            </span>
+                          </span>
+                        ) : (
+                          <span>not set</span>
+                        )}
+                      </div>
+
+                      {!offsetVerified ? (
+                        <div className="laInlineWarnText">
+                          Offset not confirmed. Click a ToC item to calibrate before running to avoid wrong output.
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  <div className="laInlineManualInputs">
+                    <div className="laInlineManualCol">
+                      <div className="laInlineManualLabel">Start {pageMode === "printed" ? "printed" : "PDF"} page</div>
+                      <input
+                        className="readerOutlineSearch"
+                        inputMode="numeric"
+                        value={manualStart}
+                        onChange={(e) => setManualStart(e.target.value)}
+                        placeholder={pageMode === "printed" ? "e.g. 41" : "e.g. 81"}
+                      />
+                    </div>
+
+                    <div className="laInlineManualCol">
+                      <div className="laInlineManualLabel">End {pageMode === "printed" ? "printed" : "PDF"} page</div>
+                      <input
+                        className="readerOutlineSearch"
+                        inputMode="numeric"
+                        value={manualEnd}
+                        onChange={(e) => setManualEnd(e.target.value)}
+                        placeholder={pageMode === "printed" ? "e.g. 46" : "e.g. 86"}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="laInlineEffectiveRange">
+                    <div className="laInlineEffectiveText">
+                      <strong>Effective range:</strong> <span>{effectiveManual.label}</span>
+                    </div>
+                    {effectiveManual.clampNote ? <div className="laInlineWarnText">{effectiveManual.clampNote}</div> : null}
+                  </div>
+
+                  <div className="laInlineManualBtns">
+                    <button
+                      type="button"
+                      className="outline-btn"
+                      disabled={!canRunManual || sectionSummaryLoading}
+                      onClick={() => runManualSectionSummary("basic")}
+                    >
+                      {sectionSummaryLoading && sectionSummaryType === "basic" ? "Basic…" : "Basic"}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="outline-btn"
+                      disabled={!canRunManual || sectionSummaryLoading}
+                      onClick={() => runManualSectionSummary("extended")}
+                    >
+                      {sectionSummaryLoading && sectionSummaryType === "extended" ? "Extended…" : "Extended"}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="outline-btn laPrimary"
+                      disabled={!canRunManual || sectionSummaryLoading}
+                      onClick={() => runManualSectionSummary(sectionSummaryType)}
+                      title="Open panel after generating"
+                    >
+                      {sectionSummaryLoading ? "Working…" : "Open in panel"}
+                    </button>
+                  </div>
+
+                  <div className="laInlineHint">
+                    Tip: keep ranges small (Basic ≤ {BASIC_MAX_SPAN} pages, Extended ≤ {EXTENDED_MAX_SPAN} pages). Preview limits
+                    still apply.
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <div style={{ padding: 10 }}>
+            <button
+              type="button"
+              className="readerOutlineMiniBtn laAccent"
+              onClick={() => setAiDrawerCollapsed(false)}
+              title="Show summary tools"
+            >
+              Open Summary
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Main reader */}
-       <div
-          className="readerpage-main"
-          onMouseDown={() => {
-            // If user clicks back into the document, collapse the AI drawer for better reading
-            if (aiDrawerOpen) setAiDrawerCollapsed(true);
-          }}
-        >
+      <div
+        className="readerpage-main"
+        onMouseDown={() => {
+          if (aiDrawerOpen) setAiDrawerCollapsed(true);
+        }}
+      >
         {loadingMeta ? <div className="readerMetaPill">Preparing document…</div> : null}
 
         <PdfViewer
@@ -2142,8 +2209,15 @@ const onOutlineClick = useCallback(
               </div>
             </div>
 
+            {/* ✅ inline hint (no toast / no popup spam) */}
             <div className="readerFindHint">
-              Tip: If the PDF viewer doesn’t support search yet, use <strong>Ctrl+F</strong>.
+              {findInlineHint ? (
+                <span>{findInlineHint}</span>
+              ) : (
+                <span>
+                  Tip: If the PDF viewer doesn’t support search yet, use <strong>Ctrl+F</strong>.
+                </span>
+              )}
             </div>
           </div>
         ) : null}

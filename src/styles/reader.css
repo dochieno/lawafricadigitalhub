@@ -2926,3 +2926,150 @@ mark.pdf-find {
 .readerpage-aiDrawer.collapsed .readerpage-aiTitle {
   display: none;
 }
+/* =========================================================
+   PATCH: Kill the annoying popup + improve drawer/backdrop UX
+   Paste at END of reader.css
+   ========================================================= */
+
+/* 1) Prevent “ghost click / long-press selection” pop effects on buttons */
+.readerpage-tocbtn,
+.readerpage-aiBtn,
+.readerpage-findBtn,
+.readerOutlineMiniBtn,
+.outline-btn,
+.primary-btn,
+.readerpage-tocClose,
+.readerOutlineTwisty,
+.readerOutlineClear {
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+/* 2) Stop the browser context menu / selection highlight from feeling like a popup */
+.readerpage-tocDrawer,
+.readerpage-aiDrawer,
+.readerFindBar,
+.readerUnlockBarInner {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* But allow selection inside summary text + PDF text layer */
+.laSummaryBody,
+.laSummarySectionBody,
+.laSummaryP,
+.laSummaryLi,
+.react-pdf__Page__textContent,
+.react-pdf__Page__textContent span {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
+/* 3) Backdrop should block clicks to what’s behind it (prevents weird pop behavior) */
+.readerpage-tocBackdrop {
+  pointer-events: auto;
+}
+
+/* 4) Make drawer overlays feel “modal”, not like they’re fighting z-index */
+.readerpage-tocDrawer { z-index: 1000; }
+.readerpage-aiDrawer { z-index: 1100; }
+.readerpage-tocBackdrop { z-index: 900; }
+.toast { z-index: 1200; }
+
+/* 5) Fix AI drawer collapsed mode:
+      - keep it as a tiny “tab”
+      - don’t trap scroll/clicks
+*/
+.readerpage-aiDrawer.collapsed {
+  overflow: hidden;
+}
+
+/* Desktop collapsed: become a vertical tab on the right */
+@media (min-width: 1024px) {
+  .readerpage-aiDrawer.collapsed {
+    width: 54px !important;
+    min-width: 54px !important;
+    max-width: 54px !important;
+    pointer-events: auto; /* still clickable */
+  }
+
+  .readerpage-aiDrawer.collapsed .readerpage-aiBody {
+    display: none;
+  }
+
+  .readerpage-aiDrawer.collapsed .readerpage-aiHeader {
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 8px;
+  }
+
+  .readerpage-aiDrawer.collapsed .readerpage-aiTitle {
+    display: none;
+  }
+
+  /* Make the “Show” button look like the main affordance */
+  .readerpage-aiDrawer.collapsed .readerOutlineMiniBtn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Mobile collapsed: keep as small bottom sheet “pill” */
+@media (max-width: 1023px) {
+  .readerpage-aiDrawer.collapsed {
+    height: 64px !important;
+  }
+  .readerpage-aiDrawer.collapsed .readerpage-aiBody {
+    display: none;
+  }
+  .readerpage-aiDrawer.collapsed .readerpage-aiHeader {
+    padding: 12px 14px;
+  }
+}
+
+/* 6) Fix: buttons text sometimes “invisible” due to inherited color in dark/light */
+.readerpage-aiBtn,
+.readerOutlineMiniBtn,
+.outline-btn,
+.primary-btn {
+  color: var(--reader-ink);
+}
+
+.reader-shell.dark .readerpage-aiBtn,
+.reader-shell.dark .readerOutlineMiniBtn,
+.reader-shell.dark .outline-btn,
+.reader-shell.dark .primary-btn {
+  color: #e5e7eb;
+}
+
+/* 7) Prevent default focus ring from looking like a “popup” on click */
+.readerpage-aiBtn:focus,
+.readerOutlineMiniBtn:focus,
+.outline-btn:focus,
+.primary-btn:focus,
+.readerpage-tocbtn:focus {
+  outline: none;
+}
+
+.readerpage-aiBtn:focus-visible,
+.readerOutlineMiniBtn:focus-visible,
+.outline-btn:focus-visible,
+.primary-btn:focus-visible,
+.readerpage-tocbtn:focus-visible {
+  box-shadow: 0 0 0 3px rgba(107, 35, 59, 0.14);
+  border-color: rgba(107, 35, 59, 0.35);
+}
+
+/* 8) Clipboard fallback textarea: ensure it never causes scroll jump */
+.laHiddenTextareaCopy {
+  position: fixed !important;
+  top: -10000px !important;
+  left: -10000px !important;
+  height: 1px !important;
+  width: 1px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
