@@ -420,14 +420,13 @@ export default function AppShell() {
             </div>
           </Link>
 
-          <nav className="topnav-links" aria-label="Main navigation">
-                <span style={{ color: "yellow", fontWeight: 900, padding: "0 6px" }}>
+            <nav className="topnav-links" aria-label="Main navigation">
+              <span style={{ color: "yellow", fontWeight: 900, padding: "0 6px" }}>
                 NAV-FINGERPRINT-2026 ✅
               </span>
-
             <NavLink to="/dashboard" end className={navLinkClass}>Home</NavLink>
-            <NavLink to="/dashboard/explore" className={navLinkClass}>Explore</NavLink>
-            <NavLink to="/dashboard/library" className={navLinkClass}>Library</NavLink>
+            <NavLink to="/dashboard/explore" className={navLinkClass}>Explore Yours</NavLink>
+            <NavLink to="/dashboard/library" className={navLinkClass}>Library Testing Tabs</NavLink>
 
             {/* ✅ NEW TAB AFTER LIBRARY */}
             <NavLink to="/dashboard/ai/commentary" className={navLinkClass}>Ask AI</NavLink>
