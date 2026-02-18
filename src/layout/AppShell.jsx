@@ -411,16 +411,15 @@ export default function AppShell() {
             <NavLink to="/dashboard" end className={navLinkClass}>Home</NavLink>
             <NavLink to="/dashboard/explore" className={navLinkClass}>Explore</NavLink>
             <NavLink to="/dashboard/library" className={navLinkClass}>Library</NavLink>
+
+            {/* ✅ NEW TAB AFTER LIBRARY */}
+            <NavLink to="/dashboard/ai/commentary" className={navLinkClass}>Ask AI</NavLink>
+
             <NavLink to="/dashboard/law-reports" className={navLinkClass}>Law Reports</NavLink>
             <NavLink to="/dashboard/trials" className={navLinkClass}>Trials</NavLink>
 
             <NavLink to="/dashboard/law-reports/subscribe" className={navLinkClass}>
               Subscriptions
-            </NavLink>
-
-            {/* ✅ FALLBACK TAB (ALWAYS VISIBLE) */}
-            <NavLink to="/dashboard/ai/commentary" className={navLinkClass}>
-              Ask AI
             </NavLink>
 
             {import.meta.env.DEV && (
@@ -630,14 +629,14 @@ export default function AppShell() {
         <Outlet />
       </main>
 
-      {/* ✅ GUARANTEED-VISIBLE FAB (inline styles override CSS issues) */}
+      {/* ✅ STICKY ASK AI (BOTTOM LEFT) */}
       <button
         type="button"
         title="Ask AI"
         onClick={() => navigate("/dashboard/ai/commentary")}
         style={{
           position: "fixed",
-          right: 18,
+          left: 18,
           bottom: 18,
           zIndex: 999999,
           display: "inline-flex",

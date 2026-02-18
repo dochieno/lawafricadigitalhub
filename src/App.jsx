@@ -5,7 +5,7 @@ import AdminOrInstitutionAdminRoute from "./routes/AdminOrInstitutionAdminRoute"
 import AdminRoute from "./routes/AdminRoute";
 import AdminTocTest from "./pages/dashboard/admin/AdminTocTest";
 import AdminCourts from "./pages/dashboard/admin/AdminCourts";
-import CommentaryPlayground from "./pages/ai/CommentaryPlayground";
+import CommentaryPlayground from "./pages/CommentaryPlayground";
 
 import AdminLLRImport from "./pages/dashboard/admin/AdminLLRImport";
 import LawReportReader from "./pages/dashboard/LawReportReader";
@@ -15,7 +15,6 @@ import TwoFactor from "./pages/TwoFactor";
 import TwoFactorSetup from "./pages/TwoFactorSetup";
 import LawReportWorkspace from "./pages/dashboard/LawReportWorkspace";
 import LawReportReportView from "./pages/dashboard/LawReportReportView";
-
 
 // ✅ Paystack return handler (public route)
 import PaystackReturn from "./pages/payments/PaystackReturn";
@@ -39,7 +38,6 @@ import InstitutionMembersAdmin from "./pages/dashboard/institution/InstitutionMe
 import AdminSubscriptionRequests from "./pages/dashboard/approvals/AdminSubscriptionRequests";
 import AppShell from "./layout/AppShell";
 import DevContentBlocksTest from "./pages/dashboard/DevContentBlocksTest";
-
 
 import Explore from "./pages/dashboard/Explore";
 import Library from "./pages/dashboard/Library";
@@ -128,6 +126,8 @@ export default function App() {
 
             <Route path="explore" element={<Explore />} />
             <Route path="library" element={<Library />} />
+
+            {/* ✅ AI Commentary */}
             <Route path="ai/commentary" element={<CommentaryPlayground />} />
 
             {/* ✅ Law Reports */}

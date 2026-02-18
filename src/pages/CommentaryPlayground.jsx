@@ -4,7 +4,7 @@ import {
   deleteCommentaryThread,
   getCommentaryThread,
   listCommentaryThreads,
-} from "../../api/aiCommentary";
+} from "../api/aiCommentary";
 
 // If you already have a markdown renderer in your app, use it.
 // Otherwise: npm i react-markdown
