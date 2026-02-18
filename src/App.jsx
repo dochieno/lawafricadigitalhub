@@ -5,6 +5,7 @@ import AdminOrInstitutionAdminRoute from "./routes/AdminOrInstitutionAdminRoute"
 import AdminRoute from "./routes/AdminRoute";
 import AdminTocTest from "./pages/dashboard/admin/AdminTocTest";
 import AdminCourts from "./pages/dashboard/admin/AdminCourts";
+import CommentaryPlayground from "./pages/ai/CommentaryPlayground";
 
 import AdminLLRImport from "./pages/dashboard/admin/AdminLLRImport";
 import LawReportReader from "./pages/dashboard/LawReportReader";
@@ -42,6 +43,7 @@ import DevContentBlocksTest from "./pages/dashboard/DevContentBlocksTest";
 
 import Explore from "./pages/dashboard/Explore";
 import Library from "./pages/dashboard/Library";
+<Route path="ai/commentary" element={<CommentaryPlayground />} />
 import AdminTrials from "./pages/dashboard/admin/AdminTrials";
 import RequestTrial from "./pages/dashboard/RequestTrial";
 import "./styles/lawAfricaBrand.css";

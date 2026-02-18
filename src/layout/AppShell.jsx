@@ -1,5 +1,5 @@
 // src/layout/AppShell.jsx
-import { Outlet, NavLink, useLocation, Link } from "react-router-dom";
+import { Outlet, NavLink, useLocation, Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import UserProfileMenu from "../components/UserProfileMenu";
 import {
@@ -34,6 +34,26 @@ function Ic({ children }) {
     </span>
   );
 }
+
+function IcSpark() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none">
+      <path
+        d="M12 2l1.2 5.2L18 9l-4.8 1.8L12 16l-1.2-5.2L6 9l4.8-1.8L12 2Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M19 14l.7 3 2.3.8-2.3.8-.7 3-.7-3-2.3-.8 2.3-.8.7-3Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 
 function IcGrid() {
   return (
@@ -215,6 +235,8 @@ function DdItem({ to, label, icon, onClick }) {
 export default function AppShell() {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+
 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
@@ -604,6 +626,15 @@ export default function AppShell() {
       <main className="app-main">
         <Outlet />
       </main>
+      <button
+        type="button"
+        className="ai-fab"
+        title="Ask AI"
+        onClick={() => navigate("/dashboard/ai/commentary")}
+      >
+        <span className="ai-fab-ic" aria-hidden="true"><IcSpark /></span>
+        <span className="ai-fab-txt">Ask AI</span>
+      </button>
 
       {showLogoutConfirm && (
         <div className="modal-overlay">

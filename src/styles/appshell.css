@@ -388,3 +388,61 @@
 .modal-btn.danger:hover {
   background: #a40000;
 }
+/* =========================
+   Floating Ask AI button
+========================= */
+.ai-fab{
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 9999;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+
+  border: 1px solid rgba(107,35,59,.22);
+  background: rgba(107,35,59, .96);
+  color: #fff;
+
+  padding: 10px 14px;
+  border-radius: 999px;
+
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+
+  box-shadow: 0 10px 30px rgba(0,0,0,.18);
+}
+
+.ai-fab:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 14px 40px rgba(0,0,0,.22);
+}
+
+.ai-fab-ic{
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ai-fab-ic svg{
+  width: 18px;
+  height: 18px;
+}
+
+.ai-fab-txt{
+  line-height: 1;
+}
+
+/* mobile: icon-only */
+@media (max-width: 640px){
+  .ai-fab{
+    padding: 12px;
+  }
+  .ai-fab-txt{
+    display: none;
+  }
+}
