@@ -43,7 +43,6 @@ import DevContentBlocksTest from "./pages/dashboard/DevContentBlocksTest";
 
 import Explore from "./pages/dashboard/Explore";
 import Library from "./pages/dashboard/Library";
-<Route path="ai/commentary" element={<CommentaryPlayground />} />
 import AdminTrials from "./pages/dashboard/admin/AdminTrials";
 import RequestTrial from "./pages/dashboard/RequestTrial";
 import "./styles/lawAfricaBrand.css";
@@ -129,6 +128,7 @@ export default function App() {
 
             <Route path="explore" element={<Explore />} />
             <Route path="library" element={<Library />} />
+            <Route path="ai/commentary" element={<AiLegalCommentary />} />
 
             {/* ✅ Law Reports */}
             <Route path="law-reports" element={<LawReports />} />

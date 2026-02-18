@@ -442,6 +442,14 @@ export default function AppShell() {
             <NavLink to="/dashboard/library" className={navLinkClass}>
               Library
             </NavLink>
+
+            <NavLink
+              to="/dashboard/ai/commentary"
+              className={({ isActive }) => `topnav-link ${isActive ? "active" : ""} ai-tab`}
+            >
+              ✨ Ask AI
+            </NavLink>
+
             <NavLink to="/dashboard/law-reports" className={navLinkClass}>
               Law Reports
             </NavLink>
