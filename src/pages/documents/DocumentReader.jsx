@@ -170,7 +170,8 @@ function filterOutlineTree(nodes, query) {
 /** =========================================================
  * OUTLINE TREE (range-active)
  * ========================================================= */
-function OutlineTree({ nodes, depth = 0, expanded, activePage, pdfPageOffset, onToggle, onPick }) {
+function OutlineTree({ nodes, depth = 0, expanded, activePage, pdfPageOffset, onToggle, onPick, onSelect }) {
+
   const arr = Array.isArray(nodes) ? nodes : [];
 
   return (
@@ -225,10 +226,17 @@ function OutlineTree({ nodes, depth = 0, expanded, activePage, pdfPageOffset, on
               <button
                 className={`readerpage-tocItem ${isActive ? "active" : ""}`}
                 type="button"
-                disabled={!jumpPage}
-                onClick={() => jumpPage && onPick(n, jumpPage)}
-                title={jumpPage ? `Go to page ${jumpPage}` : "No page mapped"}
+                aria-disabled={!jumpPage}
+                onClick={() => {
+                  // ✅ Always select the node, even if it cannot jump
+                  onSelect?.(n);
+
+                  // ✅ Only jump if we have a page
+                  if (jumpPage) onPick(n, jumpPage);
+                }}
+                title={jumpPage ? `Go to page ${jumpPage}` : "Select section (no page mapped)"}
               >
+
                 <div className="readerpage-tocItemTitle">{title || "—"}</div>
                 <div className="readerpage-tocItemPage">{right || "—"}</div>
               </button>
@@ -403,6 +411,22 @@ export default function DocumentReader() {
   const [sectionSummaryMeta, setSectionSummaryMeta] = useState(null);
   const lastSummaryKeyRef = useRef("");
   const [summaryOwnerKey, setSummaryOwnerKey] = useState(""); // which section the current summary belongs to
+
+  // ✅ ownerKey expected for the currently selected ToC node
+const expectedOwnerKeyForSelected = useMemo(() => {
+  if (!selectedTocNode) return "";
+  const tocEntryId = selectedTocNode?.id ?? selectedTocNode?.Id ?? null;
+  if (tocEntryId == null) return "";
+  return `doc:${Number(docId) || 0}|toc:${tocEntryId}`;
+}, [selectedTocNode, docId]);
+
+// ✅ summary is valid only if it belongs to the selected section
+const hasValidSummaryForSelected = useMemo(() => {
+  if (!sectionSummaryText || !sectionSummaryText.trim()) return false;
+  if (!expectedOwnerKeyForSelected) return false;
+  if (!summaryOwnerKey) return false;
+  return summaryOwnerKey === expectedOwnerKeyForSelected;
+}, [sectionSummaryText, expectedOwnerKeyForSelected, summaryOwnerKey]);
 
   // ✅ store server cache keys (for debugging and UI clarity)
   const [summaryCacheKey, setSummaryCacheKey] = useState("");
@@ -584,10 +608,11 @@ export default function DocumentReader() {
   const closeOutline = useCallback(() => setOutlineOpen(false), []);
 
   const openSummaryPanel = useCallback(() => {
-    if (!sectionSummaryText || !sectionSummaryText.trim()) {
-      showToast("No summary for this section yet. Run Basic or Extended first.", "error");
-      return;
-    }
+if (!hasValidSummaryForSelected) {
+  showToast("No summary for this section yet. Run Basic or Extended first.", "error");
+  return;
+}
+
 
     // ✅ strict ownership check (prefer server OwnerKey; fallback to computed key)
     const expectedOwnerKey = (() => {
@@ -603,7 +628,7 @@ export default function DocumentReader() {
     }
 
     setSummaryPanelOpen(true);
-  }, [docId, sectionSummaryText, selectedTocNode, showToast, summaryOwnerKey]);
+  }, [docId, hasValidSummaryForSelected, selectedTocNode, showToast, summaryOwnerKey]);
 
   const closeSummaryPanel = useCallback(() => setSummaryPanelOpen(false), []);
   const toggleSummaryExpanded = useCallback(() => setSummaryExpanded((p) => !p), []);
@@ -1783,14 +1808,35 @@ export default function DocumentReader() {
             </div>
           ) : filteredOutline?.length ? (
             <div className="readerpage-tocList">
-              <OutlineTree
-                nodes={filteredOutline}
-                expanded={outlineExpanded}
-                activePage={activePage}
-                pdfPageOffset={pdfPageOffset}
-                onToggle={toggleOutlineNode}
-                onPick={onOutlineClick}
-              />
+            <OutlineTree
+              nodes={filteredOutline}
+              expanded={outlineExpanded}
+              activePage={activePage}
+              pdfPageOffset={pdfPageOffset}
+              onToggle={toggleOutlineNode}
+              onPick={onOutlineClick}
+              onSelect={(node) => {
+                // ✅ Select without jumping
+                setSelectedTocNode(node);
+
+                // ✅ Immediately clear any stale summary that belongs to another section
+                const tocEntryId = node?.id ?? node?.Id ?? null;
+                const nextOwnerKey = tocEntryId != null ? `doc:${Number(docId) || 0}|toc:${tocEntryId}` : "";
+
+                if (summaryOwnerKey && nextOwnerKey && summaryOwnerKey !== nextOwnerKey) {
+                  setSectionSummaryText("");
+                  setSectionSummaryMeta(null);
+                  setSectionSummaryError("");
+                  lastSummaryKeyRef.current = "";
+                  setSummaryOwnerKey("");
+                  setSummaryCacheKey("");
+                  setSummaryContentHash("");
+                  setSummaryPromptVersion("");
+                  setSummaryModelUsed("");
+                }
+              }}
+            />
+
             </div>
           ) : outline?.length ? (
             <div className="readerpage-tocState">
@@ -1886,7 +1932,7 @@ export default function DocumentReader() {
                   <button
                     type="button"
                     className="readerOutlineMiniBtn"
-                    disabled={!sectionSummaryText}
+                    disabled={!hasValidSummaryForSelected}
                     onClick={onCopySummary}
                     title="Copy summary"
                   >
@@ -1896,7 +1942,7 @@ export default function DocumentReader() {
                   <button
                     type="button"
                     className="readerOutlineMiniBtn laAccent"
-                    disabled={!sectionSummaryText}
+                    disabled={!hasValidSummaryForSelected}
                     onClick={openSummaryPanel}
                     title="Open full summary panel"
                   >

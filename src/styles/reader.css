@@ -3073,3 +3073,7 @@ mark.pdf-find {
   opacity: 0 !important;
   pointer-events: none !important;
 }
+.readerpage-tocItem[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
