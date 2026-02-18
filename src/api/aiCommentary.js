@@ -1,3 +1,4 @@
+// src/api/aiCommentary.js
 import api from "./client"; // your axios instance
 
 export async function askCommentary(payload) {
@@ -12,11 +13,14 @@ export async function listCommentaryThreads({ take = 30, skip = 0 } = {}) {
 }
 
 export async function getCommentaryThread(threadId, { takeMessages = 80 } = {}) {
-  const res = await api.get(`/api/ai/commentary/threads/${threadId}`, { params: { takeMessages } });
+  const res = await api.get(`/api/ai/commentary/threads/${threadId}`, {
+    params: { takeMessages },
+  });
   return res.data; // { thread, messages:[{... sources:[]}] }
 }
 
 export async function deleteCommentaryThread(threadId) {
-  const res = await api.delete(`/api/ai/commentary/threads/${threadId}`);
+  // ✅ Prefer POST soft-delete to avoid DELETE 405 in some deployments/proxies
+  const res = await api.post(`/api/ai/commentary/threads/${threadId}/delete`);
   return res.data; // { threadId, deleted:true }
 }
