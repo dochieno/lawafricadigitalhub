@@ -128,7 +128,7 @@ export default function App() {
 
             <Route path="explore" element={<Explore />} />
             <Route path="library" element={<Library />} />
-            <Route path="ai/commentary" element={<AiLegalCommentary />} />
+            <Route path="ai/commentary" element={<CommentaryPlayground />} />
 
             {/* ✅ Law Reports */}
             <Route path="law-reports" element={<LawReports />} />

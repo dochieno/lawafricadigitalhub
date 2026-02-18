@@ -479,6 +479,9 @@ export default function AppShell() {
               Security
             </NavLink>
 
+            <NavLink to="/dashboard/ai/commentary" className={navLinkClass}>
+              Ask AI
+            </NavLink>
             {/* ================= APPROVALS ================= */}
             {canSeeApprovals() && (
               <div
