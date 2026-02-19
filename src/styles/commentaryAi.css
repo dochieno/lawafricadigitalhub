@@ -1,0 +1,648 @@
+/* =======================================================
+   FILE: src/styles/commentaryAi.css
+   Purpose: Premium LegalAI floating chat + structured response cards
+   ======================================================= */
+
+:root {
+  --la-maroon: #6b233b;
+  --la-maroon-2: #7a2b47;
+  --la-maroon-deep: #4a1527;
+
+  --la-ink: #0f172a;
+  --la-muted: rgba(15, 23, 42, 0.62);
+  --la-muted-2: rgba(15, 23, 42, 0.46);
+
+  --la-border: rgba(15, 23, 42, 0.10);
+  --la-border-2: rgba(15, 23, 42, 0.14);
+
+  --la-bg: #f6f7fb;
+  --card: #ffffff;
+
+  --shadow: 0 20px 60px rgba(2, 8, 23, 0.16);
+  --shadow-soft: 0 12px 30px rgba(2, 8, 23, 0.12);
+  --shadow-tiny: 0 8px 18px rgba(2, 8, 23, 0.08);
+
+  --radius: 16px;
+  --radius-lg: 22px;
+
+  --good: rgba(46, 125, 87, 1);
+  --warn: rgba(245, 158, 11, 1);
+  --info: rgba(59, 130, 246, 1);
+  --danger: rgba(220, 38, 38, 1);
+
+  --row-gap: 12px;
+
+  --glass: rgba(255, 255, 255, 0.78);
+  --glass-2: rgba(255, 255, 255, 0.62);
+  --glass-border: rgba(255, 255, 255, 0.28);
+
+  --focus: rgba(107, 35, 59, 0.35);
+}
+
+/* -------------------------
+   Page base
+-------------------------- */
+.laAiPage {
+  min-height: 100vh;
+  color: var(--la-ink);
+
+  /* premium layered background */
+  background:
+    radial-gradient(1200px 700px at 15% -10%, rgba(107, 35, 59, 0.10), transparent 60%),
+    radial-gradient(900px 520px at 85% 10%, rgba(46, 125, 87, 0.09), transparent 58%),
+    radial-gradient(800px 480px at 55% 100%, rgba(59, 130, 246, 0.06), transparent 55%),
+    var(--la-bg);
+}
+
+/* subtle film grain for premium feel */
+.laAiPage::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.06;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
+}
+
+/* -------------------------
+   Floating Ask AI button
+-------------------------- */
+.laAiFab {
+  position: fixed;
+  left: 18px;
+  bottom: 18px;
+  z-index: 9999;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+
+  padding: 12px 14px;
+  border-radius: 999px;
+
+  border: 1px solid rgba(255, 255, 255, 0.30);
+  background: linear-gradient(135deg, var(--la-maroon), var(--la-maroon-deep));
+  color: #fff;
+
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+  user-select: none;
+
+  font-weight: 950;
+  font-size: 13px;
+  letter-spacing: 0.2px;
+
+  transform: translateZ(0);
+  transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+}
+
+.laAiFab:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 40px rgba(107, 35, 59, 0.22), var(--shadow-soft);
+  filter: saturate(1.05);
+}
+
+.laAiFab:active {
+  transform: translateY(0px) scale(0.99);
+}
+
+.laAiFab:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.laAiFabDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 0 0 6px rgba(255, 255, 255, 0.18),
+    0 0 20px rgba(255, 255, 255, 0.25);
+}
+
+/* -------------------------
+   Overlay + Drawer
+-------------------------- */
+.laAiOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 8, 23, 0.52);
+  z-index: 9998;
+  backdrop-filter: blur(6px);
+  animation: laFadeIn 180ms ease both;
+}
+
+@keyframes laFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.laAiDrawer {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  top: 18px;
+  width: min(560px, calc(100vw - 36px));
+
+  z-index: 9999;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  background: linear-gradient(180deg, var(--glass), rgba(255,255,255,0.68));
+
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+
+  transform-origin: bottom right;
+  animation: laPop 180ms ease both;
+}
+
+@keyframes laPop {
+  from { transform: translateY(10px) scale(0.98); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* top subtle highlight */
+.laAiDrawer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(900px 250px at 20% 0%, rgba(255,255,255,0.45), transparent 60%),
+    radial-gradient(900px 250px at 80% 0%, rgba(255,255,255,0.22), transparent 60%);
+  opacity: 0.6;
+}
+
+/* -------------------------
+   Header
+-------------------------- */
+.laAiDrawerHeader {
+  position: relative;
+  padding: 14px 14px 12px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.10);
+  background: linear-gradient(180deg, rgba(255,255,255,0.88), rgba(255,255,255,0.60));
+}
+
+.laAiHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.laAiTitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.laAiTitleBadge {
+  width: 36px;
+  height: 36px;
+  border-radius: 14px;
+  background: rgba(107, 35, 59, 0.10);
+  border: 1px solid rgba(107, 35, 59, 0.18);
+  display: grid;
+  place-items: center;
+  color: var(--la-maroon);
+  font-weight: 950;
+  box-shadow: 0 10px 18px rgba(107,35,59,0.10);
+}
+
+.laAiTitleText {
+  min-width: 0;
+}
+
+.laAiTitleText h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 950;
+  letter-spacing: 0.2px;
+}
+
+.laAiTitleText p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--la-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.laAiHeaderActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* premium button */
+.laAiIconBtn {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255,255,255,0.86);
+  border-radius: 12px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-weight: 900;
+  font-size: 12px;
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.laAiIconBtn:hover {
+  border-color: rgba(15, 23, 42, 0.20);
+  background: rgba(255,255,255,0.95);
+  transform: translateY(-1px);
+}
+
+.laAiIconBtn:active {
+  transform: translateY(0px) scale(0.99);
+}
+
+/* -------------------------
+   Controls row
+-------------------------- */
+.laAiControls {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.laAiSelect {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255,255,255,0.88);
+  border-radius: 12px;
+  padding: 8px 10px;
+  font-size: 12px;
+  outline: none;
+  transition: box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.laAiSelect:focus {
+  border-color: rgba(107,35,59,0.25);
+  box-shadow: 0 0 0 4px var(--focus);
+}
+
+.laAiToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.78);
+  user-select: none;
+}
+
+.laAiToggle input {
+  accent-color: var(--la-maroon);
+}
+
+/* -------------------------
+   Error banner
+-------------------------- */
+.laAiError {
+  margin-top: 10px;
+  border: 1px solid rgba(220, 38, 38, 0.22);
+  background: rgba(220, 38, 38, 0.10);
+  color: rgba(153, 27, 27, 0.95);
+  border-radius: 14px;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+/* -------------------------
+   Body (messages)
+-------------------------- */
+.laAiBody {
+  position: relative;
+  flex: 1;
+  padding: 14px;
+  overflow: auto;
+
+  background: linear-gradient(180deg, rgba(246,247,251,0.92), rgba(246,247,251,0.70));
+}
+
+/* subtle grid texture */
+.laAiBody::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.14;
+  background-image:
+    linear-gradient(rgba(15,23,42,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15,23,42,0.04) 1px, transparent 1px);
+  background-size: 26px 26px;
+}
+
+.laAiBody > * {
+  position: relative;
+  z-index: 1;
+}
+
+.laAiEmpty {
+  border: 1px dashed rgba(15, 23, 42, 0.18);
+  background: rgba(255,255,255,0.75);
+  border-radius: 16px;
+  padding: 14px;
+  color: rgba(15, 23, 42, 0.70);
+  font-size: 13px;
+}
+
+/* nicer scrollbar */
+.laAiBody::-webkit-scrollbar {
+  width: 10px;
+}
+.laAiBody::-webkit-scrollbar-track {
+  background: transparent;
+}
+.laAiBody::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.14);
+  border-radius: 999px;
+  border: 2px solid rgba(255,255,255,0.55);
+}
+.laAiBody::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.22);
+}
+
+/* -------------------------
+   Message bubbles
+-------------------------- */
+.laAiMsg {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: var(--row-gap);
+  animation: laMsgIn 160ms ease both;
+}
+
+@keyframes laMsgIn {
+  from { transform: translateY(4px); opacity: 0.0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.laAiMeta {
+  font-size: 11px;
+  color: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.laAiBubble {
+  border-radius: 18px;
+  padding: 12px 12px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255,255,255,0.96);
+  box-shadow: var(--shadow-tiny);
+}
+
+.laAiBubbleUser {
+  background: linear-gradient(135deg, rgba(107,35,59,0.12), rgba(107,35,59,0.06));
+  border-color: rgba(107,35,59,0.18);
+}
+
+.laAiRight {
+  align-items: flex-end;
+}
+
+.laAiRight .laAiBubble {
+  max-width: 92%;
+}
+
+.laAiLeft .laAiBubble {
+  max-width: 100%;
+}
+
+/* better markdown inside bubbles */
+.laAiBubble :is(h1,h2,h3,h4) {
+  margin: 10px 0 8px;
+  font-weight: 950;
+  letter-spacing: 0.2px;
+}
+.laAiBubble p {
+  margin: 8px 0;
+  color: rgba(15, 23, 42, 0.90);
+}
+.laAiBubble ul {
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+.laAiBubble li {
+  margin-bottom: 8px;
+}
+.laAiBubble a {
+  color: var(--la-maroon);
+  font-weight: 850;
+  text-decoration: none;
+}
+.laAiBubble a:hover {
+  text-decoration: underline;
+}
+.laAiBubble code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  background: rgba(15, 23, 42, 0.06);
+  padding: 2px 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(15,23,42,0.10);
+}
+
+/* -------------------------
+   Composer
+-------------------------- */
+.laAiComposer {
+  border-top: 1px solid var(--la-border);
+  background: rgba(255,255,255,0.88);
+  padding: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.laAiTextarea {
+  flex: 1;
+  resize: none;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255,255,255,0.95);
+  padding: 10px 10px;
+  min-height: 44px;
+  max-height: 140px;
+  outline: none;
+  font-size: 13px;
+  line-height: 1.45;
+  transition: box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.laAiTextarea:focus {
+  border-color: rgba(107,35,59,0.25);
+  box-shadow: 0 0 0 4px var(--focus);
+}
+
+.laAiSendBtn {
+  border-radius: 14px;
+  padding: 11px 12px;
+  border: 1px solid rgba(255,255,255,0.26);
+  background: linear-gradient(135deg, var(--la-maroon), var(--la-maroon-deep));
+  color: #fff;
+  cursor: pointer;
+  font-weight: 950;
+  font-size: 13px;
+  box-shadow: 0 12px 26px rgba(107, 35, 59, 0.22);
+  transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
+}
+
+.laAiSendBtn:hover {
+  transform: translateY(-1px);
+  filter: saturate(1.05);
+  box-shadow: 0 16px 34px rgba(107, 35, 59, 0.26);
+}
+
+.laAiSendBtn:active {
+  transform: translateY(0px) scale(0.99);
+}
+
+.laAiSendBtn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* -------------------------
+   Typing indicator
+-------------------------- */
+.laTyping {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(15, 23, 42, 0.66);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.laDots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.laDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.35);
+  animation: laDot 1.0s infinite ease-in-out;
+}
+.laDot:nth-child(2) { animation-delay: 0.15s; }
+.laDot:nth-child(3) { animation-delay: 0.30s; }
+
+@keyframes laDot {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.35; }
+  40% { transform: translateY(-4px); opacity: 0.90; }
+}
+
+/* -------------------------
+   Structured response cards (Screen 1 vibe)
+-------------------------- */
+.aiBlock {
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255,255,255,0.98);
+  box-shadow: 0 14px 30px rgba(2, 8, 23, 0.08);
+  overflow: hidden;
+  margin-top: 10px;
+  position: relative;
+}
+
+/* premium left rail (accent) */
+.aiBlock::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: rgba(107,35,59,0.55);
+}
+
+.aiBlockHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.10);
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(255,255,255,0.82));
+}
+
+.aiPill {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(107,35,59,0.55);
+  box-shadow: 0 0 0 6px rgba(107,35,59,0.08);
+}
+
+.aiBlockTitle {
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0.8px;
+}
+
+.aiBlockBody {
+  padding: 12px 12px 14px;
+  font-size: 13px;
+  line-height: 1.58;
+  color: rgba(15, 23, 42, 0.92);
+}
+
+.aiBlockBody ul {
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+.aiBlockBody li {
+  margin-bottom: 8px;
+}
+
+/* section accents */
+.aiBlock[data-kind="overview"] .aiPill { background: rgba(107,35,59,0.58); }
+.aiBlock[data-kind="overview"]::before { background: rgba(107,35,59,0.58); }
+
+.aiBlock[data-kind="key_points"] .aiPill { background: rgba(245,158,11,0.78); }
+.aiBlock[data-kind="key_points"]::before { background: rgba(245,158,11,0.78); }
+
+.aiBlock[data-kind="important_terms"] .aiPill { background: rgba(59,130,246,0.78); }
+.aiBlock[data-kind="important_terms"]::before { background: rgba(59,130,246,0.78); }
+
+.aiBlock[data-kind="sources"] .aiPill { background: rgba(46,125,87,0.78); }
+.aiBlock[data-kind="sources"]::before { background: rgba(46,125,87,0.78); }
+
+/* Sources list */
+.aiSourcesList {
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+.aiSourcesList a {
+  color: var(--la-maroon);
+  font-weight: 900;
+  text-decoration: none;
+}
+.aiSourcesList a:hover {
+  text-decoration: underline;
+}
+
+/* small polish for markdown headings inside blocks */
+.aiBlockBody :is(h1,h2,h3,h4) {
+  margin: 10px 0 8px;
+  font-weight: 950;
+}
+.aiBlockBody p {
+  margin: 8px 0;
+  color: rgba(15, 23, 42, 0.92);
+}
