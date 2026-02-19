@@ -627,18 +627,16 @@ export default function AppShell() {
       <main className="app-main">
         <Outlet />
       </main>
-
-        {/* ✅ STICKY ASK AI (BOTTOM RIGHT) */}
-        <button
-          type="button"
-          className="la-ai-fab la-ai-fab--label"
-          title="Ask AI"
-          aria-label="Ask AI"
-          onClick={() => navigate("/dashboard/ai/commentary")}
-        >
-          <IcSpark />
-          <span className="la-ai-fab__text">Ask AI</span>
-        </button>
+      <button
+        type="button"
+        className="la-ai-fab la-ai-fab--label"
+        title="Ask AI"
+        aria-label="Ask AI"
+        onClick={() => navigate("/dashboard/ai/commentary")}
+      >
+        <IcSpark />
+        <span className="la-ai-fab__text">Ask LegalAI</span>
+      </button>
 
       {showLogoutConfirm && (
         <div className="modal-overlay">
