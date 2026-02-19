@@ -1,6 +1,8 @@
 // src/api/aiCommentary.js
 import api from "./client";
 
+// src/api/aiCommentary.js
+
 export async function askCommentary({
   question,
   mode = "basic",
@@ -9,9 +11,13 @@ export async function askCommentary({
   threadId = null,
 } = {}) {
   const payload = { question, mode, allowExternalContext, jurisdictionHint, threadId };
-  const res = await api.post("/ai/commentary/ask", payload);
+
+  // ✅ TEMP DIAGNOSTIC: route under the known-working /ai/law-reports controller
+  const res = await api.post("/ai/law-reports/commentary/ask", payload);
+
   return res.data;
 }
+
 
 export async function listCommentaryThreads({ take = 30, skip = 0 } = {}) {
   const res = await api.get("/ai/commentary/threads", { params: { take, skip } });
