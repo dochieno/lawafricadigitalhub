@@ -627,15 +627,35 @@ export default function AppShell() {
       <main className="app-main">
         <Outlet />
       </main>
+
+      {/* ✅ STICKY ASK AI (BOTTOM LEFT) */}
       <button
         type="button"
-        className="la-ai-fab la-ai-fab--label"
         title="Ask AI"
-        aria-label="Ask AI"
         onClick={() => navigate("/dashboard/ai/commentary")}
+        style={{
+          position: "fixed",
+          left: 18,
+          bottom: 18,
+          zIndex: 999999,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "12px 14px",
+          borderRadius: 999,
+          border: "1px solid rgba(107,35,59,0.25)",
+          background: "#6b233b",
+          color: "white",
+          boxShadow: "0 14px 30px rgba(0,0,0,0.25)",
+          cursor: "pointer",
+          fontWeight: 900,
+          fontSize: 13,
+        }}
       >
-        <IcSpark />
-        <span className="la-ai-fab__text">Ask LegalAI</span>
+        <span aria-hidden="true" style={{ display: "inline-flex" }}>
+          <IcSpark />
+        </span>
+        <span>Ask AI</span>
       </button>
 
       {showLogoutConfirm && (
