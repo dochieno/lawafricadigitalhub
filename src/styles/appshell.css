@@ -589,3 +589,41 @@
 
   white-space: nowrap;
 }
+/* Wrap both label + button (the wrapper is the fixed element now) */
+.la-ai-fab-wrap{
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 999999;
+
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* IMPORTANT: stop the button from being fixed when inside the wrapper */
+.la-ai-fab-wrap .la-ai-fab{
+  position: relative;   /* override: no longer fixed */
+  right: auto;          /* override */
+  bottom: auto;         /* override */
+  z-index: 2;
+}
+
+/* Label stays fully visible (not under the circle) */
+.la-ai-fab-label{
+  z-index: 1;
+  padding: 7px 10px;
+  border-radius: 999px;
+
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+
+  color: #fff;
+  background: rgba(17, 24, 39, 0.88);
+  border: 1px solid rgba(255,255,255,0.18);
+  box-shadow: 0 10px 22px rgba(0,0,0,0.22);
+
+  pointer-events: none; /* clicks go to the button */
+}
