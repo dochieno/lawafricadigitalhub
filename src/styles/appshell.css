@@ -560,3 +560,32 @@
   width: 22px;
   height: 22px;
 }
+/* Wrapper anchors both the circle + label together */
+.la-ai-fab-wrap{
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 999999;
+
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Label is NOT inside the circle */
+.la-ai-fab-label{
+  padding: 7px 10px;
+  border-radius: 999px;
+
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  line-height: 1;
+
+  color: #fff;
+  background: rgba(17, 24, 39, 0.88);
+  border: 1px solid rgba(255,255,255,0.18);
+  box-shadow: 0 10px 22px rgba(0,0,0,0.22);
+
+  white-space: nowrap;
+}

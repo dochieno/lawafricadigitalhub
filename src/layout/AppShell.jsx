@@ -628,7 +628,8 @@ export default function AppShell() {
         <Outlet />
       </main>
 
-        {/* ✅ STICKY ASK AI (BOTTOM RIGHT) */}
+      {/* ✅ STICKY ASK AI (BOTTOM RIGHT) */}
+      <div className="la-ai-fab-wrap">
         <button
           type="button"
           className="la-ai-fab"
@@ -639,6 +640,10 @@ export default function AppShell() {
           <IcSpark />
         </button>
 
+        <div className="la-ai-fab-label" aria-hidden="true">
+          Ask LegalAI
+        </div>
+      </div>
 
       {showLogoutConfirm && (
         <div className="modal-overlay">
