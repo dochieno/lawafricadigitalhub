@@ -628,35 +628,17 @@ export default function AppShell() {
         <Outlet />
       </main>
 
-      {/* ✅ STICKY ASK AI (BOTTOM LEFT) */}
-      <button
-        type="button"
-        title="Ask AI"
-        onClick={() => navigate("/dashboard/ai/commentary")}
-        style={{
-          position: "fixed",
-          left: 18,
-          bottom: 18,
-          zIndex: 999999,
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 10,
-          padding: "12px 14px",
-          borderRadius: 999,
-          border: "1px solid rgba(107,35,59,0.25)",
-          background: "#6b233b",
-          color: "white",
-          boxShadow: "0 14px 30px rgba(0,0,0,0.25)",
-          cursor: "pointer",
-          fontWeight: 900,
-          fontSize: 13,
-        }}
-      >
-        <span aria-hidden="true" style={{ display: "inline-flex" }}>
+        {/* ✅ STICKY ASK AI (BOTTOM RIGHT) */}
+        <button
+          type="button"
+          className="la-ai-fab"
+          title="Ask AI"
+          aria-label="Ask AI"
+          onClick={() => navigate("/dashboard/ai/commentary")}
+        >
           <IcSpark />
-        </span>
-        <span>Ask AI</span>
-      </button>
+        </button>
+
 
       {showLogoutConfirm && (
         <div className="modal-overlay">
