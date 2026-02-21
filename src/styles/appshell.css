@@ -627,3 +627,15 @@
 
   pointer-events: none; /* clicks go to the button */
 }
+/* add to src/styles/lawAfricaBrand.css (or appshell.css) */
+.la-input{
+  width: 100%;
+  border: 1px solid rgba(17,24,39,0.12);
+  border-radius: 12px;
+  padding: 10px 12px;
+  outline: none;
+}
+.la-input:focus{
+  border-color: rgba(112,40,64,0.55);
+  box-shadow: 0 0 0 4px rgba(112,40,64,0.12);
+}

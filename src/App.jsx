@@ -6,6 +6,9 @@ import AdminRoute from "./routes/AdminRoute";
 import AdminTocTest from "./pages/dashboard/admin/AdminTocTest";
 import AdminCourts from "./pages/dashboard/admin/AdminCourts";
 import CommentaryPlayground from "./pages/CommentaryPlayground";
+import Lawyers from "./pages/dashboard/lawyers/Lawyers";
+import LawyerProfile from "./pages/dashboard/lawyers/LawyerProfile";
+import LawyerInquiries from "./pages/dashboard/lawyers/LawyerInquiries";
 
 import AdminLLRImport from "./pages/dashboard/admin/AdminLLRImport";
 import LawReportReader from "./pages/dashboard/LawReportReader";
@@ -126,6 +129,9 @@ export default function App() {
 
             <Route path="explore" element={<Explore />} />
             <Route path="library" element={<Library />} />
+            <Route path="lawyers" element={<Lawyers />} />
+            <Route path="lawyers/inquiries" element={<LawyerInquiries />} />
+            <Route path="lawyers/:id" element={<LawyerProfile />} />
 
             {/* ✅ AI Commentary */}
             <Route path="ai/commentary" element={<CommentaryPlayground />} />

@@ -412,6 +412,7 @@ export default function AppShell() {
             <NavLink to="/dashboard" end className={navLinkClass}>Home</NavLink>
             <NavLink to="/dashboard/explore" className={navLinkClass}>Explore</NavLink>
             <NavLink to="/dashboard/library" className={navLinkClass}>Library</NavLink>
+            <NavLink to="/dashboard/lawyers" className={navLinkClass}>Find a Lawyer</NavLink>
 
             {/* ✅ NEW TAB AFTER LIBRARY */}
             <NavLink to="/dashboard/law-reports" className={navLinkClass}>Law Reports</NavLink>
