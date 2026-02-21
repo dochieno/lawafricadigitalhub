@@ -3,19 +3,28 @@
 // Update:
 // - Full-page AI screen
 // - LEFT SIDEBAR for threads
-// - Small checkbox styling hook
-// - Add Abort/Timeout + Stop button (prevents stuck "Thinking")
+// - Smaller External sources toggle (switch)
+// - Abort/Timeout + Stop button (prevents stuck "Thinking")
+// - Streaming via askCommentaryStream (SSE) with fallback to askCommentary
+// - ReactMarkdown + remark-gfm (clickable bare URLs)
+// - Display "LegalAI" (not model name)
+// - Date formatting: "21 Feb 26" (+ time)
+// - Sources consolidation: relies on backend headings:
+//    "### LawAfrica sources" and "### External sources"
+//   (so we DO NOT render msg.sources separately to avoid duplicates)
 // =======================================================
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   askCommentary,
+  askCommentaryStream,
   deleteCommentaryThread,
   getCommentaryThread,
-  listCommentaryThreads,askCommentaryStream,
+  listCommentaryThreads,
 } from "../api/aiCommentary";
 
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import "../styles/commentaryAi.css";
 
 /* ---------------------------
@@ -24,7 +33,17 @@ import "../styles/commentaryAi.css";
 
 function fmtWhen(d) {
   try {
-    return new Date(d).toLocaleString();
+    const dt = new Date(d);
+    const date = dt.toLocaleDateString(undefined, {
+      day: "2-digit",
+      month: "short",
+      year: "2-digit",
+    });
+    const time = dt.toLocaleTimeString(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return `${date} ${time}`;
   } catch {
     return "";
   }
@@ -81,7 +100,14 @@ function useTypewriter(text, enabled, speedMs = 12) {
  * - OVERVIEW
  * - KEY POINTS
  * - IMPORTANT TERMS
- * - SOURCES
+ * - LAWAFRICA SOURCES
+ * - EXTERNAL SOURCES
+ *
+ * IMPORTANT:
+ * Backend now outputs:
+ *   ### LawAfrica sources
+ *   ### External sources
+ * So we map those to dedicated blocks and avoid duplicates.
  */
 function parseIntoBlocks(markdown) {
   const raw = (markdown || "").trim();
@@ -103,23 +129,29 @@ function parseIntoBlocks(markdown) {
       pushCurrent();
 
       const norm = title.toLowerCase();
+
       let key = "answer";
       if (norm.includes("overview")) key = "overview";
-      else if (norm.includes("key issues") || norm.includes("key points")) key = "key_points";
-      else if (norm.includes("important terms") || norm.includes("definitions")) key = "important_terms";
-      else if (norm.includes("sources")) key = "sources";
+      else if (norm.includes("key issues") || norm.includes("key points"))
+        key = "key_points";
+      else if (norm.includes("important terms") || norm.includes("definitions"))
+        key = "important_terms";
+      else if (norm.includes("lawafrica sources")) key = "lawafrica_sources";
+      else if (norm.includes("external sources")) key = "external_sources";
 
       current = {
         title:
           key === "overview"
             ? "OVERVIEW"
             : key === "key_points"
-            ? "KEY POINTS"
-            : key === "important_terms"
-            ? "IMPORTANT TERMS"
-            : key === "sources"
-            ? "SOURCES"
-            : title || "Answer",
+              ? "KEY POINTS"
+              : key === "important_terms"
+                ? "IMPORTANT TERMS"
+                : key === "lawafrica_sources"
+                  ? "LAWAFRICA SOURCES"
+                  : key === "external_sources"
+                    ? "EXTERNAL SOURCES"
+                    : title || "Answer",
         key,
         content: [],
       };
@@ -131,8 +163,15 @@ function parseIntoBlocks(markdown) {
   pushCurrent();
 
   const hasKnown = sections.some((s) =>
-    ["overview", "key_points", "important_terms", "sources"].includes(s.key)
+    [
+      "overview",
+      "key_points",
+      "important_terms",
+      "lawafrica_sources",
+      "external_sources",
+    ].includes(s.key),
   );
+
   if (!hasKnown) return [{ title: "ANSWER", key: "answer", content: raw }];
 
   return sections.filter((s) => (s.content || "").trim().length > 0);
@@ -146,7 +185,14 @@ function BlockCard({ title, kind, markdown }) {
         <div className="aiBlockTitle">{title}</div>
       </div>
       <div className="aiBlockBody">
-        <ReactMarkdown>{markdown}</ReactMarkdown>
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            a: (props) => <a {...props} target="_blank" rel="noreferrer" />,
+          }}
+        >
+          {markdown}
+        </ReactMarkdown>
       </div>
     </div>
   );
@@ -171,7 +217,7 @@ export default function CommentaryPlayground() {
 
   const bodyRef = useRef(null);
 
-  // ✅ request cancellation + timeout
+  // request cancellation + timeout
   const abortRef = useRef(null);
   const timeoutRef = useRef(null);
 
@@ -226,7 +272,9 @@ export default function CommentaryPlayground() {
         setError("");
         await refreshThreads();
       } catch (e) {
-        setError(e?.response?.data?.message || e?.message || "Failed to load threads");
+        setError(
+          e?.response?.data?.message || e?.message || "Failed to load threads",
+        );
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -324,7 +372,7 @@ export default function CommentaryPlayground() {
     setMessages((prev) => [...prev, optimisticUser, optimisticAssistant]);
     setQuestion("");
 
-    // ✅ hard timeout to prevent "stuck thinking"
+    // hard timeout to prevent "stuck thinking"
     const TIMEOUT_MS = 25000;
     timeoutRef.current = window.setTimeout(() => {
       try {
@@ -334,91 +382,91 @@ export default function CommentaryPlayground() {
       }
     }, TIMEOUT_MS);
 
-try {
-  // Prefer streaming for “fast feel”
-  const useStream = true;
+    try {
+      // Prefer streaming for “fast feel”
+      const useStream = true;
 
-  if (useStream) {
-    let streamed = "";
-    let resolvedThreadId = null;
+      if (useStream) {
+        let streamed = "";
+        let resolvedThreadId = null;
 
-    await askCommentaryStream(
-      {
-        question: q,
-        mode,
-        allowExternalContext,
-        threadId: newThread ? null : activeThreadId,
-      },
-      {
-        signal: ctrl.signal,
-        onEvent: (evt) => {
-          if (evt.type === "delta" && evt.data?.text) {
-            streamed += evt.data.text;
+        await askCommentaryStream(
+          {
+            question: q,
+            mode,
+            allowExternalContext,
+            jurisdictionHint: null,
+            threadId: newThread ? null : activeThreadId,
+          },
+          {
+            signal: ctrl.signal,
+            onEvent: (evt) => {
+              if (evt.type === "delta" && evt.data?.text) {
+                streamed += evt.data.text;
 
-            // update the optimistic assistant bubble live
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.messageId === tempAssistantId
-                  ? { ...m, contentMarkdown: streamed, __typing: true }
-                  : m
-              )
-            );
-          }
+                // update the optimistic assistant bubble live
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.messageId === tempAssistantId
+                      ? { ...m, contentMarkdown: streamed, __typing: true }
+                      : m,
+                  ),
+                );
+              }
 
-          if (evt.type === "done") {
-            resolvedThreadId = evt.data?.threadId ?? null;
-          }
-        },
+              if (evt.type === "done") {
+                resolvedThreadId = evt.data?.threadId ?? null;
+              }
+            },
+          },
+        );
+
+        // stop typing flag
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.messageId === tempAssistantId ? { ...m, __typing: false } : m,
+          ),
+        );
+
+        const tid = resolvedThreadId;
+
+        if (tid && tid !== activeThreadId) {
+          await refreshThreads();
+          await loadThread(tid);
+        } else if (activeThreadId) {
+          await loadThread(activeThreadId);
+        } else if (tid) {
+          await refreshThreads();
+          await loadThread(tid);
+        }
+
+        return; // done
       }
-    );
 
-    // stop typing flag
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.messageId === tempAssistantId ? { ...m, __typing: false } : m
-      )
-    );
+      // Fallback (non-stream)
+      const resp = await askCommentary(
+        {
+          question: q,
+          mode,
+          allowExternalContext,
+          jurisdictionHint: null,
+          threadId: newThread ? null : activeThreadId,
+        },
+        { signal: ctrl.signal },
+      );
 
-    const tid = resolvedThreadId;
+      const tid = resp.threadId;
 
-    if (tid && tid !== activeThreadId) {
-      await refreshThreads();
-      await loadThread(tid);
-    } else if (activeThreadId) {
-      await loadThread(activeThreadId);
-    } else if (tid) {
-      await refreshThreads();
-      await loadThread(tid);
-    }
-
-    return; // ✅ done
-  }
-
-  // Fallback (non-stream)
-  const resp = await askCommentary(
-    {
-      question: q,
-      mode,
-      allowExternalContext,
-      threadId: newThread ? null : activeThreadId,
-    },
-    { signal: ctrl.signal }
-  );
-
-  const tid = resp.threadId;
-
-  if (tid && tid !== activeThreadId) {
-    await refreshThreads();
-    await loadThread(tid);
-  } else if (activeThreadId) {
-    await loadThread(activeThreadId);
-  } else if (tid) {
-    await refreshThreads();
-    await loadThread(tid);
-  }
-  // existing error handling...
-}catch (e) {
-      // aborted / timeout should not look like a crash
+      if (tid && tid !== activeThreadId) {
+        await refreshThreads();
+        await loadThread(tid);
+      } else if (activeThreadId) {
+        await loadThread(activeThreadId);
+      } else if (tid) {
+        await refreshThreads();
+        await loadThread(tid);
+      }
+    } catch (e) {
       const aborted =
         e?.name === "AbortError" ||
         e?.code === "ERR_CANCELED" ||
@@ -462,7 +510,11 @@ try {
               >
                 Refresh
               </button>
-              <button className="laAiIconBtn laAiIconBtnSm" onClick={onNewThread} disabled={busy}>
+              <button
+                className="laAiIconBtn laAiIconBtnSm"
+                onClick={onNewThread}
+                disabled={busy}
+              >
                 New
               </button>
             </div>
@@ -527,8 +579,13 @@ try {
                 <div className="laAiTitleText">
                   <h3>{headerTitle}</h3>
                   <p>
-                    {activeThreadId ? `Thread #${activeThreadId}` : "New conversation"} •{" "}
-                    {activeThread?.countryName ? `Jurisdiction: ${activeThread.countryName}` : "Jurisdiction: from profile"}
+                    {activeThreadId
+                      ? `Thread #${activeThreadId}`
+                      : "New conversation"}{" "}
+                    •{" "}
+                    {activeThread?.countryName
+                      ? `Jurisdiction: ${activeThread.countryName}`
+                      : "Jurisdiction: from profile"}
                   </p>
                 </div>
               </div>
@@ -545,17 +602,20 @@ try {
                 <option value="extended">extended</option>
               </select>
 
-              {/* ✅ Smaller checkbox (CSS below) */}
-            <label className={`laSwitch ${busy ? "isDisabled" : ""}`} title="Allow external sources">
-              <input
-                type="checkbox"
-                checked={allowExternalContext}
-                onChange={(e) => setAllowExternalContext(e.target.checked)}
-                disabled={busy}
-              />
-              <span className="laSwitchTrack" aria-hidden="true" />
-              <span className="laSwitchLabel">External sources</span>
-            </label>
+              {/* ✅ Smaller switch instead of huge checkbox */}
+              <label
+                className={`laSwitch ${busy ? "isDisabled" : ""}`}
+                title="Allow external sources"
+              >
+                <input
+                  type="checkbox"
+                  checked={allowExternalContext}
+                  onChange={(e) => setAllowExternalContext(e.target.checked)}
+                  disabled={busy}
+                />
+                <span className="laSwitchTrack" aria-hidden="true" />
+                <span className="laSwitchLabel">External sources</span>
+              </label>
             </div>
 
             {error && <div className="laAiError">{error}</div>}
@@ -565,8 +625,8 @@ try {
           <div className="laAiBody" ref={bodyRef}>
             {messages.length === 0 ? (
               <div className="laAiEmpty">
-                Ask a legal question to begin. The assistant will answer with structured blocks (Overview, Key Points,
-                Important Terms, Sources) when possible.
+                Ask a legal question to begin. The assistant will answer with
+                structured blocks when possible.
               </div>
             ) : (
               messages.map((m) => <ChatMessage key={m.messageId} msg={m} />)
@@ -590,7 +650,6 @@ try {
             />
 
             <div className="laAiComposerBtns">
-              {/* ✅ Stop button only when busy */}
               {busy ? (
                 <button className="laAiStopBtn" type="button" onClick={stopNow}>
                   Stop
@@ -620,7 +679,8 @@ function ChatMessage({ msg }) {
   const isUser = msg.role === "user";
   const sideClass = isUser ? "laAiMsg laAiRight" : "laAiMsg laAiLeft";
 
-  const shouldType = !isUser && (msg.__typing || msg.__temp) && (msg.contentMarkdown || "").length > 0;
+  const shouldType =
+    !isUser && (msg.__typing || msg.__temp) && (msg.contentMarkdown || "").length > 0;
 
   const typed = useTypewriter(msg.contentMarkdown || "", shouldType);
   const assistantContent = shouldType ? typed : msg.contentMarkdown || "";
@@ -630,9 +690,9 @@ function ChatMessage({ msg }) {
   return (
     <div className={sideClass}>
       <div className="laAiMeta">
-        <b>{msg.role}</b>
+        <b>{isUser ? "user" : "assistant"}</b>
         <span>•</span>
-        <span>{msg.model || "—"}</span>
+        <span>{isUser ? "—" : "LegalAI"}</span>
         <span>•</span>
         <span>{fmtWhen(msg.createdAtUtc)}</span>
       </div>
@@ -650,34 +710,23 @@ function ChatMessage({ msg }) {
         ) : !isUser && blocks ? (
           <div>
             {blocks.map((b, idx) => (
-              <BlockCard key={idx} title={b.title} kind={b.key} markdown={b.content} />
+              <BlockCard
+                key={`${msg.messageId}-${b.key}-${idx}`}
+                title={b.title}
+                kind={b.key}
+                markdown={b.content}
+              />
             ))}
-
-            {msg.sources?.length > 0 && (
-              <div className="aiBlock" data-kind="sources">
-                <div className="aiBlockHead">
-                  <span className="aiPill" />
-                  <div className="aiBlockTitle">SOURCES</div>
-                </div>
-                <div className="aiBlockBody">
-                  <ul className="aiSourcesList">
-                    {msg.sources.map((s, idx) => (
-                      <li key={idx}>
-                        <a href={s.linkUrl} target="_blank" rel="noreferrer">
-                          {s.title || s.type}
-                        </a>
-                        {s.citation ? (
-                          <span style={{ color: "rgba(15,23,42,0.62)" }}> — {s.citation}</span>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            )}
           </div>
         ) : (
-          <ReactMarkdown>{assistantContent}</ReactMarkdown>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              a: (props) => <a {...props} target="_blank" rel="noreferrer" />,
+            }}
+          >
+            {assistantContent}
+          </ReactMarkdown>
         )}
       </div>
     </div>

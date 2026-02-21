@@ -948,3 +948,84 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+/* =======================================================
+   ✅ FINAL OVERRIDES: External sources small switch
+   Paste at the VERY END of src/styles/commentaryAi.css
+   ======================================================= */
+
+/* Use switch (not checkbox) in the header controls */
+.laSwitch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  user-select: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Visually hide input but keep it focusable */
+.laSwitch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Track */
+.laSwitchTrack {
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.10);
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  position: relative;
+  transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+/* Knob */
+.laSwitchTrack::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.10);
+  transition: transform 160ms ease, border-color 160ms ease;
+}
+
+/* ✅ ON state */
+.laSwitch input:checked + .laSwitchTrack {
+  background: rgba(107, 35, 59, 0.18);
+  border-color: rgba(107, 35, 59, 0.28);
+}
+.laSwitch input:checked + .laSwitchTrack::after {
+  transform: translateX(20px);
+  border-color: rgba(107, 35, 59, 0.22);
+}
+
+/* ✅ Focus ring (keyboard accessibility) */
+.laSwitch input:focus + .laSwitchTrack {
+  box-shadow: 0 0 0 4px rgba(107, 35, 59, 0.18);
+}
+
+/* Label */
+.laSwitchLabel {
+  font-size: 12px;
+  font-weight: 850;
+  color: rgba(15, 23, 42, 0.72);
+  letter-spacing: 0.2px;
+  line-height: 1;
+}
+
+/* Disabled */
+.laSwitch.isDisabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.laSwitch.isDisabled .laSwitchTrack {
+  box-shadow: none;
+}
