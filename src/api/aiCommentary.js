@@ -1,5 +1,6 @@
 // src/api/aiCommentary.js
 import api from "./client";
+import { getToken } from "../auth/auth";
 
 export async function askCommentary(
   {
@@ -61,37 +62,27 @@ export async function askCommentaryStream(
 ) {
   const payload = { question, mode, allowExternalContext, jurisdictionHint, threadId };
 
-  // NOTE: Must match your backend route (same baseURL domain as api)
-  // We derive absolute URL from axios baseURL to avoid hardcoding.
-  const base = (api?.defaults?.baseURL || "").replace(/\/$/, "");
+  // baseURL is already `${BASE}/api` in your axios client
+  const base = String(api?.defaults?.baseURL || "").replace(/\/$/, "");
   const url = `${base}/ai/law-reports/commentary/ask-stream`;
 
-  // If your auth token is in axios headers/interceptors, fetch won't auto-attach it.
-  // We copy it from axios defaults, and also from localStorage if you store it there.
-  const auth =
-    api?.defaults?.headers?.common?.Authorization ||
-    api?.defaults?.headers?.Authorization ||
-    "";
+  // ✅ IMPORTANT: use the same token source as axios interceptor
+  const token = getToken(); // may return null on blocked public-flow pages
 
   const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "text/event-stream",
-      ...(auth ? { Authorization: auth } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(payload),
     signal,
   });
 
   if (!res.ok) {
-    let msg = `Stream HTTP ${res.status}`;
-    try {
-      msg = await res.text();
-    } catch {
-      //
-    }
-    throw new Error(msg);
+    const txt = await res.text().catch(() => "");
+    throw new Error(txt || `Stream HTTP ${res.status}`);
   }
 
   const reader = res.body?.getReader?.();
@@ -132,13 +123,8 @@ export async function askCommentaryStream(
 
       onEvent?.({ type, data: parsed });
 
-      if (type === "error") {
-        throw new Error(parsed?.message || "Stream error");
-      }
-
-      if (type === "done") {
-        return parsed; // { threadId }
-      }
+      if (type === "error") throw new Error(parsed?.message || "Stream error");
+      if (type === "done") return parsed; // { threadId }
     }
   }
 
