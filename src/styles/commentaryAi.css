@@ -850,3 +850,101 @@
     display: none;
   }
 }
+/* Small checkbox like Screen 2 */
+.laAiToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  user-select: none;
+}
+
+.laAiToggle input[type="checkbox"]{
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  transform: none; /* ensure it doesn't appear huge */
+  accent-color: #6b233b; /* matches maroon vibe */
+}
+
+/* Composer buttons layout */
+.laAiComposerBtns{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Stop button */
+.laAiStopBtn{
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(15,23,42,0.16);
+  background: rgba(255,255,255,0.92);
+  cursor: pointer;
+  font-weight: 700;
+}
+.laAiStopBtn:hover{
+  filter: brightness(0.98);
+}
+/* ---------- Premium small toggle switch ---------- */
+.laSwitch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  user-select: none;
+  cursor: pointer;
+}
+
+.laSwitch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.laSwitchTrack {
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.10);
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  position: relative;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.laSwitchTrack::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.10);
+  transition: transform 160ms ease;
+}
+
+/* ON state */
+.laSwitch input:checked + .laSwitchTrack {
+  background: rgba(140, 17, 31, 0.18);
+  border-color: rgba(140, 17, 31, 0.28);
+}
+.laSwitch input:checked + .laSwitchTrack::after {
+  transform: translateX(20px);
+  border-color: rgba(140, 17, 31, 0.22);
+}
+
+/* Label */
+.laSwitchLabel {
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(15, 23, 42, 0.72);
+  letter-spacing: 0.2px;
+}
+
+/* Disabled */
+.laSwitch.isDisabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

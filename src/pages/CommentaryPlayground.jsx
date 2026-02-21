@@ -2,9 +2,9 @@
 // FILE: src/pages/CommentaryPlayground.jsx
 // Update:
 // - Full-page AI screen
-// - LEFT SIDEBAR for threads (instead of dropdown)
-// - Keep existing design language / classes
-// - Remove page floating Ask AI button (AppShell owns it)
+// - LEFT SIDEBAR for threads
+// - Small checkbox styling hook
+// - Add Abort/Timeout + Stop button (prevents stuck "Thinking")
 // =======================================================
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -12,7 +12,7 @@ import {
   askCommentary,
   deleteCommentaryThread,
   getCommentaryThread,
-  listCommentaryThreads,
+  listCommentaryThreads,askCommentaryStream,
 } from "../api/aiCommentary";
 
 import ReactMarkdown from "react-markdown";
@@ -76,6 +76,13 @@ function useTypewriter(text, enabled, speedMs = 12) {
   return out;
 }
 
+/**
+ * Convert assistant markdown into blocks:
+ * - OVERVIEW
+ * - KEY POINTS
+ * - IMPORTANT TERMS
+ * - SOURCES
+ */
 function parseIntoBlocks(markdown) {
   const raw = (markdown || "").trim();
   if (!raw) return [];
@@ -164,6 +171,35 @@ export default function CommentaryPlayground() {
 
   const bodyRef = useRef(null);
 
+  // ✅ request cancellation + timeout
+  const abortRef = useRef(null);
+  const timeoutRef = useRef(null);
+
+  const clearInFlight = () => {
+    try {
+      if (timeoutRef.current) {
+        window.clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      abortRef.current = null;
+    } catch {
+      //
+    }
+  };
+
+  const stopNow = () => {
+    try {
+      if (abortRef.current) abortRef.current.abort();
+    } catch {
+      //
+    }
+    clearInFlight();
+    setBusy(false);
+
+    // remove any typing bubble if present
+    setMessages((prev) => prev.filter((m) => !m.__typing || !m.__temp));
+  };
+
   async function refreshThreads({ keepSelection = true } = {}) {
     const data = await listCommentaryThreads({ take: 100, skip: 0 });
     const items = data.items || [];
@@ -171,7 +207,6 @@ export default function CommentaryPlayground() {
 
     if (!keepSelection) return;
 
-    // if current selection disappeared (deleted), reset
     if (activeThreadId && !items.some((t) => t.threadId === activeThreadId)) {
       await onNewThread();
     }
@@ -207,6 +242,18 @@ export default function CommentaryPlayground() {
     return () => window.clearTimeout(t);
   }, [messages]);
 
+  // cleanup on unmount (avoid stuck busy)
+  useEffect(() => {
+    return () => {
+      try {
+        if (abortRef.current) abortRef.current.abort();
+      } catch {
+        //
+      }
+      clearInFlight();
+    };
+  }, []);
+
   async function onNewThread() {
     setActiveThreadId(null);
     setActiveThread(null);
@@ -239,6 +286,17 @@ export default function CommentaryPlayground() {
     setBusy(true);
     setError("");
 
+    // cancel any previous in-flight (defensive)
+    try {
+      if (abortRef.current) abortRef.current.abort();
+    } catch {
+      //
+    }
+    clearInFlight();
+
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+
     const tempUserId = `temp_u_${Date.now()}`;
     const tempAssistantId = `temp_a_${Date.now()}`;
 
@@ -266,29 +324,116 @@ export default function CommentaryPlayground() {
     setMessages((prev) => [...prev, optimisticUser, optimisticAssistant]);
     setQuestion("");
 
-    try {
-      const resp = await askCommentary({
+    // ✅ hard timeout to prevent "stuck thinking"
+    const TIMEOUT_MS = 25000;
+    timeoutRef.current = window.setTimeout(() => {
+      try {
+        ctrl.abort();
+      } catch {
+        //
+      }
+    }, TIMEOUT_MS);
+
+try {
+  // Prefer streaming for “fast feel”
+  const useStream = true;
+
+  if (useStream) {
+    let streamed = "";
+    let resolvedThreadId = null;
+
+    await askCommentaryStream(
+      {
         question: q,
         mode,
         allowExternalContext,
         threadId: newThread ? null : activeThreadId,
-      });
+      },
+      {
+        signal: ctrl.signal,
+        onEvent: (evt) => {
+          if (evt.type === "delta" && evt.data?.text) {
+            streamed += evt.data.text;
 
-      const tid = resp.threadId;
+            // update the optimistic assistant bubble live
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.messageId === tempAssistantId
+                  ? { ...m, contentMarkdown: streamed, __typing: true }
+                  : m
+              )
+            );
+          }
 
-      if (tid && tid !== activeThreadId) {
-        await refreshThreads();
-        await loadThread(tid);
-      } else if (activeThreadId) {
-        await loadThread(activeThreadId);
-      } else if (tid) {
-        await refreshThreads();
-        await loadThread(tid);
+          if (evt.type === "done") {
+            resolvedThreadId = evt.data?.threadId ?? null;
+          }
+        },
       }
-    } catch (e) {
-      setError(e?.response?.data?.message || e?.message || "Ask failed");
+    );
+
+    // stop typing flag
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.messageId === tempAssistantId ? { ...m, __typing: false } : m
+      )
+    );
+
+    const tid = resolvedThreadId;
+
+    if (tid && tid !== activeThreadId) {
+      await refreshThreads();
+      await loadThread(tid);
+    } else if (activeThreadId) {
+      await loadThread(activeThreadId);
+    } else if (tid) {
+      await refreshThreads();
+      await loadThread(tid);
+    }
+
+    return; // ✅ done
+  }
+
+  // Fallback (non-stream)
+  const resp = await askCommentary(
+    {
+      question: q,
+      mode,
+      allowExternalContext,
+      threadId: newThread ? null : activeThreadId,
+    },
+    { signal: ctrl.signal }
+  );
+
+  const tid = resp.threadId;
+
+  if (tid && tid !== activeThreadId) {
+    await refreshThreads();
+    await loadThread(tid);
+  } else if (activeThreadId) {
+    await loadThread(activeThreadId);
+  } else if (tid) {
+    await refreshThreads();
+    await loadThread(tid);
+  }
+  // existing error handling...
+}catch (e) {
+      // aborted / timeout should not look like a crash
+      const aborted =
+        e?.name === "AbortError" ||
+        e?.code === "ERR_CANCELED" ||
+        String(e?.message || "").toLowerCase().includes("canceled");
+
+      if (aborted) {
+        setError("Request stopped.");
+      } else {
+        setError(e?.response?.data?.message || e?.message || "Ask failed");
+      }
+
+      // remove typing bubble if failed
       setMessages((prev) => prev.filter((m) => m.messageId !== tempAssistantId));
     } finally {
+      clearInFlight();
       setBusy(false);
     }
   }
@@ -310,7 +455,11 @@ export default function CommentaryPlayground() {
             </div>
 
             <div className="laAiSideActions">
-              <button className="laAiIconBtn laAiIconBtnSm" onClick={() => refreshThreads()} disabled={busy}>
+              <button
+                className="laAiIconBtn laAiIconBtnSm"
+                onClick={() => refreshThreads()}
+                disabled={busy}
+              >
                 Refresh
               </button>
               <button className="laAiIconBtn laAiIconBtnSm" onClick={onNewThread} disabled={busy}>
@@ -338,13 +487,13 @@ export default function CommentaryPlayground() {
                       <div className="laAiThreadTitle">
                         {(t.title || `Thread #${t.threadId}`).slice(0, 64)}
                       </div>
-                      <div className="laAiThreadMeta">
-                        {t.countryName || "—"}
-                      </div>
+                      <div className="laAiThreadMeta">{t.countryName || "—"}</div>
                     </div>
 
                     <div className="laAiThreadBottom">
-                      <div className="laAiThreadWhen">{fmtWhen(t.lastActivityAtUtc || t.createdAtUtc)}</div>
+                      <div className="laAiThreadWhen">
+                        {fmtWhen(t.lastActivityAtUtc || t.createdAtUtc)}
+                      </div>
 
                       <button
                         type="button"
@@ -379,7 +528,7 @@ export default function CommentaryPlayground() {
                   <h3>{headerTitle}</h3>
                   <p>
                     {activeThreadId ? `Thread #${activeThreadId}` : "New conversation"} •{" "}
-                    {activeThread?.countryName || "Jurisdiction: auto"}
+                    {activeThread?.countryName ? `Jurisdiction: ${activeThread.countryName}` : "Jurisdiction: from profile"}
                   </p>
                 </div>
               </div>
@@ -396,15 +545,17 @@ export default function CommentaryPlayground() {
                 <option value="extended">extended</option>
               </select>
 
-              <label className="laAiToggle">
-                <input
-                  type="checkbox"
-                  checked={allowExternalContext}
-                  onChange={(e) => setAllowExternalContext(e.target.checked)}
-                  disabled={busy}
-                />
-                Allow external context
-              </label>
+              {/* ✅ Smaller checkbox (CSS below) */}
+            <label className={`laSwitch ${busy ? "isDisabled" : ""}`} title="Allow external sources">
+              <input
+                type="checkbox"
+                checked={allowExternalContext}
+                onChange={(e) => setAllowExternalContext(e.target.checked)}
+                disabled={busy}
+              />
+              <span className="laSwitchTrack" aria-hidden="true" />
+              <span className="laSwitchLabel">External sources</span>
+            </label>
             </div>
 
             {error && <div className="laAiError">{error}</div>}
@@ -437,13 +588,23 @@ export default function CommentaryPlayground() {
               }}
               disabled={busy}
             />
-            <button
-              className="laAiSendBtn"
-              onClick={() => onAsk({ newThread: !activeThreadId })}
-              disabled={busy || !question.trim()}
-            >
-              Send
-            </button>
+
+            <div className="laAiComposerBtns">
+              {/* ✅ Stop button only when busy */}
+              {busy ? (
+                <button className="laAiStopBtn" type="button" onClick={stopNow}>
+                  Stop
+                </button>
+              ) : null}
+
+              <button
+                className="laAiSendBtn"
+                onClick={() => onAsk({ newThread: !activeThreadId })}
+                disabled={busy || !question.trim()}
+              >
+                Send
+              </button>
+            </div>
           </div>
         </section>
       </div>
@@ -459,8 +620,7 @@ function ChatMessage({ msg }) {
   const isUser = msg.role === "user";
   const sideClass = isUser ? "laAiMsg laAiRight" : "laAiMsg laAiLeft";
 
-  const shouldType =
-    !isUser && (msg.__typing || msg.__temp) && (msg.contentMarkdown || "").length > 0;
+  const shouldType = !isUser && (msg.__typing || msg.__temp) && (msg.contentMarkdown || "").length > 0;
 
   const typed = useTypewriter(msg.contentMarkdown || "", shouldType);
   const assistantContent = shouldType ? typed : msg.contentMarkdown || "";
