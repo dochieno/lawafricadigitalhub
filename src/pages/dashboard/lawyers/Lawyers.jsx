@@ -1,20 +1,19 @@
 // src/pages/dashboard/lawyers/Lawyers.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { createLawyerInquiry, searchLawyers } from "../../../api/lawyers";
-import "../../../styles/lawyers.css";
+import {
+  createLawyerInquiry,
+  searchLawyers,
+  lookupPracticeAreas,
+  lookupTowns,
+  lookupCourts,
+} from "../../../api/lawyers";
 
-function toIntOrNull(v) {
-  const n = Number(String(v ?? "").trim());
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
+import "../../../styles/explore.css";          // ✅ reuse Explore premium filter styles
+import "../../../styles/lawyersDropdown.css"; // ✅ dropdown popover polish
 
 function formatErr(e) {
-  return (
-    e?.response?.data?.message ||
-    e?.message ||
-    "Something went wrong. Please try again."
-  );
+  return e?.response?.data?.message || e?.message || "Something went wrong. Please try again.";
 }
 
 function Modal({ open, title, children, onClose }) {
@@ -24,9 +23,7 @@ function Modal({ open, title, children, onClose }) {
       <div className="modal" style={{ maxWidth: 720 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
           <h3 style={{ margin: 0 }}>{title}</h3>
-          <button className="modal-btn secondary" onClick={onClose}>
-            Close
-          </button>
+          <button className="modal-btn secondary" onClick={onClose}>Close</button>
         </div>
         <div style={{ marginTop: 12 }}>{children}</div>
       </div>
@@ -34,18 +31,162 @@ function Modal({ open, title, children, onClose }) {
   );
 }
 
+/**
+ * Explore-style searchable dropdown:
+ * - button shows selected
+ * - panel has mini search + list
+ */
+function LookupDropdown({
+  label,
+  placeholder = "Type to search...",
+  disabled = false,
+  value,
+  onChange,
+  fetcher, // async ({ q }) => [{id, name}]
+  hint,
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [items, setItems] = useState([]);
+  const [err, setErr] = useState("");
+
+  const wrapRef = useRef(null);
+
+  // Close on outside click (same pattern you use in AppShell)
+  useEffect(() => {
+    function onPointerDown(e) {
+      const inside = wrapRef.current && wrapRef.current.contains(e.target);
+      if (!inside) setOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, []);
+
+  async function load(searchText) {
+    if (!fetcher) return;
+    setErr("");
+    setLoading(true);
+    try {
+      const res = await fetcher({ q: searchText });
+      setItems(Array.isArray(res) ? res : []);
+    } catch (e) {
+      setErr(formatErr(e));
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Load when opened
+  useEffect(() => {
+    if (!open) return;
+    load(q.trim());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Debounce typing
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => load(q.trim()), 220);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, open]);
+
+  const selectedText = value?.name || "";
+
+  return (
+    <div className="lw-popWrap" ref={wrapRef}>
+      <div className="explore-filterSectionTitle" style={{ marginBottom: 6 }}>{label}</div>
+
+      <button
+        type="button"
+        className="lw-popBtn"
+        disabled={disabled}
+        onClick={() => !disabled && setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        {selectedText ? (
+          <span className="lw-popValue">{selectedText}</span>
+        ) : (
+          <span className="lw-popHint">{disabled ? "Select country first" : "Select..."}</span>
+        )}
+        {hint ? <span className="lw-popHint">{hint}</span> : null}
+      </button>
+
+      {open ? (
+        <div className="lw-popPanel">
+          <div className="lw-popTopRow">
+            <input
+              className="explore-miniSearch"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={placeholder}
+              autoFocus
+            />
+            <button
+              type="button"
+              className="lw-popClear"
+              onClick={() => {
+                onChange(null);
+                setOpen(false);
+              }}
+            >
+              Clear
+            </button>
+          </div>
+
+          {err ? <div className="explore-error" style={{ padding: 10 }}>{err}</div> : null}
+
+          <div className="explore-checkList" style={{ maxHeight: 260 }}>
+            {loading ? (
+              <div className="lw-popEmpty">Loading…</div>
+            ) : items.length === 0 ? (
+              <div className="lw-popEmpty">No results.</div>
+            ) : (
+              items.map((it) => (
+                <label
+                  key={it.id}
+                  className="explore-check"
+                  onClick={() => {
+                    onChange({ id: it.id, name: it.name, code: it.code, postCode: it.postCode });
+                    setOpen(false);
+                  }}
+                >
+                  <input
+                    type="radio"
+                    checked={value?.id === it.id}
+                    readOnly
+                  />
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                    <span>{it.name}</span>
+                    {it.code ? <span style={{ opacity: 0.65 }}>{it.code}</span> : null}
+                    {it.postCode ? <span style={{ opacity: 0.65 }}>{it.postCode}</span> : null}
+                  </div>
+                </label>
+              ))
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function Lawyers() {
   const navigate = useNavigate();
 
-  // Filters
+  // Sidebar search
   const [q, setQ] = useState("");
   const [verifiedOnly, setVerifiedOnly] = useState(true);
-  const [countryId, setCountryId] = useState("");
-  const [townId, setTownId] = useState("");
-  const [practiceAreaId, setPracticeAreaId] = useState("");
-  const [highestCourtAllowedId, setHighestCourtAllowedId] = useState("");
 
-  // Data
+  // Dropdown selections (store objects)
+  const [country, setCountry] = useState({ id: 1, name: "Kenya" }); // default
+  const [town, setTown] = useState(null);
+  const [practiceArea, setPracticeArea] = useState(null);
+  const [court, setCourt] = useState(null);
+
+  // Results
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState([]);
   const [err, setErr] = useState("");
@@ -62,14 +203,14 @@ export default function Lawyers() {
     return {
       q: (q ?? "").trim() || undefined,
       verifiedOnly,
-      countryId: toIntOrNull(countryId) ?? undefined,
-      townId: toIntOrNull(townId) ?? undefined,
-      practiceAreaId: toIntOrNull(practiceAreaId) ?? undefined,
-      highestCourtAllowedId: toIntOrNull(highestCourtAllowedId) ?? undefined,
+      countryId: country?.id || undefined,
+      townId: town?.id || undefined,
+      practiceAreaId: practiceArea?.id || undefined,
+      highestCourtAllowedId: court?.id || undefined,
       take: 30,
       skip: 0,
     };
-  }, [q, verifiedOnly, countryId, townId, practiceAreaId, highestCourtAllowedId]);
+  }, [q, verifiedOnly, country, town, practiceArea, court]);
 
   async function load() {
     setErr("");
@@ -92,10 +233,10 @@ export default function Lawyers() {
   function clearFilters() {
     setQ("");
     setVerifiedOnly(true);
-    setCountryId("");
-    setTownId("");
-    setPracticeAreaId("");
-    setHighestCourtAllowedId("");
+    setCountry({ id: 1, name: "Kenya" });
+    setTown(null);
+    setPracticeArea(null);
+    setCourt(null);
   }
 
   function openInquiry(lawyer) {
@@ -118,8 +259,8 @@ export default function Lawyers() {
     try {
       await createLawyerInquiry({
         lawyerProfileId: inqLawyer?.id,
-        practiceAreaId: toIntOrNull(practiceAreaId),
-        townId: toIntOrNull(townId),
+        practiceAreaId: practiceArea?.id ?? null,
+        townId: town?.id ?? null,
         problemSummary: summary,
         preferredContactMethod: inqPreferred,
       });
@@ -135,261 +276,268 @@ export default function Lawyers() {
 
   const resultCount = items.length;
 
+  // Countries (seeded in backend; keep in sync with your Country.HasData)
+  const countryOptions = [
+    { id: 1, name: "Kenya" },
+    { id: 2, name: "Uganda" },
+    { id: 3, name: "Tanzania" },
+    { id: 4, name: "Rwanda" },
+    { id: 5, name: "South Africa" },
+  ];
+
   return (
-    <div className="lawyers-page">
-      <div className="lawyers-shell">
-        {/* ============ LEFT SIDEBAR FILTERS ============ */}
-        <aside className="lawyers-sidebar">
-          <div className="lw-side-top">
-            <div>
-              <div className="lw-side-title">Filters</div>
-              <div className="lw-side-meta">{resultCount} results</div>
-            </div>
+    <div className="explore-container">
+      <div className="explore-shell">
+        {/* ========== LEFT FILTER SIDEBAR (Explore style) ========== */}
+        <div className="explore-shellLeft">
+          <aside className="explore-sidebar">
+            <div className="explore-sidebarTop">
+              <div className="explore-sidebarTitleRow">
+                <div>
+                  <div className="explore-sidebarTitle">Filters</div>
+                  <div className="explore-sidebarSub">{resultCount} results</div>
+                </div>
 
-            <button className="lw-clear" onClick={clearFilters}>
-              Clear all
-            </button>
-          </div>
+                <button className="explore-linkBtn" onClick={clearFilters}>
+                  Clear all
+                </button>
+              </div>
 
-          <div className="lw-row" style={{ marginTop: 12 }}>
-            <input
-              className="la-input"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search name, firm..."
-            />
-          </div>
-
-          <details className="lw-section" open>
-            <summary>
-              Access
-              <span style={{ opacity: 0.55 }}>▾</span>
-            </summary>
-            <div className="lw-body">
-              <label className="lw-check">
+              <div className="explore-sidebarSearchWrap">
                 <input
-                  type="checkbox"
-                  checked={verifiedOnly}
-                  onChange={(e) => setVerifiedOnly(e.target.checked)}
-                />
-                Verified only
-              </label>
-            </div>
-          </details>
-
-          <details className="lw-section" open>
-            <summary>
-              Location
-              <span style={{ opacity: 0.55 }}>▾</span>
-            </summary>
-            <div className="lw-body">
-              <div className="lw-row">
-                <input
-                  className="la-input"
-                  value={countryId}
-                  onChange={(e) => setCountryId(e.target.value)}
-                  placeholder="CountryId (optional)"
-                />
-                <input
-                  className="la-input"
-                  value={townId}
-                  onChange={(e) => setTownId(e.target.value)}
-                  placeholder="TownId (optional)"
+                  className="explore-sidebarSearch"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Search name, firm..."
                 />
               </div>
             </div>
-          </details>
 
-          <details className="lw-section">
-            <summary>
-              Specialisation
-              <span style={{ opacity: 0.55 }}>▾</span>
-            </summary>
-            <div className="lw-body">
-              <div className="lw-row">
-                <input
-                  className="la-input"
-                  value={practiceAreaId}
-                  onChange={(e) => setPracticeAreaId(e.target.value)}
-                  placeholder="PracticeAreaId (optional)"
-                />
-              </div>
-            </div>
-          </details>
+            <div className="explore-sidebarBody">
+              {/* Access */}
+              <div className="explore-filterSection">
+                <button className="explore-filterSectionHeader" type="button">
+                  <div className="explore-filterSectionTitle">Access</div>
+                  <div className="explore-filterSectionRight">
+                    <span className="explore-pill">{verifiedOnly ? "Verified" : "All"}</span>
+                  </div>
+                </button>
 
-          <details className="lw-section">
-            <summary>
-              Court level
-              <span style={{ opacity: 0.55 }}>▾</span>
-            </summary>
-            <div className="lw-body">
-              <div className="lw-row">
-                <input
-                  className="la-input"
-                  value={highestCourtAllowedId}
-                  onChange={(e) => setHighestCourtAllowedId(e.target.value)}
-                  placeholder="CourtId (optional)"
-                />
-              </div>
-            </div>
-          </details>
-
-          <div className="lw-row" style={{ marginTop: 14 }}>
-            <button className="modal-btn" onClick={load} disabled={loading}>
-              {loading ? "Searching..." : "Search"}
-            </button>
-
-            <button
-              className="modal-btn secondary"
-              onClick={() => navigate("/dashboard/lawyers/inquiries")}
-            >
-              My Inquiries
-            </button>
-          </div>
-
-          {err ? <div className="lw-error" style={{ marginTop: 10 }}>{err}</div> : null}
-        </aside>
-
-        {/* ============ MAIN CONTENT ============ */}
-        <section className="lawyers-main">
-          <div className="lw-hero">
-            <div className="lw-hero-top">
-              <div>
-                <span className="lw-pill">LawAfrica</span>
-                <h2 className="lw-title">Find a Lawyer</h2>
-                <div className="lw-subtitle">
-                  Premium directory of verified legal professionals. Filter by location, court level, and specialization.
+                <div className="explore-filterSectionBody">
+                  <label className="explore-toggle">
+                    <input
+                      type="checkbox"
+                      checked={verifiedOnly}
+                      onChange={(e) => setVerifiedOnly(e.target.checked)}
+                    />
+                    Verified only
+                  </label>
                 </div>
               </div>
 
-              <div className="lw-hero-actions">
-                <div className="lw-count">{resultCount} results</div>
+              {/* Country */}
+              <div className="explore-filterSection">
+                <div className="explore-filterSectionTitle" style={{ marginBottom: 8 }}>
+                  Country
+                </div>
+
+                <select
+                  className="explore-select"
+                  value={country?.id ?? 1}
+                  onChange={(e) => {
+                    const id = Number(e.target.value);
+                    const c = countryOptions.find((x) => x.id === id) || countryOptions[0];
+                    setCountry(c);
+                    setTown(null);
+                    setCourt(null);
+                  }}
+                >
+                  {countryOptions.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Town */}
+              <div className="explore-filterSection">
+                <LookupDropdown
+                  label="Town"
+                  value={town}
+                  onChange={setTown}
+                  disabled={!country?.id}
+                  fetcher={({ q }) => lookupTowns({ countryId: country.id, q })}
+                  placeholder="Type town name or post code..."
+                  hint={town?.postCode ? `Post code: ${town.postCode}` : null}
+                />
+              </div>
+
+              {/* Practice area */}
+              <div className="explore-filterSection">
+                <LookupDropdown
+                  label="Practice area"
+                  value={practiceArea}
+                  onChange={setPracticeArea}
+                  fetcher={({ q }) => lookupPracticeAreas({ q })}
+                  placeholder="Type practice area..."
+                />
+              </div>
+
+              {/* Court */}
+              <div className="explore-filterSection">
+                <LookupDropdown
+                  label="Highest court allowed"
+                  value={court}
+                  onChange={setCourt}
+                  disabled={!country?.id}
+                  fetcher={({ q }) => lookupCourts({ countryId: country.id, q })}
+                  placeholder="Type court name or code..."
+                />
+              </div>
+
+              <div className="explore-filterSection">
+                <div className="explore-drawerActions" style={{ marginTop: 0 }}>
+                  <button className="explore-cta-btn" onClick={load} disabled={loading}>
+                    {loading ? "Searching..." : "Search"}
+                  </button>
+                  <button
+                    className="explore-btn explore-btn-hotOutline"
+                    type="button"
+                    onClick={() => navigate("/dashboard/lawyers/inquiries")}
+                  >
+                    My Inquiries
+                  </button>
+                </div>
+
+                {err ? (
+                  <div className="explore-error" style={{ marginTop: 12 }}>
+                    {err}
+                  </div>
+                ) : null}
               </div>
             </div>
+          </aside>
+        </div>
 
-            {/* Extra premium search bar (mirrors sidebar search but convenient) */}
-            <div className="lw-searchbar">
-              <input
-                className="la-input"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search name or firm..."
-              />
-              <div className="lw-search-actions">
-                <button className="modal-btn secondary" onClick={clearFilters} disabled={loading}>
-                  Clear
-                </button>
-                <button className="modal-btn" onClick={load} disabled={loading}>
-                  {loading ? "Searching..." : "Search"}
+        {/* ========== MAIN CONTENT ========== */}
+        <section>
+          <div className="explore-header">
+            <div className="explore-titleRow">
+              <div className="explore-brandTitle">
+                <div className="explore-brandKicker">LawAfrica</div>
+                <h1 className="explore-title">
+                  Find a Lawyer <span className="explore-titleDot">•</span>{" "}
+                  <span className="explore-titleAccent">Directory</span>
+                </h1>
+                <p className="explore-subtitle">
+                  Premium directory of verified legal professionals. Filter by town, court level, and specialization.
+                </p>
+
+                <div className="explore-brandBadges">
+                  <span className="explore-brandBadge">Verified professionals</span>
+                  <span className="explore-brandBadge">Fast inquiry</span>
+                  <span className="explore-brandBadge">Nationwide coverage</span>
+                </div>
+              </div>
+
+              <div className="explore-headerActions">
+                <div className="explore-resultsPill">{resultCount} results</div>
+                <button className="explore-btn explore-btn-hotOutline" onClick={() => navigate("/dashboard/lawyers/inquiries")}>
+                  My Inquiries
                 </button>
               </div>
             </div>
           </div>
 
-          <div className="lw-results">
+          <div style={{ marginTop: 14 }}>
             {loading ? (
-              <div className="lw-loading">Loading lawyers…</div>
+              <div className="explore-loading">Loading lawyers…</div>
             ) : resultCount === 0 ? (
-              <div className="lw-empty">
-                No lawyers found. Try adjusting your filters.
-              </div>
+              <div className="explore-empty">No lawyers found. Try adjusting your filters.</div>
             ) : (
-              <div className="lw-grid">
+              <div className="explore-grid">
                 {items.map((x) => (
-                  <div className="lw-card" key={x.id}>
-                    <div className="lw-card-top">
-                      <div className="lw-avatar">
-                        {x.profileImageUrl ? (
-                          <img src={x.profileImageUrl} alt="" />
-                        ) : null}
+                  <div key={x.id} className="explore-card" style={{ cursor: "default" }}>
+                    <div className="explore-info">
+                      <div className="explore-badges">
+                        {x.isVerified ? <span className="badge premium">Verified</span> : <span className="badge">Unverified</span>}
+                        {x.highestCourtName ? <span className="badge">{x.highestCourtName}</span> : null}
                       </div>
 
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div className="lw-name-row">
-                          <div className="lw-name">{x.displayName}</div>
-                          {x.isVerified ? <span className="lw-verified">Verified</span> : null}
-                        </div>
+                      <h3 className="explore-doc-title" title={x.displayName}>
+                        {x.displayName}
+                      </h3>
 
-                        {x.firmName ? <div className="lw-firm">{x.firmName}</div> : null}
-
-                        <div className="lw-meta">
-                          {(x.primaryTownName || "—")} • {(x.countryName || "—")}
-                        </div>
-
-                        {x.highestCourtName ? (
-                          <div className="lw-court">
-                            Highest court: <b>{x.highestCourtName}</b>
-                          </div>
-                        ) : null}
+                      <div className="explore-meta">
+                        {(x.firmName || "—")} <span className="explore-titleDot">•</span>{" "}
+                        {(x.primaryTownName || "—")} / {(x.countryName || "—")}
                       </div>
-                    </div>
 
-                    <div className="lw-card-actions">
-                      <Link
-                        className="modal-btn secondary"
-                        to={`/dashboard/lawyers/${x.id}`}
-                        style={{ textDecoration: "none" }}
-                      >
-                        View profile
-                      </Link>
-                      <button className="modal-btn" onClick={() => openInquiry(x)}>
-                        Request help
-                      </button>
+                      <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+                        <Link
+                          className="explore-btn explore-btn-hotOutline"
+                          to={`/dashboard/lawyers/${x.id}`}
+                          style={{ textDecoration: "none", textAlign: "center" }}
+                        >
+                          View profile
+                        </Link>
+                        <button className="explore-btn explore-btn-hot" onClick={() => openInquiry(x)}>
+                          Request help
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
+
+          {/* Inquiry modal */}
+          <Modal
+            open={inqOpen}
+            title={inqLawyer ? `Request help from ${inqLawyer.displayName}` : "Request help"}
+            onClose={() => setInqOpen(false)}
+          >
+            <div style={{ display: "grid", gap: 10 }}>
+              <div style={{ opacity: 0.8, fontSize: 13 }}>
+                Describe your issue and we’ll send it to the lawyer.
+              </div>
+
+              <label style={{ display: "grid", gap: 6 }}>
+                <div style={{ fontSize: 13, opacity: 0.8 }}>Preferred contact method</div>
+                <select
+                  className="explore-select"
+                  value={inqPreferred}
+                  onChange={(e) => setInqPreferred(e.target.value)}
+                >
+                  <option value="call">Call</option>
+                  <option value="email">Email</option>
+                </select>
+              </label>
+
+              <label style={{ display: "grid", gap: 6 }}>
+                <div style={{ fontSize: 13, opacity: 0.8 }}>Problem summary</div>
+                <textarea
+                  className="explore-sidebarSearch"
+                  style={{ minHeight: 120 }}
+                  value={inqSummary}
+                  onChange={(e) => setInqSummary(e.target.value)}
+                  placeholder="Explain your issue briefly…"
+                />
+              </label>
+
+              {inqError ? <div style={{ color: "#b42318" }}>{inqError}</div> : null}
+
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
+                <button className="explore-btn" onClick={() => setInqOpen(false)} disabled={inqSubmitting}>
+                  Cancel
+                </button>
+                <button className="explore-cta-btn" onClick={submitInquiry} disabled={inqSubmitting}>
+                  {inqSubmitting ? "Sending..." : "Send inquiry"}
+                </button>
+              </div>
+            </div>
+          </Modal>
         </section>
-
-        {/* Inquiry modal */}
-        <Modal
-          open={inqOpen}
-          title={inqLawyer ? `Request help from ${inqLawyer.displayName}` : "Request help"}
-          onClose={() => setInqOpen(false)}
-        >
-          <div style={{ display: "grid", gap: 10 }}>
-            <div style={{ opacity: 0.8, fontSize: 13 }}>
-              Describe your issue and we’ll send it to the lawyer.
-            </div>
-
-            <label style={{ display: "grid", gap: 6 }}>
-              <div style={{ fontSize: 13, opacity: 0.8 }}>Preferred contact method</div>
-              <select
-                className="la-input"
-                style={{ height: 42 }}
-                value={inqPreferred}
-                onChange={(e) => setInqPreferred(e.target.value)}
-              >
-                <option value="call">Call</option>
-                <option value="email">Email</option>
-              </select>
-            </label>
-
-            <label style={{ display: "grid", gap: 6 }}>
-              <div style={{ fontSize: 13, opacity: 0.8 }}>Problem summary</div>
-              <textarea
-                className="la-input"
-                style={{ minHeight: 120, paddingTop: 10 }}
-                value={inqSummary}
-                onChange={(e) => setInqSummary(e.target.value)}
-                placeholder="Explain your issue briefly…"
-              />
-            </label>
-
-            {inqError ? <div style={{ color: "#b42318" }}>{inqError}</div> : null}
-
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
-              <button className="modal-btn secondary" onClick={() => setInqOpen(false)} disabled={inqSubmitting}>
-                Cancel
-              </button>
-              <button className="modal-btn" onClick={submitInquiry} disabled={inqSubmitting}>
-                {inqSubmitting ? "Sending..." : "Send inquiry"}
-              </button>
-            </div>
-          </div>
-        </Modal>
       </div>
     </div>
   );

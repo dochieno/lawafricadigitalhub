@@ -1,0 +1,76 @@
+/* src/styles/lawyersDropdown.css */
+/* Uses Explore classes; only adds popover positioning polish */
+
+.lw-popWrap { position: relative; }
+
+.lw-popBtn {
+  width: 100%;
+  padding: 10px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #fff;
+  outline: none;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lw-popBtn:hover {
+  border-color: rgba(107, 35, 59, 0.22);
+}
+
+.lw-popBtn .lw-popValue {
+  display: block;
+  color: rgba(15, 23, 42, 0.92);
+  font-weight: 850;
+}
+
+.lw-popBtn .lw-popHint {
+  display: block;
+  margin-top: 2px;
+  color: rgba(15, 23, 42, 0.55);
+  font-weight: 650;
+  font-size: 11px;
+}
+
+.lw-popPanel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 40;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #fff;
+  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.16);
+  padding: 10px;
+}
+
+.lw-popTopRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.lw-popClear {
+  background: transparent;
+  border: 0;
+  color: #6b233b;
+  font-weight: 900;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 10px;
+}
+
+.lw-popClear:hover {
+  background: rgba(107, 35, 59, 0.08);
+}
+
+.lw-popEmpty {
+  padding: 8px 6px;
+  color: rgba(15, 23, 42, 0.62);
+  font-weight: 650;
+  font-size: 11px;
+}

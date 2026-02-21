@@ -42,3 +42,22 @@ export async function getLawyerInquiriesForMe({ take = 50, skip = 0 } = {}) {
   const res = await api.get("/lawyers/inquiries/for-me", { params: { take, skip } });
   return res.data; // { items, take, skip }
 }
+// Lookups (for dropdowns)
+
+// GET /api/lawyers/practice-areas?q=...
+export async function lookupPracticeAreas({ q = "" } = {}) {
+  const res = await api.get("/lawyers/practice-areas", { params: { q } });
+  return res.data; // expected: [{ id, name }]
+}
+
+// GET /api/lawyers/towns?countryId=1&q=...
+export async function lookupTowns({ countryId, q = "" } = {}) {
+  const res = await api.get("/lawyers/towns", { params: { countryId, q } });
+  return res.data; // expected: [{ id, name, postCode? }]
+}
+
+// GET /api/lawyers/courts?countryId=1&q=...
+export async function lookupCourts({ countryId, q = "" } = {}) {
+  const res = await api.get("/lawyers/courts", { params: { countryId, q } });
+  return res.data; // expected: [{ id, name, code? }]
+}
