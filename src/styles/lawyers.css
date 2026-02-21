@@ -1,0 +1,308 @@
+/* src/styles/lawyers.css */
+
+/* ---------- Page layout ---------- */
+.lawyers-page {
+  padding: 18px 18px 26px;
+}
+
+.lawyers-shell {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+/* Responsive: collapse sidebar */
+@media (max-width: 1100px) {
+  .lawyers-shell {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Sidebar ---------- */
+.lawyers-sidebar {
+  background: #fff;
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.06);
+  position: sticky;
+  top: 86px; /* below top nav */
+  max-height: calc(100vh - 110px);
+  overflow: auto;
+}
+
+.lw-side-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(17,24,39,0.08);
+}
+
+.lw-side-title {
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.2px;
+}
+
+.lw-side-meta {
+  font-size: 12px;
+  opacity: 0.75;
+  margin-top: 2px;
+}
+
+.lw-clear {
+  font-size: 12px;
+  color: #8a2f2f;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 10px;
+}
+.lw-clear:hover {
+  background: rgba(112,40,64,0.08);
+}
+
+/* sections */
+.lw-section {
+  margin-top: 12px;
+}
+.lw-section summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  padding: 10px 10px;
+  border-radius: 12px;
+}
+.lw-section summary:hover {
+  background: rgba(17,24,39,0.04);
+}
+.lw-section summary::-webkit-details-marker {
+  display: none;
+}
+
+.lw-section .lw-body {
+  padding: 8px 10px 0;
+}
+
+.lw-row {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* Checkbox rows */
+.lw-check {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+  opacity: 0.9;
+}
+.lw-check input {
+  width: 16px;
+  height: 16px;
+}
+
+/* ---------- Main area ---------- */
+.lawyers-main {
+  min-width: 0;
+}
+
+.lw-hero {
+  background: radial-gradient(1200px 260px at 20% 0%, rgba(112,40,64,0.14), transparent 60%),
+              radial-gradient(900px 260px at 80% 0%, rgba(46,125,87,0.10), transparent 55%),
+              #fff;
+  border-radius: 22px;
+  padding: 18px;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.06);
+}
+
+.lw-hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.lw-pill {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  background: rgba(112,40,64,0.10);
+  color: #6e3a3a;
+  border: 1px solid rgba(112,40,64,0.16);
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.lw-title {
+  margin: 10px 0 0;
+  font-size: 22px;
+}
+
+.lw-subtitle {
+  margin-top: 8px;
+  opacity: 0.78;
+}
+
+.lw-hero-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.lw-count {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(17,24,39,0.05);
+}
+
+/* Search bar in main header (premium) */
+.lw-searchbar {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.lw-search-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* ---------- Results grid ---------- */
+.lw-results {
+  margin-top: 16px;
+}
+
+.lw-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+@media (max-width: 1250px) {
+  .lw-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .lw-grid { grid-template-columns: 1fr; }
+}
+
+/* ---------- Card ---------- */
+.lw-card {
+  background: #fff;
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lw-card-top {
+  display: flex;
+  gap: 12px;
+}
+
+.lw-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: #f3f4f6;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.lw-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.lw-name-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.lw-name {
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lw-verified {
+  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(46,125,87,0.12);
+  color: #2E7D57;
+  font-weight: 700;
+  border: 1px solid rgba(46,125,87,0.22);
+}
+
+.lw-firm {
+  opacity: 0.82;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lw-meta {
+  opacity: 0.74;
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+.lw-court {
+  margin-top: 6px;
+  font-size: 12px;
+  opacity: 0.78;
+}
+
+.lw-card-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+/* ---------- Error/empty ---------- */
+.lw-empty, .lw-loading, .lw-error {
+  padding: 14px;
+  opacity: 0.85;
+}
+
+.lw-error {
+  color: #b42318;
+  opacity: 1;
+}
+
+/* ---------- Input helper (if missing globally) ---------- */
+.la-input{
+  width: 100%;
+  border: 1px solid rgba(17,24,39,0.12);
+  border-radius: 12px;
+  padding: 10px 12px;
+  outline: none;
+  background: #fff;
+}
+.la-input:focus{
+  border-color: rgba(112,40,64,0.55);
+  box-shadow: 0 0 0 4px rgba(112,40,64,0.12);
+}
