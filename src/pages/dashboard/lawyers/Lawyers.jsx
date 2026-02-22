@@ -463,7 +463,6 @@ export default function Lawyers() {
                   <span className="explore-brandBadge">Nationwide coverage</span>
                 </div>
               </div>
-
                 <div className="explore-headerActions">
                 <div className="explore-resultsPill">{resultCount} results</div>
 
