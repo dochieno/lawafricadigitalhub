@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "../../../../styles/explore.css";
 import {
-  adminListPracticeAreas,
-  adminCreatePracticeArea,
-  adminUpdatePracticeArea,
-  adminDisablePracticeArea,
+  adminListLawyerServices,
+  adminCreateLawyerService,
+  adminUpdateLawyerService,
+  adminDisableLawyerService,
 } from "../../../../api/adminLawyers";
 
 function formatErr(e) {
@@ -49,7 +49,7 @@ export default function AdminPracticeAreas() {
     setErr("");
     setLoading(true);
     try {
-      const list = await adminListPracticeAreas({
+      const list = await adminListLawyerServices({
         q: q.trim(),
         includeInactive,
       });
@@ -94,11 +94,11 @@ export default function AdminPracticeAreas() {
     setSaving(true);
     try {
       const payload = { name: n, slug: slug.trim() || null, isActive };
-      if (editing?.id) {
-        await adminUpdatePracticeArea(editing.id, payload);
-      } else {
-        await adminCreatePracticeArea(payload);
-      }
+    if (editing?.id) {
+    await adminUpdateLawyerService(editing.id, payload);
+    } else {
+    await adminCreateLawyerService(payload);
+    }
       setOpen(false);
       await load();
     } catch (e) {
@@ -111,7 +111,7 @@ export default function AdminPracticeAreas() {
   async function disable(id) {
     if (!window.confirm("Disable this practice area?")) return;
     try {
-      await adminDisablePracticeArea(id);
+      await adminDisableLawyerService(id);
       await load();
     } catch (e) {
       alert(formatErr(e));

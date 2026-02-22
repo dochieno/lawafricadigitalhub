@@ -12,6 +12,14 @@ function formatErr(e) {
   return e?.response?.data?.message || e?.message || "Something went wrong.";
 }
 
+function IconPlus() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function Modal({ open, title, children, onClose }) {
   if (!open) return null;
   return (
@@ -133,14 +141,49 @@ export default function AdminPracticeAreas() {
             </p>
           </div>
 
-          <div className="explore-headerActions">
-            <button className="explore-btn explore-btn-hotOutline" onClick={load} disabled={loading}>
-              {loading ? "Refreshing..." : "Refresh"}
-            </button>
-            <button className="explore-cta-btn" onClick={openCreate}>
-              + Add Practice Area
-            </button>
-          </div>
+<div className="explore-headerActions" style={{ gap: 10 }}>
+  {/* Refresh: icon chip */}
+  <button
+    type="button"
+    className="explore-btn explore-btn-hotOutline"
+    onClick={load}
+    disabled={loading}
+    title="Refresh"
+    aria-label="Refresh"
+    style={{
+      width: 44,
+      height: 44,
+      padding: 0,
+      borderRadius: 14,
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+    }}
+  >
+      <IconRefresh />
+        </button>
+
+        {/* Add: icon chip (keeps maroon gradient) */}
+        <button
+            type="button"
+            className="explore-cta-btn"
+            onClick={openCreate}
+            title="Add Practice Area"
+            aria-label="Add Practice Area"
+            style={{
+            width: 56,
+            height: 44,
+            padding: 0,
+            borderRadius: 14,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 10px 26px rgba(15, 23, 42, 0.10)",
+            }}
+        >
+            <IconPlus />
+        </button>
+        </div>
         </div>
 
         <div className="explore-chipsRow">
