@@ -72,3 +72,7 @@ export async function upsertMyLawyerProfile(payload) {
   const res = await api.post("/lawyers/me", payload);
   return res.data; // { message, lawyerProfileId, verificationStatus }
 }
+export async function lookupServices({ q = "", take = 200 } = {}) {
+  const res = await api.get("/lawyers/services", { params: { q, take } });
+  return res.data; // [{id,name}]
+}
