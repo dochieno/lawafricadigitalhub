@@ -61,3 +61,14 @@ export async function lookupCourts({ countryId, q = "" } = {}) {
   const res = await api.get("/lawyers/courts", { params: { countryId, q } });
   return res.data; // expected: [{ id, name, code? }]
 }
+// GET /api/lawyers/me
+export async function getMyLawyerProfile() {
+  const res = await api.get("/lawyers/me");
+  return res.data; // null or profile object
+}
+
+// POST /api/lawyers/me
+export async function upsertMyLawyerProfile(payload) {
+  const res = await api.post("/lawyers/me", payload);
+  return res.data; // { message, lawyerProfileId, verificationStatus }
+}

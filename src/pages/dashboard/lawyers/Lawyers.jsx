@@ -7,7 +7,9 @@ import {
   lookupPracticeAreas,
   lookupTowns,
   lookupCourts,
+  getMyLawyerProfile, 
 } from "../../../api/lawyers";
+
 
 import "../../../styles/explore.css";          // ✅ reuse Explore premium filter styles
 import "../../../styles/lawyersDropdown.css"; // ✅ dropdown popover polish
@@ -185,6 +187,8 @@ export default function Lawyers() {
   const [town, setTown] = useState(null);
   const [practiceArea, setPracticeArea] = useState(null);
   const [court, setCourt] = useState(null);
+  const [meLawyer, setMeLawyer] = useState(null);
+  const [meLawyerLoading, setMeLawyerLoading] = useState(true);
 
   // Results
   const [loading, setLoading] = useState(false);
@@ -273,6 +277,27 @@ export default function Lawyers() {
       setInqSubmitting(false);
     }
   }
+
+    useEffect(() => {
+    let alive = true;
+
+    async function loadMe() {
+      setMeLawyerLoading(true);
+      try {
+        const me = await getMyLawyerProfile(); // null or profile object
+        if (!alive) return;
+        setMeLawyer(me);
+      } catch {
+        if (!alive) return;
+        setMeLawyer(null);
+      } finally {
+        if (alive) setMeLawyerLoading(false);
+      }
+    }
+
+    loadMe();
+    return () => { alive = false; };
+  }, []);
 
   const resultCount = items.length;
 
@@ -439,12 +464,26 @@ export default function Lawyers() {
                 </div>
               </div>
 
-              <div className="explore-headerActions">
+                <div className="explore-headerActions">
                 <div className="explore-resultsPill">{resultCount} results</div>
-                <button className="explore-btn explore-btn-hotOutline" onClick={() => navigate("/dashboard/lawyers/inquiries")}>
-                  My Inquiries
+
+                <button
+                    className="explore-btn explore-btn-hotOutline"
+                    onClick={() => navigate("/dashboard/lawyers/inquiries")}
+                >
+                    My Inquiries
                 </button>
-              </div>
+
+                <button
+                    className="explore-cta-btn"
+                    onClick={() => navigate("/dashboard/lawyers/apply")}
+                    disabled={meLawyerLoading}
+                    title={meLawyer ? "Update your lawyer profile" : "Apply to be listed as a lawyer"}
+                    style={{ whiteSpace: "nowrap" }}
+                >
+                    {meLawyerLoading ? "Loading..." : meLawyer ? "My Lawyer Profile" : "Register as Lawyer"}
+                </button>
+                </div>
             </div>
           </div>
 

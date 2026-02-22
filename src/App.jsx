@@ -9,6 +9,7 @@ import CommentaryPlayground from "./pages/CommentaryPlayground";
 import Lawyers from "./pages/dashboard/lawyers/Lawyers";
 import LawyerProfile from "./pages/dashboard/lawyers/LawyerProfile";
 import LawyerInquiries from "./pages/dashboard/lawyers/LawyerInquiries";
+import LawyerApply from "./pages/dashboard/lawyers/LawyerApply";
 
 import AdminLLRImport from "./pages/dashboard/admin/AdminLLRImport";
 import LawReportReader from "./pages/dashboard/LawReportReader";
@@ -130,6 +131,7 @@ export default function App() {
             <Route path="explore" element={<Explore />} />
             <Route path="library" element={<Library />} />
             <Route path="lawyers" element={<Lawyers />} />
+            <Route path="lawyers/apply" element={<LawyerApply />} />
             <Route path="lawyers/inquiries" element={<LawyerInquiries />} />
             <Route path="lawyers/:id" element={<LawyerProfile />} />
 
