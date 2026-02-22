@@ -306,3 +306,19 @@
   border-color: rgba(112,40,64,0.55);
   box-shadow: 0 0 0 4px rgba(112,40,64,0.12);
 }
+/* Compact premium buttons for Lawyers module */
+.la-btn-compact {
+  padding: 8px 10px !important;
+  border-radius: 12px !important;
+  font-size: 11px !important;
+  font-weight: 850 !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1;
+}
+
+.la-btn-compact svg {
+  width: 14px;
+  height: 14px;
+}

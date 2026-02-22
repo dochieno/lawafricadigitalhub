@@ -1,15 +1,15 @@
 // src/pages/dashboard/lawyers/Lawyers.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import api from "../../../api/client";
 import {
   createLawyerInquiry,
   searchLawyers,
   lookupPracticeAreas,
   lookupTowns,
   lookupCourts,
-  getMyLawyerProfile, 
+  getMyLawyerProfile,
 } from "../../../api/lawyers";
-
 
 import "../../../styles/explore.css";          // ✅ reuse Explore premium filter styles
 import "../../../styles/lawyersDropdown.css"; // ✅ dropdown popover polish
@@ -55,7 +55,6 @@ function LookupDropdown({
 
   const wrapRef = useRef(null);
 
-  // Close on outside click (same pattern you use in AppShell)
   useEffect(() => {
     function onPointerDown(e) {
       const inside = wrapRef.current && wrapRef.current.contains(e.target);
@@ -80,14 +79,12 @@ function LookupDropdown({
     }
   }
 
-  // Load when opened
   useEffect(() => {
     if (!open) return;
     load(q.trim());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // Debounce typing
   useEffect(() => {
     if (!open) return;
     const t = setTimeout(() => load(q.trim()), 220);
@@ -155,11 +152,7 @@ function LookupDropdown({
                     setOpen(false);
                   }}
                 >
-                  <input
-                    type="radio"
-                    checked={value?.id === it.id}
-                    readOnly
-                  />
+                  <input type="radio" checked={value?.id === it.id} readOnly />
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                     <span>{it.name}</span>
                     {it.code ? <span style={{ opacity: 0.65 }}>{it.code}</span> : null}
@@ -175,6 +168,13 @@ function LookupDropdown({
   );
 }
 
+function normalizeCountry(c) {
+  // supports {id,name} or {Id,Name}
+  const id = c?.id ?? c?.Id ?? 0;
+  const name = c?.name ?? c?.Name ?? "";
+  return { id: Number(id), name: String(name || "") };
+}
+
 export default function Lawyers() {
   const navigate = useNavigate();
 
@@ -182,11 +182,18 @@ export default function Lawyers() {
   const [q, setQ] = useState("");
   const [verifiedOnly, setVerifiedOnly] = useState(true);
 
+  // Countries from backend
+  const [countryOptions, setCountryOptions] = useState([]);
+  const [countriesLoading, setCountriesLoading] = useState(true);
+  const [countriesErr, setCountriesErr] = useState("");
+
   // Dropdown selections (store objects)
-  const [country, setCountry] = useState({ id: 1, name: "Kenya" }); // default
+  const [country, setCountry] = useState(null); // ✅ now from API
   const [town, setTown] = useState(null);
   const [practiceArea, setPracticeArea] = useState(null);
   const [court, setCourt] = useState(null);
+
+  // Me lawyer status
   const [meLawyer, setMeLawyer] = useState(null);
   const [meLawyerLoading, setMeLawyerLoading] = useState(true);
 
@@ -202,6 +209,58 @@ export default function Lawyers() {
   const [inqPreferred, setInqPreferred] = useState("call");
   const [inqSubmitting, setInqSubmitting] = useState(false);
   const [inqError, setInqError] = useState("");
+
+  // Load countries from /api/country (your controller)
+  useEffect(() => {
+    let alive = true;
+
+    async function loadCountries() {
+      setCountriesErr("");
+      setCountriesLoading(true);
+      try {
+        const res = await api.get("/country");
+        const raw = Array.isArray(res.data) ? res.data : [];
+        const list = raw.map(normalizeCountry).filter((x) => x.id > 0 && x.name);
+        list.sort((a, b) => a.name.localeCompare(b.name));
+        if (alive) {
+          setCountryOptions(list);
+
+          // Default to Kenya if present, else first country
+          const kenya = list.find((x) => x.name.toLowerCase() === "kenya");
+          setCountry((cur) => cur ?? kenya ?? list[0] ?? null);
+        }
+      } catch (e) {
+        if (alive) setCountriesErr(formatErr(e));
+      } finally {
+        if (alive) setCountriesLoading(false);
+      }
+    }
+
+    loadCountries();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Load me lawyer profile status
+  useEffect(() => {
+    let alive = true;
+
+    async function loadMe() {
+      setMeLawyerLoading(true);
+      try {
+        const me = await getMyLawyerProfile();
+        if (alive) setMeLawyer(me);
+      } catch {
+        if (alive) setMeLawyer(null);
+      } finally {
+        if (alive) setMeLawyerLoading(false);
+      }
+    }
+
+    loadMe();
+    return () => { alive = false; };
+  }, []);
 
   const params = useMemo(() => {
     return {
@@ -237,7 +296,11 @@ export default function Lawyers() {
   function clearFilters() {
     setQ("");
     setVerifiedOnly(true);
-    setCountry({ id: 1, name: "Kenya" });
+
+    // reset to Kenya if present
+    const kenya = countryOptions.find((x) => x.name.toLowerCase() === "kenya");
+    setCountry(kenya ?? countryOptions[0] ?? null);
+
     setTown(null);
     setPracticeArea(null);
     setCourt(null);
@@ -278,37 +341,7 @@ export default function Lawyers() {
     }
   }
 
-    useEffect(() => {
-    let alive = true;
-
-    async function loadMe() {
-      setMeLawyerLoading(true);
-      try {
-        const me = await getMyLawyerProfile(); // null or profile object
-        if (!alive) return;
-        setMeLawyer(me);
-      } catch {
-        if (!alive) return;
-        setMeLawyer(null);
-      } finally {
-        if (alive) setMeLawyerLoading(false);
-      }
-    }
-
-    loadMe();
-    return () => { alive = false; };
-  }, []);
-
   const resultCount = items.length;
-
-  // Countries (seeded in backend; keep in sync with your Country.HasData)
-  const countryOptions = [
-    { id: 1, name: "Kenya" },
-    { id: 2, name: "Uganda" },
-    { id: 3, name: "Tanzania" },
-    { id: 4, name: "Rwanda" },
-    { id: 5, name: "South Africa" },
-  ];
 
   return (
     <div className="explore-container">
@@ -366,21 +399,27 @@ export default function Lawyers() {
                   Country
                 </div>
 
-                <select
-                  className="explore-select"
-                  value={country?.id ?? 1}
-                  onChange={(e) => {
-                    const id = Number(e.target.value);
-                    const c = countryOptions.find((x) => x.id === id) || countryOptions[0];
-                    setCountry(c);
-                    setTown(null);
-                    setCourt(null);
-                  }}
-                >
-                  {countryOptions.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
+                {countriesLoading ? (
+                  <div className="explore-muted">Loading countries…</div>
+                ) : countriesErr ? (
+                  <div className="explore-error">{countriesErr}</div>
+                ) : (
+                  <select
+                    className="explore-select"
+                    value={country?.id ?? ""}
+                    onChange={(e) => {
+                      const id = Number(e.target.value);
+                      const c = countryOptions.find((x) => x.id === id) || null;
+                      setCountry(c);
+                      setTown(null);
+                      setCourt(null);
+                    }}
+                  >
+                    {countryOptions.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               {/* Town */}
@@ -463,26 +502,27 @@ export default function Lawyers() {
                   <span className="explore-brandBadge">Nationwide coverage</span>
                 </div>
               </div>
-                <div className="explore-headerActions">
+
+              <div className="explore-headerActions">
                 <div className="explore-resultsPill">{resultCount} results</div>
 
                 <button
-                    className="explore-btn explore-btn-hotOutline"
-                    onClick={() => navigate("/dashboard/lawyers/inquiries")}
+                  className="explore-btn explore-btn-hotOutline"
+                  onClick={() => navigate("/dashboard/lawyers/inquiries")}
                 >
-                    My Inquiries
+                  My Inquiries
                 </button>
 
                 <button
-                    className="explore-cta-btn"
-                    onClick={() => navigate("/dashboard/lawyers/apply")}
-                    disabled={meLawyerLoading}
-                    title={meLawyer ? "Update your lawyer profile" : "Apply to be listed as a lawyer"}
-                    style={{ whiteSpace: "nowrap" }}
+                  className="explore-cta-btn"
+                  onClick={() => navigate("/dashboard/lawyers/apply")}
+                  disabled={meLawyerLoading}
+                  title={meLawyer ? "Update your lawyer profile" : "Apply to be listed as a lawyer"}
+                  style={{ whiteSpace: "nowrap" }}
                 >
-                    {meLawyerLoading ? "Loading..." : meLawyer ? "My Lawyer Profile" : "Register as Lawyer"}
+                  {meLawyerLoading ? "Loading..." : meLawyer ? "My Lawyer Profile" : "Register as Lawyer"}
                 </button>
-                </div>
+              </div>
             </div>
           </div>
 
@@ -542,11 +582,7 @@ export default function Lawyers() {
 
               <label style={{ display: "grid", gap: 6 }}>
                 <div style={{ fontSize: 13, opacity: 0.8 }}>Preferred contact method</div>
-                <select
-                  className="explore-select"
-                  value={inqPreferred}
-                  onChange={(e) => setInqPreferred(e.target.value)}
-                >
+                <select className="explore-select" value={inqPreferred} onChange={(e) => setInqPreferred(e.target.value)}>
                   <option value="call">Call</option>
                   <option value="email">Email</option>
                 </select>
