@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import "../../../styles/explore.css";
+import "../../../../styles/explore.css";
+
 import {
   adminListPracticeAreas,
   adminCreatePracticeArea,
