@@ -594,6 +594,18 @@ export default function AppShell() {
                       <DdItem to="/dashboard/admin/toc-test" label="Table of Contents (Test)" icon={<IcLink />} onClick={() => setOpenDd(null)} />
                       <DdItem to="/dashboard/admin/llr-services" label="LLR Services" icon={<IcSettings />} onClick={() => setOpenDd(null)} />
                       <DdItem to="/dashboard/admin/courts" label="Courts" icon={<IcGrid />} onClick={() => setOpenDd(null)} />
+                      <DdItem
+                        to="/dashboard/admin/lawyers/practice-areas"
+                        label="Lawyer Practice Areas"
+                        icon={<IcGrid />}
+                        onClick={() => setOpenDd(null)}
+                      />
+                      <DdItem
+                        to="/dashboard/admin/lawyers/services"
+                        label="Lawyer Services"
+                        icon={<IcGrid />}
+                        onClick={() => setOpenDd(null)}
+                      />
                       <DdItem to="/dashboard/admin/llr-services/import" label="Import Cases" icon={<IcUpload />} onClick={() => setOpenDd(null)} />
                       <DdItem to="/dashboard/admin/institution-subscriptions" label="Subscriptions" icon={<IcShield />} onClick={() => setOpenDd(null)} />
                       <DdItem to="/dashboard/admin/user-subscriptions" label="Public Subscriptions" icon={<IcUsers />} onClick={() => setOpenDd(null)} />
