@@ -1,14 +1,17 @@
-// src/pages/dashboard/lawyers/LawyerProfile.jsx
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { createLawyerInquiry, getLawyer } from "../../../api/lawyers";
 
 function formatErr(e) {
-  return (
-    e?.response?.data?.message ||
-    e?.message ||
-    "Something went wrong. Please try again."
-  );
+  return e?.response?.data?.message || e?.message || "Something went wrong. Please try again.";
+}
+
+function formatMoney(currency, n) {
+  if (n == null || n === "") return null;
+  const num = Number(n);
+  if (!Number.isFinite(num)) return null;
+  const cur = (currency || "").trim() || "KES";
+  return `${cur} ${num.toLocaleString()}`;
 }
 
 export default function LawyerProfile() {
@@ -127,6 +130,46 @@ export default function LawyerProfile() {
                   <span style={{ opacity: 0.7 }}>—</span>
                 )}
               </div>
+            </div>
+
+            {/* ✅ NEW: Services & Fees */}
+            <div style={{ marginTop: 14 }}>
+              <h3 style={{ margin: "0 0 8px" }}>Services & Fees</h3>
+              {(x.serviceOfferings || []).length ? (
+                <div style={{ display: "grid", gap: 10 }}>
+                  {x.serviceOfferings.map((s) => {
+                    const min = formatMoney(s.currency, s.minFee);
+                    const max = formatMoney(s.currency, s.maxFee);
+                    const unit = (s.billingUnit || "").trim() || "—";
+
+                    const price =
+                      min && max ? `${min} – ${max}` :
+                      min ? `${min}` :
+                      max ? `${max}` :
+                      "Negotiable";
+
+                    return (
+                      <div
+                        key={s.lawyerServiceId}
+                        style={{
+                          border: "1px solid rgba(15,23,42,0.10)",
+                          borderRadius: 14,
+                          padding: 12,
+                          background: "#fff",
+                        }}
+                      >
+                        <div style={{ fontWeight: 850 }}>{s.serviceName}</div>
+                        <div style={{ opacity: 0.8, marginTop: 4, fontSize: 13 }}>
+                          {price} <span style={{ opacity: 0.6 }}>•</span> {unit}
+                        </div>
+                        {s.notes ? <div style={{ marginTop: 6, opacity: 0.75, fontSize: 13 }}>{s.notes}</div> : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ opacity: 0.75 }}>No service pricing provided.</div>
+              )}
             </div>
 
             <div style={{ marginTop: 14 }}>

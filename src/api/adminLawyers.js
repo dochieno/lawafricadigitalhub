@@ -45,3 +45,8 @@ export async function adminDisableLawyerService(id) {
   const res = await api.delete(`/admin/lawyers/services/${id}`);
   return res.data;
 }
+
+export async function lookupServices({ q = "", take = 200 } = {}) {
+  const res = await api.get("/lawyers/services", { params: { q, take } });
+  return res.data; // [{id,name}]
+}

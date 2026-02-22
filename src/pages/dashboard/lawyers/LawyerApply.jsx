@@ -1,5 +1,4 @@
-// src/pages/dashboard/lawyers/LawyerApply.jsx
-import { useEffect,useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../../api/client";
 import { useAuth } from "../../../auth/AuthContext";
@@ -10,6 +9,7 @@ import {
   lookupPracticeAreas,
   lookupTowns,
   lookupCourts,
+  lookupServices, // ✅ NEW
 } from "../../../api/lawyers";
 
 import "../../../styles/explore.css";
@@ -48,11 +48,7 @@ function SmallIcon({ children }) {
 function IconShield() {
   return (
     <svg viewBox="0 0 24 24" fill="none" width="14" height="14">
-      <path
-        d="M12 2 20 6v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-4Z"
-        stroke="currentColor"
-        strokeWidth="2"
-      />
+      <path d="M12 2 20 6v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-4Z" stroke="currentColor" strokeWidth="2" />
     </svg>
   );
 }
@@ -83,10 +79,20 @@ function IconPlus() {
   );
 }
 
+function IconTrash() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" width="14" height="14">
+      <path d="M4 7h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M10 11v7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M14 11v7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M6 7l1-3h10l1 3" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M7 7v14h10V7" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
 /**
- * Explore-style searchable dropdown:
- * - button shows selected
- * - panel has mini search + list
+ * Explore-style searchable dropdown
  */
 function LookupDropdown({ label, disabled, value, onChange, fetcher, placeholder }) {
   const [open, setOpen] = useState(false);
@@ -104,33 +110,34 @@ function LookupDropdown({ label, disabled, value, onChange, fetcher, placeholder
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, []);
 
-  async function load(searchText) {
-    if (!fetcher) return;
-    setErr("");
-    setLoading(true);
-    try {
-      const res = await fetcher({ q: searchText });
-      setItems(Array.isArray(res) ? res : []);
-    } catch (e) {
-      setErr(formatErr(e));
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const load = useCallback(
+    async (searchText) => {
+      if (!fetcher) return;
+      setErr("");
+      setLoading(true);
+      try {
+        const res = await fetcher({ q: searchText });
+        setItems(Array.isArray(res) ? res : []);
+      } catch (e) {
+        setErr(formatErr(e));
+        setItems([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [fetcher]
+  );
 
   useEffect(() => {
     if (!open) return;
     load(q.trim());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, load, q]);
 
   useEffect(() => {
     if (!open) return;
     const t = setTimeout(() => load(q.trim()), 220);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, open]);
+  }, [q, open, load]);
 
   return (
     <div className="lw-popWrap" ref={wrapRef}>
@@ -142,11 +149,7 @@ function LookupDropdown({ label, disabled, value, onChange, fetcher, placeholder
         disabled={disabled}
         onClick={() => !disabled && setOpen((v) => !v)}
       >
-        {value?.name ? (
-          <span className="lw-popValue">{value.name}</span>
-        ) : (
-          <span className="lw-popHint">{disabled ? "Select country first" : "Select..."}</span>
-        )}
+        {value?.name ? <span className="lw-popValue">{value.name}</span> : <span className="lw-popHint">{disabled ? "Select country first" : "Select..."}</span>}
       </button>
 
       {open ? (
@@ -208,41 +211,54 @@ export default function LawyerApply() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // Countries from backend /api/country
   const [countryOptions, setCountryOptions] = useState([]);
   const [countriesLoading, setCountriesLoading] = useState(true);
   const [countriesErr, setCountriesErr] = useState("");
-
   const [country, setCountry] = useState(null);
 
-  // Primary selectors
   const [primaryTown, setPrimaryTown] = useState(null);
   const [highestCourt, setHighestCourt] = useState(null);
 
-  // Profile fields (prefill from User)
+  // Prefill from User
   const [displayName, setDisplayName] = useState("");
   const [firmName, setFirmName] = useState("");
   const [bio, setBio] = useState("");
   const [primaryPhone, setPrimaryPhone] = useState("");
   const [publicEmail, setPublicEmail] = useState("");
 
-  // Location fields (new)
+  // Location
   const [googleFormattedAddress, setGoogleFormattedAddress] = useState("");
   const [googlePlaceId, setGooglePlaceId] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
 
   // Multi lists
-  const [townsServed, setTownsServed] = useState([]);       // [{id,name}]
-  const [practiceAreas, setPracticeAreas] = useState([]);   // [{id,name}]
+  const [townsServed, setTownsServed] = useState([]);
+  const [practiceAreas, setPracticeAreas] = useState([]);
   const [pickTown, setPickTown] = useState(null);
   const [pickArea, setPickArea] = useState(null);
+
+  // ✅ Services + rate cards
+  const [pickService, setPickService] = useState(null);
+  const [serviceOfferings, setServiceOfferings] = useState([]); // [{lawyerServiceId, serviceName, currency, minFee, maxFee, billingUnit, notes}]
 
   // UI state
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [toast, setToast] = useState(null);
+
+  // Compact premium buttons
+  const compactBtn = useMemo(() => ({
+    padding: "8px 10px",
+    borderRadius: 12,
+    fontSize: 11,
+    fontWeight: 850,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    whiteSpace: "nowrap",
+  }), []);
 
   // Load countries
   useEffect(() => {
@@ -252,17 +268,16 @@ export default function LawyerApply() {
       setCountriesErr("");
       setCountriesLoading(true);
       try {
-        const res = await api.get("/country"); // ✅ your controller
+        const res = await api.get("/country");
         const raw = Array.isArray(res.data) ? res.data : [];
         const list = raw.map(normalizeCountry).filter((x) => x.id > 0 && x.name);
         list.sort((a, b) => a.name.localeCompare(b.name));
 
-        if (alive) {
-          setCountryOptions(list);
-          // default Kenya if exists
-          const kenya = list.find((x) => x.name.toLowerCase() === "kenya");
-          setCountry((cur) => cur ?? kenya ?? list[0] ?? null);
-        }
+        if (!alive) return;
+        setCountryOptions(list);
+
+        const kenya = list.find((x) => x.name.toLowerCase() === "kenya");
+        setCountry((cur) => cur ?? kenya ?? list[0] ?? null);
       } catch (e) {
         if (alive) setCountriesErr(formatErr(e));
       } finally {
@@ -274,7 +289,7 @@ export default function LawyerApply() {
     return () => { alive = false; };
   }, []);
 
-  // Load existing lawyer profile (if any) + prefill from user if none
+  // Load existing profile + prefill from user if none
   useEffect(() => {
     let alive = true;
 
@@ -298,7 +313,6 @@ export default function LawyerApply() {
           setLatitude(me.latitude != null ? String(me.latitude) : "");
           setLongitude(me.longitude != null ? String(me.longitude) : "");
 
-          // Country from primaryTown countryId (if controller returns it)
           const cid = me.countryId || null;
           if (cid && countryOptions.length) {
             const c = countryOptions.find((x) => x.id === cid);
@@ -311,14 +325,27 @@ export default function LawyerApply() {
           if (me.highestCourtAllowedId)
             setHighestCourt({ id: me.highestCourtAllowedId, name: me.highestCourtAllowedName || `Court #${me.highestCourtAllowedId}` });
 
-          // IDs only; show placeholders until user re-picks
           if (Array.isArray(me.townIdsServed))
             setTownsServed(me.townIdsServed.map((id) => ({ id, name: `Town #${id}` })));
 
           if (Array.isArray(me.practiceAreaIds))
             setPracticeAreas(me.practiceAreaIds.map((id) => ({ id, name: `Area #${id}` })));
+
+          // ✅ services
+          if (Array.isArray(me.serviceOfferings)) {
+            setServiceOfferings(
+              me.serviceOfferings.map((s) => ({
+                lawyerServiceId: s.lawyerServiceId,
+                serviceName: s.serviceName || `Service #${s.lawyerServiceId}`,
+                currency: s.currency || "",
+                minFee: s.minFee != null ? String(s.minFee) : "",
+                maxFee: s.maxFee != null ? String(s.maxFee) : "",
+                billingUnit: s.billingUnit || "",
+                notes: s.notes || "",
+              }))
+            );
+          }
         } else {
-          // ✅ Prefill from user table (editable)
           const fn = (user?.firstName || user?.FirstName || "").trim();
           const ln = (user?.lastName || user?.LastName || "").trim();
           const full = `${fn} ${ln}`.trim();
@@ -338,19 +365,43 @@ export default function LawyerApply() {
     return () => { alive = false; };
   }, [user, countryOptions]);
 
-  // When user selects a town to add
+  // Add town
   useEffect(() => {
     if (!pickTown) return;
     setTownsServed((cur) => uniqById([...cur, pickTown]));
     setPickTown(null);
   }, [pickTown]);
 
-  // When user selects a practice area to add
+  // Add practice area
   useEffect(() => {
     if (!pickArea) return;
     setPracticeAreas((cur) => uniqById([...cur, pickArea]));
     setPickArea(null);
   }, [pickArea]);
+
+  // ✅ Add service offering row when pickService changes
+  useEffect(() => {
+    if (!pickService) return;
+
+    setServiceOfferings((cur) => {
+      const exists = cur.some((x) => x.lawyerServiceId === pickService.id);
+      if (exists) return cur;
+      return [
+        ...cur,
+        {
+          lawyerServiceId: pickService.id,
+          serviceName: pickService.name,
+          currency: "KES",
+          minFee: "",
+          maxFee: "",
+          billingUnit: "Consultation",
+          notes: "",
+        },
+      ];
+    });
+
+    setPickService(null);
+  }, [pickService]);
 
   function removeTown(id) {
     setTownsServed((cur) => cur.filter((x) => x.id !== id));
@@ -358,41 +409,44 @@ export default function LawyerApply() {
   function removeArea(id) {
     setPracticeAreas((cur) => cur.filter((x) => x.id !== id));
   }
+  function removeService(serviceId) {
+    setServiceOfferings((cur) => cur.filter((x) => x.lawyerServiceId !== serviceId));
+  }
 
-  // Buttons: compact premium
-  const compactBtn = {
-    padding: "8px 10px",
-    borderRadius: 12,
-    fontSize: 11,
-    fontWeight: 850,
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    whiteSpace: "nowrap",
-  };
+  function updateServiceRow(serviceId, patch) {
+    setServiceOfferings((cur) =>
+      cur.map((x) => (x.lawyerServiceId === serviceId ? { ...x, ...patch } : x))
+    );
+  }
+
+  function toNumOrNull(s) {
+    const t = String(s ?? "").trim();
+    if (!t) return null;
+    const n = Number(t);
+    return Number.isFinite(n) ? n : null;
+  }
 
   async function save() {
     setErr("");
     setToast(null);
 
-    if (!displayName.trim()) {
-      setErr("Display name is required.");
-      return;
-    }
-    if (!country?.id) {
-      setErr("Country is required.");
-      return;
-    }
-    if (!primaryTown?.id) {
-      setErr("Primary town is required.");
-      return;
-    }
+    if (!displayName.trim()) return setErr("Display name is required.");
+    if (!country?.id) return setErr("Country is required.");
+    if (!primaryTown?.id) return setErr("Primary town is required.");
 
     const lat = latitude.trim();
     const lng = longitude.trim();
     if ((lat && !Number.isFinite(Number(lat))) || (lng && !Number.isFinite(Number(lng)))) {
-      setErr("Latitude/Longitude must be numeric (or leave them blank).");
-      return;
+      return setErr("Latitude/Longitude must be numeric (or leave blank).");
+    }
+
+    // validate services locally
+    for (const s of serviceOfferings) {
+      const minN = toNumOrNull(s.minFee);
+      const maxN = toNumOrNull(s.maxFee);
+      if (minN != null && minN < 0) return setErr("Min fee cannot be negative.");
+      if (maxN != null && maxN < 0) return setErr("Max fee cannot be negative.");
+      if (minN != null && maxN != null && minN > maxN) return setErr("Min fee cannot exceed Max fee.");
     }
 
     setSaving(true);
@@ -407,21 +461,28 @@ export default function LawyerApply() {
         primaryTownId: primaryTown.id,
         highestCourtAllowedId: highestCourt?.id ?? null,
 
-        // Location fields
         googleFormattedAddress: googleFormattedAddress.trim() || null,
         googlePlaceId: googlePlaceId.trim() || null,
         latitude: lat ? Number(lat) : null,
         longitude: lng ? Number(lng) : null,
 
-        // Ensure primary town is included
         townIdsServed: uniqById([...(townsServed || []), primaryTown]).map((x) => x.id),
         practiceAreaIds: uniqById(practiceAreas || []).map((x) => x.id),
+
+        // ✅ NEW
+        serviceOfferings: serviceOfferings.map((s) => ({
+          lawyerServiceId: s.lawyerServiceId,
+          currency: (s.currency || "").trim() || null,
+          minFee: toNumOrNull(s.minFee),
+          maxFee: toNumOrNull(s.maxFee),
+          billingUnit: (s.billingUnit || "").trim() || null,
+          notes: (s.notes || "").trim() || null,
+        })),
       };
 
       const res = await upsertMyLawyerProfile(payload);
 
       setToast({ kind: "success", text: res?.message || "Submitted successfully." });
-
       setTimeout(() => navigate("/dashboard/lawyers"), 700);
     } catch (e) {
       const m = formatErr(e);
@@ -481,7 +542,6 @@ export default function LawyerApply() {
                       const c = countryOptions.find((x) => x.id === id) || null;
                       setCountry(c);
 
-                      // Reset dependent fields
                       setPrimaryTown(null);
                       setHighestCourt(null);
                       setTownsServed([]);
@@ -585,35 +645,35 @@ export default function LawyerApply() {
                 </div>
               </div>
 
-              {/* Services + Rate cards (MVP note) */}
+              {/* ✅ Services + rate cards */}
               <div className="explore-filterSection">
-                <div className="explore-filterSectionTitle">Services & Rate cards</div>
+                <div className="explore-filterSectionTitle" style={{ marginBottom: 8 }}>
+                  Services & Rate Card
+                </div>
+
+                <LookupDropdown
+                  label=""
+                  value={pickService}
+                  onChange={setPickService}
+                  disabled={false}
+                  fetcher={({ q }) => lookupServices({ q })}
+                  placeholder="Search and add service…"
+                />
+
                 <div className="explore-hint">
-                  Next step: define services (e.g. consultation, drafting, litigation) and add estimated fees per service.
-                  We’ll add this once the backend model is added (so it can persist).
+                  Add the services you offer and set estimated fees. You can leave fees blank and mark unit as “Negotiable”.
                 </div>
               </div>
 
               {/* Actions */}
               <div className="explore-filterSection">
                 <div className="explore-drawerActions" style={{ marginTop: 0 }}>
-                  <button
-                    className="explore-cta-btn"
-                    onClick={save}
-                    disabled={saving}
-                    style={compactBtn}
-                    title="Submit application"
-                  >
+                  <button className="explore-cta-btn" onClick={save} disabled={saving} style={compactBtn}>
                     <SmallIcon><IconShield /></SmallIcon>
                     {saving ? "Submitting…" : "Submit application"}
                   </button>
 
-                  <button
-                    className="explore-btn explore-btn-hotOutline"
-                    onClick={() => navigate("/dashboard/lawyers")}
-                    style={compactBtn}
-                    type="button"
-                  >
+                  <button className="explore-btn explore-btn-hotOutline" onClick={() => navigate("/dashboard/lawyers")} style={compactBtn} type="button">
                     Cancel
                   </button>
                 </div>
@@ -647,21 +707,12 @@ export default function LawyerApply() {
               </div>
 
               <div style={{ display: "flex", gap: 10 }}>
-                <button
-                  className="explore-btn explore-btn-hotOutline"
-                  onClick={() => navigate("/dashboard/lawyers")}
-                  style={compactBtn}
-                >
+                <button className="explore-btn explore-btn-hotOutline" onClick={() => navigate("/dashboard/lawyers")} style={compactBtn}>
                   <SmallIcon><IconBack /></SmallIcon>
                   Back
                 </button>
 
-                <button
-                  className="explore-cta-btn"
-                  onClick={save}
-                  disabled={saving}
-                  style={compactBtn}
-                >
+                <button className="explore-cta-btn" onClick={save} disabled={saving} style={compactBtn}>
                   <SmallIcon><IconSave /></SmallIcon>
                   {saving ? "Saving…" : "Save"}
                 </button>
@@ -673,45 +724,25 @@ export default function LawyerApply() {
             <div style={{ display: "grid", gap: 12 }}>
               <div>
                 <div className="explore-filterSectionTitle" style={{ marginBottom: 6 }}>Display name</div>
-                <input
-                  className="explore-sidebarSearch"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="e.g., Jane Doe"
-                />
+                <input className="explore-sidebarSearch" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="e.g., Jane Doe" />
                 <div className="explore-hint">
-                  Default is your account name, but you can change how clients address you (e.g., “Snr. Counsel …”).
+                  Default is your account name, but you can change how clients address you.
                 </div>
               </div>
 
               <div>
                 <div className="explore-filterSectionTitle" style={{ marginBottom: 6 }}>Firm name (optional)</div>
-                <input
-                  className="explore-sidebarSearch"
-                  value={firmName}
-                  onChange={(e) => setFirmName(e.target.value)}
-                  placeholder="e.g., Doe & Co Advocates"
-                />
+                <input className="explore-sidebarSearch" value={firmName} onChange={(e) => setFirmName(e.target.value)} placeholder="e.g., Doe & Co Advocates" />
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <div className="explore-filterSectionTitle" style={{ marginBottom: 6 }}>Phone (optional)</div>
-                  <input
-                    className="explore-sidebarSearch"
-                    value={primaryPhone}
-                    onChange={(e) => setPrimaryPhone(e.target.value)}
-                    placeholder="+254..."
-                  />
+                  <input className="explore-sidebarSearch" value={primaryPhone} onChange={(e) => setPrimaryPhone(e.target.value)} placeholder="+254..." />
                 </div>
                 <div>
                   <div className="explore-filterSectionTitle" style={{ marginBottom: 6 }}>Public email (optional)</div>
-                  <input
-                    className="explore-sidebarSearch"
-                    value={publicEmail}
-                    onChange={(e) => setPublicEmail(e.target.value)}
-                    placeholder="email@example.com"
-                  />
+                  <input className="explore-sidebarSearch" value={publicEmail} onChange={(e) => setPublicEmail(e.target.value)} placeholder="email@example.com" />
                 </div>
               </div>
 
@@ -730,74 +761,131 @@ export default function LawyerApply() {
 
                 <div>
                   <div className="explore-filterSectionTitle" style={{ marginBottom: 6 }}>Latitude</div>
-                  <input
-                    className="explore-sidebarSearch"
-                    value={latitude}
-                    onChange={(e) => setLatitude(e.target.value)}
-                    placeholder="-1.2864"
-                  />
+                  <input className="explore-sidebarSearch" value={latitude} onChange={(e) => setLatitude(e.target.value)} placeholder="-1.2864" />
                 </div>
 
                 <div>
                   <div className="explore-filterSectionTitle" style={{ marginBottom: 6 }}>Longitude</div>
-                  <input
-                    className="explore-sidebarSearch"
-                    value={longitude}
-                    onChange={(e) => setLongitude(e.target.value)}
-                    placeholder="36.8172"
-                  />
+                  <input className="explore-sidebarSearch" value={longitude} onChange={(e) => setLongitude(e.target.value)} placeholder="36.8172" />
                 </div>
               </div>
 
               <div>
                 <div className="explore-filterSectionTitle" style={{ marginBottom: 6 }}>Google Place Id (optional)</div>
-                <input
-                  className="explore-sidebarSearch"
-                  value={googlePlaceId}
-                  onChange={(e) => setGooglePlaceId(e.target.value)}
-                  placeholder="Paste your Google Place ID (optional)"
-                />
+                <input className="explore-sidebarSearch" value={googlePlaceId} onChange={(e) => setGooglePlaceId(e.target.value)} placeholder="Paste your Google Place ID (optional)" />
               </div>
 
               {/* Bio */}
               <div>
                 <div className="explore-filterSectionTitle" style={{ marginBottom: 6 }}>Bio (optional)</div>
-                <textarea
-                  className="explore-sidebarSearch"
-                  style={{ minHeight: 140 }}
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  placeholder="Brief professional bio…"
-                />
+                <textarea className="explore-sidebarSearch" style={{ minHeight: 140 }} value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Brief professional bio…" />
               </div>
 
-              {/* Expertise reminder */}
-              <div style={{ marginTop: 2 }}>
-                <div className="explore-filterSectionTitle" style={{ marginBottom: 6 }}>
-                  Expertise & towns served
+              {/* ✅ Rate card editor */}
+              <div style={{ marginTop: 6 }}>
+                <div className="explore-filterSectionTitle" style={{ marginBottom: 10 }}>
+                  Services & Estimated Fees
                 </div>
-                <div className="explore-hint">
-                  Use the sidebar to add your <b>areas of expertise</b> and <b>towns served</b>.
-                </div>
-              </div>
 
-              {/* Services + Rate cards - placeholder */}
-              <div style={{ marginTop: 2 }}>
-                <div className="explore-filterSectionTitle" style={{ marginBottom: 6 }}>
-                  Services & estimated fees (next)
-                </div>
-                <div className="explore-hint">
-                  We can add a “Rate Card” section once we define the backend model:
-                  e.g. Consultation fee, Hourly rate, and per-service pricing.
-                </div>
+                {serviceOfferings.length === 0 ? (
+                  <div className="explore-muted">
+                    No services added yet. Use the sidebar “Services & Rate Card” to add services.
+                  </div>
+                ) : (
+                  <div style={{ display: "grid", gap: 10 }}>
+                    {serviceOfferings.map((s) => (
+                      <div
+                        key={s.lawyerServiceId}
+                        style={{
+                          border: "1px solid rgba(15,23,42,0.10)",
+                          borderRadius: 16,
+                          padding: 12,
+                          background: "#fff",
+                          boxShadow: "0 10px 26px rgba(15,23,42,0.06)",
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                          <div style={{ fontWeight: 900 }}>{s.serviceName}</div>
+                          <button
+                            className="explore-btn"
+                            type="button"
+                            style={compactBtn}
+                            onClick={() => removeService(s.lawyerServiceId)}
+                            title="Remove service"
+                          >
+                            <SmallIcon><IconTrash /></SmallIcon>
+                            Remove
+                          </button>
+                        </div>
+
+                        <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "0.6fr 0.7fr 0.7fr 1fr", gap: 10 }}>
+                          <div>
+                            <div className="explore-hint" style={{ marginTop: 0 }}>Currency</div>
+                            <input
+                              className="explore-sidebarSearch"
+                              value={s.currency}
+                              onChange={(e) => updateServiceRow(s.lawyerServiceId, { currency: e.target.value })}
+                              placeholder="KES"
+                            />
+                          </div>
+
+                          <div>
+                            <div className="explore-hint" style={{ marginTop: 0 }}>Min fee</div>
+                            <input
+                              className="explore-sidebarSearch"
+                              value={s.minFee}
+                              onChange={(e) => updateServiceRow(s.lawyerServiceId, { minFee: e.target.value })}
+                              placeholder="e.g. 2000"
+                            />
+                          </div>
+
+                          <div>
+                            <div className="explore-hint" style={{ marginTop: 0 }}>Max fee</div>
+                            <input
+                              className="explore-sidebarSearch"
+                              value={s.maxFee}
+                              onChange={(e) => updateServiceRow(s.lawyerServiceId, { maxFee: e.target.value })}
+                              placeholder="e.g. 5000"
+                            />
+                          </div>
+
+                          <div>
+                            <div className="explore-hint" style={{ marginTop: 0 }}>Billing unit</div>
+                            <select
+                              className="explore-select"
+                              value={s.billingUnit}
+                              onChange={(e) => updateServiceRow(s.lawyerServiceId, { billingUnit: e.target.value })}
+                            >
+                              <option value="Consultation">Consultation</option>
+                              <option value="Hour">Hour</option>
+                              <option value="Fixed">Fixed</option>
+                              <option value="Negotiable">Negotiable</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div style={{ marginTop: 10 }}>
+                          <div className="explore-hint" style={{ marginTop: 0 }}>Notes (optional)</div>
+                          <input
+                            className="explore-sidebarSearch"
+                            value={s.notes}
+                            onChange={(e) => updateServiceRow(s.lawyerServiceId, { notes: e.target.value })}
+                            placeholder="e.g. Includes 30 mins consultation, excludes filing fees…"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <button
                   className="explore-btn explore-btn-hotOutline"
                   type="button"
-                  style={compactBtn}
-                  onClick={() => setToast({ kind: "success", text: "Next: we’ll add services & rate cards once backend fields are ready." })}
+                  style={{ ...compactBtn, marginTop: 12 }}
+                  onClick={() => setToast({ kind: "success", text: "Use the sidebar to add another service." })}
                 >
                   <SmallIcon><IconPlus /></SmallIcon>
-                  Add services (coming next)
+                  Add another service (via sidebar)
                 </button>
               </div>
             </div>
