@@ -362,6 +362,11 @@ export default function LawyerApply() {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [toast, setToast] = useState(null);
+  useEffect(() => {
+  if (!toast) return;
+  const t = setTimeout(() => setToast(null), 2500);
+    return () => clearTimeout(t);
+    }, [toast]);
 
   const compactBtn = useMemo(
     () => ({
@@ -708,9 +713,13 @@ export default function LawyerApply() {
 
   return (
     <div className="explore-container">
-      {toast ? (
-        <div className={`toast ${toast.kind === "success" ? "toast-success" : "toast-error"}`}>{toast.text}</div>
-      ) : null}
+    {toast ? (
+    <div className="toast">
+        <div className={`toast-box ${toast.kind === "success" ? "toast-success" : "toast-error"}`}>
+        {toast.text}
+        </div>
+    </div>
+    ) : null}
 
       <div className="explore-shell">
         {/* Sidebar */}

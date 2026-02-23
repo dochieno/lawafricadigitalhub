@@ -140,37 +140,29 @@
   border-radius: var(--radius);
 }
 
-/* Toast should NOT cover the screen */
+/* the container is only a position anchor, no background */
 .toast{
   position: fixed;
   right: 16px;
   bottom: 16px;
   z-index: 9999;
 
+  background: transparent;   /* IMPORTANT */
   width: auto;
-  max-width: 360px;
+  height: auto;
+  pointer-events: none;       /* IMPORTANT */
+}
 
+/* the visible bubble */
+.toast > .toast-box{
+  pointer-events: auto;
+  max-width: 360px;
   padding: 12px 14px;
   border-radius: 14px;
-
-  background: rgba(15, 23, 42, 0.92);
+  background: rgba(15,23,42,0.92);
   border: 1px solid rgba(255,255,255,0.10);
   box-shadow: 0 18px 55px rgba(0,0,0,0.25);
-
   color: #fff;
-  font-size: 14px;
-  line-height: 1.35;
-
-  pointer-events: none; /* critical: doesn’t block clicks */
-}
-
-.toast-success{
-  /* optional: a subtle left border */
-  border-left: 4px solid #22c55e;
-}
-
-.toast-error{
-  border-left: 4px solid #ef4444;
 }
 
 /* Shell layout */
