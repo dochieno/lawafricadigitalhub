@@ -81,7 +81,7 @@ async function postMultipartWithFallback(paths, formData) {
 
 async function getVatRatesWithFallback() {
   const paths = ["/admin/vat-rates"];
-  let lastErr = null;
+
 
   for (const p of paths) {
     try {
@@ -96,7 +96,6 @@ async function getVatRatesWithFallback() {
         }))
         .filter((x) => x.id != null);
     } catch (e) {
-      lastErr = e;
       const status = e?.response?.status;
       if (status === 404 || status === 405) continue; // try next route
       // for auth/500 etc, stop — but don't break page
@@ -355,7 +354,7 @@ export default function AdminDocuments() {
 
   useEffect(() => {
     loadAll();
-  }, []);
+  },);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
