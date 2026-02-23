@@ -169,7 +169,6 @@ function canDedupe(config) {
   return true;
 }
 
-
 function resolveAdapter(config) {
   // If caller already provided a function adapter, use it.
   if (typeof config?.adapter === "function") return config.adapter;
@@ -288,4 +287,17 @@ export default api;
 export async function checkDocumentAvailability(documentId) {
   const res = await api.get(`/legal-documents/${documentId}/availability`, { __skipThrottle: true });
   return res.data?.data ?? res.data;
+}
+
+/* =========================
+   ✅ Asset URL helpers
+========================= */
+export const API_ORIGIN = BASE;
+
+export function toApiAssetUrl(url) {
+  const s = String(url || "").trim();
+  if (!s) return "";
+  if (/^https?:\/\//i.test(s)) return s; // already absolute
+  if (s.startsWith("/")) return `${API_ORIGIN}${s}`; // /storage/... => API origin
+  return `${API_ORIGIN}/${s}`;
 }

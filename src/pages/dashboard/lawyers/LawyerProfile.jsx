@@ -46,7 +46,7 @@ export default function LawyerProfile() {
       setErr("");
       setLoading(true);
       try {
-        const data = await getLawyer(id);
+        const data = await getLawyer(id); // ✅ now normalized in api/lawyers.js
         if (!alive) return;
         setX(data);
       } catch (e) {
@@ -147,7 +147,15 @@ export default function LawyerProfile() {
             <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
               <div style={{ width: 72, height: 72, borderRadius: 18, background: "rgba(15,23,42,0.06)", overflow: "hidden", flexShrink: 0 }}>
                 {x.profileImageUrl ? (
-                  <img src={x.profileImageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <img
+                    src={x.profileImageUrl}
+                    alt=""
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    onError={(e) => {
+                      // ✅ prevents repeated runtime error overlays due to broken image loads
+                      e.currentTarget.style.display = "none";
+                    }}
+                  />
                 ) : null}
               </div>
 
@@ -258,8 +266,8 @@ export default function LawyerProfile() {
                 padding: 16,
                 border: "1px solid rgba(15,23,42,0.10)",
                 boxShadow: "0 10px 26px rgba(15,23,42,0.08)",
-                maxHeight: "calc(100vh - 120px)", // ✅ scroll-safe
-                overflow: "auto",                 // ✅ scroll-safe
+                maxHeight: "calc(100vh - 120px)",
+                overflow: "auto",
               }}
             >
               <div className="explore-filterSectionTitle" style={{ marginBottom: 10 }}>
