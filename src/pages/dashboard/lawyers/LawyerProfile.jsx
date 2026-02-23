@@ -46,7 +46,7 @@ export default function LawyerProfile() {
       setErr("");
       setLoading(true);
       try {
-        const data = await getLawyer(id); // ✅ now normalized in api/lawyers.js
+        const data = await getLawyer(id);
         if (!alive) return;
         setX(data);
       } catch (e) {
@@ -85,12 +85,14 @@ export default function LawyerProfile() {
 
     setSending(true);
     try {
-      await createLawyerInquiry({
+      const created = await createLawyerInquiry({
         lawyerProfileId: Number(id),
         problemSummary: s,
         preferredContactMethod: preferred,
       });
-      navigate("/dashboard/lawyers/inquiries");
+
+      const newId = created?.id;
+      navigate(newId ? `/dashboard/lawyers/inquiries?open=${newId}` : "/dashboard/lawyers/inquiries");
     } catch (e) {
       setSendErr(formatErr(e));
     } finally {
@@ -108,18 +110,25 @@ export default function LawyerProfile() {
               Lawyer <span className="explore-titleDot">•</span>{" "}
               <span className="explore-titleAccent">Profile</span>
             </h1>
-            <p className="explore-subtitle">
-              View lawyer details and send an inquiry.
-            </p>
+            <p className="explore-subtitle">View lawyer details and send an inquiry.</p>
           </div>
 
-          <div className="explore-headerActions">
+          <div className="explore-headerActions" style={{ gap: 10 }}>
             <button
               className="explore-btn explore-btn-hotOutline"
               onClick={() => navigate("/dashboard/lawyers")}
               title="Back to Find a Lawyer"
             >
               ← Back
+            </button>
+
+            {/* ✅ Quick access to the workflow */}
+            <button
+              className="explore-btn"
+              onClick={() => navigate("/dashboard/lawyers/inquiries")}
+              title="View your inquiries"
+            >
+              My Inquiries
             </button>
           </div>
         </div>
@@ -128,11 +137,23 @@ export default function LawyerProfile() {
       {loading ? (
         <div className="explore-loading">Loading…</div>
       ) : err ? (
-        <div className="explore-error" style={{ marginTop: 14 }}>{err}</div>
+        <div className="explore-error" style={{ marginTop: 14 }}>
+          {err}
+        </div>
       ) : !x ? (
-        <div className="explore-empty" style={{ marginTop: 14 }}>Not found.</div>
+        <div className="explore-empty" style={{ marginTop: 14 }}>
+          Not found.
+        </div>
       ) : (
-        <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "1.6fr 0.9fr", gap: 16, alignItems: "start" }}>
+        <div
+          style={{
+            marginTop: 14,
+            display: "grid",
+            gridTemplateColumns: "1.6fr 0.9fr",
+            gap: 16,
+            alignItems: "start",
+          }}
+        >
           {/* LEFT: Profile card */}
           <div
             className="explore-empty"
@@ -145,16 +166,21 @@ export default function LawyerProfile() {
             }}
           >
             <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-              <div style={{ width: 72, height: 72, borderRadius: 18, background: "rgba(15,23,42,0.06)", overflow: "hidden", flexShrink: 0 }}>
+              <div
+                style={{
+                  width: 72,
+                  height: 72,
+                  borderRadius: 18,
+                  background: "rgba(15,23,42,0.06)",
+                  overflow: "hidden",
+                  flexShrink: 0,
+                }}
+              >
                 {x.profileImageUrl ? (
                   <img
                     src={x.profileImageUrl}
                     alt=""
                     style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    onError={(e) => {
-                      // ✅ prevents repeated runtime error overlays due to broken image loads
-                      e.currentTarget.style.display = "none";
-                    }}
                   />
                 ) : null}
               </div>
@@ -171,14 +197,17 @@ export default function LawyerProfile() {
                 </div>
 
                 <div style={{ marginTop: 6, color: "rgba(15,23,42,0.62)", fontWeight: 650, fontSize: 12.5 }}>
-                  {(x.primaryTownName || "—")} <span className="explore-titleDot">•</span> {(x.countryName || "—")}
+                  {(x.primaryTownName || "—")} <span className="explore-titleDot">•</span>{" "}
+                  {(x.countryName || "—")}
                 </div>
               </div>
             </div>
 
             {/* About */}
             <div style={{ marginTop: 16 }}>
-              <div className="explore-filterSectionTitle" style={{ marginBottom: 8 }}>About</div>
+              <div className="explore-filterSectionTitle" style={{ marginBottom: 8 }}>
+                About
+              </div>
               <div style={{ color: "rgba(15,23,42,0.78)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
                 {x.bio ? x.bio : <span style={{ opacity: 0.75 }}>—</span>}
               </div>
@@ -186,7 +215,9 @@ export default function LawyerProfile() {
 
             {/* Practice areas */}
             <div style={{ marginTop: 16 }}>
-              <div className="explore-filterSectionTitle" style={{ marginBottom: 8 }}>Practice areas</div>
+              <div className="explore-filterSectionTitle" style={{ marginBottom: 8 }}>
+                Practice areas
+              </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {(x.practiceAreas || []).length ? (
                   x.practiceAreas.map((p) => (
@@ -202,7 +233,9 @@ export default function LawyerProfile() {
 
             {/* Services */}
             <div style={{ marginTop: 16 }}>
-              <div className="explore-filterSectionTitle" style={{ marginBottom: 8 }}>Services & Fees</div>
+              <div className="explore-filterSectionTitle" style={{ marginBottom: 8 }}>
+                Services & Fees
+              </div>
               {serviceRows.length ? (
                 <div style={{ display: "grid", gap: 10 }}>
                   {serviceRows.map((s) => (
@@ -234,7 +267,9 @@ export default function LawyerProfile() {
 
             {/* Towns served */}
             <div style={{ marginTop: 16 }}>
-              <div className="explore-filterSectionTitle" style={{ marginBottom: 8 }}>Towns served</div>
+              <div className="explore-filterSectionTitle" style={{ marginBottom: 8 }}>
+                Towns served
+              </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {(x.townsServed || []).length ? (
                   x.townsServed.map((t) => (
@@ -251,7 +286,9 @@ export default function LawyerProfile() {
             {/* Address */}
             {x.googleFormattedAddress ? (
               <div style={{ marginTop: 16 }}>
-                <div className="explore-filterSectionTitle" style={{ marginBottom: 8 }}>Address</div>
+                <div className="explore-filterSectionTitle" style={{ marginBottom: 8 }}>
+                  Address
+                </div>
                 <div style={{ color: "rgba(15,23,42,0.78)" }}>{x.googleFormattedAddress}</div>
               </div>
             ) : null}
@@ -293,7 +330,11 @@ export default function LawyerProfile() {
                 />
               </label>
 
-              {sendErr ? <div style={{ color: "#b42318", marginTop: 10, fontWeight: 700 }}>{sendErr}</div> : null}
+              {sendErr ? (
+                <div style={{ color: "#b42318", marginTop: 10, fontWeight: 700 }}>
+                  {sendErr}
+                </div>
+              ) : null}
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 12 }}>
                 <button className="explore-cta-btn" onClick={send} disabled={sending} title="Send inquiry">

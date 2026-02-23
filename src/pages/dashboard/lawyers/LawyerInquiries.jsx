@@ -85,12 +85,14 @@ export default function LawyerProfile() {
 
     setSending(true);
     try {
-      await createLawyerInquiry({
+      const created = await createLawyerInquiry({
         lawyerProfileId: Number(id),
         problemSummary: s,
         preferredContactMethod: preferred,
       });
-      navigate("/dashboard/lawyers/inquiries");
+
+      const newId = created?.id;
+      navigate(newId ? `/dashboard/lawyers/inquiries?open=${newId}` : "/dashboard/lawyers/inquiries");
     } catch (e) {
       setSendErr(formatErr(e));
     } finally {
@@ -108,18 +110,25 @@ export default function LawyerProfile() {
               Lawyer <span className="explore-titleDot">•</span>{" "}
               <span className="explore-titleAccent">Profile</span>
             </h1>
-            <p className="explore-subtitle">
-              View lawyer details and send an inquiry.
-            </p>
+            <p className="explore-subtitle">View lawyer details and send an inquiry.</p>
           </div>
 
-          <div className="explore-headerActions">
+          <div className="explore-headerActions" style={{ gap: 10 }}>
             <button
               className="explore-btn explore-btn-hotOutline"
               onClick={() => navigate("/dashboard/lawyers")}
               title="Back to Find a Lawyer"
             >
               ← Back
+            </button>
+
+            {/* ✅ Quick access */}
+            <button
+              className="explore-btn"
+              onClick={() => navigate("/dashboard/lawyers/inquiries")}
+              title="View your inquiries"
+            >
+              My Inquiries
             </button>
           </div>
         </div>
@@ -258,8 +267,8 @@ export default function LawyerProfile() {
                 padding: 16,
                 border: "1px solid rgba(15,23,42,0.10)",
                 boxShadow: "0 10px 26px rgba(15,23,42,0.08)",
-                maxHeight: "calc(100vh - 120px)", // ✅ scroll-safe
-                overflow: "auto",                 // ✅ scroll-safe
+                maxHeight: "calc(100vh - 120px)",
+                overflow: "auto",
               }}
             >
               <div className="explore-filterSectionTitle" style={{ marginBottom: 10 }}>
