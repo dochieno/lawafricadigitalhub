@@ -140,20 +140,38 @@
   border-radius: var(--radius);
 }
 
-.toast {
+/* Toast should NOT cover the screen */
+.toast{
   position: fixed;
-  right: 18px;
-  bottom: 18px;
-  z-index: 50;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: #fff;
-  box-shadow: var(--shadow-soft);
-  font-weight: 800;
+  right: 16px;
+  bottom: 16px;
+  z-index: 9999;
+
+  width: auto;
+  max-width: 360px;
+
+  padding: 12px 14px;
+  border-radius: 14px;
+
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 18px 55px rgba(0,0,0,0.25);
+
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.35;
+
+  pointer-events: none; /* critical: doesn’t block clicks */
 }
-.toast-success { border-color: rgba(16, 185, 129, 0.35); }
-.toast-error { border-color: rgba(239, 68, 68, 0.35); }
+
+.toast-success{
+  /* optional: a subtle left border */
+  border-left: 4px solid #22c55e;
+}
+
+.toast-error{
+  border-left: 4px solid #ef4444;
+}
 
 /* Shell layout */
 .explore-shell {
