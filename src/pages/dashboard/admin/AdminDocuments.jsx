@@ -1,8 +1,8 @@
 // src/pages/dashboard/admin/AdminDocuments.jsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback} from "react";
 import api, { API_BASE_URL } from "../../../api/client";
 import "../../../styles/adminCrud.css";
-import "../../../styles/adminUsers.css"; // 
+import "../../../styles/adminUsers.css";
 
 function getServerOrigin() {
   return String(API_BASE_URL || "").replace(/\/api\/?$/i, "");
@@ -82,12 +82,10 @@ async function postMultipartWithFallback(paths, formData) {
 async function getVatRatesWithFallback() {
   const paths = ["/admin/vat-rates"];
 
-
   for (const p of paths) {
     try {
       const res = await api.get(p);
       const arr = Array.isArray(res.data) ? res.data : [];
-      // normalize minimal fields we need
       return arr
         .map((x) => ({
           id: x?.id ?? x?.Id,
@@ -97,8 +95,7 @@ async function getVatRatesWithFallback() {
         .filter((x) => x.id != null);
     } catch (e) {
       const status = e?.response?.status;
-      if (status === 404 || status === 405) continue; // try next route
-      // for auth/500 etc, stop — but don't break page
+      if (status === 404 || status === 405) continue;
       break;
     }
   }
@@ -106,8 +103,27 @@ async function getVatRatesWithFallback() {
   return [];
 }
 
+async function getDocSubCategories(categoryId) {
+  // relies on LookupsController (authorized)
+  const res = await api.get("/lookups/legal-document-subcategories", {
+    params: categoryId ? { categoryId } : {},
+  });
+  const items = res?.data?.items || [];
+  return Array.isArray(items) ? items : [];
+}
+
 /** ✅ Must match backend enum values EXACTLY */
 const CATEGORY_OPTIONS = ["Commentaries", "InternationalTitles", "Journals", "LawReports", "Statutes", "LLRServices"];
+
+// enum id mapping (must match backend enum numeric values)
+const CATEGORY_ID_BY_NAME = {
+  Commentaries: 1,
+  InternationalTitles: 2,
+  Journals: 3,
+  LawReports: 4,
+  Statutes: 5,
+  LLRServices: 6,
+};
 
 function pickKind(r) {
   return r?.kind ?? r?.Kind ?? null;
@@ -116,7 +132,6 @@ function pickFileType(r) {
   const ft = r?.fileType ?? r?.FileType ?? null;
   return ft == null ? "" : String(ft);
 }
-
 
 function isReportRow(r) {
   const k = pickKind(r);
@@ -171,6 +186,8 @@ const emptyForm = {
   version: "1",
 
   category: "Commentaries",
+  subCategoryId: "", // ✅ NEW (nullable)
+
   countryId: "",
 
   pageCount: "",
@@ -183,9 +200,9 @@ const emptyForm = {
   publicPrice: "",
   publicCurrency: "KES",
 
-  // ✅ NEW: VAT
-  vatRateId: "", // optional
-  isTaxInclusive: true, // default: inclusive (matches your backend logic if you prefer)
+  // ✅ VAT
+  vatRateId: "",
+  isTaxInclusive: true,
 };
 
 /* =========================
@@ -205,7 +222,14 @@ function ISearch() {
 }
 function IRefresh({ spin = false } = {}) {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" className={spin ? "au-spin" : undefined}>
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      className={spin ? "au-spin" : undefined}
+    >
       <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       <path d="M21 3v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
@@ -260,37 +284,22 @@ function Badge({ children, kind = "neutral", title }) {
   );
 }
 
-function IconButton({ title, onClick, disabled, kind = "neutral", children }) {
-  const cls =
-    kind === "danger"
-      ? "au-iconBtn au-iconBtn-danger"
-      : kind === "info"
-      ? "au-iconBtn au-iconBtn-info"
-      : kind === "success"
-      ? "au-iconBtn au-iconBtn-success"
-      : "au-iconBtn au-iconBtn-neutral";
-
-  return (
-    <button type="button" className={cls} onClick={onClick} disabled={disabled} title={title} aria-label={title}>
-      {children}
-    </button>
-  );
-}
-
 export default function AdminDocuments() {
   const [rows, setRows] = useState([]);
   const [countries, setCountries] = useState([]);
-
-  // ✅ NEW: VAT rates list
   const [vatRates, setVatRates] = useState([]);
+
+  // ✅ NEW: subcategories cache per categoryId
+  const [subcatsByCategory, setSubcatsByCategory] = useState({}); // { [categoryId]: items[] }
+  const [subcatsLoading, setSubcatsLoading] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const [q, setQ] = useState("");
 
-  // ✅ toast (au branding)
-  const [toast, setToast] = useState(null); // {type:"success"|"error", text:string}
+  // ✅ No toast — use simple banners (top of page + in modal)
+  const [banner, setBanner] = useState(null); // {type:"success"|"error"|"info", text:string}
 
   // Modal state
   const [open, setOpen] = useState(false);
@@ -306,55 +315,99 @@ export default function AdminDocuments() {
   const ebookInputRef = useRef(null);
   const coverInputRef = useRef(null);
 
-  function showError(msg) {
-    setToast({ type: "error", text: String(msg || "Request failed.") });
-    window.clearTimeout(showError._t);
-    showError._t = window.setTimeout(() => setToast(null), 4500);
-  }
-  function showSuccess(msg) {
-    setToast({ type: "success", text: String(msg || "Done.") });
-    window.clearTimeout(showSuccess._t);
-    showSuccess._t = window.setTimeout(() => setToast(null), 3200);
-  }
-
   function setField(k, v) {
     setForm((p) => ({ ...p, [k]: v }));
   }
 
-  async function loadAll() {
-    setToast(null);
-    setLoading(true);
+const showBanner = useCallback((type, text, ms = 3500) => {
+  setBanner({ type, text: String(text || "") });
+  window.clearTimeout(showBanner._t);
+  if (ms > 0) {
+    showBanner._t = window.setTimeout(() => setBanner(null), ms);
+  }
+}, []);
 
+const showError = useCallback(
+  (msg) => {
+    showBanner("error", msg, 4500);
+  },
+  [showBanner]
+);
+
+const showSuccess = useCallback(
+  (msg) => {
+    showBanner("success", msg, 2500);
+  },
+  [showBanner]
+);
+
+  async function ensureSubcatsLoadedForCategoryId(categoryId) {
+    if (!categoryId) return;
+    const key = String(categoryId);
+    if (subcatsByCategory[key]) return;
+
+    setSubcatsLoading(true);
     try {
-      const [docsRes, countriesRes, vatRes] = await Promise.all([
-        api.get("/legal-documents/admin"),
-        api.get("/Country"),
-        getVatRatesWithFallback(), // ✅ NEW (safe)
-      ]);
-
-      let all = Array.isArray(docsRes.data) ? docsRes.data : [];
-
-      // 🔧 enrich missing Kind/FileType
-      all = await enrichAdminListIfNeeded(all);
-
-      // ✅ filter out reports
-      setRows(all.filter((r) => !isReportRow(r)));
-
-      setCountries(Array.isArray(countriesRes.data) ? countriesRes.data : []);
-
-      // ✅ NEW
-      setVatRates(Array.isArray(vatRes) ? vatRes : []);
+      const items = await getDocSubCategories(categoryId);
+      setSubcatsByCategory((prev) => ({ ...prev, [key]: items }));
     } catch (e) {
-      setRows([]);
-      showError(getApiErrorMessage(e, "Failed to load admin documents."));
+      // fail-soft (don’t break page)
+      showError(getApiErrorMessage(e, "Failed to load subcategories."));
     } finally {
-      setLoading(false);
+      setSubcatsLoading(false);
     }
   }
 
+const loadAll = useCallback(async () => {
+  setBanner(null);
+  setLoading(true);
+
+  try {
+    const [docsRes, countriesRes, vatRes] = await Promise.all([
+      api.get("/legal-documents/admin"),
+      api.get("/Country"),
+      getVatRatesWithFallback(),
+    ]);
+
+    let all = Array.isArray(docsRes.data) ? docsRes.data : [];
+    all = await enrichAdminListIfNeeded(all);
+
+    setRows(all.filter((r) => !isReportRow(r)));
+    setCountries(Array.isArray(countriesRes.data) ? countriesRes.data : []);
+    setVatRates(Array.isArray(vatRes) ? vatRes : []);
+  } catch (e) {
+    setRows([]);
+    showError(getApiErrorMessage(e, "Failed to load admin documents."));
+  } finally {
+    setLoading(false);
+  }
+}, [showError]); // ✅ REQUIRED
+
+useEffect(() => {
+  loadAll();
+}, [loadAll]);
+
+  // when category changes in form, load subcats and clean invalid selection
   useEffect(() => {
-    loadAll();
-  },);
+    if (!open) return;
+
+    const categoryName = form.category;
+    const categoryId = CATEGORY_ID_BY_NAME[categoryName] || null;
+
+    if (!categoryId) {
+      setField("subCategoryId", "");
+      return;
+    }
+
+    ensureSubcatsLoadedForCategoryId(categoryId);
+
+    // if category is not Statutes, keep subCategory nullable but clear by default
+    // (still allows other categories later if you seed them)
+    if (categoryName !== "Statutes") {
+      setField("subCategoryId", "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, form.category]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -405,12 +458,17 @@ export default function AdminDocuments() {
     setForm({ ...emptyForm });
     resetUploadInputs();
     setOpen(true);
+    setBanner(null);
+
+    // preload statutes subcats for a smoother first use
+    ensureSubcatsLoadedForCategoryId(CATEGORY_ID_BY_NAME.Statutes);
   }
 
   async function openEdit(row) {
     resetUploadInputs();
     setEditing(row);
     setOpen(true);
+    setBanner(null);
 
     try {
       const res = await api.get(`/legal-documents/${row.id}`);
@@ -422,6 +480,10 @@ export default function AdminDocuments() {
         return;
       }
 
+      const catName = d.category ?? "Commentaries";
+      const catId = CATEGORY_ID_BY_NAME[catName] || null;
+      if (catId) await ensureSubcatsLoadedForCategoryId(catId);
+
       setForm({
         title: d.title ?? "",
         description: d.description ?? "",
@@ -430,7 +492,9 @@ export default function AdminDocuments() {
         edition: d.edition ?? "",
         version: d.version ?? "1",
 
-        category: d.category ?? "Commentaries",
+        category: catName,
+        subCategoryId: d.subCategoryId ?? d.SubCategoryId ?? "",
+
         countryId: d.countryId ?? "",
 
         pageCount: d.pageCount ?? "",
@@ -443,18 +507,16 @@ export default function AdminDocuments() {
         publicPrice: d.publicPrice ?? d.PublicPrice ?? "",
         publicCurrency: d.publicCurrency ?? d.PublicCurrency ?? "KES",
 
-        // ✅ NEW: VAT
         vatRateId: d.vatRateId ?? d.VatRateId ?? "",
         isTaxInclusive: safeBool(d.isTaxInclusive ?? d.IsTaxInclusive, true),
       });
 
-      // keep latest server cover path if present
       setEditing((p) => ({
         ...(p || row),
         coverImagePath: d.coverImagePath ?? d.CoverImagePath ?? (p?.coverImagePath ?? row?.coverImagePath ?? null),
       }));
-    } catch {
-      showError("Loaded partial row (details endpoint failed).");
+    } catch (e) {
+      showError(getApiErrorMessage(e, "Loaded partial row (details endpoint failed)."));
     }
   }
 
@@ -475,6 +537,8 @@ export default function AdminDocuments() {
       edition: form.edition?.trim() || null,
 
       category: form.category,
+      subCategoryId: toIntOrNull(form.subCategoryId), // ✅ NEW
+
       countryId: Number(form.countryId),
 
       // ✅ Standard page forces Kind=Standard
@@ -496,7 +560,6 @@ export default function AdminDocuments() {
       publicPrice: allowPublicPurchase ? toDecimalOrNull(form.publicPrice) : null,
       publicCurrency: allowPublicPurchase ? (form.publicCurrency?.trim() || "KES") : "KES",
 
-      // ✅ NEW: VAT fields (safe even if backend ignores until added)
       vatRateId: toIntOrNull(form.vatRateId),
       isTaxInclusive: safeBool(form.isTaxInclusive, true),
     };
@@ -514,6 +577,8 @@ export default function AdminDocuments() {
       edition: form.edition?.trim() || null,
 
       category: form.category,
+      subCategoryId: toIntOrNull(form.subCategoryId), // ✅ NEW
+
       countryId: Number(form.countryId),
 
       pageCount: toIntOrNull(form.pageCount),
@@ -527,9 +592,9 @@ export default function AdminDocuments() {
       publicPrice: allowPublicPurchase ? toDecimalOrNull(form.publicPrice) : null,
       publicCurrency: allowPublicPurchase ? (form.publicCurrency?.trim() || "KES") : "KES",
 
-      // ✅ NEW: VAT
       vatRateId: toIntOrNull(form.vatRateId),
       isTaxInclusive: safeBool(form.isTaxInclusive, true),
+      kind: "Standard", // keep backend satisfied if it expects this in update payloads
     };
   }
 
@@ -539,6 +604,14 @@ export default function AdminDocuments() {
 
     if (!CATEGORY_OPTIONS.includes(form.category)) {
       return showError("Invalid category selected. Please choose a valid category.");
+    }
+
+    // SubCategory is optional; but if set, require it to exist in current list to avoid backend 400
+    if (form.subCategoryId) {
+      const catId = CATEGORY_ID_BY_NAME[form.category];
+      const list = subcatsByCategory[String(catId)] || [];
+      const ok = list.some((x) => String(x.id) === String(form.subCategoryId));
+      if (!ok) return showError("Invalid subcategory selection. Please re-select.");
     }
 
     if (!form.isPremium) {
@@ -653,11 +726,20 @@ export default function AdminDocuments() {
   const showPricing = !!form.isPremium;
   const canClose = !(busy || uploadingCover || uploadingEbook);
 
+  const catIdForForm = CATEGORY_ID_BY_NAME[form.category] || null;
+  const subcatOptions = catIdForForm ? subcatsByCategory[String(catIdForForm)] || [] : [];
+  const showSubcategoryField = form.category === "Statutes"; // primary use-case; keeps UI clean
+
   return (
     <div className="au-wrap">
-      {/* Toast */}
-      {toast?.text ? (
-        <div className={`toast ${toast.type === "error" ? "toast-error" : "toast-success"}`}>{toast.text}</div>
+      {/* Page banner (no toast) */}
+      {banner?.text ? (
+        <div
+          className={`admin-alert ${banner.type === "error" ? "danger" : banner.type === "success" ? "success" : "info"}`}
+          style={{ marginBottom: 12 }}
+        >
+          {banner.text}
+        </div>
       ) : null}
 
       {/* HERO */}
@@ -802,7 +884,7 @@ export default function AdminDocuments() {
                             {r.category ? (
                               <>
                                 <span className="au-sep">•</span>
-                                <span className="au-muted">{r.category}</span>
+                                <span className="au-muted">{r.categoryName || r.category}</span>
                               </>
                             ) : null}
                           </div>
@@ -851,7 +933,12 @@ export default function AdminDocuments() {
 
                     <td className="au-tdRight">
                       <div className="au-actionsRow">
-                        <button className="au-iconBtn au-iconBtn-neutral" onClick={() => openEdit(r)} disabled={busy} title="Edit">
+                        <button
+                          className="au-iconBtn au-iconBtn-neutral"
+                          onClick={() => openEdit(r)}
+                          disabled={busy}
+                          title="Edit"
+                        >
                           <IEdit />
                         </button>
                       </div>
@@ -869,7 +956,7 @@ export default function AdminDocuments() {
         </div>
       </div>
 
-      {/* MODAL (kept adminCrud styles) */}
+      {/* MODAL */}
       {open && (
         <div className="admin-modal-overlay" onClick={closeModal}>
           <div className="admin-modal admin-modal-tight" onClick={(e) => e.stopPropagation()}>
@@ -894,17 +981,31 @@ export default function AdminDocuments() {
             </div>
 
             <div className="admin-modal-body admin-modal-scroll">
+              {/* Inline modal banner (no toast) */}
+              {banner?.text ? (
+                <div
+                  className={`admin-alert ${banner.type === "error" ? "danger" : banner.type === "success" ? "success" : "info"}`}
+                  style={{ marginBottom: 12 }}
+                >
+                  {banner.text}
+                </div>
+              ) : null}
+
               <div className="admin-form-section">
                 <div className="admin-form-section-title">Document details</div>
-                <div className="admin-form-section-sub">Title, jurisdiction, category, pages and descriptive metadata.</div>
+                <div className="admin-form-section-sub">
+                  Each row has two fields (unless otherwise). Statutes can optionally use a subcategory.
+                </div>
               </div>
 
               <div className="admin-grid">
+                {/* Row 1 (full width) */}
                 <div className="admin-field admin-span2">
                   <label>Title *</label>
                   <input value={form.title} onChange={(e) => setField("title", e.target.value)} />
                 </div>
 
+                {/* Row 2 */}
                 <div className="admin-field">
                   <label>Country *</label>
                   <select value={String(form.countryId)} onChange={(e) => setField("countryId", e.target.value)}>
@@ -926,9 +1027,14 @@ export default function AdminDocuments() {
                   </select>
                 </div>
 
+                {/* Row 3 */}
                 <div className="admin-field">
                   <label>Category</label>
-                  <select value={form.category} onChange={(e) => setField("category", e.target.value)}>
+                  <select
+                    value={form.category}
+                    onChange={(e) => setField("category", e.target.value)}
+                    disabled={subcatsLoading}
+                  >
                     {CATEGORY_OPTIONS.map((c) => (
                       <option key={c} value={c}>
                         {c}
@@ -951,14 +1057,56 @@ export default function AdminDocuments() {
                   <div className="admin-help">Optional. Used for display and search.</div>
                 </div>
 
-                <div className="admin-field">
-                  <label>Premium?</label>
-                  <select value={String(!!form.isPremium)} onChange={(e) => setField("isPremium", e.target.value === "true")}>
-                    <option value="true">Yes</option>
-                    <option value="false">No</option>
-                  </select>
-                </div>
+                {/* Row 4 (subcategory only for statutes) */}
+                {showSubcategoryField ? (
+                  <>
+                    <div className="admin-field">
+                      <label>Subcategory (Statutes)</label>
+                      <select
+                        value={String(form.subCategoryId ?? "")}
+                        onChange={(e) => setField("subCategoryId", e.target.value)}
+                        disabled={subcatsLoading}
+                      >
+                        <option value="">None</option>
+                        {subcatOptions
+                          .filter((x) => x.isActive !== false)
+                          .map((x) => (
+                            <option key={x.id} value={x.id}>
+                              {x.name}
+                            </option>
+                          ))}
+                      </select>
+                      <div className="admin-help">
+                        Optional. Used to improve Statutes search (e.g., Constitutional, Criminal, Taxation…).
+                      </div>
+                    </div>
 
+                    <div className="admin-field">
+                      <label>Premium?</label>
+                      <select value={String(!!form.isPremium)} onChange={(e) => setField("isPremium", e.target.value === "true")}>
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                      </select>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="admin-field">
+                      <label>Premium?</label>
+                      <select value={String(!!form.isPremium)} onChange={(e) => setField("isPremium", e.target.value === "true")}>
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                      </select>
+                    </div>
+
+                    <div className="admin-field">
+                      <label>Version</label>
+                      <input value={form.version} onChange={(e) => setField("version", e.target.value)} />
+                    </div>
+                  </>
+                )}
+
+                {/* Row 5 */}
                 <div className="admin-field">
                   <label>Version</label>
                   <input value={form.version} onChange={(e) => setField("version", e.target.value)} />
@@ -969,11 +1117,13 @@ export default function AdminDocuments() {
                   <input type="date" value={form.publishedAt} onChange={(e) => setField("publishedAt", e.target.value)} />
                 </div>
 
+                {/* Row 6 (full width) */}
                 <div className="admin-field admin-span2">
                   <label>Description</label>
                   <textarea rows={4} value={form.description} onChange={(e) => setField("description", e.target.value)} />
                 </div>
 
+                {/* Row 7 */}
                 <div className="admin-field">
                   <label>Author</label>
                   <input value={form.author} onChange={(e) => setField("author", e.target.value)} />
@@ -984,9 +1134,16 @@ export default function AdminDocuments() {
                   <input value={form.publisher} onChange={(e) => setField("publisher", e.target.value)} />
                 </div>
 
+                {/* Row 8 */}
                 <div className="admin-field">
                   <label>Edition</label>
                   <input value={form.edition} onChange={(e) => setField("edition", e.target.value)} />
+                </div>
+
+                <div className="admin-field">
+                  <label style={{ opacity: 0.85 }}>Kind</label>
+                  <input value="Standard" disabled />
+                  <div className="admin-help">This screen manages Standard documents only.</div>
                 </div>
               </div>
 
@@ -1001,6 +1158,7 @@ export default function AdminDocuments() {
               </div>
 
               <div className="admin-grid">
+                {/* Row 1 */}
                 <div className="admin-field">
                   <label>Allow public purchase?</label>
                   <select
@@ -1022,6 +1180,7 @@ export default function AdminDocuments() {
                   />
                 </div>
 
+                {/* Row 2 */}
                 <div className="admin-field">
                   <label>Public price</label>
                   <input
@@ -1034,7 +1193,6 @@ export default function AdminDocuments() {
                   />
                 </div>
 
-                {/* ✅ NEW: VAT Code (keeps same grid/layout) */}
                 <div className="admin-field">
                   <label>VAT Code</label>
                   <select value={String(form.vatRateId ?? "")} onChange={(e) => setField("vatRateId", e.target.value)}>
@@ -1046,12 +1204,10 @@ export default function AdminDocuments() {
                       </option>
                     ))}
                   </select>
-                  <div className="admin-help">
-                    Optional. Used for VAT calculation on purchases + invoice printout (if configured).
-                  </div>
+                  <div className="admin-help">Optional. Used for VAT calculation on purchases + invoice printout.</div>
                 </div>
 
-                {/* ✅ NEW: Tax inclusive */}
+                {/* Row 3 */}
                 <div className="admin-field">
                   <label>Tax Inclusive?</label>
                   <select value={String(!!form.isTaxInclusive)} onChange={(e) => setField("isTaxInclusive", e.target.value === "true")}>
@@ -1059,6 +1215,20 @@ export default function AdminDocuments() {
                     <option value="false">No (VAT added on top)</option>
                   </select>
                   <div className="admin-help">Controls how invoice totals are computed when VAT Code is set.</div>
+                </div>
+
+                <div className="admin-field">
+                  <label style={{ opacity: 0.85 }}>VAT Preview</label>
+                  <input
+                    value={
+                      form.vatRateId
+                        ? `VAT: ${
+                            vatRates.find((x) => String(x.id) === String(form.vatRateId))?.ratePercent ?? "—"
+                          }%`
+                        : "No VAT"
+                    }
+                    disabled
+                  />
                 </div>
               </div>
 
@@ -1106,7 +1276,7 @@ export default function AdminDocuments() {
                       title={!editing ? "Save first, then upload." : ""}
                     />
 
-                    <div className="admin-upload-actions">
+                    <div className="admin-upload-actions" style={{ flexWrap: "wrap" }}>
                       <button
                         className="admin-btn"
                         type="button"
@@ -1115,6 +1285,7 @@ export default function AdminDocuments() {
                       >
                         {uploadingCover ? "Uploading…" : "Upload cover"}
                       </button>
+
                       <span className="admin-help">{coverFile ? coverFile.name : "No file selected."}</span>
 
                       {editing?.coverImagePath ? (
