@@ -1,5 +1,5 @@
 // src/pages/dashboard/admin/AdminDocuments.jsx
-import { useEffect, useMemo, useRef, useState, useCallback} from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import api, { API_BASE_URL } from "../../../api/client";
 import "../../../styles/adminCrud.css";
 import "../../../styles/adminUsers.css";
@@ -113,7 +113,15 @@ async function getDocSubCategories(categoryId) {
 }
 
 /** ✅ Must match backend enum values EXACTLY */
-const CATEGORY_OPTIONS = ["Commentaries", "InternationalTitles", "Journals", "LawReports", "Statutes", "LLRServices","Gazette"];
+const CATEGORY_OPTIONS = [
+  "Commentaries",
+  "InternationalTitles",
+  "Journals",
+  "LawReports",
+  "Statutes",
+  "LLRServices",
+  "Gazette",
+];
 
 // enum id mapping (must match backend enum numeric values)
 const CATEGORY_ID_BY_NAME = {
@@ -187,7 +195,7 @@ const emptyForm = {
   version: "1",
 
   category: "Commentaries",
-  subCategoryId: "", // ✅ NEW (nullable)
+  subCategoryId: "",
 
   countryId: "",
 
@@ -201,7 +209,6 @@ const emptyForm = {
   publicPrice: "",
   publicCurrency: "KES",
 
-  // ✅ VAT
   vatRateId: "",
   isTaxInclusive: true,
 };
@@ -285,13 +292,50 @@ function Badge({ children, kind = "neutral", title }) {
   );
 }
 
+/* =========================
+   Simple pager (no deps)
+========================= */
+function clamp(n, min, max) {
+  return Math.max(min, Math.min(max, n));
+}
+function Pager({ page, totalPages, totalItems, pageSize, onPage }) {
+  if (totalPages <= 1) return null;
+
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(totalItems, page * pageSize);
+
+  return (
+    <div className="au-pager" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 0" }}>
+      <div className="au-muted" style={{ fontWeight: 800 }}>
+        Showing <span className="au-mono">{from}</span>–<span className="au-mono">{to}</span> of{" "}
+        <span className="au-mono">{totalItems}</span>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button className="au-refresh" type="button" disabled={page <= 1} onClick={() => onPage(page - 1)}>
+          ← Prev
+        </button>
+
+        <div className="au-mePill" title="Page">
+          <span className="au-meText">
+            Page <b className="au-mono">{page}</b> / <b className="au-mono">{totalPages}</b>
+          </span>
+        </div>
+
+        <button className="au-refresh" type="button" disabled={page >= totalPages} onClick={() => onPage(page + 1)}>
+          Next →
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminDocuments() {
   const [rows, setRows] = useState([]);
   const [countries, setCountries] = useState([]);
   const [vatRates, setVatRates] = useState([]);
 
-  // ✅ NEW: subcategories cache per categoryId
-  const [subcatsByCategory, setSubcatsByCategory] = useState({}); // { [categoryId]: items[] }
+  const [subcatsByCategory, setSubcatsByCategory] = useState({});
   const [subcatsLoading, setSubcatsLoading] = useState(false);
 
   const [loading, setLoading] = useState(true);
@@ -299,7 +343,7 @@ export default function AdminDocuments() {
 
   const [q, setQ] = useState("");
 
-  // ✅ No toast — use simple banners (top of page + in modal)
+  // no toast — banner only
   const [banner, setBanner] = useState(null); // {type:"success"|"error"|"info", text:string}
 
   // Modal state
@@ -316,31 +360,23 @@ export default function AdminDocuments() {
   const ebookInputRef = useRef(null);
   const coverInputRef = useRef(null);
 
+  // ✅ Pagination
+  const PAGE_SIZE = 12;
+  const [page, setPage] = useState(1);
+  const topRef = useRef(null);
+
   function setField(k, v) {
     setForm((p) => ({ ...p, [k]: v }));
   }
 
-const showBanner = useCallback((type, text, ms = 3500) => {
-  setBanner({ type, text: String(text || "") });
-  window.clearTimeout(showBanner._t);
-  if (ms > 0) {
-    showBanner._t = window.setTimeout(() => setBanner(null), ms);
-  }
-}, []);
+  const showBanner = useCallback((type, text, ms = 3500) => {
+    setBanner({ type, text: String(text || "") });
+    window.clearTimeout(showBanner._t);
+    if (ms > 0) showBanner._t = window.setTimeout(() => setBanner(null), ms);
+  }, []);
 
-const showError = useCallback(
-  (msg) => {
-    showBanner("error", msg, 4500);
-  },
-  [showBanner]
-);
-
-const showSuccess = useCallback(
-  (msg) => {
-    showBanner("success", msg, 2500);
-  },
-  [showBanner]
-);
+  const showError = useCallback((msg) => showBanner("error", msg, 4500), [showBanner]);
+  const showSuccess = useCallback((msg) => showBanner("success", msg, 2500), [showBanner]);
 
   async function ensureSubcatsLoadedForCategoryId(categoryId) {
     if (!categoryId) return;
@@ -352,43 +388,42 @@ const showSuccess = useCallback(
       const items = await getDocSubCategories(categoryId);
       setSubcatsByCategory((prev) => ({ ...prev, [key]: items }));
     } catch (e) {
-      // fail-soft (don’t break page)
       showError(getApiErrorMessage(e, "Failed to load subcategories."));
     } finally {
       setSubcatsLoading(false);
     }
   }
 
-const loadAll = useCallback(async () => {
-  setBanner(null);
-  setLoading(true);
+  const loadAll = useCallback(async () => {
+    setBanner(null);
+    setLoading(true);
 
-  try {
-    const [docsRes, countriesRes, vatRes] = await Promise.all([
-      api.get("/legal-documents/admin"),
-      api.get("/Country"),
-      getVatRatesWithFallback(),
-    ]);
+    try {
+      const [docsRes, countriesRes, vatRes] = await Promise.all([
+        api.get("/legal-documents/admin"),
+        api.get("/Country"),
+        getVatRatesWithFallback(),
+      ]);
 
-    let all = Array.isArray(docsRes.data) ? docsRes.data : [];
-    all = await enrichAdminListIfNeeded(all);
+      let all = Array.isArray(docsRes.data) ? docsRes.data : [];
+      all = await enrichAdminListIfNeeded(all);
 
-    setRows(all.filter((r) => !isReportRow(r)));
-    setCountries(Array.isArray(countriesRes.data) ? countriesRes.data : []);
-    setVatRates(Array.isArray(vatRes) ? vatRes : []);
-  } catch (e) {
-    setRows([]);
-    showError(getApiErrorMessage(e, "Failed to load admin documents."));
-  } finally {
-    setLoading(false);
-  }
-}, [showError]); // ✅ REQUIRED
+      setRows(all.filter((r) => !isReportRow(r)));
+      setCountries(Array.isArray(countriesRes.data) ? countriesRes.data : []);
+      setVatRates(Array.isArray(vatRes) ? vatRes : []);
+    } catch (e) {
+      setRows([]);
+      showError(getApiErrorMessage(e, "Failed to load admin documents."));
+    } finally {
+      setLoading(false);
+    }
+  }, [showError]);
 
-useEffect(() => {
-  loadAll();
-}, [loadAll]);
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
 
-  // when category changes in form, load subcats and clean invalid selection
+  // when category changes in modal form, load subcats and clean invalid selection
   useEffect(() => {
     if (!open) return;
 
@@ -402,8 +437,6 @@ useEffect(() => {
 
     ensureSubcatsLoadedForCategoryId(categoryId);
 
-    // if category is not Statutes, keep subCategory nullable but clear by default
-    // (still allows other categories later if you seed them)
     if (categoryName !== "Statutes") {
       setField("subCategoryId", "");
     }
@@ -430,6 +463,31 @@ useEffect(() => {
       return title.includes(s) || meta.includes(s);
     });
   }, [rows, q]);
+
+  // reset to page 1 when filters change / dataset changes
+  useEffect(() => {
+    setPage(1);
+  }, [q, rows.length]);
+
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)), [filtered.length]);
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalPages]);
+
+  const pagedRows = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, page]);
+
+  function goToPage(p) {
+    const next = clamp(p, 1, totalPages);
+    setPage(next);
+    requestAnimationFrame(() => {
+      if (topRef.current) topRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      else window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
 
   const kpis = useMemo(() => {
     const total = filtered.length;
@@ -461,7 +519,6 @@ useEffect(() => {
     setOpen(true);
     setBanner(null);
 
-    // preload statutes subcats for a smoother first use
     ensureSubcatsLoadedForCategoryId(CATEGORY_ID_BY_NAME.Statutes);
   }
 
@@ -538,11 +595,10 @@ useEffect(() => {
       edition: form.edition?.trim() || null,
 
       category: form.category,
-      subCategoryId: toIntOrNull(form.subCategoryId), // ✅ NEW
+      subCategoryId: toIntOrNull(form.subCategoryId),
 
       countryId: Number(form.countryId),
 
-      // ✅ Standard page forces Kind=Standard
       kind: "Standard",
 
       filePath: "",
@@ -578,7 +634,7 @@ useEffect(() => {
       edition: form.edition?.trim() || null,
 
       category: form.category,
-      subCategoryId: toIntOrNull(form.subCategoryId), // ✅ NEW
+      subCategoryId: toIntOrNull(form.subCategoryId),
 
       countryId: Number(form.countryId),
 
@@ -595,7 +651,7 @@ useEffect(() => {
 
       vatRateId: toIntOrNull(form.vatRateId),
       isTaxInclusive: safeBool(form.isTaxInclusive, true),
-      kind: "Standard", // keep backend satisfied if it expects this in update payloads
+      kind: "Standard",
     };
   }
 
@@ -607,7 +663,6 @@ useEffect(() => {
       return showError("Invalid category selected. Please choose a valid category.");
     }
 
-    // SubCategory is optional; but if set, require it to exist in current list to avoid backend 400
     if (form.subCategoryId) {
       const catId = CATEGORY_ID_BY_NAME[form.category];
       const list = subcatsByCategory[String(catId)] || [];
@@ -729,11 +784,12 @@ useEffect(() => {
 
   const catIdForForm = CATEGORY_ID_BY_NAME[form.category] || null;
   const subcatOptions = catIdForForm ? subcatsByCategory[String(catIdForForm)] || [] : [];
-  const showSubcategoryField = form.category === "Statutes"; // primary use-case; keeps UI clean
+  const showSubcategoryField = form.category === "Statutes";
 
   return (
     <div className="au-wrap">
-      {/* Page banner (no toast) */}
+      <div ref={topRef} />
+
       {banner?.text ? (
         <div
           className={`admin-alert ${banner.type === "error" ? "danger" : banner.type === "success" ? "success" : "info"}`}
@@ -743,7 +799,6 @@ useEffect(() => {
         </div>
       ) : null}
 
-      {/* HERO */}
       <div className="au-hero">
         <div className="au-titleRow">
           <div>
@@ -778,7 +833,6 @@ useEffect(() => {
           </div>
         </div>
 
-        {/* TOPBAR */}
         <div className="au-topbar">
           <div className="au-search">
             <span className="au-searchIcon" aria-hidden="true">
@@ -805,7 +859,6 @@ useEffect(() => {
           </div>
         </div>
 
-        {/* KPIs */}
         <div className="au-kpis">
           <div className="au-kpiCard">
             <div className="au-kpiLabel">Shown</div>
@@ -826,12 +879,20 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* PANEL */}
       <div className="au-panel">
         <div className="au-panelTop">
           <div className="au-panelTitle">Standard documents</div>
           <div className="au-pageMeta">{loading ? "Loading…" : `${filtered.length} record(s)`}</div>
         </div>
+
+        {/* ✅ Pager (top) */}
+        <Pager
+          page={page}
+          totalPages={totalPages}
+          totalItems={filtered.length}
+          pageSize={PAGE_SIZE}
+          onPage={goToPage}
+        />
 
         <div className="au-tableWrap">
           <table className="au-table">
@@ -862,7 +923,7 @@ useEffect(() => {
                 </tr>
               )}
 
-              {filtered.map((r) => {
+              {pagedRows.map((r) => {
                 const allow = getAllow(r);
                 const currency = getCurrency(r);
                 const price = getPrice(r);
@@ -934,12 +995,7 @@ useEffect(() => {
 
                     <td className="au-tdRight">
                       <div className="au-actionsRow">
-                        <button
-                          className="au-iconBtn au-iconBtn-neutral"
-                          onClick={() => openEdit(r)}
-                          disabled={busy}
-                          title="Edit"
-                        >
+                        <button className="au-iconBtn au-iconBtn-neutral" onClick={() => openEdit(r)} disabled={busy} title="Edit">
                           <IEdit />
                         </button>
                       </div>
@@ -950,6 +1006,15 @@ useEffect(() => {
             </tbody>
           </table>
         </div>
+
+        {/* ✅ Pager (bottom) */}
+        <Pager
+          page={page}
+          totalPages={totalPages}
+          totalItems={filtered.length}
+          pageSize={PAGE_SIZE}
+          onPage={goToPage}
+        />
 
         <div className="au-panelBottom">
           <span className="au-pageMeta">Tip: Reports are managed under Admin → LLR Services (not here).</span>
@@ -973,7 +1038,7 @@ useEffect(() => {
                 type="button"
                 className="admin-modal-xbtn"
                 onClick={closeModal}
-                disabled={!canClose}
+                disabled={canClose === false}
                 aria-label="Close"
                 title="Close"
               >
@@ -982,7 +1047,6 @@ useEffect(() => {
             </div>
 
             <div className="admin-modal-body admin-modal-scroll">
-              {/* Inline modal banner (no toast) */}
               {banner?.text ? (
                 <div
                   className={`admin-alert ${banner.type === "error" ? "danger" : banner.type === "success" ? "success" : "info"}`}
@@ -1000,13 +1064,11 @@ useEffect(() => {
               </div>
 
               <div className="admin-grid">
-                {/* Row 1 (full width) */}
                 <div className="admin-field admin-span2">
                   <label>Title *</label>
                   <input value={form.title} onChange={(e) => setField("title", e.target.value)} />
                 </div>
 
-                {/* Row 2 */}
                 <div className="admin-field">
                   <label>Country *</label>
                   <select value={String(form.countryId)} onChange={(e) => setField("countryId", e.target.value)}>
@@ -1028,14 +1090,9 @@ useEffect(() => {
                   </select>
                 </div>
 
-                {/* Row 3 */}
                 <div className="admin-field">
                   <label>Category</label>
-                  <select
-                    value={form.category}
-                    onChange={(e) => setField("category", e.target.value)}
-                    disabled={subcatsLoading}
-                  >
+                  <select value={form.category} onChange={(e) => setField("category", e.target.value)} disabled={subcatsLoading}>
                     {CATEGORY_OPTIONS.map((c) => (
                       <option key={c} value={c}>
                         {c}
@@ -1058,7 +1115,6 @@ useEffect(() => {
                   <div className="admin-help">Optional. Used for display and search.</div>
                 </div>
 
-                {/* Row 4 (subcategory only for statutes) */}
                 {showSubcategoryField ? (
                   <>
                     <div className="admin-field">
@@ -1077,9 +1133,7 @@ useEffect(() => {
                             </option>
                           ))}
                       </select>
-                      <div className="admin-help">
-                        Optional. Used to improve Statutes search (e.g., Constitutional, Criminal, Taxation…).
-                      </div>
+                      <div className="admin-help">Optional. Used to improve Statutes search.</div>
                     </div>
 
                     <div className="admin-field">
@@ -1107,7 +1161,6 @@ useEffect(() => {
                   </>
                 )}
 
-                {/* Row 5 */}
                 <div className="admin-field">
                   <label>Version</label>
                   <input value={form.version} onChange={(e) => setField("version", e.target.value)} />
@@ -1118,13 +1171,11 @@ useEffect(() => {
                   <input type="date" value={form.publishedAt} onChange={(e) => setField("publishedAt", e.target.value)} />
                 </div>
 
-                {/* Row 6 (full width) */}
                 <div className="admin-field admin-span2">
                   <label>Description</label>
                   <textarea rows={4} value={form.description} onChange={(e) => setField("description", e.target.value)} />
                 </div>
 
-                {/* Row 7 */}
                 <div className="admin-field">
                   <label>Author</label>
                   <input value={form.author} onChange={(e) => setField("author", e.target.value)} />
@@ -1135,7 +1186,6 @@ useEffect(() => {
                   <input value={form.publisher} onChange={(e) => setField("publisher", e.target.value)} />
                 </div>
 
-                {/* Row 8 */}
                 <div className="admin-field">
                   <label>Edition</label>
                   <input value={form.edition} onChange={(e) => setField("edition", e.target.value)} />
@@ -1159,7 +1209,6 @@ useEffect(() => {
               </div>
 
               <div className="admin-grid">
-                {/* Row 1 */}
                 <div className="admin-field">
                   <label>Allow public purchase?</label>
                   <select
@@ -1181,7 +1230,6 @@ useEffect(() => {
                   />
                 </div>
 
-                {/* Row 2 */}
                 <div className="admin-field">
                   <label>Public price</label>
                   <input
@@ -1208,7 +1256,6 @@ useEffect(() => {
                   <div className="admin-help">Optional. Used for VAT calculation on purchases + invoice printout.</div>
                 </div>
 
-                {/* Row 3 */}
                 <div className="admin-field">
                   <label>Tax Inclusive?</label>
                   <select value={String(!!form.isTaxInclusive)} onChange={(e) => setField("isTaxInclusive", e.target.value === "true")}>
@@ -1223,9 +1270,7 @@ useEffect(() => {
                   <input
                     value={
                       form.vatRateId
-                        ? `VAT: ${
-                            vatRates.find((x) => String(x.id) === String(form.vatRateId))?.ratePercent ?? "—"
-                          }%`
+                        ? `VAT: ${vatRates.find((x) => String(x.id) === String(form.vatRateId))?.ratePercent ?? "—"}%`
                         : "No VAT"
                     }
                     disabled
