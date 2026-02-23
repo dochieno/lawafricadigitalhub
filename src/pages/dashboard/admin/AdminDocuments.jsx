@@ -113,7 +113,7 @@ async function getDocSubCategories(categoryId) {
 }
 
 /** ✅ Must match backend enum values EXACTLY */
-const CATEGORY_OPTIONS = ["Commentaries", "InternationalTitles", "Journals", "LawReports", "Statutes", "LLRServices"];
+const CATEGORY_OPTIONS = ["Commentaries", "InternationalTitles", "Journals", "LawReports", "Statutes", "LLRServices","Gazette"];
 
 // enum id mapping (must match backend enum numeric values)
 const CATEGORY_ID_BY_NAME = {
@@ -123,6 +123,7 @@ const CATEGORY_ID_BY_NAME = {
   LawReports: 4,
   Statutes: 5,
   LLRServices: 6,
+  Gazette: 7,
 };
 
 function pickKind(r) {
