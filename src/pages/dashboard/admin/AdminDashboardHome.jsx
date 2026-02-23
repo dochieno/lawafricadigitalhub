@@ -318,15 +318,6 @@ function MiniInsight({ icon, label, value, hint }) {
   );
 }
 
-function Toast({ kind = "success", text }) {
-  if (!text) return null;
-  return (
-    <div className="toast">
-      <div className={`toast-box ${kind === "success" ? "toast-success" : "toast-error"}`}>{text}</div>
-    </div>
-  );
-}
-
 export default function AdminDashboardHome() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -357,13 +348,10 @@ export default function AdminDashboardHome() {
       setOverview(ovRes.data);
       setUsage(usageRes.data);
       setLastUpdated(new Date());
-
-      setToast({ kind: "success", text: "Analytics refreshed." });
     } catch (e) {
       console.error(e);
       const m = friendlyApiError(e);
       setErr(m);
-      setToast({ kind: "error", text: m });
     } finally {
       setLoading(false);
     }
@@ -461,7 +449,6 @@ export default function AdminDashboardHome() {
 
   return (
     <div className="ga-wrap ga-wrap-modern ga-wrap-premium">
-      <Toast kind={toast?.kind} text={toast?.text} />
 
       {/* Single header bar */}
       <header className="ga-head">
@@ -590,8 +577,8 @@ export default function AdminDashboardHome() {
         </div>
 
         <div className="ga-row ga-row-modern">
-          <CompactList title="Top documents" items={topDocs} emptyText="No document reads found." searchable />
-          <CompactList title="Top institutions" items={topInstitutions} emptyText="No institution reads found." searchable />
+        <CompactList title="Top documents" items={topDocs} emptyText="No document reads found." searchable />
+        <CompactList title="Top institutions" items={topInstitutions} emptyText="No institution reads found." />
         </div>
       </section>
 
