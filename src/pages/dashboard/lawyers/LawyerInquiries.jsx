@@ -1,104 +1,298 @@
-// src/pages/dashboard/lawyers/LawyerProfile.jsx
+// src/pages/dashboard/lawyers/LawyerInquiries.jsx
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { createLawyerInquiry, getLawyer } from "../../../api/lawyers";
+import { useLocation, useNavigate } from "react-router-dom";
+
+import api from "../../../api/client";
+import {
+  getLawyerInquiriesForMe,
+  getMyLawyerInquiries,
+  getMyLawyerProfile,
+} from "../../../api/lawyers";
+
 import "../../../styles/explore.css";
 
 function formatErr(e) {
-  return e?.response?.data?.message || e?.message || "Something went wrong. Please try again.";
+  return e?.response?.data?.message || e?.message || "Something went wrong.";
 }
 
-function formatMoney(currency, n) {
-  if (n == null || n === "") return null;
-  const num = Number(n);
-  if (!Number.isFinite(num)) return null;
-  const cur = (currency || "").trim() || "KES";
-  return `${cur} ${num.toLocaleString()}`;
+function fmtDate(d) {
+  if (!d) return "—";
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return "—";
+  return dt.toLocaleString();
 }
 
-function Badge({ children, kind = "neutral" }) {
-  const cls =
-    kind === "premium"
-      ? "badge premium"
-      : kind === "free"
-      ? "badge free"
-      : "badge";
-  return <span className={cls}>{children}</span>;
+// UI-friendly labels (your backend enum values are New/Contacted/InProgress/Closed/Spam)
+function prettyStatus(s) {
+  const x = (s || "").toLowerCase();
+  if (x === "new") return "Open";
+  if (x === "contacted") return "Acknowledged";
+  if (x === "inprogress" || x === "in progress") return "In Progress";
+  if (x === "closed") return "Closed";
+  if (x === "spam") return "Spam";
+  return s || "—";
 }
 
-export default function LawyerProfile() {
-  const { id } = useParams();
+function StatusPill({ status }) {
+  const raw = status || "";
+  const x = raw.toLowerCase();
+  const style = {
+    padding: "6px 10px",
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: 850,
+    border: "1px solid rgba(15,23,42,0.10)",
+    background: "rgba(15,23,42,0.04)",
+    color: "rgba(15,23,42,0.82)",
+  };
+
+  if (x === "new") style.background = "rgba(59,130,246,0.10)";
+  if (x === "contacted") style.background = "rgba(234,179,8,0.14)";
+  if (x === "inprogress" || x === "in progress") style.background = "rgba(16,185,129,0.12)";
+  if (x === "closed") style.background = "rgba(107,35,59,0.12)";
+  if (x === "spam") style.background = "rgba(239,68,68,0.10)";
+
+  return <span style={style}>{prettyStatus(raw)}</span>;
+}
+
+function Modal({ open, onClose, title, children }) {
+  if (!open) return null;
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(2, 8, 23, 0.55)",
+        zIndex: 50,
+        display: "grid",
+        placeItems: "center",
+        padding: 16,
+      }}
+      onMouseDown={onClose}
+    >
+      <div
+        style={{
+          width: "min(980px, 96vw)",
+          maxHeight: "88vh",
+          overflow: "auto",
+          background: "#fff",
+          borderRadius: 18,
+          border: "1px solid rgba(15,23,42,0.10)",
+          boxShadow: "0 25px 70px rgba(2, 8, 23, 0.35)",
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div
+          style={{
+            padding: "14px 16px",
+            borderBottom: "1px solid rgba(15,23,42,0.10)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+          }}
+        >
+          <div style={{ fontWeight: 950, fontSize: 15 }}>{title}</div>
+          <button className="explore-btn" onClick={onClose}>
+            Close
+          </button>
+        </div>
+        <div style={{ padding: 16 }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+export default function LawyerInquiries() {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const [tab, setTab] = useState("mine"); // mine | for-me
+  const [isLawyer, setIsLawyer] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [x, setX] = useState(null);
+  const [items, setItems] = useState([]);
 
-  const [summary, setSummary] = useState("");
-  const [preferred, setPreferred] = useState("call");
-  const [sending, setSending] = useState(false);
-  const [sendErr, setSendErr] = useState("");
+  // filters
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState(""); // New/Contacted/InProgress/Closed/Spam
+  const [onlyClosed, setOnlyClosed] = useState(false);
 
+  // detail modal
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailErr, setDetailErr] = useState("");
+  const [detail, setDetail] = useState(null);
+
+  // actions state
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionErr, setActionErr] = useState("");
+
+  // rating state
+  const [stars, setStars] = useState(5);
+  const [comment, setComment] = useState("");
+
+  // detect lawyer (if has lawyer profile)
   useEffect(() => {
     let alive = true;
-
-    async function load() {
-      setErr("");
-      setLoading(true);
+    (async () => {
       try {
-        const data = await getLawyer(id);
+        const p = await getMyLawyerProfile();
         if (!alive) return;
-        setX(data);
-      } catch (e) {
+        const ok = !!p?.id;
+        setIsLawyer(ok);
+        if (!ok) setTab("mine");
+      } catch {
         if (!alive) return;
-        setErr(formatErr(e));
-      } finally {
-        if (alive) setLoading(false);
+        setIsLawyer(false);
+        setTab("mine");
       }
-    }
-
-    load();
+    })();
     return () => {
       alive = false;
     };
-  }, [id]);
+  }, []);
 
-  const serviceRows = useMemo(() => {
-    const list = x?.serviceOfferings || [];
-    if (!Array.isArray(list)) return [];
-    return list.map((s) => {
-      const min = formatMoney(s.currency, s.minFee);
-      const max = formatMoney(s.currency, s.maxFee);
-      const unit = (s.billingUnit || "").trim() || "—";
-      const price = min && max ? `${min} – ${max}` : min ? `${min}` : max ? `${max}` : "Negotiable";
-      return { ...s, price, unit };
-    });
-  }, [x]);
-
-  async function send() {
-    setSendErr("");
-    const s = (summary ?? "").trim();
-    if (!s) {
-      setSendErr("Problem summary is required.");
-      return;
-    }
-
-    setSending(true);
+  async function loadList(activeTab = tab) {
+    setErr("");
+    setLoading(true);
     try {
-      const created = await createLawyerInquiry({
-        lawyerProfileId: Number(id),
-        problemSummary: s,
-        preferredContactMethod: preferred,
-      });
+      const res =
+        activeTab === "for-me"
+          ? await getLawyerInquiriesForMe({ take: 50, skip: 0 })
+          : await getMyLawyerInquiries({ take: 50, skip: 0 });
 
-      const newId = created?.id;
-      navigate(newId ? `/dashboard/lawyers/inquiries?open=${newId}` : "/dashboard/lawyers/inquiries");
+      setItems(Array.isArray(res?.items) ? res.items : []);
     } catch (e) {
-      setSendErr(formatErr(e));
+      setErr(formatErr(e));
+      setItems([]);
     } finally {
-      setSending(false);
+      setLoading(false);
     }
   }
+
+  useEffect(() => {
+    loadList(tab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  const filtered = useMemo(() => {
+    const query = (q || "").trim().toLowerCase();
+    return (items || [])
+      .filter((x) => {
+        const st = String(x.status || "");
+        if (onlyClosed && st !== "Closed") return false;
+        if (status && st !== status) return false;
+
+        if (!query) return true;
+        const hay = [
+          x.problemSummary,
+          x.practiceAreaName,
+          x.townName,
+          x.requesterName,
+          x.requesterEmail,
+          x.requesterPhone,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return hay.includes(query);
+      })
+      .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+  }, [items, q, onlyClosed, status]);
+
+  async function openDetail(id) {
+    setDetailOpen(true);
+    setDetail(null);
+    setDetailErr("");
+    setActionErr("");
+    setDetailLoading(true);
+
+    try {
+      const res = await api.get(`/lawyers/inquiries/${id}`);
+      const d = res.data || null;
+      setDetail(d);
+
+      setStars(d?.ratingStars || 5);
+      setComment(d?.ratingComment || "");
+    } catch (e) {
+      setDetailErr(formatErr(e));
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
+  // auto-open via ?open=123
+  useEffect(() => {
+    const sp = new URLSearchParams(location.search);
+    const openId = sp.get("open");
+    const idNum = openId ? Number(openId) : 0;
+    if (idNum > 0) {
+      openDetail(idNum);
+      // remove param so refresh doesn’t keep reopening
+      sp.delete("open");
+      navigate({ pathname: location.pathname, search: sp.toString() ? `?${sp.toString()}` : "" }, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
+  async function patchStatus(nextStatus, { outcome = null, note = "" } = {}) {
+    if (!detail?.id) return;
+    setActionErr("");
+    setActionBusy(true);
+    try {
+      await api.patch(`/lawyers/inquiries/${detail.id}/status`, {
+        status: nextStatus,
+        outcome,
+        note,
+      });
+      await openDetail(detail.id);
+      await loadList(tab);
+    } catch (e) {
+      setActionErr(formatErr(e));
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
+  async function closeInquiry(outcome) {
+    if (!detail?.id) return;
+    setActionErr("");
+    setActionBusy(true);
+    try {
+      await api.post(`/lawyers/inquiries/${detail.id}/close`, {
+        outcome,
+        note: "",
+      });
+      await openDetail(detail.id);
+      await loadList(tab);
+    } catch (e) {
+      setActionErr(formatErr(e));
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
+  async function submitRating() {
+    if (!detail?.id) return;
+    setActionErr("");
+    setActionBusy(true);
+    try {
+      await api.post(`/lawyers/inquiries/${detail.id}/rating`, {
+        stars,
+        comment: (comment || "").trim() || null,
+      });
+      await openDetail(detail.id);
+      await loadList(tab);
+    } catch (e) {
+      setActionErr(formatErr(e));
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
+  const canShowForMe = isLawyer;
 
   return (
     <div className="explore-container">
@@ -107,208 +301,331 @@ export default function LawyerProfile() {
           <div className="explore-brandTitle">
             <div className="explore-brandKicker">LawAfrica</div>
             <h1 className="explore-title">
-              Lawyer <span className="explore-titleDot">•</span>{" "}
-              <span className="explore-titleAccent">Profile</span>
+              My <span className="explore-titleDot">•</span>{" "}
+              <span className="explore-titleAccent">Inquiries</span>
             </h1>
-            <p className="explore-subtitle">View lawyer details and send an inquiry.</p>
+            <p className="explore-subtitle">
+              Manage inquiries you’ve sent and (if you’re a lawyer) requests assigned to you.
+            </p>
           </div>
 
           <div className="explore-headerActions" style={{ gap: 10 }}>
-            <button
-              className="explore-btn explore-btn-hotOutline"
-              onClick={() => navigate("/dashboard/lawyers")}
-              title="Back to Find a Lawyer"
-            >
+            <button className="explore-btn explore-btn-hotOutline" onClick={() => navigate("/dashboard/lawyers")}>
               ← Back
             </button>
-
-            {/* ✅ Quick access */}
-            <button
-              className="explore-btn"
-              onClick={() => navigate("/dashboard/lawyers/inquiries")}
-              title="View your inquiries"
-            >
-              My Inquiries
+            <button className="explore-btn" onClick={() => loadList(tab)} title="Reload">
+              ↻ Refresh
             </button>
           </div>
         </div>
       </div>
 
-      {loading ? (
-        <div className="explore-loading">Loading…</div>
-      ) : err ? (
-        <div className="explore-error" style={{ marginTop: 14 }}>{err}</div>
-      ) : !x ? (
-        <div className="explore-empty" style={{ marginTop: 14 }}>Not found.</div>
-      ) : (
-        <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "1.6fr 0.9fr", gap: 16, alignItems: "start" }}>
-          {/* LEFT: Profile card */}
-          <div
-            className="explore-empty"
-            style={{
-              marginTop: 0,
-              background: "#fff",
-              borderRadius: 18,
-              border: "1px solid rgba(15,23,42,0.10)",
-              boxShadow: "0 10px 26px rgba(15,23,42,0.08)",
-            }}
-          >
-            <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-              <div style={{ width: 72, height: 72, borderRadius: 18, background: "rgba(15,23,42,0.06)", overflow: "hidden", flexShrink: 0 }}>
-                {x.profileImageUrl ? (
-                  <img src={x.profileImageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                ) : null}
-              </div>
+      <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "320px 1fr", gap: 16, alignItems: "start" }}>
+        {/* LEFT FILTER NAV */}
+        <div
+          style={{
+            position: "sticky",
+            top: 92,
+            alignSelf: "start",
+            background: "#fff",
+            borderRadius: 18,
+            padding: 14,
+            border: "1px solid rgba(15,23,42,0.10)",
+            boxShadow: "0 10px 26px rgba(15,23,42,0.08)",
+          }}
+        >
+          <div className="explore-filterSectionTitle" style={{ marginBottom: 10 }}>
+            View
+          </div>
 
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                  <h2 style={{ margin: 0, fontSize: 18, fontWeight: 950 }}>{x.displayName}</h2>
-                  {x.isVerified ? <Badge kind="premium">Verified</Badge> : <Badge>Unverified</Badge>}
-                  {x.highestCourtName ? <Badge>{x.highestCourtName}</Badge> : null}
-                </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              className={`explore-btn ${tab === "mine" ? "explore-btn-hot" : ""}`}
+              onClick={() => setTab("mine")}
+            >
+              My Requests
+            </button>
 
-                <div style={{ marginTop: 6, color: "rgba(15,23,42,0.70)", fontWeight: 700 }}>
-                  {x.firmName ? x.firmName : "—"}
-                </div>
-
-                <div style={{ marginTop: 6, color: "rgba(15,23,42,0.62)", fontWeight: 650, fontSize: 12.5 }}>
-                  {(x.primaryTownName || "—")} <span className="explore-titleDot">•</span> {(x.countryName || "—")}
-                </div>
-              </div>
-            </div>
-
-            {/* About */}
-            <div style={{ marginTop: 16 }}>
-              <div className="explore-filterSectionTitle" style={{ marginBottom: 8 }}>About</div>
-              <div style={{ color: "rgba(15,23,42,0.78)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
-                {x.bio ? x.bio : <span style={{ opacity: 0.75 }}>—</span>}
-              </div>
-            </div>
-
-            {/* Practice areas */}
-            <div style={{ marginTop: 16 }}>
-              <div className="explore-filterSectionTitle" style={{ marginBottom: 8 }}>Practice areas</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {(x.practiceAreas || []).length ? (
-                  x.practiceAreas.map((p) => (
-                    <span key={p} className="explore-chip" style={{ cursor: "default" }}>
-                      <span className="explore-chipText">{p}</span>
-                    </span>
-                  ))
-                ) : (
-                  <span style={{ opacity: 0.7 }}>—</span>
-                )}
-              </div>
-            </div>
-
-            {/* Services */}
-            <div style={{ marginTop: 16 }}>
-              <div className="explore-filterSectionTitle" style={{ marginBottom: 8 }}>Services & Fees</div>
-              {serviceRows.length ? (
-                <div style={{ display: "grid", gap: 10 }}>
-                  {serviceRows.map((s) => (
-                    <div
-                      key={s.lawyerServiceId}
-                      style={{
-                        border: "1px solid rgba(15,23,42,0.10)",
-                        borderRadius: 14,
-                        padding: 12,
-                        background: "linear-gradient(135deg, rgba(107,35,59,0.04), rgba(255,255,255,0.95))",
-                      }}
-                    >
-                      <div style={{ fontWeight: 900 }}>{s.serviceName}</div>
-                      <div style={{ marginTop: 4, color: "rgba(15,23,42,0.75)", fontWeight: 700, fontSize: 12.5 }}>
-                        {s.price} <span style={{ opacity: 0.6 }}>•</span> {s.unit}
-                      </div>
-                      {s.notes ? (
-                        <div style={{ marginTop: 6, color: "rgba(15,23,42,0.65)", fontSize: 12.5 }}>
-                          {s.notes}
-                        </div>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ opacity: 0.75 }}>No service pricing provided.</div>
-              )}
-            </div>
-
-            {/* Towns served */}
-            <div style={{ marginTop: 16 }}>
-              <div className="explore-filterSectionTitle" style={{ marginBottom: 8 }}>Towns served</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {(x.townsServed || []).length ? (
-                  x.townsServed.map((t) => (
-                    <span key={t} className="explore-chip" style={{ cursor: "default" }}>
-                      <span className="explore-chipText">{t}</span>
-                    </span>
-                  ))
-                ) : (
-                  <span style={{ opacity: 0.7 }}>—</span>
-                )}
-              </div>
-            </div>
-
-            {/* Address */}
-            {x.googleFormattedAddress ? (
-              <div style={{ marginTop: 16 }}>
-                <div className="explore-filterSectionTitle" style={{ marginBottom: 8 }}>Address</div>
-                <div style={{ color: "rgba(15,23,42,0.78)" }}>{x.googleFormattedAddress}</div>
-              </div>
+            {canShowForMe ? (
+              <button
+                className={`explore-btn ${tab === "for-me" ? "explore-btn-hot" : ""}`}
+                onClick={() => setTab("for-me")}
+              >
+                For Me
+              </button>
             ) : null}
           </div>
 
-          {/* RIGHT: Inquiry card (scroll-safe) */}
-          <div style={{ position: "sticky", top: 92, alignSelf: "start" }}>
+          <div style={{ marginTop: 14 }}>
+            <div className="explore-filterSectionTitle" style={{ marginBottom: 8 }}>
+              Filters
+            </div>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <div className="explore-hint" style={{ marginTop: 0 }}>
+                Search
+              </div>
+              <input
+                className="explore-sidebarSearch"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Summary, town, practice area…"
+              />
+            </label>
+
+            <label style={{ display: "grid", gap: 6, marginTop: 10 }}>
+              <div className="explore-hint" style={{ marginTop: 0 }}>
+                Status
+              </div>
+              <select className="explore-select" value={status} onChange={(e) => setStatus(e.target.value)}>
+                <option value="">All</option>
+                <option value="New">Open</option>
+                <option value="Contacted">Acknowledged</option>
+                <option value="InProgress">In Progress</option>
+                <option value="Closed">Closed</option>
+                <option value="Spam">Spam</option>
+              </select>
+            </label>
+
+            <label style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 12 }}>
+              <input type="checkbox" checked={onlyClosed} onChange={(e) => setOnlyClosed(e.target.checked)} />
+              <div style={{ fontWeight: 800, color: "rgba(15,23,42,0.78)" }}>Closed only</div>
+            </label>
+          </div>
+
+          <div className="explore-hint" style={{ marginTop: 12 }}>
+            Tip: Click an item to open details and update status / close / rate.
+          </div>
+        </div>
+
+        {/* RIGHT CONTENT */}
+        <div>
+          {loading ? (
+            <div className="explore-loading">Loading…</div>
+          ) : err ? (
+            <div className="explore-error">{err}</div>
+          ) : filtered.length === 0 ? (
+            <div className="explore-empty">No inquiries found.</div>
+          ) : (
+            <div style={{ display: "grid", gap: 10 }}>
+              {filtered.map((x) => (
+                <div
+                  key={x.id}
+                  style={{
+                    background: "#fff",
+                    borderRadius: 18,
+                    border: "1px solid rgba(15,23,42,0.10)",
+                    boxShadow: "0 10px 26px rgba(15,23,42,0.08)",
+                    padding: 14,
+                    display: "grid",
+                    gridTemplateColumns: "1fr auto",
+                    gap: 12,
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <StatusPill status={x.status} />
+                      <div style={{ fontWeight: 950 }}>Inquiry #{x.id}</div>
+                      <div style={{ color: "rgba(15,23,42,0.55)", fontWeight: 800, fontSize: 12.5 }}>
+                        {fmtDate(x.createdAt)}
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: 8, color: "rgba(15,23,42,0.82)", fontWeight: 800, lineHeight: 1.45 }}>
+                      {x.problemSummary}
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: 8,
+                        display: "flex",
+                        gap: 10,
+                        flexWrap: "wrap",
+                        color: "rgba(15,23,42,0.62)",
+                        fontWeight: 750,
+                        fontSize: 12.5,
+                      }}
+                    >
+                      <span>{x.practiceAreaName ? x.practiceAreaName : "—"}</span>
+                      <span className="explore-titleDot">•</span>
+                      <span>{x.townName ? x.townName : "—"}</span>
+
+                      {tab === "for-me" && (x.requesterName || x.requesterEmail || x.requesterPhone) ? (
+                        <>
+                          <span className="explore-titleDot">•</span>
+                          <span>
+                            {x.requesterName || "Requester"}{" "}
+                            {x.requesterPhone ? `(${x.requesterPhone})` : x.requesterEmail ? `(${x.requesterEmail})` : ""}
+                          </span>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <button className="explore-cta-btn" onClick={() => openDetail(x.id)}>
+                      View
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* DETAIL MODAL */}
+      <Modal
+        open={detailOpen}
+        onClose={() => setDetailOpen(false)}
+        title={detail ? `Inquiry #${detail.id}` : "Inquiry"}
+      >
+        {detailLoading ? (
+          <div className="explore-loading">Loading…</div>
+        ) : detailErr ? (
+          <div className="explore-error">{detailErr}</div>
+        ) : !detail ? (
+          <div className="explore-empty">No detail.</div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 14, alignItems: "start" }}>
+            {/* LEFT */}
             <div
               style={{
-                background: "#fff",
-                borderRadius: 18,
-                padding: 16,
                 border: "1px solid rgba(15,23,42,0.10)",
-                boxShadow: "0 10px 26px rgba(15,23,42,0.08)",
-                maxHeight: "calc(100vh - 120px)",
-                overflow: "auto",
+                borderRadius: 18,
+                padding: 14,
+                background: "linear-gradient(135deg, rgba(107,35,59,0.04), rgba(255,255,255,0.96))",
+              }}
+            >
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <StatusPill status={detail.status} />
+                {detail.outcome ? (
+                  <span style={{ fontWeight: 900, color: "rgba(15,23,42,0.78)" }}>Outcome: {detail.outcome}</span>
+                ) : null}
+              </div>
+
+              <div style={{ marginTop: 10, fontWeight: 950 }}>Problem summary</div>
+              <div style={{ marginTop: 6, color: "rgba(15,23,42,0.78)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
+                {detail.problemSummary}
+              </div>
+
+              <div style={{ marginTop: 12, display: "grid", gap: 6, color: "rgba(15,23,42,0.70)", fontWeight: 750, fontSize: 12.5 }}>
+                <div>Created: {fmtDate(detail.createdAt)}</div>
+                {detail.contactedAtUtc ? <div>Acknowledged: {fmtDate(detail.contactedAtUtc)}</div> : null}
+                {detail.inProgressAtUtc ? <div>In progress: {fmtDate(detail.inProgressAtUtc)}</div> : null}
+                {detail.closedAtUtc ? <div>Closed: {fmtDate(detail.closedAtUtc)}</div> : null}
+              </div>
+
+              {actionErr ? <div style={{ marginTop: 10, color: "#b42318", fontWeight: 800 }}>{actionErr}</div> : null}
+            </div>
+
+            {/* RIGHT ACTIONS */}
+            <div
+              style={{
+                border: "1px solid rgba(15,23,42,0.10)",
+                borderRadius: 18,
+                padding: 14,
+                background: "#fff",
               }}
             >
               <div className="explore-filterSectionTitle" style={{ marginBottom: 10 }}>
-                Request help
+                Actions
               </div>
 
-              <label style={{ display: "grid", gap: 6 }}>
-                <div className="explore-hint" style={{ marginTop: 0 }}>Preferred contact method</div>
-                <select className="explore-select" value={preferred} onChange={(e) => setPreferred(e.target.value)}>
-                  <option value="call">Call</option>
-                  <option value="email">Email</option>
-                </select>
-              </label>
+              {/* Lawyer actions */}
+              {tab === "for-me" && String(detail.status || "") !== "Closed" && String(detail.status || "") !== "Spam" ? (
+                <div style={{ display: "grid", gap: 10 }}>
+                  <button className="explore-btn explore-btn-hot" disabled={actionBusy} onClick={() => patchStatus("Contacted")}>
+                    Mark Acknowledged
+                  </button>
+                  <button className="explore-btn explore-btn-hotOutline" disabled={actionBusy} onClick={() => patchStatus("InProgress")}>
+                    Mark In Progress
+                  </button>
 
-              <label style={{ display: "grid", gap: 6, marginTop: 10 }}>
-                <div className="explore-hint" style={{ marginTop: 0 }}>Problem summary</div>
-                <textarea
-                  className="explore-sidebarSearch"
-                  style={{ minHeight: 160 }}
-                  value={summary}
-                  onChange={(e) => setSummary(e.target.value)}
-                  placeholder="Explain your issue briefly…"
-                />
-              </label>
+                  <div style={{ height: 1, background: "rgba(15,23,42,0.10)", margin: "6px 0" }} />
 
-              {sendErr ? <div style={{ color: "#b42318", marginTop: 10, fontWeight: 700 }}>{sendErr}</div> : null}
+                  <div style={{ fontWeight: 900, color: "rgba(15,23,42,0.75)" }}>Close inquiry</div>
+                  <div style={{ display: "grid", gap: 8 }}>
+                    <button className="explore-btn" disabled={actionBusy} onClick={() => closeInquiry("Resolved")}>
+                      Close as Resolved
+                    </button>
+                    <button className="explore-btn" disabled={actionBusy} onClick={() => closeInquiry("Declined")}>
+                      Close as Declined
+                    </button>
+                    <button className="explore-btn" disabled={actionBusy} onClick={() => closeInquiry("NotResolved")}>
+                      Close as Not Resolved
+                    </button>
+                    <button className="explore-btn" disabled={actionBusy} onClick={() => closeInquiry("Duplicate")}>
+                      Close as Duplicate
+                    </button>
+                    <button className="explore-btn" disabled={actionBusy} onClick={() => closeInquiry("NoResponse")}>
+                      Close as No Response
+                    </button>
+                    <button className="explore-btn" disabled={actionBusy} onClick={() => patchStatus("Spam")}>
+                      Mark as Spam
+                    </button>
+                  </div>
+                </div>
+              ) : null}
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 12 }}>
-                <button className="explore-cta-btn" onClick={send} disabled={sending} title="Send inquiry">
-                  {sending ? "Sending…" : "Send inquiry"}
-                </button>
-              </div>
+              {/* Requester actions */}
+              {tab === "mine" && String(detail.status || "") !== "Closed" && String(detail.status || "") !== "Spam" ? (
+                <div style={{ display: "grid", gap: 10 }}>
+                  <div style={{ fontWeight: 900, color: "rgba(15,23,42,0.75)" }}>Close inquiry</div>
+                  <button className="explore-btn" disabled={actionBusy} onClick={() => closeInquiry("NotResolved")}>
+                    Close as Not Resolved
+                  </button>
+                  <button className="explore-btn" disabled={actionBusy} onClick={() => closeInquiry("NoResponse")}>
+                    Close as No Response
+                  </button>
+                  <button className="explore-btn" disabled={actionBusy} onClick={() => closeInquiry("Resolved")}>
+                    Close as Resolved
+                  </button>
+                </div>
+              ) : null}
 
-              <div className="explore-hint" style={{ marginTop: 12 }}>
-                Your inquiry will appear under <b>My Inquiries</b>.
-              </div>
+              {/* Rating (requester only, closed only) */}
+              {tab === "mine" && String(detail.status || "") === "Closed" ? (
+                <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
+                  <div style={{ height: 1, background: "rgba(15,23,42,0.10)", margin: "6px 0" }} />
+
+                  <div style={{ fontWeight: 950 }}>Rate this engagement</div>
+
+                  <label style={{ display: "grid", gap: 6 }}>
+                    <div className="explore-hint" style={{ marginTop: 0 }}>Stars (1–5)</div>
+                    <select className="explore-select" value={stars} onChange={(e) => setStars(Number(e.target.value))}>
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label style={{ display: "grid", gap: 6 }}>
+                    <div className="explore-hint" style={{ marginTop: 0 }}>Comment (optional)</div>
+                    <textarea
+                      className="explore-sidebarSearch"
+                      style={{ minHeight: 110 }}
+                      value={comment}
+                      onChange={(e) => setComment(e.target.value)}
+                      placeholder="Share a brief review…"
+                    />
+                  </label>
+
+                  <button className="explore-cta-btn" disabled={actionBusy} onClick={submitRating}>
+                    {actionBusy ? "Saving…" : "Submit rating"}
+                  </button>
+
+                  {detail.ratingStars ? (
+                    <div className="explore-hint" style={{ marginTop: 0 }}>
+                      Already rated: <b>{detail.ratingStars}/5</b>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   );
 }

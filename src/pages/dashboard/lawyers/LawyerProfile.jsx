@@ -17,17 +17,16 @@ function formatMoney(currency, n) {
 }
 
 function Badge({ children, kind = "neutral" }) {
-  const cls =
-    kind === "premium"
-      ? "badge premium"
-      : kind === "free"
-      ? "badge free"
-      : "badge";
+  const cls = kind === "premium" ? "badge premium" : kind === "free" ? "badge free" : "badge";
   return <span className={cls}>{children}</span>;
 }
 
 export default function LawyerProfile() {
-  const { id } = useParams();
+  const params = useParams();
+  // ✅ robust: supports :id, :lawyerId, :profileId etc. (your route uses :id)
+  const lawyerIdRaw = params.id ?? params.lawyerId ?? params.profileId ?? params.lawyerProfileId;
+  const lawyerId = lawyerIdRaw != null ? String(lawyerIdRaw) : "";
+
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
@@ -45,13 +44,25 @@ export default function LawyerProfile() {
     async function load() {
       setErr("");
       setLoading(true);
+
+      // ✅ hard guard: prevents /lawyers/undefined
+      if (!lawyerId || lawyerId === "undefined" || lawyerId === "null") {
+        if (alive) {
+          setErr("Missing lawyer id in the URL.");
+          setX(null);
+          setLoading(false);
+        }
+        return;
+      }
+
       try {
-        const data = await getLawyer(id);
+        const data = await getLawyer(lawyerId);
         if (!alive) return;
         setX(data);
       } catch (e) {
         if (!alive) return;
         setErr(formatErr(e));
+        setX(null);
       } finally {
         if (alive) setLoading(false);
       }
@@ -61,7 +72,7 @@ export default function LawyerProfile() {
     return () => {
       alive = false;
     };
-  }, [id]);
+  }, [lawyerId]);
 
   const serviceRows = useMemo(() => {
     const list = x?.serviceOfferings || [];
@@ -78,15 +89,19 @@ export default function LawyerProfile() {
   async function send() {
     setSendErr("");
     const s = (summary ?? "").trim();
-    if (!s) {
-      setSendErr("Problem summary is required.");
+    if (!s) return setSendErr("Problem summary is required.");
+
+    // ✅ prevent NaN payload
+    const idNum = Number(lawyerId);
+    if (!Number.isFinite(idNum) || idNum <= 0) {
+      setSendErr("Invalid lawyer id in the URL.");
       return;
     }
 
     setSending(true);
     try {
       const created = await createLawyerInquiry({
-        lawyerProfileId: Number(id),
+        lawyerProfileId: idNum,
         problemSummary: s,
         preferredContactMethod: preferred,
       });
@@ -107,8 +122,7 @@ export default function LawyerProfile() {
           <div className="explore-brandTitle">
             <div className="explore-brandKicker">LawAfrica</div>
             <h1 className="explore-title">
-              Lawyer <span className="explore-titleDot">•</span>{" "}
-              <span className="explore-titleAccent">Profile</span>
+              Lawyer <span className="explore-titleDot">•</span> <span className="explore-titleAccent">Profile</span>
             </h1>
             <p className="explore-subtitle">View lawyer details and send an inquiry.</p>
           </div>
@@ -118,16 +132,12 @@ export default function LawyerProfile() {
               className="explore-btn explore-btn-hotOutline"
               onClick={() => navigate("/dashboard/lawyers")}
               title="Back to Find a Lawyer"
+              type="button"
             >
               ← Back
             </button>
 
-            {/* ✅ Quick access to the workflow */}
-            <button
-              className="explore-btn"
-              onClick={() => navigate("/dashboard/lawyers/inquiries")}
-              title="View your inquiries"
-            >
+            <button className="explore-btn" onClick={() => navigate("/dashboard/lawyers/inquiries")} title="View your inquiries" type="button">
               My Inquiries
             </button>
           </div>
@@ -177,11 +187,7 @@ export default function LawyerProfile() {
                 }}
               >
                 {x.profileImageUrl ? (
-                  <img
-                    src={x.profileImageUrl}
-                    alt=""
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                  />
+                  <img src={x.profileImageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 ) : null}
               </div>
 
@@ -192,13 +198,10 @@ export default function LawyerProfile() {
                   {x.highestCourtName ? <Badge>{x.highestCourtName}</Badge> : null}
                 </div>
 
-                <div style={{ marginTop: 6, color: "rgba(15,23,42,0.70)", fontWeight: 700 }}>
-                  {x.firmName ? x.firmName : "—"}
-                </div>
+                <div style={{ marginTop: 6, color: "rgba(15,23,42,0.70)", fontWeight: 700 }}>{x.firmName ? x.firmName : "—"}</div>
 
                 <div style={{ marginTop: 6, color: "rgba(15,23,42,0.62)", fontWeight: 650, fontSize: 12.5 }}>
-                  {(x.primaryTownName || "—")} <span className="explore-titleDot">•</span>{" "}
-                  {(x.countryName || "—")}
+                  {(x.primaryTownName || "—")} <span className="explore-titleDot">•</span> {(x.countryName || "—")}
                 </div>
               </div>
             </div>
@@ -252,11 +255,7 @@ export default function LawyerProfile() {
                       <div style={{ marginTop: 4, color: "rgba(15,23,42,0.75)", fontWeight: 700, fontSize: 12.5 }}>
                         {s.price} <span style={{ opacity: 0.6 }}>•</span> {s.unit}
                       </div>
-                      {s.notes ? (
-                        <div style={{ marginTop: 6, color: "rgba(15,23,42,0.65)", fontSize: 12.5 }}>
-                          {s.notes}
-                        </div>
-                      ) : null}
+                      {s.notes ? <div style={{ marginTop: 6, color: "rgba(15,23,42,0.65)", fontSize: 12.5 }}>{s.notes}</div> : null}
                     </div>
                   ))}
                 </div>
@@ -294,7 +293,7 @@ export default function LawyerProfile() {
             ) : null}
           </div>
 
-          {/* RIGHT: Inquiry card (scroll-safe) */}
+          {/* RIGHT: Inquiry card */}
           <div style={{ position: "sticky", top: 92, alignSelf: "start" }}>
             <div
               style={{
@@ -312,7 +311,9 @@ export default function LawyerProfile() {
               </div>
 
               <label style={{ display: "grid", gap: 6 }}>
-                <div className="explore-hint" style={{ marginTop: 0 }}>Preferred contact method</div>
+                <div className="explore-hint" style={{ marginTop: 0 }}>
+                  Preferred contact method
+                </div>
                 <select className="explore-select" value={preferred} onChange={(e) => setPreferred(e.target.value)}>
                   <option value="call">Call</option>
                   <option value="email">Email</option>
@@ -320,7 +321,9 @@ export default function LawyerProfile() {
               </label>
 
               <label style={{ display: "grid", gap: 6, marginTop: 10 }}>
-                <div className="explore-hint" style={{ marginTop: 0 }}>Problem summary</div>
+                <div className="explore-hint" style={{ marginTop: 0 }}>
+                  Problem summary
+                </div>
                 <textarea
                   className="explore-sidebarSearch"
                   style={{ minHeight: 160 }}
@@ -330,14 +333,10 @@ export default function LawyerProfile() {
                 />
               </label>
 
-              {sendErr ? (
-                <div style={{ color: "#b42318", marginTop: 10, fontWeight: 700 }}>
-                  {sendErr}
-                </div>
-              ) : null}
+              {sendErr ? <div style={{ color: "#b42318", marginTop: 10, fontWeight: 700 }}>{sendErr}</div> : null}
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 12 }}>
-                <button className="explore-cta-btn" onClick={send} disabled={sending} title="Send inquiry">
+                <button className="explore-cta-btn" onClick={send} disabled={sending} title="Send inquiry" type="button">
                   {sending ? "Sending…" : "Send inquiry"}
                 </button>
               </div>
