@@ -169,10 +169,27 @@ function LookupDropdown({
 }
 
 function normalizeCountry(c) {
-  // supports {id,name} or {Id,Name}
   const id = c?.id ?? c?.Id ?? 0;
   const name = c?.name ?? c?.Name ?? "";
   return { id: Number(id), name: String(name || "") };
+}
+
+function IconUser() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+      <path
+        d="M20 21c0-4-4-7-8-7s-8 3-8 7"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+    </svg>
+  );
 }
 
 export default function Lawyers() {
@@ -188,7 +205,7 @@ export default function Lawyers() {
   const [countriesErr, setCountriesErr] = useState("");
 
   // Dropdown selections (store objects)
-  const [country, setCountry] = useState(null); // ✅ now from API
+  const [country, setCountry] = useState(null);
   const [town, setTown] = useState(null);
   const [practiceArea, setPracticeArea] = useState(null);
   const [court, setCourt] = useState(null);
@@ -210,7 +227,7 @@ export default function Lawyers() {
   const [inqSubmitting, setInqSubmitting] = useState(false);
   const [inqError, setInqError] = useState("");
 
-  // Load countries from /api/country (your controller)
+  // Load countries from /api/country
   useEffect(() => {
     let alive = true;
 
@@ -222,13 +239,12 @@ export default function Lawyers() {
         const raw = Array.isArray(res.data) ? res.data : [];
         const list = raw.map(normalizeCountry).filter((x) => x.id > 0 && x.name);
         list.sort((a, b) => a.name.localeCompare(b.name));
-        if (alive) {
-          setCountryOptions(list);
 
-          // Default to Kenya if present, else first country
-          const kenya = list.find((x) => x.name.toLowerCase() === "kenya");
-          setCountry((cur) => cur ?? kenya ?? list[0] ?? null);
-        }
+        if (!alive) return;
+
+        setCountryOptions(list);
+        const kenya = list.find((x) => x.name.toLowerCase() === "kenya");
+        setCountry((cur) => cur ?? kenya ?? list[0] ?? null);
       } catch (e) {
         if (alive) setCountriesErr(formatErr(e));
       } finally {
@@ -237,9 +253,7 @@ export default function Lawyers() {
     }
 
     loadCountries();
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, []);
 
   // Load me lawyer profile status
@@ -296,11 +310,8 @@ export default function Lawyers() {
   function clearFilters() {
     setQ("");
     setVerifiedOnly(true);
-
-    // reset to Kenya if present
     const kenya = countryOptions.find((x) => x.name.toLowerCase() === "kenya");
     setCountry(kenya ?? countryOptions[0] ?? null);
-
     setTown(null);
     setPracticeArea(null);
     setCourt(null);
@@ -343,12 +354,32 @@ export default function Lawyers() {
 
   const resultCount = items.length;
 
+  // Compact “My Lawyer Profile” / “Register as Lawyer”
+  const compactCtaStyle = {
+    padding: "10px 12px",
+    borderRadius: 14,
+    fontSize: 11,
+    fontWeight: 900,
+    whiteSpace: "nowrap",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+  };
+
   return (
     <div className="explore-container">
       <div className="explore-shell">
         {/* ========== LEFT FILTER SIDEBAR (Explore style) ========== */}
         <div className="explore-shellLeft">
-          <aside className="explore-sidebar">
+          <aside
+            className="explore-sidebar"
+            // ✅ FIX: allow scrolling in filter panel
+            style={{
+              maxHeight: "calc(100vh - 120px)",
+              overflow: "auto",
+              overscrollBehavior: "contain",
+            }}
+          >
             <div className="explore-sidebarTop">
               <div className="explore-sidebarTitleRow">
                 <div>
@@ -503,12 +534,23 @@ export default function Lawyers() {
                 </div>
               </div>
 
-              <div className="explore-headerActions">
-                <div className="explore-resultsPill">{resultCount} results</div>
+              <div
+                className="explore-headerActions"
+                // ✅ keep header actions tidy + prevent weird wrapping
+                style={{ gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}
+              >
+                <div
+                  className="explore-resultsPill"
+                  // ✅ FIX: keep "0 results" on ONE line
+                  style={{ whiteSpace: "nowrap", display: "inline-flex", alignItems: "center" }}
+                >
+                  {resultCount} results
+                </div>
 
                 <button
                   className="explore-btn explore-btn-hotOutline"
                   onClick={() => navigate("/dashboard/lawyers/inquiries")}
+                  style={{ whiteSpace: "nowrap" }}
                 >
                   My Inquiries
                 </button>
@@ -518,8 +560,10 @@ export default function Lawyers() {
                   onClick={() => navigate("/dashboard/lawyers/apply")}
                   disabled={meLawyerLoading}
                   title={meLawyer ? "Update your lawyer profile" : "Apply to be listed as a lawyer"}
-                  style={{ whiteSpace: "nowrap" }}
+                  // ✅ FIX: compact CTA (no huge button)
+                  style={compactCtaStyle}
                 >
+                  <IconUser />
                   {meLawyerLoading ? "Loading..." : meLawyer ? "My Lawyer Profile" : "Register as Lawyer"}
                 </button>
               </div>
