@@ -606,6 +606,11 @@ export default function AppShell() {
                         icon={<IcGrid />}
                         onClick={() => setOpenDd(null)}
                       />
+                      <DdItem
+                        to="/dashboard/admin/lawyers/profiles"
+                        label="Lawyer Verification"
+                        icon={<IcShield />}
+                      />
                       <DdItem to="/dashboard/admin/llr-services/import" label="Import Cases" icon={<IcUpload />} onClick={() => setOpenDd(null)} />
                       <DdItem to="/dashboard/admin/institution-subscriptions" label="Subscriptions" icon={<IcShield />} onClick={() => setOpenDd(null)} />
                       <DdItem to="/dashboard/admin/user-subscriptions" label="Public Subscriptions" icon={<IcUsers />} onClick={() => setOpenDd(null)} />

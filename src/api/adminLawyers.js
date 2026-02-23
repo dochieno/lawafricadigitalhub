@@ -45,3 +45,36 @@ export async function adminDisableLawyerService(id) {
   const res = await api.delete(`/admin/lawyers/services/${id}`);
   return res.data;
 }
+// ====================
+// Lawyer Profiles (Admin verification)
+// ====================
+
+/**
+ * GET /api/admin/lawyers/profiles?q=&status=&take=&skip=
+ * returns: { total, take, skip, items: [...] }
+ */
+export async function adminListLawyerProfiles({ q = "", status = "", take = 50, skip = 0 } = {}) {
+  const res = await api.get("/admin/lawyers/profiles", { params: { q, status, take, skip } });
+  return res.data;
+}
+
+/**
+ * GET /api/admin/lawyers/profiles/{id}
+ * returns: profile detail + documents
+ */
+export async function adminGetLawyerProfile(profileId) {
+  const res = await api.get(`/admin/lawyers/profiles/${profileId}`);
+  return res.data;
+}
+
+/**
+ * POST /api/admin/lawyers/profiles/{id}/verify
+ * body: { action: "verify"|"reject"|"suspend", reason? }
+ */
+export async function adminVerifyLawyerProfile(profileId, { action = "verify", reason = "" } = {}) {
+  const res = await api.post(`/admin/lawyers/profiles/${profileId}/verify`, {
+    action,
+    reason: reason?.trim() || null,
+  });
+  return res.data;
+}

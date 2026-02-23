@@ -10,7 +10,12 @@ import {
   lookupPracticeAreas,
   lookupTowns,
   lookupCourts,
-  lookupServices, // ✅ expects /api/lawyers/services
+  lookupServices,
+
+  // ✅ NEW: attachments
+  listMyLawyerDocuments,
+  uploadMyLawyerDocument,
+  deleteMyLawyerDocument,
 } from "../../../api/lawyers";
 
 import "../../../styles/explore.css";
@@ -94,6 +99,27 @@ function IconTrash() {
       <path d="M14 11v7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       <path d="M6 7l1-3h10l1 3" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
       <path d="M7 7v14h10V7" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+function IconEye() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" width="14" height="14">
+      <path
+        d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+function IconUpload() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" width="14" height="14">
+      <path d="M12 3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M7 8l5-5 5 5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M5 21h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }
@@ -225,7 +251,6 @@ function LookupDropdown({ label, disabled, value, onChange, fetcher, placeholder
 async function resolveTownNames(countryId, ids) {
   const uniq = Array.from(new Set((ids || []).filter((x) => Number(x) > 0)));
   if (!countryId || uniq.length === 0) return [];
-  // NOTE: uses a broad lookup to build id->name map.
   const list = await lookupTowns({ countryId, q: "" });
   const map = new Map((Array.isArray(list) ? list : []).map((t) => [t.id, t]));
   return uniq.map((id) => {
@@ -255,6 +280,34 @@ async function resolveServiceNames(ids) {
     return s ? { id: s.id, name: s.name } : { id, name: `Service #${id}` };
   });
 }
+
+/* ---------------------------
+   Documents helpers
+--------------------------- */
+function bytesLabel(n) {
+  const num = Number(n);
+  if (!Number.isFinite(num) || num <= 0) return "";
+  const kb = num / 1024;
+  if (kb < 1024) return `${kb.toFixed(0)} KB`;
+  return `${(kb / 1024).toFixed(1)} MB`;
+}
+
+/**
+ * ✅ IMPORTANT:
+ * These "value" strings MUST match your backend enum names (LawyerDocumentType)
+ *   KenyaSchoolOfLawCertificate
+ *   AdmissionCertificate
+ *   PracticingCertificate
+ *   NationalIdOrPassport
+ *   Other
+ */
+const DOC_KIND_OPTIONS = [
+  { value: "KenyaSchoolOfLawCertificate", label: "Kenya School of Law Certificate" },
+  { value: "PracticingCertificate", label: "Practicing Certificate" },
+  { value: "NationalIdOrPassport", label: "National ID / Passport" },
+  { value: "AdmissionCertificate", label: "Admission Certificate" },
+  { value: "Other", label: "Other" },
+];
 
 export default function LawyerApply() {
   const navigate = useNavigate();
@@ -291,7 +344,18 @@ export default function LawyerApply() {
 
   // Services + rate cards
   const [pickService, setPickService] = useState(null);
-  const [serviceOfferings, setServiceOfferings] = useState([]); // editable rows
+  const [serviceOfferings, setServiceOfferings] = useState([]);
+
+  // ✅ NEW: Documents (attachments)
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [docsErr, setDocsErr] = useState("");
+  const [docs, setDocs] = useState([]);
+
+  const [docKind, setDocKind] = useState(DOC_KIND_OPTIONS[0]?.value || "Other");
+  const [docNotes, setDocNotes] = useState("");
+  const [docFile, setDocFile] = useState(null);
+  const [docUploading, setDocUploading] = useState(false);
+  const [docUploadErr, setDocUploadErr] = useState("");
 
   // UI state
   const [loading, setLoading] = useState(true);
@@ -313,6 +377,20 @@ export default function LawyerApply() {
     []
   );
 
+  const miniIconBtn = useMemo(
+    () => ({
+      padding: "8px 10px",
+      borderRadius: 12,
+      fontSize: 11,
+      fontWeight: 850,
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 8,
+      whiteSpace: "nowrap",
+    }),
+    []
+  );
+
   // Load countries
   useEffect(() => {
     let alive = true;
@@ -321,7 +399,7 @@ export default function LawyerApply() {
       setCountriesErr("");
       setCountriesLoading(true);
       try {
-        const res = await api.get("/country"); // ✅ your CountryController route
+        const res = await api.get("/country");
         const raw = Array.isArray(res.data) ? res.data : [];
         const list = raw.map(normalizeCountry).filter((x) => x.id > 0 && x.name);
         list.sort((a, b) => a.name.localeCompare(b.name));
@@ -343,6 +421,21 @@ export default function LawyerApply() {
     return () => {
       alive = false;
     };
+  }, []);
+
+  // ✅ Load documents (attachments)
+  const loadDocs = useCallback(async () => {
+    setDocsErr("");
+    setDocsLoading(true);
+    try {
+      const list = await listMyLawyerDocuments();
+      setDocs(Array.isArray(list) ? list : []);
+    } catch (e) {
+      setDocsErr(formatErr(e));
+      setDocs([]);
+    } finally {
+      setDocsLoading(false);
+    }
   }, []);
 
   // Load existing profile + resolve names
@@ -369,7 +462,6 @@ export default function LawyerApply() {
           setLatitude(me.latitude != null ? String(me.latitude) : "");
           setLongitude(me.longitude != null ? String(me.longitude) : "");
 
-          // Country (from server)
           const cid = me.countryId || null;
           if (cid && countryOptions.length) {
             const c = countryOptions.find((x) => x.id === cid);
@@ -390,8 +482,7 @@ export default function LawyerApply() {
             });
           }
 
-          // ✅ Resolve towns/practice areas/services to names (no more "Town #123")
-          const effectiveCountryId = (me.countryId || country?.id || null);
+          const effectiveCountryId = me.countryId || country?.id || null;
 
           if (Array.isArray(me.townIdsServed) && effectiveCountryId) {
             const townObjs = await resolveTownNames(effectiveCountryId, me.townIdsServed);
@@ -403,7 +494,6 @@ export default function LawyerApply() {
             if (alive) setPracticeAreas(areaObjs);
           }
 
-          // services from me (if you return them) – if server sends names already, we keep them
           if (Array.isArray(me.serviceOfferings) && me.serviceOfferings.length) {
             const serviceIds = me.serviceOfferings.map((s) => s.lawyerServiceId).filter(Boolean);
             let resolvedNames = [];
@@ -427,7 +517,6 @@ export default function LawyerApply() {
             );
           }
         } else {
-          // Prefill from User table (editable)
           const fn = (user?.firstName || user?.FirstName || "").trim();
           const ln = (user?.lastName || user?.LastName || "").trim();
           const full = `${fn} ${ln}`.trim();
@@ -449,21 +538,23 @@ export default function LawyerApply() {
     };
   }, [user, countryOptions, country?.id]);
 
-  // Add town
+  useEffect(() => {
+    if (loading) return;
+    loadDocs();
+  }, [loading, loadDocs]);
+
   useEffect(() => {
     if (!pickTown) return;
     setTownsServed((cur) => uniqById([...(cur || []), pickTown]));
     setPickTown(null);
   }, [pickTown]);
 
-  // Add practice area
   useEffect(() => {
     if (!pickArea) return;
     setPracticeAreas((cur) => uniqById([...(cur || []), pickArea]));
     setPickArea(null);
   }, [pickArea]);
 
-  // Add service row when pickService changes
   useEffect(() => {
     if (!pickService) return;
 
@@ -515,7 +606,6 @@ export default function LawyerApply() {
       return setErr("Latitude/Longitude must be numeric (or leave blank).");
     }
 
-    // validate services locally
     for (const s of serviceOfferings || []) {
       const minN = toNumOrNull(s.minFee);
       const maxN = toNumOrNull(s.maxFee);
@@ -544,7 +634,6 @@ export default function LawyerApply() {
         townIdsServed: uniqById([...(townsServed || []), primaryTown]).map((x) => x.id),
         practiceAreaIds: uniqById(practiceAreas || []).map((x) => x.id),
 
-        // ✅ NEW (requires backend DTO + upsert to persist)
         serviceOfferings: (serviceOfferings || []).map((s) => ({
           lawyerServiceId: s.lawyerServiceId,
           currency: (s.currency || "").trim() || null,
@@ -567,6 +656,54 @@ export default function LawyerApply() {
     }
   }
 
+  async function uploadDoc() {
+    setDocUploadErr("");
+    setToast(null);
+
+    if (!docFile) {
+      setDocUploadErr("Please choose a file to upload.");
+      return;
+    }
+
+    setDocUploading(true);
+    try {
+      await uploadMyLawyerDocument({
+        file: docFile,
+        type: docKind, // ✅ backend enum name
+        // notes are currently UI-only (backend controller doesn't accept notes yet)
+      });
+
+      setDocFile(null);
+      setDocNotes("");
+      const input = document.getElementById("lawyer-doc-file");
+      if (input) input.value = "";
+
+      await loadDocs();
+      setToast({ kind: "success", text: "Document uploaded." });
+    } catch (e) {
+      const m = formatErr(e);
+      setDocUploadErr(m);
+      setToast({ kind: "error", text: m });
+    } finally {
+      setDocUploading(false);
+    }
+  }
+
+  async function removeDoc(id) {
+    if (!id) return;
+    if (!window.confirm("Delete this document?")) return;
+
+    setToast(null);
+    try {
+      await deleteMyLawyerDocument(id);
+      await loadDocs();
+      setToast({ kind: "success", text: "Document removed." });
+    } catch (e) {
+      const m = formatErr(e);
+      setToast({ kind: "error", text: m });
+    }
+  }
+
   if (loading) return <div className="explore-loading">Loading…</div>;
 
   return (
@@ -581,7 +718,6 @@ export default function LawyerApply() {
           <aside
             className="explore-sidebar"
             style={{
-              // ✅ FIX: sidebar always scrollable when sticky
               maxHeight: "calc(100vh - 110px)",
               overflow: "auto",
             }}
@@ -624,7 +760,6 @@ export default function LawyerApply() {
                       const c = countryOptions.find((x) => x.id === id) || null;
                       setCountry(c);
 
-                      // reset dependent fields
                       setPrimaryTown(null);
                       setHighestCourt(null);
                       setTownsServed([]);
@@ -746,7 +881,6 @@ export default function LawyerApply() {
                   onChange={setPickService}
                   disabled={false}
                   fetcher={async ({ q }) => {
-                    // ✅ fail-safe: if endpoint not present yet, avoid crashing UI
                     try {
                       return await lookupServices({ q });
                     } catch {
@@ -756,9 +890,7 @@ export default function LawyerApply() {
                   placeholder="Search and add service…"
                 />
 
-                <div className="explore-hint">
-                  Add services you offer and set estimated fees. Fees can be blank if negotiable.
-                </div>
+                <div className="explore-hint">Add services you offer and set estimated fees.</div>
               </div>
 
               {/* Actions */}
@@ -795,7 +927,9 @@ export default function LawyerApply() {
                 <h1 className="explore-title">
                   Apply to be a <span className="explore-titleAccent">Lawyer</span>
                 </h1>
-                <p className="explore-subtitle">Your application will be marked <b>Pending</b> until verified.</p>
+                <p className="explore-subtitle">
+                  Your application will be marked <b>Pending</b> until verified.
+                </p>
               </div>
             </div>
 
@@ -825,9 +959,7 @@ export default function LawyerApply() {
               <div>
                 <div className="explore-filterSectionTitle" style={{ marginBottom: 6 }}>Display name</div>
                 <input className="explore-sidebarSearch" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="e.g., Jane Doe" />
-                <div className="explore-hint">
-                  Default is your account name, but you can change how clients address you.
-                </div>
+                <div className="explore-hint">Default is your account name, but you can change how clients address you.</div>
               </div>
 
               <div>
@@ -898,7 +1030,7 @@ export default function LawyerApply() {
                           <button
                             className="explore-btn"
                             type="button"
-                            style={compactBtn}
+                            style={miniIconBtn}
                             onClick={() => removeService(s.lawyerServiceId)}
                             title="Remove service"
                           >
@@ -950,6 +1082,167 @@ export default function LawyerApply() {
                   <SmallIcon><IconPlus /></SmallIcon>
                   Add another service
                 </button>
+              </div>
+
+              {/* ✅ Verification Documents */}
+              <div style={{ marginTop: 10 }}>
+                <div className="explore-filterSectionTitle" style={{ marginBottom: 10 }}>
+                  Verification Documents
+                </div>
+
+                <div className="explore-hint" style={{ marginTop: 0, marginBottom: 10 }}>
+                  Upload supporting documents (e.g., KSL certificate, practicing certificate). Requirements may vary by country — we’ll enforce rules later.
+                </div>
+
+                {/* uploader */}
+                <div
+                  style={{
+                    border: "1px solid rgba(15,23,42,0.10)",
+                    borderRadius: 16,
+                    padding: 12,
+                    background: "linear-gradient(135deg, rgba(107,35,59,0.04), rgba(255,255,255,0.95))",
+                  }}
+                >
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div>
+                      <div className="explore-hint" style={{ marginTop: 0 }}>Document type</div>
+                      <select className="explore-select" value={docKind} onChange={(e) => setDocKind(e.target.value)}>
+                        {DOC_KIND_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <div className="explore-hint" style={{ marginTop: 0 }}>Notes (optional)</div>
+                      <input
+                        className="explore-sidebarSearch"
+                        value={docNotes}
+                        onChange={(e) => setDocNotes(e.target.value)}
+                        placeholder="e.g. 2026 certificate"
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                    <input
+                      id="lawyer-doc-file"
+                      type="file"
+                      onChange={(e) => setDocFile(e.target.files?.[0] || null)}
+                      style={{ maxWidth: 420 }}
+                    />
+
+                    <button
+                      className="explore-cta-btn"
+                      type="button"
+                      onClick={uploadDoc}
+                      disabled={docUploading}
+                      style={compactBtn}
+                      title="Upload document"
+                    >
+                      <SmallIcon><IconUpload /></SmallIcon>
+                      {docUploading ? "Uploading…" : "Upload"}
+                    </button>
+
+                    <button
+                      className="explore-btn explore-btn-hotOutline"
+                      type="button"
+                      onClick={loadDocs}
+                      disabled={docsLoading}
+                      style={compactBtn}
+                      title="Refresh documents"
+                    >
+                      Refresh
+                    </button>
+
+                    {docFile ? (
+                      <span style={{ fontSize: 12, opacity: 0.8 }}>
+                        Selected: <b>{docFile.name}</b> ({bytesLabel(docFile.size)})
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {docUploadErr ? <div className="explore-error" style={{ marginTop: 10 }}>{docUploadErr}</div> : null}
+                </div>
+
+                {/* list */}
+                <div style={{ marginTop: 12 }}>
+                  {docsErr ? <div className="explore-error">{docsErr}</div> : null}
+
+                  {docsLoading ? (
+                    <div className="explore-muted">Loading documents…</div>
+                  ) : docs.length === 0 ? (
+                    <div className="explore-muted">No documents uploaded yet.</div>
+                  ) : (
+                    <div style={{ display: "grid", gap: 10 }}>
+                      {docs.map((d) => {
+                        const id = d.id ?? d.documentId ?? `${d.kind || d.type}-${d.fileName}`;
+                        const kind = d.kind || d.type || d.documentKind || "Document";
+                        const name = d.fileName || d.name || "Attachment";
+                        const size = d.sizeBytes ?? d.size ?? d.length ?? null;
+                        const createdAt = d.createdAt || d.uploadedAt || d.created || null;
+
+                        return (
+                          <div
+                            key={id}
+                            style={{
+                              border: "1px solid rgba(15,23,42,0.10)",
+                              borderRadius: 16,
+                              padding: 12,
+                              background: "#fff",
+                              boxShadow: "0 10px 26px rgba(15,23,42,0.06)",
+                            }}
+                          >
+                            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                  {kind}
+                                </div>
+                                <div style={{ opacity: 0.75, fontSize: 13, marginTop: 4 }}>
+                                  {name}
+                                  {size ? <span style={{ opacity: 0.7 }}> • {bytesLabel(size)}</span> : null}
+                                  {createdAt ? <span style={{ opacity: 0.7 }}> • {new Date(createdAt).toLocaleString()}</span> : null}
+                                </div>
+                                {d.notes ? <div style={{ opacity: 0.75, fontSize: 13, marginTop: 6 }}>{d.notes}</div> : null}
+                              </div>
+
+                              <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+                                {d.url ? (
+                                  <a
+                                    className="explore-btn explore-btn-hotOutline"
+                                    href={d.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    style={{ ...compactBtn, textDecoration: "none" }}
+                                    title="View document"
+                                  >
+                                    <SmallIcon><IconEye /></SmallIcon>
+                                    View
+                                  </a>
+                                ) : null}
+
+                                <button
+                                  className="explore-btn"
+                                  type="button"
+                                  style={compactBtn}
+                                  onClick={() => removeDoc(d.id ?? d.documentId)}
+                                  title="Delete document"
+                                >
+                                  <SmallIcon><IconTrash /></SmallIcon>
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="explore-hint" style={{ marginTop: 12 }}>
+                Tip: after uploading documents, submit/save your profile so the Admin can verify you faster.
               </div>
             </div>
           </div>

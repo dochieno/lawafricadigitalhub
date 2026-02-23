@@ -102,3 +102,56 @@ export async function lookupServices({ q = "", take = 200 } = {}) {
   const res = await api.get("/lawyers/services", { params: { q, take } });
   return res.data; // [{id,name}]
 }
+
+/* =========================================================
+   ✅ NEW: Lawyer Verification Documents (Attachments)
+   Endpoints:
+   - GET    /api/lawyers/me/documents
+   - POST   /api/lawyers/me/documents  (multipart: file, type)
+   - DELETE /api/lawyers/me/documents/{id}
+========================================================= */
+
+function normalizeLawyerDoc(d) {
+  if (!d) return d;
+
+  // backend returns urlPath
+  const rawUrl =
+    d.url ??
+    d.fileUrl ??
+    d.urlPath ?? // ✅ backend uses urlPath
+    d.path ??
+    d.storagePath ??
+    d.downloadUrl ??
+    null;
+
+  return {
+    ...d,
+    url: rawUrl ? toApiAssetUrl(rawUrl) : null,
+    // optional alias for UI consistency
+    kind: d.kind ?? d.type ?? null, // ✅ backend uses "type" string
+  };
+}
+
+export async function listMyLawyerDocuments() {
+  const res = await api.get("/lawyers/me/documents");
+  const list = Array.isArray(res.data) ? res.data : [];
+  return list.map(normalizeLawyerDoc);
+}
+
+export async function uploadMyLawyerDocument({ file, type } = {}) {
+  const fd = new FormData();
+  if (file) fd.append("file", file);
+
+  // ✅ MUST be "type" to match controller [FromForm] LawyerDocumentType type
+  // ✅ MUST match enum NAME, e.g. "KenyaSchoolOfLawCertificate"
+  if (type) fd.append("type", String(type));
+
+  const res = await api.post("/lawyers/me/documents", fd);
+  return normalizeLawyerDoc(res.data);
+}
+
+export async function deleteMyLawyerDocument(id) {
+  // backend returns 204 NoContent
+  await api.delete(`/lawyers/me/documents/${id}`);
+  return true;
+}

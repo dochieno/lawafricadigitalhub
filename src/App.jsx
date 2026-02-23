@@ -44,6 +44,7 @@ import AppShell from "./layout/AppShell";
 import DevContentBlocksTest from "./pages/dashboard/DevContentBlocksTest";
 import AdminPracticeAreas from "./pages/dashboard/admin/lawyers/AdminPracticeAreas";
 import AdminLawyerServices from "./pages/dashboard/admin/lawyers/AdminLawyerServices";
+import AdminLawyerProfiles from "./pages/dashboard/admin/lawyers/AdminLawyerProfiles";
 
 import Explore from "./pages/dashboard/Explore";
 import Library from "./pages/dashboard/Library";
@@ -171,6 +172,7 @@ export default function App() {
               <Route path="admin/courts" element={<AdminCourts />} />
               <Route path="admin/lawyers/practice-areas" element={<AdminPracticeAreas />} />
               <Route path="admin/lawyers/services" element={<AdminLawyerServices />} />
+              <Route path="admin/lawyers/profiles" element={<AdminLawyerProfiles />} />
               <Route path="admin/llr-services/import" element={<AdminLLRImport />} />
               <Route path="/dashboard/dev/content-blocks" element={<DevContentBlocksTest />} />
               <Route path="admin/llr-services/:legalDocumentId/content" element={<AdminReportContent />} />
