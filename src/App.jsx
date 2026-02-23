@@ -45,6 +45,8 @@ import DevContentBlocksTest from "./pages/dashboard/DevContentBlocksTest";
 import AdminPracticeAreas from "./pages/dashboard/admin/lawyers/AdminPracticeAreas";
 import AdminLawyerServices from "./pages/dashboard/admin/lawyers/AdminLawyerServices";
 import AdminLawyerProfiles from "./pages/dashboard/admin/lawyers/AdminLawyerProfiles";
+import AdminDocumentCategories from "./pages/dashboard/admin/AdminDocumentCategories";
+import AdminDocumentSubCategories from "./pages/dashboard/admin/AdminDocumentSubCategories";
 
 import Explore from "./pages/dashboard/Explore";
 import Library from "./pages/dashboard/Library";
@@ -166,6 +168,8 @@ export default function App() {
               <Route path="admin/institutions" element={<AdminInstitutions />} />
               <Route path="admin/content-products" element={<AdminContentProducts />} />
               <Route path="admin/content-product-prices" element={<AdminContentProductPrices />} />
+              <Route path="admin/document-categories" element={<AdminDocumentCategories />} />
+              <Route path="admin/document-subcategories" element={<AdminDocumentSubCategories />} />
               <Route path="admin/documents" element={<AdminDocuments />} />
               <Route path="admin/toc-test" element={<AdminTocTest />} />
               <Route path="admin/llr-services" element={<AdminLLRServices />} />
