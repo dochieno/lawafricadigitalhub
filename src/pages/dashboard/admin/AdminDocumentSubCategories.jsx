@@ -1,5 +1,6 @@
 // src/pages/dashboard/admin/AdminDocumentSubCategories.jsx
 import { useEffect, useMemo, useState } from "react";
+import api from "../../../api/client";
 import {
   adminListDocCategories,
   adminListDocSubCategories,
@@ -19,12 +20,17 @@ function toInt(v, fallback = 0) {
 
 export default function AdminDocumentSubCategories() {
   const [loading, setLoading] = useState(true);
+
   const [cats, setCats] = useState([]);
   const [rows, setRows] = useState([]);
+  const [countries, setCountries] = useState([]);
+
   const [categoryId, setCategoryId] = useState(5); // default Statutes (enum id 5)
+
   const [savingId, setSavingId] = useState(null);
   const [creating, setCreating] = useState(false);
   const [disablingId, setDisablingId] = useState(null);
+
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
@@ -36,17 +42,19 @@ export default function AdminDocumentSubCategories() {
     name: "",
     sortOrder: 0,
     isActive: true,
-    countryId: "",
+    countryId: "", // now driven by dropdown
   });
 
   async function loadAll() {
     setLoading(true);
     setError("");
     setInfo("");
+
     try {
-      const [catRes, subRes] = await Promise.all([
+      const [catRes, subRes, countryRes] = await Promise.all([
         adminListDocCategories(),
         adminListDocSubCategories({ categoryId }),
+        api.get("/Country"),
       ]);
 
       const items = (catRes?.items || []).map((x) => ({ ...x }));
@@ -54,6 +62,9 @@ export default function AdminDocumentSubCategories() {
 
       const subItems = (subRes?.items || []).map((x) => ({ ...x, _dirty: false }));
       setRows(subItems);
+
+      const countryItems = Array.isArray(countryRes?.data) ? countryRes.data : [];
+      setCountries(countryItems);
     } catch (e) {
       setError(e?.response?.data?.message || e?.message || "Failed to load subcategories.");
     } finally {
@@ -68,8 +79,6 @@ export default function AdminDocumentSubCategories() {
 
   const visibleCats = useMemo(() => {
     if (showReportCategories) return cats;
-
-    // hide report-focused categories by id (enum mapping)
     const HIDE_IDS = new Set([4, 6]); // LawReports=4, LLRServices=6
     return (cats || []).filter((x) => !HIDE_IDS.has(Number(x.id)));
   }, [cats, showReportCategories]);
@@ -79,16 +88,27 @@ export default function AdminDocumentSubCategories() {
     return c?.name || `Category #${categoryId}`;
   }, [cats, categoryId]);
 
+  const countryById = useMemo(() => {
+    const m = new Map();
+    (countries || []).forEach((c) => m.set(Number(c.id), c));
+    return m;
+  }, [countries]);
+
+  function countryNameOf(id) {
+    if (id == null || id === "") return "—";
+    const c = countryById.get(Number(id));
+    return c?.name || `#${id}`;
+  }
+
   function updateRow(id, patch) {
-    setRows((prev) =>
-      prev.map((r) => (r.id !== id ? r : { ...r, ...patch, _dirty: true }))
-    );
+    setRows((prev) => prev.map((r) => (r.id !== id ? r : { ...r, ...patch, _dirty: true })));
   }
 
   async function saveRow(r) {
     setError("");
     setInfo("");
     setSavingId(r.id);
+
     try {
       const payload = {
         categoryId: toInt(r.categoryId, categoryId),
@@ -101,9 +121,7 @@ export default function AdminDocumentSubCategories() {
 
       await adminUpdateDocSubCategory(r.id, payload);
 
-      setRows((prev) =>
-        prev.map((x) => (x.id === r.id ? { ...x, ...payload, _dirty: false } : x))
-      );
+      setRows((prev) => prev.map((x) => (x.id === r.id ? { ...x, ...payload, _dirty: false } : x)));
 
       setInfo(`Saved subcategory #${r.id}.`);
       setTimeout(() => setInfo(""), 1500);
@@ -121,6 +139,7 @@ export default function AdminDocumentSubCategories() {
     setError("");
     setInfo("");
     setDisablingId(id);
+
     try {
       await adminDisableDocSubCategory(id);
       setRows((prev) => prev.map((r) => (r.id === id ? { ...r, isActive: false, _dirty: false } : r)));
@@ -167,16 +186,23 @@ export default function AdminDocumentSubCategories() {
 
   if (loading) {
     return (
-      <div className="admin-page">
-        <h1>Document Subcategories</h1>
+      <div className="admin-page" style={pageWrap}>
+        <div style={headRow}>
+          <div>
+            <h1 style={{ marginBottom: 6 }}>Document Subcategories</h1>
+            <div style={{ opacity: 0.8 }}>
+              Manage subcategories (primarily for Statutes). Default selector hides report categories.
+            </div>
+          </div>
+        </div>
         <p>Loading…</p>
       </div>
     );
   }
 
   return (
-    <div className="admin-page">
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+    <div className="admin-page" style={pageWrap}>
+      <div style={headRow}>
         <div>
           <h1 style={{ marginBottom: 6 }}>Document Subcategories</h1>
           <div style={{ opacity: 0.8 }}>
@@ -184,7 +210,7 @@ export default function AdminDocumentSubCategories() {
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <label style={{ display: "flex", gap: 8, alignItems: "center", userSelect: "none" }}>
             <input
               type="checkbox"
@@ -212,35 +238,35 @@ export default function AdminDocumentSubCategories() {
       )}
 
       {/* Category filter */}
-      <div className="admin-card" style={{ marginTop: 14, padding: 14 }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ minWidth: 240 }}>
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>Category</div>
+      <div className="admin-card" style={{ ...card, marginTop: 14 }}>
+        <div style={cardTopRow}>
+          <div style={{ minWidth: 320 }}>
+            <div style={{ fontWeight: 800, marginBottom: 6 }}>Category</div>
             <select
               className="admin-select"
               value={String(categoryId)}
               onChange={(e) => setCategoryId(toInt(e.target.value, 5))}
-              style={{ padding: "10px 12px", minWidth: 280 }}
+              style={{ padding: "10px 12px", minWidth: 340 }}
             >
               {visibleCats.map((c) => (
                 <option key={c.id} value={String(c.id)}>
-                  {c.name} (#{c.id})
+                  {c.name}
                 </option>
               ))}
             </select>
           </div>
 
-          <div style={{ opacity: 0.75 }}>
+          <div style={{ opacity: 0.8, paddingTop: 24 }}>
             Showing subcategories under: <b>{selectedCategoryName}</b>
           </div>
         </div>
       </div>
 
       {/* Create form */}
-      <div className="admin-card" style={{ marginTop: 14, padding: 14 }}>
-        <div style={{ fontWeight: 800, marginBottom: 10 }}>Create Subcategory</div>
+      <div className="admin-card" style={{ ...card, marginTop: 14 }}>
+        <div style={{ fontWeight: 900, marginBottom: 12 }}>Create Subcategory</div>
 
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div style={createGrid}>
           <div>
             <div style={lbl}>Code</div>
             <input
@@ -275,18 +301,23 @@ export default function AdminDocumentSubCategories() {
           </div>
 
           <div>
-            <div style={lbl}>CountryId (optional)</div>
-            <input
-              value={form.countryId}
+            <div style={lbl}>Country (optional)</div>
+            <select
+              className="admin-select"
+              value={String(form.countryId ?? "")}
               onChange={(e) => setForm((p) => ({ ...p, countryId: e.target.value }))}
-              className="admin-input"
-              inputMode="numeric"
-              placeholder="e.g. 1"
-              style={inpSmall}
-            />
+              style={{ ...inpSelect, minWidth: 240 }}
+            >
+              <option value="">All countries</option>
+              {countries.map((c) => (
+                <option key={c.id} value={String(c.id)}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <label style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+          <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 22 }}>
             <input
               type="checkbox"
               checked={!!form.isActive}
@@ -295,32 +326,35 @@ export default function AdminDocumentSubCategories() {
             <span>Active</span>
           </label>
 
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={create}
-            disabled={creating}
-            style={{ minWidth: 140 }}
-          >
-            {creating ? "Creating…" : "Create"}
-          </button>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={create}
+              disabled={creating}
+              style={{ minWidth: 160 }}
+            >
+              {creating ? "Creating…" : "Create"}
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Table */}
-      <div className="admin-card" style={{ marginTop: 14, overflowX: "auto" }}>
-        <table className="admin-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
+      <div className="admin-card" style={{ ...card, marginTop: 14, overflowX: "auto" }}>
+        <table className="admin-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 1120 }}>
           <thead>
             <tr>
               <th style={th}>Id</th>
               <th style={th}>Code</th>
               <th style={th}>Name</th>
               <th style={th}>Sort</th>
-              <th style={th}>Active</th>
-              <th style={th}>CountryId</th>
+              <th style={thCenter}>Active</th>
+              <th style={th}>Country</th>
               <th style={th}>Actions</th>
             </tr>
           </thead>
+
           <tbody>
             {rows.length === 0 ? (
               <tr>
@@ -374,18 +408,27 @@ export default function AdminDocumentSubCategories() {
                     </td>
 
                     <td style={td}>
-                      <input
+                      <select
+                        className="admin-select"
                         value={r.countryId == null ? "" : String(r.countryId)}
                         onChange={(e) => updateRow(r.id, { countryId: e.target.value })}
-                        className="admin-input"
-                        inputMode="numeric"
-                        placeholder="(none)"
-                        style={inpSmall}
-                      />
+                        style={{ ...inpSelect, minWidth: 220 }}
+                      >
+                        <option value="">All countries</option>
+                        {countries.map((c) => (
+                          <option key={c.id} value={String(c.id)}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+
+                      <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
+                        Current: <b>{countryNameOf(r.countryId)}</b>
+                      </div>
                     </td>
 
                     <td style={td}>
-                      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                         <button
                           type="button"
                           className="btn btn-primary"
@@ -422,15 +465,54 @@ export default function AdminDocumentSubCategories() {
   );
 }
 
+/* ---------- light layout helpers (no CSS file required) ---------- */
+const pageWrap = {
+  maxWidth: 1320,
+  margin: "0 auto",
+  padding: "0 10px",
+};
+
+const headRow = {
+  display: "flex",
+  alignItems: "baseline",
+  justifyContent: "space-between",
+  gap: 12,
+  flexWrap: "wrap",
+};
+
+const card = {
+  padding: 16,
+};
+
+const cardTopRow = {
+  display: "flex",
+  gap: 16,
+  alignItems: "center",
+  justifyContent: "space-between",
+  flexWrap: "wrap",
+};
+
+const createGrid = {
+  display: "grid",
+  gridTemplateColumns: "minmax(220px, 1fr) minmax(320px, 1.5fr) minmax(140px, 0.6fr) minmax(240px, 1fr)",
+  gap: 12,
+  alignItems: "end",
+};
+
 const th = {
   textAlign: "left",
-  padding: "10px 10px",
+  padding: "12px 10px",
   borderBottom: "1px solid rgba(0,0,0,0.08)",
   whiteSpace: "nowrap",
 };
 
+const thCenter = {
+  ...th,
+  textAlign: "center",
+};
+
 const td = {
-  padding: "10px 10px",
+  padding: "12px 10px",
   borderBottom: "1px solid rgba(0,0,0,0.06)",
   verticalAlign: "middle",
 };
@@ -452,16 +534,24 @@ const lbl = {
 };
 
 const inp = {
-  width: "220px",
-  padding: "8px 10px",
+  width: "100%",
+  maxWidth: 260,
+  padding: "9px 10px",
 };
 
 const inpWide = {
-  width: "360px",
-  padding: "8px 10px",
+  width: "100%",
+  maxWidth: 420,
+  padding: "9px 10px",
 };
 
 const inpSmall = {
-  width: "90px",
-  padding: "8px 10px",
+  width: "100%",
+  maxWidth: 120,
+  padding: "9px 10px",
+};
+
+const inpSelect = {
+  width: "100%",
+  padding: "10px 10px",
 };
